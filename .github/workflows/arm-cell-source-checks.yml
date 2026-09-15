@@ -1,0 +1,30 @@
+name: ARM Cell source checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  source-sanity:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Validate public ROS package licensing
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          paths = list(Path('ros2_ws/src/arm_cell').glob('*/package.xml'))
+          paths.append(Path('ros2_ws/src/interfaces/arm_cell_interfaces/package.xml'))
+          missing = [str(path) for path in paths
+                     if ET.parse(path).getroot().findtext('license') != 'MIT']
+          if missing:
+              raise SystemExit('non-MIT project package metadata: ' + ', '.join(missing))
+          PY
+      - name: Check Python syntax in ARM Cell tooling
+        run: |
+          python3 -m compileall -q infra/isaac_sim/scripts/m0609_cell

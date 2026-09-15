@@ -1,0 +1,2547 @@
+{
+  "schema_version": 1,
+  "fixture_id": "isaac_rgbd_m1c_verified_config_v2",
+  "status": "PARTIALLY VERIFIED",
+  "source_capture": {
+    "uri": "local-artifact://m1c/sftwin_rgbd_nominal_v2_source",
+    "db3_sha256": "4c2c2a5cfa17702b85c1e7f2fe0ccc3219bcd93d7da60daaabafc1ae074d9ee2",
+    "source_mutated": false
+  },
+  "repository_revision": "4feed3e006858eae9c18c013ca484ed2b49dd957",
+  "provenance": {
+    "camera_snapshot_path": "local-artifact://m1c/geometry_snapshot_v9.json",
+    "camera_snapshot_sha256": "0c88fe207a30e053d3e21caf486930331ffb91e74a344761bf8d956989851354",
+    "camera_profile_path": "local-artifact://m1c/isaac_camera_verified.yaml",
+    "camera_profile_sha256": "3963eb9d796f44cccb7d43a52a76439c974f393b8b9305561e19179fbbc23a94",
+    "stage_snapshot": {
+      "schema_version": 1,
+      "camera_prim": "/World/SF_Twin_Cell/Vision/Camera_Sensor",
+      "stage_meters_per_unit": 1.0,
+      "world_to_usd_camera": {
+        "parent_frame": "world",
+        "child_frame": "usd_camera_frame",
+        "translation_m": [
+          0.2,
+          -0.8414999999999999,
+          1.735
+        ],
+        "quaternion_xyzw": [
+          2.9034684465852756e-16,
+          -2.1993320441369934e-16,
+          -0.7071067811865475,
+          0.7071067811865476
+        ]
+      },
+      "usd_camera_to_ros_optical_point_coordinate_basis": [
+        [
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          -1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -1.0
+        ]
+      ],
+      "world_to_optical": {
+        "parent_frame": "world",
+        "child_frame": "camera_color_optical_frame",
+        "translation_m": [
+          0.2,
+          -0.8414999999999999,
+          1.735
+        ],
+        "quaternion_xyzw": [
+          0.7071067811865476,
+          -0.7071067811865475,
+          2.1993320441369934e-16,
+          -2.9034684465852756e-16
+        ]
+      },
+      "usd_composed_diagnostics": {
+        "raw_matrix_row_major": [
+          [
+            2.7755575615628914e-16,
+            -1.0,
+            -9.957992501029593e-17,
+            0.0
+          ],
+          [
+            1.0,
+            2.775557561562891e-16,
+            7.216449660063518e-16,
+            0.0
+          ],
+          [
+            -7.216449660063518e-16,
+            -9.957992501029612e-17,
+            1.0,
+            0.0
+          ],
+          [
+            0.2,
+            -0.8414999999999999,
+            1.735,
+            1.0
+          ]
+        ],
+        "translation_row_3": [
+          0.2,
+          -0.8414999999999999,
+          1.735
+        ],
+        "translation_column_3": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "camera_origin_world": [
+          0.2,
+          -0.8414999999999999,
+          1.735
+        ],
+        "basis_directions_world": {
+          "local_plus_x_world": [
+            2.7755575615628914e-16,
+            -1.0,
+            -9.957992501029593e-17
+          ],
+          "local_plus_y_world": [
+            1.0,
+            2.775557561562891e-16,
+            7.216449660063518e-16
+          ],
+          "local_plus_z_world": [
+            -7.216449660063518e-16,
+            -9.957992501029612e-17,
+            1.0
+          ],
+          "local_minus_z_forward_world": [
+            7.216449660063518e-16,
+            9.957992501029612e-17,
+            -1.0
+          ]
+        }
+      },
+      "render_product_bindings": [
+        {
+          "render_product": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/TemplateRenderProducts/Camera_Pseudo_Depth_render_product",
+          "camera_targets": [
+            "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_Pseudo_Depth"
+          ],
+          "uses_camera_sensor": false
+        },
+        {
+          "render_product": "/Render/OmniverseKit/HydraTextures/omni_kit_widget_viewport_ViewportTexture_0",
+          "camera_targets": [
+            "/OmniverseKit_Persp"
+          ],
+          "uses_camera_sensor": false
+        },
+        {
+          "render_product": "/Render/OmniverseKit/HydraTextures/Replicator",
+          "camera_targets": [
+            "/World/SF_Twin_Cell/Vision/Camera_Sensor"
+          ],
+          "uses_camera_sensor": true
+        }
+      ],
+      "d455_color_camera_pose_comparison": {
+        "status": "NOT VERIFIED",
+        "reason": "pose/quaternion comparison requires rigid composed transforms; raw matrix comparison exported without orthonormalization",
+        "d455_root": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+        "camera_sensor": {
+          "prim_path": "/World/SF_Twin_Cell/Vision/Camera_Sensor",
+          "raw_matrix_row_major": [
+            [
+              2.7755575615628914e-16,
+              -1.0,
+              -9.957992501029593e-17,
+              0.0
+            ],
+            [
+              1.0,
+              2.775557561562891e-16,
+              7.216449660063518e-16,
+              0.0
+            ],
+            [
+              -7.216449660063518e-16,
+              -9.957992501029612e-17,
+              1.0,
+              0.0
+            ],
+            [
+              0.2,
+              -0.8414999999999999,
+              1.735,
+              1.0
+            ]
+          ],
+          "translation_m": [
+            0.2,
+            -0.8414999999999999,
+            1.735
+          ],
+          "affine_3x3": {
+            "upper_left_3x3": [
+              [
+                2.7755575615628914e-16,
+                -1.0,
+                -9.957992501029593e-17
+              ],
+              [
+                1.0,
+                2.775557561562891e-16,
+                7.216449660063518e-16
+              ],
+              [
+                -7.216449660063518e-16,
+                -9.957992501029612e-17,
+                1.0
+              ]
+            ],
+            "row_norms": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "column_norms": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "row_dot_products": [
+              [
+                1.0,
+                -2.2557545022656827e-32,
+                0.0
+              ],
+              [
+                -2.2557545022656827e-32,
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "column_dot_products": [
+              [
+                1.0,
+                2.255754502265697e-32,
+                0.0
+              ],
+              [
+                2.255754502265697e-32,
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "determinant": 1.0,
+            "gram_matrix_column_metric": [
+              [
+                1.0,
+                2.255754502265697e-32,
+                0.0
+              ],
+              [
+                2.255754502265697e-32,
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "normalized_column_dot_products": [
+              [
+                1.0,
+                2.255754502265697e-32,
+                0.0
+              ],
+              [
+                2.255754502265697e-32,
+                1.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0
+              ]
+            ],
+            "is_rigid_rotation": true,
+            "scale_shear_decomposition": {
+              "status": "VERIFIED",
+              "reason": null
+            }
+          },
+          "parent_local_transform_chain": [
+            {
+              "prim_path": "/World/SF_Twin_Cell/Vision/Camera_Sensor",
+              "type_name": "Camera",
+              "local_matrix_row_major": [
+                [
+                  2.7755575615628914e-16,
+                  -1.0,
+                  -9.957992501029593e-17,
+                  0.0
+                ],
+                [
+                  1.0,
+                  2.775557561562891e-16,
+                  7.216449660063518e-16,
+                  0.0
+                ],
+                [
+                  -7.216449660063518e-16,
+                  -9.957992501029612e-17,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.2,
+                  -0.8414999999999999,
+                  1.735,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World/SF_Twin_Cell/Vision",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World/SF_Twin_Cell",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/",
+              "type_name": "",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            }
+          ]
+        },
+        "d455_color_camera": {
+          "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Color",
+          "raw_matrix_row_major": [
+            [
+              2.7755575615628914e-16,
+              -1.0,
+              -9.957992501029593e-17,
+              0.0
+            ],
+            [
+              0.9999989867210388,
+              2.2204437993190474e-16,
+              7.216442347786903e-16,
+              0.0
+            ],
+            [
+              -6.661338147750939e-16,
+              -1.5509107624155381e-16,
+              1.0,
+              0.0
+            ],
+            [
+              0.2,
+              -0.8414999999999999,
+              1.735,
+              1.0
+            ]
+          ],
+          "translation_m": [
+            0.2,
+            -0.8414999999999999,
+            1.735
+          ],
+          "affine_3x3": {
+            "upper_left_3x3": [
+              [
+                2.7755575615628914e-16,
+                -1.0,
+                -9.957992501029593e-17
+              ],
+              [
+                0.9999989867210388,
+                2.2204437993190474e-16,
+                7.216442347786903e-16
+              ],
+              [
+                -6.661338147750939e-16,
+                -1.5509107624155381e-16,
+                1.0
+              ]
+            ],
+            "row_norms": [
+              1.0,
+              0.9999989867210388,
+              1.0
+            ],
+            "column_norms": [
+              0.9999989867210388,
+              1.0,
+              1.0
+            ],
+            "row_dot_products": [
+              [
+                1.0,
+                5.551109498297605e-17,
+                5.5511151231257716e-17
+              ],
+              [
+                5.551109498297605e-17,
+                0.9999979734431044,
+                5.5511094982976173e-17
+              ],
+              [
+                5.5511151231257716e-17,
+                5.5511094982976173e-17,
+                1.0
+              ]
+            ],
+            "column_dot_products": [
+              [
+                0.9999979734431044,
+                -5.551160121728293e-17,
+                5.550968877667577e-17
+              ],
+              [
+                -5.551160121728293e-17,
+                1.0,
+                -5.551115123125773e-17
+              ],
+              [
+                5.550968877667577e-17,
+                -5.551115123125773e-17,
+                1.0
+              ]
+            ],
+            "determinant": 0.9999989867210388,
+            "gram_matrix_column_metric": [
+              [
+                0.9999979734431044,
+                -5.551160121728293e-17,
+                5.550968877667577e-17
+              ],
+              [
+                -5.551160121728293e-17,
+                1.0,
+                -5.551115123125773e-17
+              ],
+              [
+                5.550968877667577e-17,
+                -5.551115123125773e-17,
+                1.0
+              ]
+            ],
+            "normalized_column_dot_products": [
+              [
+                1.0,
+                -5.551165746607754e-17,
+                5.5509745023532544e-17
+              ],
+              [
+                -5.551165746607754e-17,
+                1.0,
+                -5.551115123125773e-17
+              ],
+              [
+                5.5509745023532544e-17,
+                -5.551115123125773e-17,
+                1.0
+              ]
+            ],
+            "is_rigid_rotation": false,
+            "scale_shear_decomposition": {
+              "status": "NOT VERIFIED",
+              "reason": "non-rigid affine matrix has no unique scale/shear decomposition without selecting an orthonormalization convention; raw Gram-matrix evidence is retained"
+            }
+          },
+          "parent_local_transform_chain": [
+            {
+              "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Color",
+              "type_name": "Camera",
+              "local_matrix_row_major": [
+                [
+                  -2.220446049250313e-16,
+                  1.0,
+                  2.7755575615628914e-16,
+                  0.0
+                ],
+                [
+                  4.995998548467856e-16,
+                  -2.220443799319047e-16,
+                  0.9999989867210388,
+                  0.0
+                ],
+                [
+                  1.0,
+                  2.7755575615628914e-16,
+                  -4.440892098500626e-16,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0115,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  -1.0,
+                  1.2246467991473532e-16,
+                  0.0,
+                  0.0
+                ],
+                [
+                  -1.2246467991473532e-16,
+                  -1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  2.220446049250313e-16,
+                  0.0,
+                  -1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.0,
+                  0.0,
+                  2.220446049250313e-16,
+                  0.0
+                ],
+                [
+                  0.2,
+                  -0.83,
+                  1.735,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World/SF_Twin_Cell/CameraRig",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World/SF_Twin_Cell",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/World",
+              "type_name": "Xform",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            },
+            {
+              "prim_path": "/",
+              "type_name": "",
+              "local_matrix_row_major": [
+                [
+                  1.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            }
+          ]
+        },
+        "raw_composed_matrix_comparison": {
+          "matrix_difference": [
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              1.0132789611816406e-06,
+              5.551137622438434e-17,
+              7.312276614968765e-22,
+              0.0
+            ],
+            [
+              -5.551115123125783e-17,
+              5.551115123125769e-17,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ]
+          ],
+          "max_abs_element_error": 1.0132789611816406e-06
+        },
+        "pose_comparison": {
+          "status": "NOT VERIFIED",
+          "reason": "at least one composed transform is non-rigid"
+        },
+        "discovered_d455_cameras": [
+          {
+            "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_Pseudo_Depth",
+            "raw_matrix_row_major": [
+              [
+                -1.6653345369377353e-16,
+                -1.0,
+                2.3348698237725095e-16,
+                0.0
+              ],
+              [
+                1.0,
+                -1.1102230246251565e-16,
+                2.220446049250313e-16,
+                0.0
+              ],
+              [
+                -2.220446049250313e-16,
+                2.8899813360850883e-16,
+                1.0,
+                0.0
+              ],
+              [
+                0.2,
+                -0.83,
+                1.735,
+                1.0
+              ]
+            ],
+            "translation_m": [
+              0.2,
+              -0.83,
+              1.735
+            ],
+            "affine_3x3": {
+              "upper_left_3x3": [
+                [
+                  -1.6653345369377353e-16,
+                  -1.0,
+                  2.3348698237725095e-16
+                ],
+                [
+                  1.0,
+                  -1.1102230246251565e-16,
+                  2.220446049250313e-16
+                ],
+                [
+                  -2.220446049250313e-16,
+                  2.8899813360850883e-16,
+                  1.0
+                ]
+              ],
+              "row_norms": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "column_norms": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "row_dot_products": [
+                [
+                  1.0,
+                  -5.551115123125783e-17,
+                  -5.551115123125783e-17
+                ],
+                [
+                  -5.551115123125783e-17,
+                  1.0,
+                  -4.930380657631324e-32
+                ],
+                [
+                  -5.551115123125783e-17,
+                  -4.930380657631324e-32,
+                  1.0
+                ]
+              ],
+              "column_dot_products": [
+                [
+                  1.0,
+                  5.5511151231257815e-17,
+                  -4.930380657631324e-32
+                ],
+                [
+                  5.5511151231257815e-17,
+                  1.0,
+                  5.551115123125783e-17
+                ],
+                [
+                  -4.930380657631324e-32,
+                  5.551115123125783e-17,
+                  1.0
+                ]
+              ],
+              "determinant": 1.0,
+              "gram_matrix_column_metric": [
+                [
+                  1.0,
+                  5.5511151231257815e-17,
+                  -4.930380657631324e-32
+                ],
+                [
+                  5.5511151231257815e-17,
+                  1.0,
+                  5.551115123125783e-17
+                ],
+                [
+                  -4.930380657631324e-32,
+                  5.551115123125783e-17,
+                  1.0
+                ]
+              ],
+              "normalized_column_dot_products": [
+                [
+                  1.0,
+                  5.5511151231257815e-17,
+                  -4.930380657631324e-32
+                ],
+                [
+                  5.5511151231257815e-17,
+                  1.0,
+                  5.551115123125783e-17
+                ],
+                [
+                  -4.930380657631324e-32,
+                  5.551115123125783e-17,
+                  1.0
+                ]
+              ],
+              "is_rigid_rotation": true,
+              "scale_shear_decomposition": {
+                "status": "VERIFIED",
+                "reason": null
+              }
+            },
+            "parent_local_transform_chain": [
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_Pseudo_Depth",
+                "type_name": "Camera",
+                "local_matrix_row_major": [
+                  [
+                    1.1102230246251565e-16,
+                    1.0,
+                    -1.6653345369377348e-16,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.1102230246251565e-16,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    -1.6653345369377348e-16,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    -1.0,
+                    1.2246467991473532e-16,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    -1.2246467991473532e-16,
+                    -1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    2.220446049250313e-16,
+                    0.0,
+                    -1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    0.0,
+                    2.220446049250313e-16,
+                    0.0
+                  ],
+                  [
+                    0.2,
+                    -0.83,
+                    1.735,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/",
+                "type_name": "",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Color",
+            "raw_matrix_row_major": [
+              [
+                2.7755575615628914e-16,
+                -1.0,
+                -9.957992501029593e-17,
+                0.0
+              ],
+              [
+                0.9999989867210388,
+                2.2204437993190474e-16,
+                7.216442347786903e-16,
+                0.0
+              ],
+              [
+                -6.661338147750939e-16,
+                -1.5509107624155381e-16,
+                1.0,
+                0.0
+              ],
+              [
+                0.2,
+                -0.8414999999999999,
+                1.735,
+                1.0
+              ]
+            ],
+            "translation_m": [
+              0.2,
+              -0.8414999999999999,
+              1.735
+            ],
+            "affine_3x3": {
+              "upper_left_3x3": [
+                [
+                  2.7755575615628914e-16,
+                  -1.0,
+                  -9.957992501029593e-17
+                ],
+                [
+                  0.9999989867210388,
+                  2.2204437993190474e-16,
+                  7.216442347786903e-16
+                ],
+                [
+                  -6.661338147750939e-16,
+                  -1.5509107624155381e-16,
+                  1.0
+                ]
+              ],
+              "row_norms": [
+                1.0,
+                0.9999989867210388,
+                1.0
+              ],
+              "column_norms": [
+                0.9999989867210388,
+                1.0,
+                1.0
+              ],
+              "row_dot_products": [
+                [
+                  1.0,
+                  5.551109498297605e-17,
+                  5.5511151231257716e-17
+                ],
+                [
+                  5.551109498297605e-17,
+                  0.9999979734431044,
+                  5.5511094982976173e-17
+                ],
+                [
+                  5.5511151231257716e-17,
+                  5.5511094982976173e-17,
+                  1.0
+                ]
+              ],
+              "column_dot_products": [
+                [
+                  0.9999979734431044,
+                  -5.551160121728293e-17,
+                  5.550968877667577e-17
+                ],
+                [
+                  -5.551160121728293e-17,
+                  1.0,
+                  -5.551115123125773e-17
+                ],
+                [
+                  5.550968877667577e-17,
+                  -5.551115123125773e-17,
+                  1.0
+                ]
+              ],
+              "determinant": 0.9999989867210388,
+              "gram_matrix_column_metric": [
+                [
+                  0.9999979734431044,
+                  -5.551160121728293e-17,
+                  5.550968877667577e-17
+                ],
+                [
+                  -5.551160121728293e-17,
+                  1.0,
+                  -5.551115123125773e-17
+                ],
+                [
+                  5.550968877667577e-17,
+                  -5.551115123125773e-17,
+                  1.0
+                ]
+              ],
+              "normalized_column_dot_products": [
+                [
+                  1.0,
+                  -5.551165746607754e-17,
+                  5.5509745023532544e-17
+                ],
+                [
+                  -5.551165746607754e-17,
+                  1.0,
+                  -5.551115123125773e-17
+                ],
+                [
+                  5.5509745023532544e-17,
+                  -5.551115123125773e-17,
+                  1.0
+                ]
+              ],
+              "is_rigid_rotation": false,
+              "scale_shear_decomposition": {
+                "status": "NOT VERIFIED",
+                "reason": "non-rigid affine matrix has no unique scale/shear decomposition without selecting an orthonormalization convention; raw Gram-matrix evidence is retained"
+              }
+            },
+            "parent_local_transform_chain": [
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Color",
+                "type_name": "Camera",
+                "local_matrix_row_major": [
+                  [
+                    -2.220446049250313e-16,
+                    1.0,
+                    2.7755575615628914e-16,
+                    0.0
+                  ],
+                  [
+                    4.995998548467856e-16,
+                    -2.220443799319047e-16,
+                    0.9999989867210388,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    2.7755575615628914e-16,
+                    -4.440892098500626e-16,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0115,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    -1.0,
+                    1.2246467991473532e-16,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    -1.2246467991473532e-16,
+                    -1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    2.220446049250313e-16,
+                    0.0,
+                    -1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    0.0,
+                    2.220446049250313e-16,
+                    0.0
+                  ],
+                  [
+                    0.2,
+                    -0.83,
+                    1.735,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/",
+                "type_name": "",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Left",
+            "raw_matrix_row_major": [
+              [
+                1.110223024625158e-16,
+                -1.0000000000000013,
+                -9.957992501029604e-17,
+                0.0
+              ],
+              [
+                0.9999992251396179,
+                2.2204443287146392e-16,
+                4.995999739607938e-16,
+                0.0
+              ],
+              [
+                -6.661342912311268e-16,
+                1.1442385636445789e-17,
+                1.0000007152557373,
+                0.0
+              ],
+              [
+                0.2,
+                -0.7825,
+                1.735,
+                1.0
+              ]
+            ],
+            "translation_m": [
+              0.2,
+              -0.7825,
+              1.735
+            ],
+            "affine_3x3": {
+              "upper_left_3x3": [
+                [
+                  1.110223024625158e-16,
+                  -1.0000000000000013,
+                  -9.957992501029604e-17
+                ],
+                [
+                  0.9999992251396179,
+                  2.2204443287146392e-16,
+                  4.995999739607938e-16
+                ],
+                [
+                  -6.661342912311268e-16,
+                  1.1442385636445789e-17,
+                  1.0000007152557373
+                ]
+              ],
+              "row_norms": [
+                1.0000000000000013,
+                0.9999992251396179,
+                1.0000007152557373
+              ],
+              "column_norms": [
+                0.9999992251396179,
+                1.0000000000000013,
+                1.0000007152557373
+              ],
+              "row_dot_products": [
+                [
+                  1.0000000000000027,
+                  -1.1102221643573217e-16,
+                  -1.110223818718546e-16
+                ],
+                [
+                  -1.1102221643573217e-16,
+                  0.9999984502798362,
+                  -1.6653344376751383e-16
+                ],
+                [
+                  -1.110223818718546e-16,
+                  -1.6653344376751383e-16,
+                  1.0000014305119862
+                ]
+              ],
+              "column_dot_products": [
+                [
+                  0.9999984502798362,
+                  1.1102195835551387e-16,
+                  -1.6653518084693332e-16
+                ],
+                [
+                  1.1102195835551387e-16,
+                  1.0000000000000027,
+                  1.1102231883097404e-16
+                ],
+                [
+                  -1.6653518084693332e-16,
+                  1.1102231883097404e-16,
+                  1.0000014305119862
+                ]
+              ],
+              "determinant": 0.9999999403948023,
+              "gram_matrix_column_metric": [
+                [
+                  0.9999984502798362,
+                  1.1102195835551387e-16,
+                  -1.6653518084693332e-16
+                ],
+                [
+                  1.1102195835551387e-16,
+                  1.0000000000000027,
+                  1.1102231883097404e-16
+                ],
+                [
+                  -1.6653518084693332e-16,
+                  1.1102231883097404e-16,
+                  1.0000014305119862
+                ]
+              ],
+              "normalized_column_dot_products": [
+                [
+                  1.0,
+                  1.1102204438209745e-16,
+                  -1.665351907732965e-16
+                ],
+                [
+                  1.1102204438209745e-16,
+                  1.0,
+                  1.1102223942168017e-16
+                ],
+                [
+                  -1.665351907732965e-16,
+                  1.1102223942168017e-16,
+                  1.0
+                ]
+              ],
+              "is_rigid_rotation": false,
+              "scale_shear_decomposition": {
+                "status": "NOT VERIFIED",
+                "reason": "non-rigid affine matrix has no unique scale/shear decomposition without selecting an orthonormalization convention; raw Gram-matrix evidence is retained"
+              }
+            },
+            "parent_local_transform_chain": [
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Left",
+                "type_name": "Camera",
+                "local_matrix_row_major": [
+                  [
+                    -2.2204460492503155e-16,
+                    1.0000000000000013,
+                    1.1102230246251578e-16,
+                    0.0
+                  ],
+                  [
+                    2.7755554108932987e-16,
+                    -2.220444328714639e-16,
+                    0.9999992251396179,
+                    0.0
+                  ],
+                  [
+                    1.0000007152557373,
+                    1.1102238187185446e-16,
+                    -4.440895274874178e-16,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    -0.0475,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    -1.0,
+                    1.2246467991473532e-16,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    -1.2246467991473532e-16,
+                    -1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    2.220446049250313e-16,
+                    0.0,
+                    -1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    0.0,
+                    2.220446049250313e-16,
+                    0.0
+                  ],
+                  [
+                    0.2,
+                    -0.83,
+                    1.735,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/",
+                "type_name": "",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ]
+          },
+          {
+            "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Right",
+            "raw_matrix_row_major": [
+              [
+                2.7755575615628914e-16,
+                -1.0,
+                -9.957992501029593e-17,
+                0.0
+              ],
+              [
+                0.9999989867210388,
+                2.2204437993190474e-16,
+                7.216442347786903e-16,
+                0.0
+              ],
+              [
+                -6.661338147750939e-16,
+                -1.5509107624155381e-16,
+                1.0,
+                0.0
+              ],
+              [
+                0.2,
+                -0.8775,
+                1.735,
+                1.0
+              ]
+            ],
+            "translation_m": [
+              0.2,
+              -0.8775,
+              1.735
+            ],
+            "affine_3x3": {
+              "upper_left_3x3": [
+                [
+                  2.7755575615628914e-16,
+                  -1.0,
+                  -9.957992501029593e-17
+                ],
+                [
+                  0.9999989867210388,
+                  2.2204437993190474e-16,
+                  7.216442347786903e-16
+                ],
+                [
+                  -6.661338147750939e-16,
+                  -1.5509107624155381e-16,
+                  1.0
+                ]
+              ],
+              "row_norms": [
+                1.0,
+                0.9999989867210388,
+                1.0
+              ],
+              "column_norms": [
+                0.9999989867210388,
+                1.0,
+                1.0
+              ],
+              "row_dot_products": [
+                [
+                  1.0,
+                  5.551109498297605e-17,
+                  5.5511151231257716e-17
+                ],
+                [
+                  5.551109498297605e-17,
+                  0.9999979734431044,
+                  5.5511094982976173e-17
+                ],
+                [
+                  5.5511151231257716e-17,
+                  5.5511094982976173e-17,
+                  1.0
+                ]
+              ],
+              "column_dot_products": [
+                [
+                  0.9999979734431044,
+                  -5.551160121728293e-17,
+                  5.550968877667577e-17
+                ],
+                [
+                  -5.551160121728293e-17,
+                  1.0,
+                  -5.551115123125773e-17
+                ],
+                [
+                  5.550968877667577e-17,
+                  -5.551115123125773e-17,
+                  1.0
+                ]
+              ],
+              "determinant": 0.9999989867210388,
+              "gram_matrix_column_metric": [
+                [
+                  0.9999979734431044,
+                  -5.551160121728293e-17,
+                  5.550968877667577e-17
+                ],
+                [
+                  -5.551160121728293e-17,
+                  1.0,
+                  -5.551115123125773e-17
+                ],
+                [
+                  5.550968877667577e-17,
+                  -5.551115123125773e-17,
+                  1.0
+                ]
+              ],
+              "normalized_column_dot_products": [
+                [
+                  1.0,
+                  -5.551165746607754e-17,
+                  5.5509745023532544e-17
+                ],
+                [
+                  -5.551165746607754e-17,
+                  1.0,
+                  -5.551115123125773e-17
+                ],
+                [
+                  5.5509745023532544e-17,
+                  -5.551115123125773e-17,
+                  1.0
+                ]
+              ],
+              "is_rigid_rotation": false,
+              "scale_shear_decomposition": {
+                "status": "NOT VERIFIED",
+                "reason": "non-rigid affine matrix has no unique scale/shear decomposition without selecting an orthonormalization convention; raw Gram-matrix evidence is retained"
+              }
+            },
+            "parent_local_transform_chain": [
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455/Camera_OmniVision_OV9782_Right",
+                "type_name": "Camera",
+                "local_matrix_row_major": [
+                  [
+                    -2.220446049250313e-16,
+                    1.0,
+                    2.7755575615628914e-16,
+                    0.0
+                  ],
+                  [
+                    4.995998548467856e-16,
+                    -2.220443799319047e-16,
+                    0.9999989867210388,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    2.7755575615628914e-16,
+                    -4.440892098500626e-16,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0475,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455/RSD455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    -1.0,
+                    1.2246467991473532e-16,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    -1.2246467991473532e-16,
+                    -1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    2.220446049250313e-16,
+                    0.0,
+                    -1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    1.0,
+                    0.0,
+                    2.220446049250313e-16,
+                    0.0
+                  ],
+                  [
+                    0.2,
+                    -0.83,
+                    1.735,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell/CameraRig",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World/SF_Twin_Cell",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/World",
+                "type_name": "Xform",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              },
+              {
+                "prim_path": "/",
+                "type_name": "",
+                "local_matrix_row_major": [
+                  [
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0
+                  ]
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "depth_helper_runtime": {
+        "status": "VERIFIED",
+        "helper_path": "/World/SF_Twin_Cell/ROS2/ActionGraph/CameraHelperDepth",
+        "helper_type_token": "depth",
+        "topic_name": "/camera/aligned_depth_to_color/image_raw",
+        "frame_id": "camera_color_optical_frame",
+        "render_product_path": "/Render/OmniverseKit/HydraTextures/Replicator",
+        "render_product_input_upstream": [
+          {
+            "python_type": "omni.graph.core._omni_graph_core.Attribute",
+            "available_api": [
+              "get_node",
+              "get_name"
+            ],
+            "attribute_name": "outputs:renderProductPath",
+            "owning_node_type": "omni.graph.core._omni_graph_core.Node",
+            "owning_node_path": "/World/SF_Twin_Cell/ROS2/ActionGraph/CreateRenderProduct"
+          }
+        ],
+        "render_product_camera_targets": [
+          "/World/SF_Twin_Cell/Vision/Camera_Sensor"
+        ],
+        "uses_camera_sensor": true,
+        "render_var_runtime_edge": "NOT VERIFIED: ROS2CameraHelper creates the writer dynamically",
+        "source_mapping": "type=depth maps to SensorType.DistanceToImagePlane in ROS2CameraHelper source"
+      },
+      "world_to_camera_link": {
+        "parent_frame": "world",
+        "child_frame": "camera_link",
+        "translation_m": [
+          0.2,
+          -0.8414999999999999,
+          1.735
+        ],
+        "quaternion_xyzw": [
+          -6.292395854532184e-17,
+          0.7071067811865472,
+          1.3333759879015001e-16,
+          0.7071067811865478
+        ]
+      },
+      "camera_link_to_optical": {
+        "parent_frame": "camera_link",
+        "child_frame": "camera_color_optical_frame",
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "quaternion_xyzw": [
+          0.5,
+          -0.5,
+          0.5,
+          -0.5
+        ]
+      },
+      "projection": {
+        "focalLength": 24.0,
+        "horizontalAperture": 20.954999923706055,
+        "verticalAperture": 15.290800094604492,
+        "clippingRange": [
+          0.10000000149011612,
+          10.0
+        ]
+      },
+      "reference_geometry": [
+        {
+          "prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPart",
+          "world_bounds_m": {
+            "min": [
+              0.020199023314723723,
+              -0.8598010692587474,
+              0.7067997700859227
+            ],
+            "max": [
+              0.03979906799553896,
+              -0.8402010049828907,
+              0.7132000677894436
+            ]
+          },
+          "world_surface_points_m": {
+            "top_center": [
+              0.02999904565513134,
+              -0.8500010371208191,
+              0.7132000677894436
+            ],
+            "top_off_axis_a": [
+              0.02509903448492753,
+              -0.8549010531897834,
+              0.7132000677894436
+            ],
+            "top_off_axis_b": [
+              0.03489905682533515,
+              -0.8451010210518548,
+              0.7132000677894436
+            ]
+          },
+          "forward_alignment": {
+            "top_center": {
+              "world_delta": [
+                -0.17000095434486867,
+                -0.008501037120819177,
+                -1.0217999322105564
+              ],
+              "forward_dot": 0.9864074798667972
+            },
+            "top_off_axis_a": {
+              "world_delta": [
+                -0.17490096551507248,
+                -0.013401053189783463,
+                -1.0217999322105564
+              ],
+              "forward_dot": 0.9855824050225447
+            },
+            "top_off_axis_b": {
+              "world_delta": [
+                -0.16510094317466487,
+                -0.0036010210518548913,
+                -1.0217999322105564
+              ],
+              "forward_dot": 0.9871903791353055
+            }
+          }
+        }
+      ],
+      "collision_scene_query": {
+        "status": "PARTIALLY VERIFIED",
+        "query_kind": "PhysX collision scene query",
+        "limitation": "Collision geometry can differ from renderer-visible geometry; do not use these hits to verify depth semantics.",
+        "entries": [
+          {
+            "reference_prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPart",
+            "reference_point": "top_center",
+            "reference_world_point_m": [
+              0.02999904565513134,
+              -0.8500010371208191,
+              0.7132000677894436
+            ],
+            "reference_optical_z_m": 1.0217999322105562,
+            "ray_origin_world_m": [
+              0.2,
+              -0.8414999999999999,
+              1.735
+            ],
+            "ray_direction_world": [
+              -0.16411257004831886,
+              -0.008206583635663612,
+              -0.9864074798667974
+            ],
+            "ray_kind": "authored-reference direction; not an exact discrete ROS pixel-center ray",
+            "query_kind": "PhysX collision scene query; not renderer-visible ground truth",
+            "status": "PARTIALLY VERIFIED",
+            "hit_prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPartMarker/Base",
+            "hit_world_point_m": [
+              0.039449065923690796,
+              -0.8495284914970398,
+              0.7699999809265137
+            ],
+            "hit_optical_z_m": 0.9650000190734861,
+            "hit_distance_m": 0.9782975912094116,
+            "limitation": "Collision hit is not accepted as Replicator renderer-visible surface ground truth."
+          },
+          {
+            "reference_prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPart",
+            "reference_point": "top_off_axis_a",
+            "reference_world_point_m": [
+              0.02509903448492753,
+              -0.8549010531897834,
+              0.7132000677894436
+            ],
+            "reference_optical_z_m": 1.0217999322105562,
+            "ray_origin_world_m": [
+              0.2,
+              -0.8414999999999999,
+              1.735
+            ],
+            "ray_direction_world": [
+              -0.16870163013241335,
+              -0.012926055107527808,
+              -0.9855824050225449
+            ],
+            "ray_kind": "authored-reference direction; not an exact discrete ROS pixel-center ray",
+            "query_kind": "PhysX collision scene query; not renderer-visible ground truth",
+            "status": "PARTIALLY VERIFIED",
+            "hit_prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPartMarker/Base",
+            "hit_world_point_m": [
+              0.03482143580913544,
+              -0.8541560769081116,
+              0.7699999809265137
+            ],
+            "hit_optical_z_m": 0.9650000190734861,
+            "hit_distance_m": 0.9791165590286255,
+            "limitation": "Collision hit is not accepted as Replicator renderer-visible surface ground truth."
+          },
+          {
+            "reference_prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPart",
+            "reference_point": "top_off_axis_b",
+            "reference_world_point_m": [
+              0.03489905682533515,
+              -0.8451010210518548,
+              0.7132000677894436
+            ],
+            "reference_optical_z_m": 1.0217999322105562,
+            "ray_origin_world_m": [
+              0.2,
+              -0.8414999999999999,
+              1.735
+            ],
+            "ray_direction_world": [
+              -0.15950878205246188,
+              -0.0034790502772536016,
+              -0.9871903791353057
+            ],
+            "ray_kind": "authored-reference direction; not an exact discrete ROS pixel-center ray",
+            "query_kind": "PhysX collision scene query; not renderer-visible ground truth",
+            "status": "PARTIALLY VERIFIED",
+            "hit_prim_path": "/World/SF_Twin_Cell/AMR/Mockup/RawPartMarker/Base",
+            "hit_world_point_m": [
+              0.04407671093940735,
+              -0.8449008464813232,
+              0.7699999809265137
+            ],
+            "hit_optical_z_m": 0.9650000190734862,
+            "hit_distance_m": 0.9775217175483704,
+            "limitation": "Collision hit is not accepted as Replicator renderer-visible surface ground truth."
+          }
+        ]
+      }
+    }
+  },
+  "camera": {
+    "frame_id": "camera_color_optical_frame",
+    "width": 1280,
+    "height": 720,
+    "distortion_model": "plumb_bob",
+    "D": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "R": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "K": [
+      1465.9985736982494,
+      0.0,
+      640.0,
+      0.0,
+      1465.9985736982494,
+      360.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "P": [
+      1465.9985736982494,
+      0.0,
+      640.0,
+      0.0,
+      0.0,
+      1465.9985736982494,
+      360.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ]
+  },
+  "topic_types": {
+    "/camera/color/image_raw": "sensor_msgs/msg/Image",
+    "/camera/color/camera_info": "sensor_msgs/msg/CameraInfo",
+    "/camera/aligned_depth_to_color/image_raw": "sensor_msgs/msg/Image",
+    "/clock": "rosgraph_msgs/msg/Clock",
+    "/tf_static": "tf2_msgs/msg/TFMessage"
+  },
+  "source_topic_counts": {
+    "/camera/color/image_raw": 149,
+    "/camera/color/camera_info": 149,
+    "/camera/aligned_depth_to_color/image_raw": 149,
+    "/clock": 151,
+    "/tf_static": 2
+  },
+  "selected_topic_counts": {
+    "/camera/color/image_raw": 8,
+    "/camera/aligned_depth_to_color/image_raw": 8,
+    "/camera/color/camera_info": 8,
+    "/clock": 10,
+    "/tf_static": 2
+  },
+  "static_tf_edges": [
+    [
+      "camera_link",
+      "camera_color_optical_frame"
+    ],
+    [
+      "world",
+      "camera_link"
+    ]
+  ],
+  "static_tf_matches_inspector_snapshot": true,
+  "selected_image_stamp_range_ns": [
+    36933335259,
+    37050001932
+  ],
+  "depth_unit": "NOT VERIFIED",
+  "depth_semantics": "NOT VERIFIED",
+  "pixel_correspondence": "NOT VERIFIED"
+}

@@ -1,0 +1,11 @@
+# Local build and interpreter outputs are never part of the public source tree.
+**/__pycache__/
+*.py[cod]
+**/build/
+**/install/
+**/log/
+**/cache/
+.local_artifacts/
+.env
+.env.*
+!.env.example

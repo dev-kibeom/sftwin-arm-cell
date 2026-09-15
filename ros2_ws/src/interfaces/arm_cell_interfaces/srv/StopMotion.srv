@@ -1,0 +1,8 @@
+# Safety request identity is echoed in MotionStatus.last_stop_request_id.
+unique_identifier_msgs/UUID request_id
+StopMode stop_mode
+SafetyCauseSet causes
+---
+# accepted confirms dispatch processing only; MotionStatus confirms STOPPED.
+bool accepted
+string diagnostic_detail

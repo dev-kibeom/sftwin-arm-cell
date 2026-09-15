@@ -1,0 +1,28 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: world
+  Displays:
+    - Class: rviz_default_plugins/RobotModel
+      Name: Measured robot
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+      Enabled: true
+    - Class: moveit_rviz_plugin/Trajectory
+      Name: Planned path (display only)
+      Robot Description: robot_description
+      Trajectory Topic: /display_planned_path
+      Enabled: true
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.5
+      Pitch: 0.5
+      Yaw: 0.8

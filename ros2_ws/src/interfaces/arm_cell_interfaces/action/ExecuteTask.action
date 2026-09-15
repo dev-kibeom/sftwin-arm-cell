@@ -1,0 +1,16 @@
+# Goal. The ROS Action Goal UUID is the execution identity.
+MotionTaskType task_type
+geometry_msgs/PoseStamped target_pose
+bool has_target_pose
+float32 estimated_object_height_m
+bool has_estimated_object_height
+float32 grasp_width_mm
+bool has_grasp_width
+---
+# Result. The terminal action state is independent from this canonical result code.
+MotionTaskResultCode result_code
+string diagnostic_detail
+---
+# Feedback.
+MotionTaskPhase phase
+string diagnostic_detail

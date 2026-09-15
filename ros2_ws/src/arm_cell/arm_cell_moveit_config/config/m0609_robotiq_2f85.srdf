@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!-- Mechanically adjacent/rigid assembly pairs only; no sampled blanket exclusions. -->
+<robot name="m0609_robotiq_2f85">
+  <group name="arm">
+    <chain base_link="base_link" tip_link="sf_grasp_tcp" />
+  </group>
+  <group name="gripper">
+    <link name="gripper_robotiq_85_base_link" />
+    <link name="gripper_robotiq_85_left_knuckle_link" />
+    <link name="gripper_robotiq_85_right_knuckle_link" />
+    <link name="gripper_robotiq_85_left_finger_link" />
+    <link name="gripper_robotiq_85_right_finger_link" />
+    <link name="gripper_robotiq_85_left_inner_knuckle_link" />
+    <link name="gripper_robotiq_85_right_inner_knuckle_link" />
+    <link name="gripper_robotiq_85_left_finger_tip_link" />
+    <link name="gripper_robotiq_85_right_finger_tip_link" />
+  </group>
+  <end_effector name="robotiq" parent_link="tool_mount" group="gripper" parent_group="arm" />
+  <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="base_link" />
+  <disable_collisions link1="base_link" link2="base" reason="Adjacent" />
+  <disable_collisions link1="base_link" link2="link_1" reason="Adjacent" />
+  <disable_collisions link1="link_1" link2="link_2" reason="Adjacent" />
+  <disable_collisions link1="link_2" link2="link_3" reason="Adjacent" />
+  <disable_collisions link1="link_3" link2="link_4" reason="Adjacent" />
+  <disable_collisions link1="link_4" link2="link_5" reason="Adjacent" />
+  <disable_collisions link1="link_5" link2="link_6" reason="Adjacent" />
+  <disable_collisions link1="link_6" link2="tool0" reason="Adjacent" />
+  <disable_collisions link1="tool0" link2="sf_tool_adapter" reason="Adjacent" />
+  <disable_collisions link1="sf_tool_adapter" link2="tool_mount" reason="Adjacent" />
+  <disable_collisions link1="tool_mount" link2="gripper_robotiq_85_base_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_base_link" link2="gripper_robotiq_85_left_knuckle_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_base_link" link2="gripper_robotiq_85_right_knuckle_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_left_knuckle_link" link2="gripper_robotiq_85_left_finger_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_right_knuckle_link" link2="gripper_robotiq_85_right_finger_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_base_link" link2="gripper_robotiq_85_left_inner_knuckle_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_base_link" link2="gripper_robotiq_85_right_inner_knuckle_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_left_finger_link" link2="gripper_robotiq_85_left_finger_tip_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_right_finger_link" link2="gripper_robotiq_85_right_finger_tip_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_robotiq_85_base_link" link2="sf_grasp_tcp" reason="Adjacent" />
+  <!-- The wrist and gripper base are one rigid mount, separated in the URDF
+       by tool0 / sf_tool_adapter / tool_mount semantic frames with no geometry. -->
+  <disable_collisions link1="link_6" link2="gripper_robotiq_85_base_link" reason="Rigid tool mount"/>
+  <!-- The URDF tree opens each physical four-bar loop. These mating links meet
+       at its omitted closure joint; mimic constraints preserve that connection. -->
+  <disable_collisions link1="gripper_robotiq_85_left_inner_knuckle_link" link2="gripper_robotiq_85_left_finger_tip_link" reason="Four-bar closure"/>
+  <disable_collisions link1="gripper_robotiq_85_right_inner_knuckle_link" link2="gripper_robotiq_85_right_finger_tip_link" reason="Four-bar closure"/>
+</robot>

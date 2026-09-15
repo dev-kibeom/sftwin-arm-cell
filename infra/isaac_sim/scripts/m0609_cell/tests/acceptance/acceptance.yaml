@@ -1,0 +1,32 @@
+expected_resolution: [1280, 720]
+expected_encodings:
+  color: rgb8
+  depth: 32FC1
+offered_qos:
+  reliability: reliable
+  durability: volatile
+  history: unknown
+camera_info:
+  frame_id: camera_color_optical_frame
+  distortion_model: plumb_bob
+  D: [0.0, 0.0, 0.0, 0.0, 0.0]
+  R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+  K: [1465.9985736982494, 0.0, 640.0, 0.0, 1465.9985736982494, 360.0, 0.0, 0.0, 1.0]
+  P: [1465.9985736982494, 0.0, 640.0, 0.0, 0.0, 1465.9985736982494, 360.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+sensor_profile_id: null
+calibration_id: null
+depth_unit: metres
+depth_semantics: DistanceToImagePlane_optical_axis_Z
+camera_info_exact_stamp_verified: true
+startup_timeout_wall_s: 10.0
+observation_duration_wall_s: 5.0
+minimum_pair_count: 8
+max_pending_pairs: 16
+max_receipt_age_wall_s: 1.0
+max_clock_lead_sim_s: null
+max_clock_lag_sim_s: null
+max_unmatched_fraction: 0.0
+projection_tolerance_px: null
+depth_tolerance_m: 0.002
+tf_translation_tolerance_m: 0.0001
+tf_rotation_tolerance_rad: 0.0001

@@ -1,0 +1,11 @@
+# target_id is the caller-visible logical work/target selection key.
+# The ROS Action Goal UUID is the execution identity.
+string target_id
+---
+# DEPLETED is normal completion. Recovery never rewrites the original exit_reason.
+MissionExitReason exit_reason
+string diagnostic_detail
+---
+# Feedback is a public mission phase, not a BehaviorTree implementation state.
+MissionPhase phase
+string diagnostic_detail

@@ -1,0 +1,3 @@
+# Position/velocity limits remain those in the canonical URDF.
+# No acceleration limits or time-parameterization adapter in this planning-only profile.
+joint_limits: {}

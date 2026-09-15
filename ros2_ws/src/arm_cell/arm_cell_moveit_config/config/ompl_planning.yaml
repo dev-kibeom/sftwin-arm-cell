@@ -1,0 +1,12 @@
+planning_plugin: ompl_interface/OMPLPlanner
+# Preserve invalid-start rejection. No start-state collision repair or time parameterization.
+request_adapters: default_planner_request_adapters/ResolveConstraintFrames
+start_state_max_bounds_error: 0.0
+planner_configs:
+  RRTConnect:
+    type: geometric::RRTConnect
+    range: 0.0
+arm:
+  default_planner_config: RRTConnect
+  planner_configs: [RRTConnect]
+  longest_valid_segment_fraction: 0.005

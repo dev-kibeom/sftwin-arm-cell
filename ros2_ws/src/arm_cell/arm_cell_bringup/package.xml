@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>arm_cell_bringup</name>
+  <version>0.1.0</version>
+  <description>ARM Cell ROS integration composition.</description>
+  <maintainer email="neopkrrl@gmail.com">kibeom</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>arm_cell_description</depend>
+  <depend>arm_cell_sim_adapter</depend>
+  <depend>arm_cell_moveit_config</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>tf2_ros</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>ament_index_python</depend>
+  <depend>python3-yaml</depend>
+  <depend>xacro</depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

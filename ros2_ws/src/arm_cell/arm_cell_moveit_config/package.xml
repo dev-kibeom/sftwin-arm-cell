@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>arm_cell_moveit_config</name>
+  <version>0.1.0</version>
+  <description>ARM Cell robot planning configuration and bounded static-scene profile.</description>
+  <maintainer email="neopkrrl@gmail.com">kibeom</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>arm_cell_description</depend>
+  <depend>moveit_ros_move_group</depend>
+  <depend>moveit_kinematics</depend>
+  <depend>moveit_planners_ompl</depend>
+  <depend>moveit_ros_visualization</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>ament_index_python</depend>
+  <depend>python3-yaml</depend>
+  <depend>xacro</depend>
+  <depend>rviz2</depend>
+  <depend>rclpy</depend>
+  <depend>moveit_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>shape_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
