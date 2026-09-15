@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "manifest": "m0609_static_environment.json",
+  "selected_ids": [
+    "factory_floor",
+    "pedestal",
+    "pedestal_top",
+    "robot_riser",
+    "cnc_base",
+    "cnc_upper_housing",
+    "camera_rig_post_left",
+    "camera_rig_post_right",
+    "camera_rig_top_beam",
+    "camera_boom",
+    "camera_drop_bracket",
+    "cable_tray"
+  ],
+  "policy": {
+    "operation": "add_or_replace_selected_objects",
+    "preserve_unselected_objects": true,
+    "preserve_allowed_collision_matrix": true
+  }
+}

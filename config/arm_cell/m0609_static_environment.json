@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "coverage": "partial",
+  "frame_id": "world",
+  "objects": [
+    {
+      "id": "factory_floor",
+      "display_name": "FactoryFloor",
+      "geometry": {"type": "box", "dimensions_m": [5.4, 5.4, 0.03]},
+      "pose": {"position_m": [0.25, -0.2, -0.015], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "pedestal",
+      "display_name": "Pedestal",
+      "geometry": {"type": "box", "dimensions_m": [0.5, 0.5, 0.6]},
+      "pose": {"position_m": [0.15, -0.15, 0.3], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "pedestal_top",
+      "display_name": "PedestalTop",
+      "geometry": {"type": "box", "dimensions_m": [0.58, 0.58, 0.05]},
+      "pose": {"position_m": [0.15, -0.15, 0.625], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "robot_riser",
+      "display_name": "RobotRiser",
+      "geometry": {"type": "box", "dimensions_m": [0.25, 0.25, 0.03]},
+      "pose": {"position_m": [0.15, -0.15, 0.665], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "cnc_base",
+      "display_name": "CNC Base",
+      "geometry": {"type": "box", "dimensions_m": [1.22, 0.8, 0.84]},
+      "pose": {"position_m": [0.82, 0.72, 0.42], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "cnc_upper_housing",
+      "display_name": "CNC UpperHousing",
+      "geometry": {"type": "box", "dimensions_m": [1.22, 0.8, 0.48]},
+      "pose": {"position_m": [0.82, 0.74, 1.06], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "camera_rig_post_left",
+      "display_name": "CameraRig PostLeft",
+      "geometry": {"type": "box", "dimensions_m": [0.055, 0.055, 1.9]},
+      "pose": {"position_m": [-0.56, -0.35, 0.95], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "camera_rig_post_right",
+      "display_name": "CameraRig PostRight",
+      "geometry": {"type": "box", "dimensions_m": [0.055, 0.055, 1.9]},
+      "pose": {"position_m": [0.96, -0.35, 0.95], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "camera_rig_top_beam",
+      "display_name": "CameraRig TopBeam",
+      "geometry": {"type": "box", "dimensions_m": [1.58, 0.06, 0.06]},
+      "pose": {"position_m": [0.2, -0.35, 1.88], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "camera_boom",
+      "display_name": "CameraBoom",
+      "geometry": {"type": "box", "dimensions_m": [0.06, 0.52, 0.06]},
+      "pose": {"position_m": [0.2, -0.59, 1.82], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "camera_drop_bracket",
+      "display_name": "CameraDropBracket",
+      "geometry": {"type": "box", "dimensions_m": [0.08, 0.08, 0.04]},
+      "pose": {"position_m": [0.2, -0.83, 1.77], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    },
+    {
+      "id": "cable_tray",
+      "display_name": "CableTray",
+      "geometry": {"type": "box", "dimensions_m": [1.4, 0.05, 0.035]},
+      "pose": {"position_m": [0.2, -0.3, 1.95], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+    }
+  ]
+}

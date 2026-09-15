@@ -1,0 +1,3 @@
+# Deployment snapshot template.  Generate a populated copy with inspect_camera.py
+# from the composed Isaac stage; this file intentionally carries no guessed pose.
+camera_snapshot: null

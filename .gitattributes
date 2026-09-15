@@ -1,0 +1,2 @@
+# Preserve upstream Robotiq Xacro serialization, including CRLF line endings.
+infra/isaac_sim/assets/third_party/robotiq_description/urdf/*.xacro -text whitespace=-trailing-space

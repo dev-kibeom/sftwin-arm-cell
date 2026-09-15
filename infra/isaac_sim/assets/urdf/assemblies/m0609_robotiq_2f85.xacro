@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="m0609_robotiq_2f85">
+  <!-- Source-tree entry point for the standalone Isaac importer; no ROS overlay required. -->
+  <xacro:arg name="mesh_root" default="${xacro.abs_filename('../../../../../ros2_ws/src/arm_cell/arm_cell_description/meshes')}"/>
+  <xacro:include filename="../../../../../ros2_ws/src/arm_cell/arm_cell_description/urdf/m0609_robotiq_2f85.urdf.xacro"/>
+</robot>

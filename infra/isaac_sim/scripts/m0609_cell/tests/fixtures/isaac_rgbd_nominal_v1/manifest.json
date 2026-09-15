@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "fixture_id": "isaac_rgbd_nominal_v1",
+  "status": "PARTIALLY VERIFIED",
+  "source_capture": {
+    "uri": "local-artifact://ros2_bags/arm-cell-m1c-rgbd-runtime-2026-09-11",
+    "db3_sha256": "d86133ffcf00a3d4801ab7bbc50e3db7d9f912e5087025cd1e1be8f4a136044f",
+    "source_mutated": false
+  },
+  "repository_revision": "4feed3e006858eae9c18c013ca484ed2b49dd957",
+  "provenance": {
+    "camera_snapshot_path": "local-artifact://m1c/isaac_camera_snapshot.json",
+    "camera_snapshot_sha256": "2b8c1f4af222020db42e167c2ab7026818777c872e95771eb7b0f33a59fa5987",
+    "camera_profile_path": "local-artifact://m1c/isaac_camera_verified.yaml",
+    "camera_profile_sha256": "3963eb9d796f44cccb7d43a52a76439c974f393b8b9305561e19179fbbc23a94",
+    "stage_snapshot": {
+      "schema_version": 1,
+      "camera_prim": "/World/SF_Twin_Cell/Vision/Camera_Sensor",
+      "stage_meters_per_unit": 1.0,
+      "world_to_camera_link": {
+        "parent_frame": "world",
+        "child_frame": "camera_link",
+        "translation_m": [
+          0.2,
+          -0.83,
+          1.725
+        ],
+        "quaternion_xyzw": [
+          0.7071067811865476,
+          -0.7071067811865475,
+          -4.3297802811774664e-17,
+          -4.329780281177467e-17
+        ]
+      },
+      "camera_link_to_optical": {
+        "parent_frame": "camera_link",
+        "child_frame": "camera_color_optical_frame",
+        "translation_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "quaternion_xyzw": [
+          0.5,
+          -0.5,
+          0.5,
+          -0.5
+        ]
+      },
+      "projection": {
+        "focalLength": 24.0,
+        "horizontalAperture": 20.954999923706055,
+        "verticalAperture": 15.290800094604492,
+        "clippingRange": [
+          0.10000000149011612,
+          10.0
+        ]
+      }
+    }
+  },
+  "camera": {
+    "frame_id": "camera_color_optical_frame",
+    "width": 1280,
+    "height": 720,
+    "distortion_model": "plumb_bob",
+    "D": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "R": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "K": [
+      1465.9985736982494,
+      0.0,
+      640.0,
+      0.0,
+      1465.9985736982494,
+      360.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "P": [
+      1465.9985736982494,
+      0.0,
+      640.0,
+      0.0,
+      0.0,
+      1465.9985736982494,
+      360.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ]
+  },
+  "topic_types": {
+    "/tf_static": "tf2_msgs/msg/TFMessage",
+    "/clock": "rosgraph_msgs/msg/Clock",
+    "/camera/aligned_depth_to_color/image_raw": "sensor_msgs/msg/Image",
+    "/camera/color/camera_info": "sensor_msgs/msg/CameraInfo",
+    "/camera/color/image_raw": "sensor_msgs/msg/Image"
+  },
+  "source_topic_counts": {
+    "/tf_static": 2,
+    "/clock": 58,
+    "/camera/aligned_depth_to_color/image_raw": 57,
+    "/camera/color/camera_info": 57,
+    "/camera/color/image_raw": 57
+  },
+  "selected_topic_counts": {
+    "/camera/color/image_raw": 8,
+    "/camera/aligned_depth_to_color/image_raw": 8,
+    "/camera/color/camera_info": 8,
+    "/clock": 8,
+    "/tf_static": 2
+  },
+  "static_tf_edges": [
+    [
+      "camera_link",
+      "camera_color_optical_frame"
+    ],
+    [
+      "world",
+      "camera_link"
+    ]
+  ],
+  "static_tf_matches_inspector_snapshot": true,
+  "selected_image_stamp_range_ns": [
+    364533352345,
+    364650019017
+  ],
+  "depth_unit": "NOT VERIFIED",
+  "depth_semantics": "NOT VERIFIED",
+  "pixel_correspondence": "NOT VERIFIED"
+}

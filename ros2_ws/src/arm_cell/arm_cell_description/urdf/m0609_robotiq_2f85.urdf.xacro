@@ -1,0 +1,73 @@
+<?xml version="1.0"?>
+
+<robot
+    xmlns:xacro="http://www.ros.org/wiki/xacro"
+    name="m0609_robotiq_2f85">
+
+    <xacro:arg name="mesh_root" default="package://arm_cell_description/meshes"/>
+
+    <!-- M0609 -->
+    <xacro:include filename="m0609_macro.xacro"/>
+
+    <!-- SF-Twin tool abstraction -->
+    <xacro:include filename="m0609_tool_adapter.xacro"/>
+
+    <!-- Vendored Robotiq 2F-85 -->
+    <xacro:include filename="robotiq_2f_85_macro.urdf.xacro"/>
+
+
+    <!-- =========================================================
+         Robot
+         ========================================================= -->
+
+    <xacro:m0609_robot
+    mesh_dir="$(arg mesh_root)"/>
+
+
+    <!-- =========================================================
+         SF-Twin standard tool adapter
+         ========================================================= -->
+
+    <xacro:m0609_tool_adapter
+        parent="tool0"
+        adapter_link="sf_tool_adapter"
+        mount_link="tool_mount"
+        xyz="0 0 0"
+        rpy="0 0 0"/>
+
+
+    <!-- =========================================================
+         Robotiq 2F-85
+         ========================================================= -->
+
+    <xacro:robotiq_gripper
+        name="robotiq_2f85"
+        prefix="gripper_"
+        parent="tool_mount"
+
+        mesh_dir="$(arg mesh_root)/robotiq"
+
+        sim_gazebo="false"
+        sim_isaac="false">
+
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+
+    </xacro:robotiq_gripper>
+
+
+    <!-- =========================================================
+         SF-Twin canonical grasp TCP
+         ========================================================= -->
+
+    <link name="sf_grasp_tcp"/>
+
+    <joint name="gripper_to_sf_grasp_tcp" type="fixed">
+        <parent link="gripper_robotiq_85_base_link"/>
+        <child link="sf_grasp_tcp"/>
+
+        <!-- Initial estimate.
+             Calibrate after visual/kinematic validation. -->
+        <origin xyz="0 0 0.15" rpy="0 0 0"/>
+    </joint>
+
+</robot>
