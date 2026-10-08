@@ -1,0 +1,141 @@
+# Supported simulator-backed ARM Cell operational profile and reproducible
+# startup defaults. ROS parameters override these values for the current run.
+# Classification: backend/owner wiring, names, topics, model/kinematics,
+# geometry are static/restart-required. Motion's listed
+# planning/tolerance/watchdog/holding values are idle-mutable and take
+# effect on the next Motion action. Motion's planning budgets and scaling
+# factors are runtime-safe: updates queue for the next action while an active
+# action keeps its tuning snapshot. Safety behavior remains restart-required.
+#
+# Integration owns ROS/simulator composition.  The optional simulator includes
+# are externally started; this profile does not imply live Isaac evidence.
+use_sim_time: true
+
+readiness:
+  fail_closed_until_inputs_fresh: true
+  required_motion_backend: true
+
+vda:
+  publish_period_ms: 100
+  material_phase_period_ms: 100
+  degraded_publish_period_ms: 300
+
+material_handoff:
+  transfer_duration_ms: 100
+  source_freshness_timeout_ms: 500
+
+safety:
+  freshness_timeout_ms: 500
+  source_timestamp_max_age_ms: 2000
+  degraded_freshness_threshold_ms: 180
+  degraded_freshness_inputs: [AMR, PACKML]
+  degraded_velocity_scale: 0.5
+  degraded_acceleration_scale: 0.5
+
+vision:
+  sync_slop_ms: 10.0
+  # The profile default remains 500 ms pending production timing measurement.
+  # DetectTarget requests carry the authoritative per-request deadline.
+  request_timeout_ms: 500.0
+  receipt_max_age_ms: -1.0
+  reusable_pair_max_age_ms: 200.0
+  sync_queue_size: 20
+  rgb_topic: /camera/color/image_raw
+  depth_topic: /camera/aligned_depth_to_color/image_raw
+  camera_info_topic: /camera/color/camera_info
+  detector_profiles:
+    RawPart:
+      target_id: RawPart
+      observation_reference: visible_top_surface_centroid
+      shape: box
+      dimensions_m: [0.07, 0.07, 0.08]
+      dimension_tolerance_m: [0.01, 0.01, 0.01]
+      workspace_roi_m:
+        x: [-0.12, 0.12]
+        y: [-0.14, 0.14]
+        z: [0.01, 0.12]
+      support_contact_tolerance_m: 0.01
+      top_surface_geometry_tolerance_m: 0.01
+      support_region_dimensions_m: [0.24, 0.28]
+      fiducial:
+        dictionary: DICT_4X4_50
+        marker_id: 0
+        size_m: 0.08
+        # Derived from the live 80 mm tag pose (1.07596 m) and synchronized
+        # support depth (1.0648 m) on the composed Isaac render product.
+        pose_translation_scale: 0.9896
+        support_frame: RawSlot
+        marker_in_support:
+          # Keep the support tag in the D455 color frame while clear of the
+          # centered 70 mm RawPart footprint.
+          position_m: [-0.040, -0.090, 0.0002]
+          rpy_rad: [0.0, 0.0, 0.0]
+
+motion:
+  backend_mode: isaac
+  # Initial MoveIt path-search budget; this is not a Motion action or
+  # trajectory completion deadline.
+  planning_time_s: 15.0
+  planning_velocity_scaling_factor: 0.1
+  planning_acceleration_scaling_factor: 0.1
+  # W06 seed enables the validated time-parameterized trajectory execution
+  # path; final acceleration calibration remains in M11-W01.
+  planning_max_acceleration_rad_s2: 5.0
+  place_candidate_planning_time_s: 15.0
+  place_total_planning_time_s: 60.0
+  # W06 production allowance for fresh gripper HELD feedback; timing hardening
+  # remains a later calibration responsibility.
+  holding_confirmation_timeout_ms: 2000
+  motion_progress_stall_timeout_s: 60.0
+  approach_entry_orientation_tolerance_rad: 0.08726646259971647
+  place_approach_entry_position_tolerance_m: 0.012
+  place_tracking_tolerance_rad: 0.01
+  arm_joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+  retract_joint_positions: [0.0, -0.5, 1.0, -1.3, -1.0, 0.0]
+  # RawPart's profile defines its observation as the visible top-surface
+  # centroid. Its 80 mm local height places the geometric center 40 mm below.
+  observation_to_object_translation: [0.0, 0.0, -0.04]
+  observation_to_object_quaternion: [0.0, 0.0, 0.0, 1.0]
+  # Production target position is the RawPart geometric center.
+  object_to_grasp_tcp_translation: [0.0, 0.0, 0.0]
+  # The URDF grasp TCP has +Z along the tool; rotate it 180 degrees about X
+  # so TCP +Z is the world-up approach direction's opposite, into the part.
+  object_to_grasp_tcp_quaternion: [1.0, 0.0, 0.0, 0.0]
+  # Bounded target roll/pitch search around the nominal top-down orientation.
+  target_roll_tolerance_rad: 0.034906585
+  target_pitch_tolerance_rad: 0.034906585
+  target_roll_sample_step_rad: 0.034906585
+  target_pitch_sample_step_rad: 0.034906585
+  insertion_axis_tcp: [0.0, 0.0, 1.0]
+  # PICK-only clearance seed: 150 mm from object center leaves about 110 mm
+  # between the nominal top-down TCP and the 80 mm RawPart top surface.
+  pick_approach_distance_m: 0.15
+  pick_retract_distance_m: 0.05
+  # W06 production seed includes bounded Isaac approach-entry residual margin;
+  # final calibration remains in M11-W01.
+  approach_entry_position_tolerance_m: 0.012
+  enable_test_backend_controls: false
+
+orchestration:
+  mission_target_id: RawPart
+  # Default deadline pending production timing measurement; each DetectTarget
+  # request carries its own Vision acquisition + processing deadline.
+  vision_request_timeout_ms: 500
+  recipe_directory: recipes
+
+# Initial capture-local grasp realization for the production Isaac gripper
+# runtime. These tolerances support the W06 demo path; motion/timing tuning is
+# owned by M11-W01.
+gripper_capture:
+  volume_dimensions_m: [0.12, 0.12, 0.12]
+  position_tolerance_m: 0.015
+  orientation_tolerance_deg: 12.0
+  contact_width_tolerance_mm: 2.0
+
+simulation:
+  planning_profile: isaac_planning.yaml
+  static_scene: true
+  # Initial W06 production value from bounded joint_2-only live tuning.
+  # Scales the imported Isaac angular-drive stiffness; all other drive
+  # parameters remain owned by the imported robot configuration.
+  joint_2_stiffness_scale: 2.75

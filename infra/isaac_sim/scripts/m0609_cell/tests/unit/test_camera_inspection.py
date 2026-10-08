@@ -192,6 +192,18 @@ def test_reference_surface_exports_center_and_off_axis_points():
     assert points["top_off_axis_a"] != points["top_center"]
 
 
+def test_authoritative_raw_part_bounds_use_authored_dimensions_for_top_surface():
+    minimum, maximum = camera.authoritative_box_bounds(
+        (0.03, -0.85, 0.71), (0.14, 0.14, 0.08)
+    )
+
+    assert minimum == pytest.approx((-0.04, -0.92, 0.67))
+    assert maximum == pytest.approx((0.10, -0.78, 0.75))
+    assert camera.inset_top_surface_points(minimum, maximum)["top_center"][2] == (
+        pytest.approx(0.75)
+    )
+
+
 def test_non_rigid_transform_is_rejected():
     assert not camera.is_rigid_rotation(
         ((2.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
@@ -228,7 +240,7 @@ def test_script_editor_snapshot_override_is_preserved():
     assert (
         camera.script_editor_output_path(
             {"SFTWIN_CAMERA_SNAPSHOT_PATH": "/tmp/operator_snapshot.json"},
-            "/workspace/inspect_camera.py",
+            "/workspace/camera_tooling/entrypoints/inspect_camera.py",
         )
         == "/tmp/operator_snapshot.json"
     )
@@ -238,7 +250,7 @@ def test_standalone_cli_remains_strict_about_unknown_arguments():
     with pytest.raises(SystemExit) as error:
         camera.run_entrypoint(
             argv=["--output", "/tmp/snapshot.json", "--unknown"],
-            script_path="/workspace/inspect_camera.py",
+            script_path="/workspace/camera_tooling/entrypoints/inspect_camera.py",
             inspector=lambda _: None,
         )
     assert error.value.code == 2
@@ -270,7 +282,7 @@ def test_standalone_cli_output_precedes_script_editor_filename_default():
     observed = []
     camera.run_entrypoint(
         argv=["--output", "/tmp/cli.json"],
-        script_path="/workspace/inspect_camera.py",
+        script_path="/workspace/camera_tooling/entrypoints/inspect_camera.py",
         inspector=lambda path: observed.append(path),
         output_filename="wrapper.json",
     )

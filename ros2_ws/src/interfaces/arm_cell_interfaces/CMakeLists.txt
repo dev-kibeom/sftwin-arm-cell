@@ -17,6 +17,8 @@ set(msg_files
   "msg/DetectTargetResultCode.msg"
   "msg/MissionExitReason.msg"
   "msg/MissionPhase.msg"
+  "msg/MaterialHandoffState.msg"
+  "msg/MaterialReadiness.msg"
   "msg/MotionCapability.msg"
   "msg/MotionStatus.msg"
   "msg/MotionTaskPhase.msg"
@@ -27,10 +29,14 @@ set(msg_files
   "msg/SafetyHardwareState.msg"
   "msg/SafetyState.msg"
   "msg/StopMode.msg"
+  "msg/VisionDiagnostic.msg"
 )
 
 set(srv_files
   "srv/DetectTarget.srv"
+  "srv/RequestMaterial.srv"
+  "srv/RequestMaterialSupply.srv"
+  "srv/ResetSafety.srv"
   "srv/StopMotion.srv"
 )
 
@@ -51,6 +57,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
+  add_executable(interface_contract_smoke tests/interface_contract_smoke.cpp)
+  rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+  target_link_libraries(interface_contract_smoke "${cpp_typesupport_target}")
+  add_test(NAME interface_contract_smoke COMMAND interface_contract_smoke)
+
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files

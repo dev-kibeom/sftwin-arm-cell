@@ -27,7 +27,6 @@ const char * status_name(arm_cell_vision::IngressStatus status)
     case IngressStatus::kDuplicateObservation: return "duplicate_observation";
     case IngressStatus::kSynchronizationSlopExceeded: return "sync_slop_exceeded";
     case IngressStatus::kStaleObservation: return "stale_observation";
-    case IngressStatus::kUnsettledObservation: return "unsettled_observation";
     case IngressStatus::kReceiptStaleObservation: return "receipt_stale_observation";
     case IngressStatus::kCalibrationUnavailable: return "calibration_unavailable";
     case IngressStatus::kIncompatibleMetadata: return "incompatible_metadata";

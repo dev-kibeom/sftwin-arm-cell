@@ -1,4 +1,7 @@
+import logging
 from enum import Enum
+
+LOGGER = logging.getLogger(__name__)
 
 
 class GripperState(Enum):
@@ -93,9 +96,10 @@ class Robotiq2F85Actuator:
             )
 
         if self.verbose:
-            print("[Robotiq] USD joints found:")
-            for name in self.JOINT_SIGNS:
-                print(f"  {name}: {self.joints[name].GetPath()}")
+            LOGGER.debug(
+                "Robotiq USD joints discovered paths=%s",
+                {name: str(self.joints[name].GetPath()) for name in self.JOINT_SIGNS},
+            )
 
     def _infer_robot_root_path(self):
         roots = set()
@@ -121,7 +125,7 @@ class Robotiq2F85Actuator:
         root = next(iter(roots))
 
         if self.verbose:
-            print(f"[Robotiq] Robot root inferred: {root}")
+            LOGGER.debug("Robotiq robot root inferred path=%s", root)
 
         return root
 
@@ -148,7 +152,7 @@ class Robotiq2F85Actuator:
             )
 
         if self.verbose:
-            print(f"[Robotiq] ArticulationRootAPI discovered: {candidates[0]}")
+            LOGGER.debug("Robotiq articulation root discovered path=%s", candidates[0])
 
         return candidates[0]
 
@@ -207,11 +211,14 @@ class Robotiq2F85Actuator:
 
         if self.verbose:
             runtime_path = self.dc.get_articulation_path(self.articulation)
-            print(f"[Robotiq] Robot root: {self.robot_root_path}")
-            print(f"[Robotiq] Runtime lookup path: {self.articulation_base_path}")
-            print(f"[Robotiq] Runtime articulation: {runtime_path}")
-            print(f"[Robotiq] DOF count: {dof_count}")
-            print("[Robotiq] READY")
+            LOGGER.debug(
+                "Robotiq actuator ready robot_root=%s lookup_path=%s "
+                "runtime_path=%s dof_count=%d",
+                self.robot_root_path,
+                self.articulation_base_path,
+                runtime_path,
+                dof_count,
+            )
 
     @staticmethod
     def _clamp01(value):
@@ -293,9 +300,10 @@ class Robotiq2F85Actuator:
         self.state = GripperState.HOLDING
 
         if self.verbose:
-            print(
-                f"[Robotiq] set_position q={self._commanded_q:.3f}, "
-                f"width≈{self.position_to_width(self._commanded_q):.1f} mm"
+            LOGGER.debug(
+                "Robotiq position set q=%.3f width_mm=%.3f",
+                self._commanded_q,
+                self.position_to_width(self._commanded_q),
             )
 
     def get_position(self):
@@ -365,9 +373,15 @@ class Robotiq2F85Actuator:
             self.state = GripperState.OPENING
 
         if self.verbose:
-            print(
-                f"[Robotiq] move_to {start_q:.3f} -> {q:.3f} "
-                f"({duration:.3f}s, {self.state.value})"
+            LOGGER.debug(
+                "Robotiq motion started start_q=%.3f target_q=%.3f "
+                "start_width_mm=%.3f target_width_mm=%.3f duration_s=%.3f state=%s",
+                start_q,
+                q,
+                self.position_to_width(start_q),
+                self.position_to_width(q),
+                duration,
+                self.state.value,
             )
 
     def update(self, dt):
@@ -398,9 +412,10 @@ class Robotiq2F85Actuator:
             self.state = GripperState.HOLDING
 
             if self.verbose:
-                print(
-                    f"[Robotiq] motion complete q={target_q:.3f}, "
-                    f"width≈{self.position_to_width(target_q):.1f} mm"
+                LOGGER.debug(
+                    "Robotiq motion completed target_q=%.3f target_width_mm=%.3f",
+                    target_q,
+                    self.position_to_width(target_q),
                 )
 
             return False
@@ -420,9 +435,10 @@ class Robotiq2F85Actuator:
         self.state = GripperState.HOLDING
 
         if self.verbose:
-            print(
-                f"[Robotiq] stopped at q={q:.3f}, "
-                f"width≈{self.position_to_width(q):.1f} mm"
+            LOGGER.debug(
+                "Robotiq motion stopped q=%.3f observed_width_mm=%.3f",
+                q,
+                self.position_to_width(q),
             )
 
         return q

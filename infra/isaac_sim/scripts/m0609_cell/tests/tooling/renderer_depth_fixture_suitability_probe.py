@@ -58,8 +58,12 @@ def _evaluate_target(target, decoded_depth, camera_info, criteria):
     u, v = project_target(target, camera_info)
     pixel = (int(round(u)), int(round(v)))
     target_width_m, target_height_m, _ = target.dimensions_m
-    half_width_px = camera_info.k[0] * target_width_m / (2.0 * target.front_optical_xyz_m[2])
-    half_height_px = camera_info.k[4] * target_height_m / (2.0 * target.front_optical_xyz_m[2])
+    half_width_px = (
+        camera_info.k[0] * target_width_m / (2.0 * target.front_optical_xyz_m[2])
+    )
+    half_height_px = (
+        camera_info.k[4] * target_height_m / (2.0 * target.front_optical_xyz_m[2])
+    )
     required_border_x = criteria.border_margin_px + half_width_px
     required_border_y = criteria.border_margin_px + half_height_px
 
@@ -76,9 +80,7 @@ def _evaluate_target(target, decoded_depth, camera_info, criteria):
     if inside_image and not border_pass:
         reasons.append("projected target lacks required border margin")
 
-    baseline_depth = (
-        float(decoded_depth[pixel[1], pixel[0]]) if inside_image else None
-    )
+    baseline_depth = float(decoded_depth[pixel[1], pixel[0]]) if inside_image else None
     required_depth = target.front_optical_xyz_m[2] + criteria.minimum_depth_clearance_m
     depth_clearance_pass = (
         baseline_depth is not None
@@ -125,7 +127,9 @@ def evaluate_candidate(candidate, depth, camera_info, criteria=SuitabilityCriter
         or criteria.minimum_separation_px <= 0
         or criteria.minimum_depth_clearance_m < 0
     ):
-        raise ValueError("suitability criteria must be non-negative and separation positive")
+        raise ValueError(
+            "suitability criteria must be non-negative and separation positive"
+        )
     expected_z = tuple(target.front_optical_xyz_m[2] for target in candidate.targets)
     if expected_z != TARGET_DEPTHS_M:
         raise ValueError("candidate optical depths must be 0.80, 1.10, and 1.40 metres")
@@ -145,7 +149,10 @@ def evaluate_candidate(candidate, depth, camera_info, criteria=SuitabilityCriter
             separation_pass = separation_pass and passed
             separations.append(
                 {
-                    "target_ids": [entries[left_index]["id"], entries[right_index]["id"]],
+                    "target_ids": [
+                        entries[left_index]["id"],
+                        entries[right_index]["id"],
+                    ],
                     "distance_px": distance,
                     "required_px": criteria.minimum_separation_px,
                     "pass": passed,
@@ -270,7 +277,9 @@ def _run_live(timeout_wall_s):
             super().__init__("renderer_depth_fixture_suitability_probe")
             self.result = None
             self.depth_subscriber = message_filters.Subscriber(self, Image, DEPTH_TOPIC)
-            self.info_subscriber = message_filters.Subscriber(self, CameraInfo, CAMERA_INFO_TOPIC)
+            self.info_subscriber = message_filters.Subscriber(
+                self, CameraInfo, CAMERA_INFO_TOPIC
+            )
             self.synchronizer = message_filters.TimeSynchronizer(
                 [self.depth_subscriber, self.info_subscriber], 10
             )
@@ -284,7 +293,9 @@ def _run_live(timeout_wall_s):
                     self.result = {
                         "status": "NOT VERIFIED",
                         "reason": f"invalid live depth/CameraInfo sample: {error}",
-                        "sample_stamp_ns": stamp_nanoseconds(depth_message.header.stamp),
+                        "sample_stamp_ns": stamp_nanoseconds(
+                            depth_message.header.stamp
+                        ),
                         "evaluated_candidates": [],
                         "fallback_candidates": [],
                         "final_recommendation": None,
@@ -322,7 +333,9 @@ def main(argv=None):
         parser.error("--timeout-wall-s must be a positive finite value")
     report = _run_live(args.timeout_wall_s)
     if args.diagnostic_dump:
-        report["diagnostic_dump_path"] = str(write_diagnostic_dump(report, args.diagnostic_dump))
+        report["diagnostic_dump_path"] = str(
+            write_diagnostic_dump(report, args.diagnostic_dump)
+        )
     print(serialize_report(report))
     return 0 if report["status"] == "FIXTURE SUITABILITY VERIFIED" else 1
 

@@ -4,7 +4,7 @@
 - **Document Type:** `ICD`
 - **Scope:** `Isaac / ARM Cell Integration / ROS State & TF Consumers`
 - **Version:** `1.0.0`
-- **Status:** `Draft`
+- **Status:** `Approved`
 - **Owner:** `ARM Cell Integration`
 - **Related ADR:** `ADR-ARM-CELL-0001`
 

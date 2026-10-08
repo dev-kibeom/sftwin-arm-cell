@@ -52,13 +52,29 @@ If calibration becomes incompatible or invalid, Vision SHALL reject processing u
 
 ## 4. Request Start / Stale Flush
 
-On a new DetectTarget request:
+The camera callback maintains only the newest structurally valid synchronized
+RGB-D pair as an input candidate. It is bounded to one pair and does not retain
+detector output. Each DetectTarget request first checks whether that pair is
+within the configured local-receipt freshness window (`reusable_pair_max_age_ms`,
+200 ms in the supported ARM Cell profile and capped at 200 ms). When a current
+simulation-clock sample is available, its RGB source stamp must also be no more
+than this window behind the clock. If so, that exact RGB-D pair and its original
+RGB source identity are passed to a new detector execution. Prior
+detection results are never reused. If no fresh candidate is available, Vision
+waits for a post-request synchronized pair whose image stamps advance past the
+request watermark and whose image receipts occur after request start. Cached
+CameraInfo is associated only after compatibility validation.
 
-1. stale/pre-request frame candidates are excluded according to the configured freshness boundary;
-2. configured settling behavior is applied when required by the observing-pose workflow;
-3. Vision waits for a fresh synchronized RGB-D pair;
-4. valid cached CameraInfo is associated;
-5. the resulting frame set is passed to perception.
+A DetectTarget request does not itself indicate a camera, observing-pose,
+scene, or material transition. A recent synchronized input can therefore be
+processed again when its receipt age and available sensor-time age are within
+the configured window; every request still executes the detector anew against
+the preserved source frames.
+Vision SHALL NOT impose an additional request-relative source-time settling
+window. If camera startup, lifecycle, observing-pose, or scene/material
+transition behavior requires stabilization, the contract and authority that
+own that transition SHALL explicitly define the requirement and its trigger.
+This FDS defines no such transition-specific settling mechanism.
 
 ## 5. Freshness vs Request Deadline
 
@@ -70,9 +86,22 @@ Sensor/sample freshness is evaluated using sensor/simulation timestamp semantics
 
 ### 5.2 Request deadline
 
-The DetectTarget wait/deadline is bounded by a monotonic steady-clock deadline.
+The DetectTarget request timeout is the sole deadline source for both
+acquisition of a fresh usable observation and processing of that observation,
+and is bounded by a monotonic steady-clock deadline. Adapter-local defaults
+MUST NOT expire an active request before its supplied timeout. Vision SHALL
+return `DETECT_RESULT_TIMEOUT` when the deadline expires before processing
+completes. A processing operation that
+cannot be interrupted may finish after the deadline, but its result SHALL NOT
+be reported as success or another terminal perception result.
 
 A paused `/clock` SHALL NOT cause an otherwise bounded API request to wait indefinitely.
+
+On timeout, the existing `diagnostic_detail` SHALL identify the most specific
+observed acquisition stage/rejection, or identify that processing started and
+exceeded the deadline. Where available it includes latest RGB, depth, and
+CameraInfo receipt ages, the latest RGB-depth stamp delta, and the last ingress
+status. Missing stream evidence remains explicitly unavailable.
 
 This is the intended architecture. Codex repository audit SHALL confirm current implementation alignment.
 

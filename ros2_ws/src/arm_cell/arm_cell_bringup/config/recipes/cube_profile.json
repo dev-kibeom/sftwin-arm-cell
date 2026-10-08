@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "recipe_id": "cube-validation-placement-v1",
+  "target_id": "cube_profile",
+  "grasp": {
+    "width_mm": 70.0,
+    "yaw_rad": 0.0
+  },
+  "place": {
+    "orientation_constraint": "fixed",
+    "desired_object_pose": {
+      "frame": "base_link",
+      "position": [0.50, 0.25, 0.37],
+      "orientation_xyzw": [0.0, 0.0, 0.0, 1.0]
+    },
+    "position_tolerance_m": 0.0,
+    "orientation_tolerance_rad": 0.0,
+    "approach": {
+      "direction_object": [0.0, 0.0, 1.0],
+      "distance_m": 0.05
+    },
+    "retract_distance_m": 0.05
+  }
+}

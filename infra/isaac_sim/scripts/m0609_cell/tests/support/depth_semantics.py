@@ -96,3 +96,35 @@ def classify_depth_samples(
         "candidate_max_error": residuals,
         "depth_unit": "metres" if semantic.endswith("_m") else "normalized",
     }
+
+
+def verify_declared_optical_z_for_coplanar_samples(
+    samples, classifier_result, helper_runtime, metric_tolerance_m
+):
+    """Use verified helper source semantics when geometry is intentionally coplanar."""
+    source_mapping = helper_runtime.get("source_mapping") if helper_runtime else None
+    expected_mapping = (
+        "type=depth maps to SensorType.DistanceToImagePlane in ROS2CameraHelper source"
+    )
+    if (
+        classifier_result.get("status") != "NOT VERIFIED"
+        or "independent optical depths" not in classifier_result.get("reason", "")
+        or not helper_runtime
+        or helper_runtime.get("status") != "VERIFIED"
+        or helper_runtime.get("helper_type_token") != "depth"
+        or source_mapping != expected_mapping
+        or not samples
+        or max(
+            abs(sample["actual_depth"] - sample["expected_optical_z_m"])
+            for sample in samples
+        )
+        > metric_tolerance_m
+    ):
+        return classifier_result
+    return {
+        **classifier_result,
+        "status": "VERIFIED",
+        "semantic": "optical_axis_z_m",
+        "depth_unit": "metres",
+        "verification_basis": "verified ROS2CameraHelper DistanceToImagePlane source mapping for coplanar reference geometry",
+    }

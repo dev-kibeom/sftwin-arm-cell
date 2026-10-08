@@ -7,15 +7,33 @@
   <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>arm_cell_description</depend>
+  <depend>arm_cell_vision</depend>
+  <depend>arm_cell_vda</depend>
+  <depend>arm_cell_safety</depend>
+  <depend>arm_cell_motion_moveit2</depend>
+  <depend>arm_cell_bt</depend>
+  <depend>arm_cell_integration</depend>
   <depend>arm_cell_sim_adapter</depend>
   <depend>arm_cell_moveit_config</depend>
   <depend>robot_state_publisher</depend>
   <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>moveit_msgs</depend>
+  <depend>std_msgs</depend>
   <depend>launch</depend>
   <depend>launch_ros</depend>
   <depend>ament_index_python</depend>
   <depend>python3-yaml</depend>
   <depend>xacro</depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>launch_testing_ament_cmake</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>std_srvs</test_depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>arm_cell_safety</test_depend>
+  <test_depend>arm_cell_motion_moveit2</test_depend>
+  <test_depend>arm_cell_bt</test_depend>
+  <test_depend>yaml-cpp</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>
