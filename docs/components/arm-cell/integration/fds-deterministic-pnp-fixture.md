@@ -285,7 +285,7 @@ insufficient without these observations.
 
 ## 8. Calibration Boundary
 
-WU-14 may establish only the simulator validation profile's
+The simulator validation profile may establish only the
 object-reference-to-grasp-TCP transform, approach/retract values, Home
 tolerance, capture volume, and snap tolerances.
 
@@ -325,9 +325,9 @@ right fingertip links. Inner/outer knuckles, the gripper base, arm links,
 pedestal, and self-collision remain disallowed. The policy is restored after
 the grasp planning operation and is not available to production launches.
 
-Failure to provide or validate the simulator profile values blocks WU-14
-acceptance; it does not authorize Motion to absorb Vision error or the Isaac
-adapter to widen tolerances dynamically.
+Failure to provide or validate the simulator profile values blocks acceptance
+of this validation scenario; it does not authorize Motion to absorb Vision
+error or the Isaac adapter to widen tolerances dynamically.
 
 ## 9. Non-Goals
 
@@ -374,8 +374,8 @@ from the expected release center is recorded as a separate post-release
 observation against `place.position_tolerance_m`; it does not gate PLACE success
 or cleanup. The expected center is derived from
 `orchestration.mission_place_pose_xyz` / quaternion using the inverse existing
-`motion.object_to_grasp_tcp_*` transform. This remains WU-14 validation behavior,
-not production placement-quality validation.
+`motion.object_to_grasp_tcp_*` transform. This remains specific to the
+validation scenario, not production placement-quality validation.
 
 ### VR-INT-PNP-06 — Home observation
 The scenario passes only when GO_HOME follows PLACE and measured joints are

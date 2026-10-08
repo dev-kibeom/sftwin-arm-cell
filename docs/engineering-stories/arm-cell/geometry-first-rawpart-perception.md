@@ -44,4 +44,3 @@ contract so the next target can use a different strategy.
 
 - [`RawPart Depth Perception FDS`](../../components/arm-cell/vision/fds-rawpart-depth-perception.md)
 - [`DetectTarget ICD`](../../interfaces/arm-cell/icd-vision-orchestration.md)
-- PR #55, PR #70, PR #189

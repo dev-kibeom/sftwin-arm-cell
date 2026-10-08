@@ -132,7 +132,7 @@ preference may rank feasible candidates within the object constraint. For
 movement, time-parameterized trajectory duration, then stable candidate order.
 The existing bounded planning budget applies. These process constraints do not
 alter Safety authority, execution completion tolerances, or post-release
-verification. This W06/demo path does not verify a settled post-release Object
+verification. This demo path does not verify a settled post-release Object
 Pose.
 
 The recipe schema retains `orientation_tolerance_rad` for compatibility. It

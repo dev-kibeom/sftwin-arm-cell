@@ -30,6 +30,4 @@ of a system-wide performance gain.
 
 ## References
 
-- PR #231, PR #232, PR #233
-- PR #269
 - [`Hub operator UI FDS`](../../components/arm-cell/integration/fds-operator-ui-hub.md)

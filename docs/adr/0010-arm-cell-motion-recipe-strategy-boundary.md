@@ -57,6 +57,3 @@ MissionRecipe, Motion CDS/FDS, and relevant ICDs.
 
 - [`docs/components/arm-cell/motion/cds.md`](../components/arm-cell/motion/cds.md)
 - [`docs/interfaces/arm-cell/icd-orchestration-motion.md`](../interfaces/arm-cell/icd-orchestration-motion.md)
-- PR #242
-- PR #246
-- PR #270

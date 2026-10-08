@@ -427,7 +427,7 @@ grasp width and required fallback yaw on PICK and its configured Desired Object
 Pose and process tolerance on PLACE. Vision SHALL override that fallback yaw only when its
 explicit yaw-presence semantic is true. Vision SHALL remain the source of PICK
 object pose/geometry only, and
-Orchestration SHALL not issue RETRACT as part of WU-09 Safety-preemption
+Orchestration SHALL not issue RETRACT as part of Safety-preemption
 coordination.
 
 ### VR-ORCH-MISSION-05 — Terminal Safety precedence
