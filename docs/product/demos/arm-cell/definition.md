@@ -16,13 +16,13 @@ the meaning of final live acceptance. It does not define implementation
 structure, class or file names, ROS details, UI layout, simulator workarounds,
 or component-level algorithms.
 
-The [SF-Twin Product Definition](../../definition.md) retains authority over
-whole-product identity, lifecycle, global constraints, and the canonical
-registry. Existing capability authorities retain authority over reusable
-capability-local requirements. Approved HLD, CDS, FDS, and ICD documents
-retain authority over architecture, ownership, interfaces, dynamic design,
-safety mechanisms, and calibration. A delivery plan decomposes this demo
-meaning into milestones and Work Units; it does not redefine it.
+This definition is limited to ARM Cell demo scope, demo-complete meaning, and
+final live acceptance. Existing capability authorities retain authority over
+reusable capability-local requirements. Approved HLD, CDS, FDS, and ICD
+documents retain authority over architecture, ownership, interfaces, dynamic
+design, safety mechanisms, and calibration. An implementation plan may
+organize delivery into milestones and tasks; it does not redefine this demo
+meaning.
 
 ## 2. Demo-Complete Outcome
 

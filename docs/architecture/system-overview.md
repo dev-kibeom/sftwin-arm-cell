@@ -7,7 +7,6 @@
 - **Status:** Draft
 - **Owner:** Architecture Authority
 - **Source:** `[SF-Twin]_SAD_v13.0` decomposition
-- **Related Product Definition:** `[SF-Twin]_PRD-DEFINITION_v1.0.0`
 - **Related Capabilities:** `WEB`, `BF-LITE`, `BF-STD`, `GF-D1`, `GF-D2`
 
 ## 1. Purpose
