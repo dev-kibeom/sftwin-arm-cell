@@ -35,6 +35,5 @@ causes.
 
 ## References
 
-- PR #257, PR #258, PR #259
 - [`Safety supervision FDS`](../../components/arm-cell/safety/fds-supervision.md)
 - [`Safety stop/recovery FDS`](../../components/arm-cell/safety/fds-stop-recovery.md)

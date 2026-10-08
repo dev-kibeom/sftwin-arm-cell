@@ -6,7 +6,6 @@
 
 ### AD-001 — Safety-owned stop severity publication
 
-- **Applicable Work Unit:** WU-10
 - **Context/problem:** Controlled recovery needed to observe the selected stop
   severity without moving stop authority into Orchestration.
 - **Decision:** Safety publishes `SafetyState.selected_stop_mode`; Safety remains
@@ -14,7 +13,6 @@
   value.
 - **Rationale:** Preserve Safety ownership while making the accepted recovery
   arbitration observable and deterministic.
-- **Affected Work Unit / PR:** WU-10; PR #42 handoff corrections
 - **Normative owner(s):** [Safety Stop/Recovery FDS](../../components/arm-cell/safety/fds-stop-recovery.md); [Safety ↔ Orchestration ICD](../../interfaces/arm-cell/icd-safety-orchestration.md); shared [`SafetyState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/SafetyState.msg); [Safety ↔ Motion ICD](../../interfaces/arm-cell/icd-safety-motion.md) for the Safety-owned stop-initiation/severity boundary
 - **ADR:** None recorded
 - **Status:** Accepted
