@@ -7,6 +7,7 @@ from graph_builder.graph_contract import (
     DEPTH_TOPIC,
     GRAPH_PATH,
     GRIPPER_COMMAND_TOPIC,
+    GRIPPER_STATUS_TOPIC,
     JOINT_COMMAND_TOPIC,
     JOINT_STATE_TOPIC,
     RGB_TOPIC,
@@ -28,3 +29,4 @@ def test_graph_contract_preserves_approved_ros_camera_and_command_strings():
         "/joint_commands",
         "/gripper/command",
     )
+    assert GRIPPER_STATUS_TOPIC == "/gripper/status"

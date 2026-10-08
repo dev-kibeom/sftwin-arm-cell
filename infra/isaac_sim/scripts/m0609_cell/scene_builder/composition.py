@@ -1,6 +1,8 @@
 """Final M0609 scene composition, cleanup, and ordered builder orchestration."""
 
 from dataclasses import dataclass
+import os
+from pathlib import Path
 
 import numpy as np
 
@@ -14,6 +16,7 @@ from scene_builder.d455_camera import d455_asset_url, mount_d455
 from scene_builder.environment import build_environment
 from scene_builder.logical_camera import create_logical_camera_sensor
 from scene_builder.reachability import run_reachability_check
+from scene_builder.rawpart_profile import load_rawpart_profile
 from scene_builder.robot_station import build_robot_station
 from scene_builder.materials import create_preview_material
 from scene_builder.primitives import (
@@ -212,6 +215,10 @@ def run_scene_build(
         author_static_manifest_box,
         add_reference_to_stage,
     )
+    project_root = (
+        os.environ.get("SFTWIN_PROJECT_ROOT") or Path(__file__).resolve().parents[5]
+    )
+    context.rawpart_profile = load_rawpart_profile(project_root)
     for path in LEGACY_CLEANUP:
         if context.stage.GetPrimAtPath(path).IsValid():
             delete_prim(path)

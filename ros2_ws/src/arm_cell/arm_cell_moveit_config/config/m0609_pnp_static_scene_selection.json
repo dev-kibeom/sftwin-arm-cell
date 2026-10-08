@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "selected_ids": [
+    "pedestal",
+    "cnc_front_left",
+    "cnc_front_top",
+    "camera_rig_post_left",
+    "amr_tray_rail_left",
+    "amr_tray_rail_right",
+    "amr_tray_rail_rear"
+  ]
+}

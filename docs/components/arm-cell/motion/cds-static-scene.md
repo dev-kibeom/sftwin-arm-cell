@@ -4,13 +4,15 @@
 - **Document Type:** `CDS`
 - **Scope:** `ARM Cell / MoveIt Static Planning Scene`
 - **Version:** `1.0.0`
-- **Status:** `Draft`
+- **Status:** `Review`
 - **Owner:** `ARM Cell Motion`
 - **Related ADR:** `ADR-ARM-CELL-0002`
 
 ## 1. Canonical Geometry and Selection
 
-Canonical nominal environment geometry and MoveIt inclusion policy are separate concerns.
+Canonical nominal environment geometry and MoveIt inclusion policy are
+separate concerns. Cross-consumer environment relationships are owned by
+[ARM Cell Simulation Environment Semantics](../simulation-environment-semantics.md).
 
 ```text
 canonical nominal environment

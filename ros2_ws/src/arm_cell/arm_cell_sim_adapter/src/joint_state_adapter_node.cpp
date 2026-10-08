@@ -35,12 +35,18 @@ public:
         } else if (clock_stamp_ && *stamp < *clock_stamp_) {
           latch_reset("simulation clock moved backward");
         } else {
+          RCLCPP_INFO_ONCE(get_logger(), "Received simulation clock input");
           clock_stamp_ = stamp;
         }
       });
     state_sub_ = create_subscription<sensor_msgs::msg::JointState>(
       "raw_joint_states", rclcpp::SensorDataQoS(),
-      [this](sensor_msgs::msg::JointState::ConstSharedPtr msg) {publish_state(*msg);});
+      [this](sensor_msgs::msg::JointState::ConstSharedPtr msg) {
+        RCLCPP_INFO_ONCE(
+          get_logger(), "Received raw joint state: joints=%zu positions=%zu",
+          msg->name.size(), msg->position.size());
+        publish_state(*msg);
+      });
     RCLCPP_INFO(get_logger(), "Waiting for simulation clock and complete measured joint state");
   }
 
@@ -98,6 +104,9 @@ private:
     invalid_sample_ = false;
     state_stamp_ = stamp;
     publisher_->publish(*canonical);
+    RCLCPP_INFO_ONCE(
+      get_logger(), "Published first canonical joint state: joints=%zu",
+      canonical->name.size());
   }
 
   std::vector<std::string> joints_;

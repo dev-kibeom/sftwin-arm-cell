@@ -4,7 +4,7 @@
 - **Document Type:** `ICD`
 - **Scope:** `Simulated RGB-D Producer ↔ Vision Consumer`
 - **Version:** `1.0.0`
-- **Status:** `Draft`
+- **Status:** `Approved`
 - **Owner:** `ARM Cell Shared Interface`
 - **Related ADR:** `ADR-ARM-CELL-0003`
 
@@ -95,6 +95,29 @@ The current simulated profile is intended to expose metric depth compatible with
 
 Consumers SHALL NOT rewrite pixels, depth values, timestamps, frame IDs, or CameraInfo merely to make inconsistent input appear valid.
 
+### 9.1 Acceptance Sensor-Fault Stimulus Seam
+
+The Final Demo's invalid/stale/unavailable Vision scenario SHALL be
+reproducible through an approved source-side stimulus on the production
+RGB-D input path. The stimulus is applied before the Vision subscriber and
+may temporarily withhold a required image/calibration input, publish a
+stale/out-of-order sample, or present an invalid/incompatible sample or
+calibration. The active stimulus and recovery to a coherent fresh stream are
+observable at the canonical sensor boundary. Scenario values and exact
+stimulus duration remain deployment/test configuration; this seam adds no ROS
+control interface and does not change nominal sensor semantics.
+
+The stimulus SHALL exercise the same RGB-D topics and production Vision
+operational profile used by acceptance. It SHALL NOT inject a DetectTarget
+result, modify Vision's internal buffers/profile/result, or write canonical
+Vision, Orchestration, Motion, or Safety state. Clearing the stimulus restores
+normal source publication; Vision ingress/result handling remains governed by
+the existing [Vision Frame Ingress FDS](../../components/arm-cell/vision/fds-frame-ingress.md),
+[DetectTarget FDS](../../components/arm-cell/vision/fds-detect-target.md),
+and [Vision↔Orchestration ICD](icd-vision-orchestration.md). The validation-only
+Fixed Vision adapter is not a sensor-fault seam or production perception
+evidence (`VR-ICD-VIS-ORCH-11`).
+
 ## 10. Verification Requirements
 
 ### VR-ICD-RGBD-01 — Best-Effort consumer QoS
@@ -111,3 +134,13 @@ RGB-D geometry SHALL be interpreted in the canonical optical frame contract.
 
 ### VR-ICD-RGBD-05 — No hidden rewriting
 The integration/consumer path SHALL not silently rewrite data semantics to conceal incompatibility.
+
+### VR-ICD-RGBD-06 — Production sensor-fault scenario seam
+
+The approved acceptance seam SHALL make unavailable, stale/out-of-order, and
+invalid/incompatible sensor conditions observable at the production RGB-D
+source boundary and SHALL restore coherent fresh publication when cleared.
+The oracle is the sensor input path/stream condition; Vision rejection and
+result classification remain verified by `VR-VIS-INGRESS-01`,
+`VR-VIS-INGRESS-03` through `VR-VIS-INGRESS-05`, `VR-VIS-DETECT-01`, and
+`VR-ICD-VIS-ORCH-02` in the Vision↔Orchestration ICD.

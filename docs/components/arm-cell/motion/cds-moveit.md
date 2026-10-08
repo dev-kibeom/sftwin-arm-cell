@@ -16,6 +16,8 @@ The Motion/MoveIt concern SHALL own or consume, as appropriate:
 - canonical current-state consumption;
 - collision-aware planning;
 - Motion-owned target offsets;
+- Motion-owned object-reference to grasp-TCP rigid-transform composition;
+- distinct approach, grasp, and retract planning targets;
 - PlanningScene interaction;
 - controller-execution dependency when enabled by the selected profile.
 
@@ -43,3 +45,11 @@ Robot-only planning SHALL NOT be represented as static-cell collision or executi
 
 ### VR-MOT-MOVEIT-03 — Motion-owned target conversion
 Planning targets SHALL use Motion-owned tool/TCP transformation semantics.
+
+### VR-MOT-MOVEIT-04 — Planning target frames
+MoveIt planning targets SHALL be the Motion-generated `sf_grasp_tcp` poses in
+the canonical `base_link` frame. MoveIt SHALL consume the final grasp,
+approach, and retract poses produced by Motion; both approach and default
+retract SHALL be displaced opposite Motion's positive insertion direction. It
+SHALL NOT infer object height, tool offsets, or grasp geometry from raw Vision
+or recipe fields.

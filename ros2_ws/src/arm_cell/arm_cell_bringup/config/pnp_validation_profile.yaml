@@ -1,0 +1,148 @@
+# WU-14 validation-only profile.  These values configure deterministic
+# simulator wiring; Task 5 is responsible for live suitability evidence.
+use_sim_time: true
+
+vda:
+  publish_period_ms: 100
+
+safety:
+  freshness_timeout_ms: 500
+  source_timestamp_max_age_ms: 2000
+
+motion:
+  backend_mode: isaac
+  arm_joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+  # Validation-only planning/time-parameterization policy seed.  This is not
+  # a measured M0609 or Isaac acceleration ceiling.
+  planning_max_acceleration_rad_s2: 5.0
+  # Use the full velocity limits in the URDF and the acceleration limits above
+  # for this validation planning profile. MoveGroupInterface otherwise uses
+  # 0.1 scaling defaults when the request does not set explicit values.
+  planning_velocity_scaling_factor: 1.0
+  planning_acceleration_scaling_factor: 1.0
+  trajectory_sampler: linear
+  trajectory_clock_liveness_timeout_s: 2.0
+  # Timeout only when measured arm joints stop making progress; there is no
+  # total Motion completion duration limit.
+  motion_progress_stall_timeout_s: 60.0
+  # Validation-only wall-clock budget for receiving a fresh post-close HELD.
+  # Observation freshness remains governed independently by the holding
+  # freshness contract.
+  holding_confirmation_timeout_ms: 1500
+  # APPROACH entry acceptance is separate from capture-volume tolerance and
+  # joint tracking diagnostics. Validation-only simulation tolerance is 10 mm.
+  # The latest accepted run measured approximately 7.58 mm; an earlier Isaac
+  # audit measured approximately 8.5 mm after bounded final-target hold. FK,
+  # TCP definition, and joint-state mapping were consistent and the residual
+  # was traced to articulation tracking. This is not a hardware accuracy
+  # requirement or a final-position accuracy claim; higher-fidelity validation
+  # may use a tighter band later. PICK keeps this 10 mm bound.
+  approach_entry_position_tolerance_m: 0.010
+  # PLACE validation calibration based on the observed 10.544 mm TCP residual.
+  # This may be used for Task 5 acceptance after a successful fresh full cycle;
+  # consider a tighter value only with separate calibration evidence.
+  place_approach_entry_position_tolerance_m: 0.015
+  approach_entry_orientation_tolerance_rad: 0.08726646259971647
+  # PLACE validation calibration based on the observed 0.015994 rad residual.
+  # This may be used for Task 5 acceptance after a successful fresh full cycle;
+  # consider a tighter value only with separate calibration evidence.
+  place_tracking_tolerance_rad: 0.020
+  approach_entry_require_settled: true
+  approach_entry_settled_joint_delta_rad: 0.001
+  approach_entry_settled_samples: 3
+  retract_joint_positions: [0.0, -0.5, 1.0, -1.3, -1.0, 0.0]
+  # The fixture detected pose is the top-surface centroid. Motion derives the
+  # fixture object's geometric center. This is validation-only geometry; the
+  # historical WU-14 contact seed remains isolated from production config.
+  observation_reference: fixture_visible_top_surface_centroid
+  observation_to_object_translation: [0.0, 0.0, -0.04]
+  observation_to_object_quaternion: [0.0, 0.0, 0.0, 1.0]
+  object_to_grasp_tcp_translation: [0.0, 0.0, 0.0375]
+  # Relative X-180 tool convention: TCP +X remains the closing axis and
+  # TCP +Z is the physical body-to-contact/insertion axis.
+  object_to_grasp_tcp_quaternion: [1.0, 0.0, 0.0, 0.0]
+  target_roll_tolerance_rad: 0.034906585
+  target_pitch_tolerance_rad: 0.034906585
+  target_roll_sample_step_rad: 0.034906585
+  target_pitch_sample_step_rad: 0.034906585
+  insertion_axis_tcp: [0.0, 0.0, 1.0]
+  pick_approach_distance_m: 0.05
+  pick_retract_distance_m: 0.05
+  validation_grasp_contact_policy_enabled: true
+  validation_grasp_contact_object_id_prefix: wu14_fixture_
+  validation_grasp_contact_links:
+    - gripper_robotiq_85_left_finger_tip_link
+    - gripper_robotiq_85_right_finger_tip_link
+  enable_test_backend_controls: false
+  calibration_profile_reference: config/isaac_planning.yaml
+  tolerance_profile_reference: docs/components/arm-cell/integration/fds-deterministic-pnp-fixture.md#calibration-boundary
+
+orchestration:
+  mission_target_id: cube_profile
+  vision_request_timeout_ms: 500
+  recipe_directory: recipes
+
+validation:
+  runtime_runner_entrypoint: infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py
+  registration_helper_entrypoint: ros2_ws/src/arm_cell/arm_cell_bringup/scripts/register_pnp_fixture.py
+  registration_handoff_schema: wu14-pnp-registration/v1
+  registration_ttl_s: 30.0
+  registration_ttl_max_s: 60.0
+  holding_freshness_ms: 500.0
+  # Wall-clock budget for OPEN completion and fresh physics feedback.
+  # Independent from HELD/RELEASED observation freshness.
+  open_readiness_timeout_s: 2.0
+  fixed_vision:
+    executable: fixed_detect_target_node
+    registration_service: /fixed_detect_target_node/register_target
+  planning_scene:
+    # Validation-only scene keeps support/contact geometry excluded while
+    # retaining the observed CNC top frame and pedestal swept-path obstacles.
+    static_scene_file: config/m0609_pnp_static_scene.json
+    fixture_object_id_prefix: wu14_fixture_
+    attachment_link: gripper_robotiq_85_base_link
+    touch_links:
+      - gripper_robotiq_85_left_finger_link
+      - gripper_robotiq_85_right_finger_link
+    cleanup_operation: remove
+
+fixture:
+  # X/Y are the declared top-grasp dimensions and match the 70 mm recipe.
+  dimensions_m: [0.07, 0.07, 0.08]
+  # Gravity is disabled for the validation phase; runtime stability ownership
+  # separately protects the registered pose before capture.
+  gravity_enabled: false
+  seed: 17
+  prim_root: /World/SFTwin/ValidationFixture
+  geometry_frame: world
+  support_surface_id: /World/SF_Twin_Cell/AMR/Mockup/Tray
+  support_surface_frame: amr_top
+  spawn_clearance_m: 0.001
+  grasp_recipe:
+    # Measured corrected-orientation fingertip-only contact band from the
+    # MoveIt dry-run; this is validation recipe provenance, not a universal
+    # Robotiq specification.
+    measured_contact_band_m: [-0.024, 0.019]
+    object_top_to_grasp_tcp_z_m: -0.0025
+    q_contact_70mm: 0.1622419314
+  spawn_bounds_m:
+    min: [0.15, -0.35, 0.72]
+    max: [0.55, 0.25, 0.95]
+  excluded_volumes_m:
+    - min: [0.25, -0.05, 0.70]
+      max: [0.40, 0.10, 0.90]
+
+capture:
+  volume_dimensions_m: [0.12, 0.12, 0.12]
+  position_tolerance_m: 0.015
+  # Canonical Task 3 CaptureConfig unit: degrees. No implicit conversion.
+  orientation_tolerance_deg: 10.0
+  expected_contact_width_mm: 70.0
+  contact_width_tolerance_mm: 2.0
+
+place:
+  # Euclidean distance between expected and actual detached fixture centers.
+  # Expected center is derived from the configured PLACE TCP pose and the
+  # object_to_grasp_tcp transform above; this is a WU-14 validation tolerance.
+  position_tolerance_m: 0.05
+  deletion_delay_s: 3.0

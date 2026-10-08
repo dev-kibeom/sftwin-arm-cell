@@ -412,6 +412,19 @@ def optical_transform_snapshot():
     }
 
 
+def authoritative_box_bounds(center, dimensions):
+    """Return world-space bounds for an axis-aligned authored box."""
+    if len(center) != 3 or len(dimensions) != 3:
+        raise ValueError("box center and dimensions must have three components")
+    if any(float(value) <= 0.0 for value in dimensions):
+        raise ValueError("box dimensions must be positive")
+    half = [float(value) / 2.0 for value in dimensions]
+    return (
+        tuple(float(center[index]) - half[index] for index in range(3)),
+        tuple(float(center[index]) + half[index] for index in range(3)),
+    )
+
+
 def inset_top_surface_points(minimum, maximum):
     """Return a centre and two inset off-axis points from USD world-space bounds."""
     x0, y0, z0 = minimum
@@ -452,13 +465,32 @@ def inspect_stage(output_path, reference_prim_paths=None):
         if not prim.IsValid():
             raise RuntimeError(f"reference prim not found: {path}")
         bounds = bbox_cache.ComputeWorldBound(prim).ComputeAlignedRange()
-        minimum = [float(value) for value in bounds.GetMin()]
-        maximum = [float(value) for value in bounds.GetMax()]
+        bbox_minimum = [float(value) for value in bounds.GetMin()]
+        bbox_maximum = [float(value) for value in bounds.GetMax()]
+        geometry_attribute = prim.GetAttribute("sf_twin:geometry_dimensions_m")
+        geometry_dimensions = (
+            geometry_attribute.Get() if geometry_attribute.IsValid() else None
+        )
+        if geometry_dimensions is not None:
+            minimum, maximum = authoritative_box_bounds(
+                [
+                    (bbox_minimum[index] + bbox_maximum[index]) / 2.0
+                    for index in range(3)
+                ],
+                geometry_dimensions,
+            )
+            bounds_source = (
+                "sf_twin:geometry_dimensions_m centered on composed prim bounds"
+            )
+        else:
+            minimum, maximum = bbox_minimum, bbox_maximum
+            bounds_source = "UsdGeom.BBoxCache.ComputeWorldBound"
         reference_geometry.append(
             {
                 "prim_path": path,
                 "world_bounds_m": {"min": minimum, "max": maximum},
                 "world_surface_points_m": inset_top_surface_points(minimum, maximum),
+                "bounds_source": bounds_source,
             }
         )
     origin = transform.Transform(Gf.Vec3d(0.0, 0.0, 0.0))

@@ -1,4 +1,6 @@
 from pathlib import Path
+import sys
+from types import ModuleType
 
 import pytest
 
@@ -35,5 +37,35 @@ def test_script_editor_temp_path_uses_explicit_project_root():
 
 def test_source_path_resolution_does_not_depend_on_current_directory():
     assert (
-        bootstrap.discover_module_root(CELL_ROOT / "inspect_camera.py", {}) == CELL_ROOT
+        bootstrap.discover_module_root(
+            CELL_ROOT / "camera_tooling/entrypoints/inspect_camera.py", {}
+        )
+        == CELL_ROOT
     )
+
+
+def test_package_import_cache_can_be_cleared_without_removing_prefix_siblings(
+    monkeypatch,
+):
+    package = "_test_graph_builder"
+    names = (package, f"{package}.contract", f"{package}_other")
+    for name in names:
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+
+    bootstrap.clear_imported_package(package)
+
+    assert package not in sys.modules
+    assert f"{package}.contract" not in sys.modules
+    assert f"{package}_other" in sys.modules
+
+
+def test_package_bytecode_cache_is_removed_for_script_editor_reload(tmp_path):
+    package = tmp_path / "gripper_runtime"
+    cache = package / "__pycache__"
+    cache.mkdir(parents=True)
+    bytecode = cache / "session.cpython-310.pyc"
+    bytecode.write_bytes(b"stale bytecode")
+
+    bootstrap.clear_package_bytecode(package)
+
+    assert not bytecode.exists()

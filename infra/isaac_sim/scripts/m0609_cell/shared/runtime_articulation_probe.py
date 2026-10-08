@@ -47,7 +47,14 @@ def run_probe():
             print("  handle valid:", handle != _dynamic_control.INVALID_HANDLE)
             if handle != _dynamic_control.INVALID_HANDLE:
                 print("  runtime path:", dc.get_articulation_path(handle))
-                print("  dof count:", dc.get_articulation_dof_count(handle))
+                dof_count = dc.get_articulation_dof_count(handle)
+                print("  dof count:", dof_count)
+                for dof_index in range(dof_count):
+                    try:
+                        dof_name = dc.get_articulation_dof_name(handle, dof_index)
+                    except Exception as exc:
+                        dof_name = f"<name lookup failed: {exc}>"
+                    print(f"  dof[{dof_index}] name: {dof_name}")
 
     print("\\n=== Candidate paths explicitly checked ===")
     for path in CANDIDATE_PATHS:

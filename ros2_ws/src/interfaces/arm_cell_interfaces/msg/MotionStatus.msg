@@ -16,4 +16,11 @@ bool execution_active
 bool backend_inactivity_confirmed
 unique_identifier_msgs/UUID last_stop_request_id
 bool has_last_stop_request
+uint8 HOLDING_UNKNOWN=0
+uint8 HOLDING_HELD=1
+uint8 HOLDING_RELEASED=2
+uint8 holding_state
+float32 applied_velocity_scale
+float32 applied_acceleration_scale
+bool applied_envelope_valid
 string diagnostic_detail

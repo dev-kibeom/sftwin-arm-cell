@@ -39,7 +39,10 @@ from rgbd_assertions import (
     validate_camera_info,
     validate_image_payload,
 )
-from depth_semantics import classify_depth_samples
+from depth_semantics import (
+    classify_depth_samples,
+    verify_declared_optical_z_for_coplanar_samples,
+)
 from shared.local_artifacts import default_artifact_directory
 
 
@@ -477,6 +480,12 @@ class Acceptance(Node):
                 "status": "NOT VERIFIED",
                 "reason": "missing clipping range or valid depth samples",
             }
+        )
+        semantic_result = verify_declared_optical_z_for_coplanar_samples(
+            valid,
+            semantic_result,
+            self.snapshot.get("depth_helper_runtime"),
+            self.depth_tolerance,
         )
         semantics = (
             semantic_result.get("semantic")

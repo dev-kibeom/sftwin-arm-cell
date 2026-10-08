@@ -44,9 +44,10 @@ def unrelated_object():
 
 
 class FakePlanningSceneServices:
-    def __init__(self, omit_selected_on_readback=False):
+    def __init__(self, omit_selected_on_readback=False, nominal_valid=True):
         self.objects = {"unrelated_object": unrelated_object()}
         self.omit_selected_on_readback = omit_selected_on_readback
+        self.nominal_valid = nominal_valid
 
     def apply(self, request):
         assert request.scene.is_diff
@@ -62,10 +63,13 @@ class FakePlanningSceneServices:
         scene.world.collision_objects = objects
         return SimpleNamespace(scene=scene)
 
+    def validity(self, _request):
+        return SimpleNamespace(valid=self.nominal_valid)
+
 
 class IdentityTransformBuffer:
     @staticmethod
-    def lookup_transform(target_frame, source_frame, _time):
+    def lookup_transform(target_frame, source_frame, _time, **_kwargs):
         assert (target_frame, source_frame) == ("world", "world")
         transform = TransformStamped()
         transform.transform.rotation.w = 1.0
@@ -77,11 +81,16 @@ def loader_with_services(services):
         artifact=artifact(),
         apply_client="apply",
         read_client="read",
+        validity_client="validity",
         tf_buffer=IdentityTransformBuffer(),
     )
 
     def call(client, request):
-        return services.apply(request) if client == "apply" else services.read(request)
+        if client == "apply":
+            return services.apply(request)
+        if client == "read":
+            return services.read(request)
+        return services.validity(request)
 
     loader.call = call
     return loader
@@ -104,4 +113,16 @@ def test_loader_fails_explicitly_when_selected_object_is_missing_from_readback()
     loader = loader_with_services(services)
 
     with pytest.raises(module.StaticSceneLoadError, match="missing after apply"):
+        module.StaticSceneLoader.apply_and_verify(loader)
+
+
+def test_loader_checks_nominal_robot_state_validity_when_enabled():
+    module = load_loader_module()
+    services = FakePlanningSceneServices(nominal_valid=False)
+    loader = loader_with_services(services)
+    loader.verify_nominal_state = True
+
+    with pytest.raises(
+        module.StaticSceneLoadError, match="nominal current robot state"
+    ):
         module.StaticSceneLoader.apply_and_verify(loader)

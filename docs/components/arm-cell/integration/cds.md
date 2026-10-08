@@ -3,7 +3,7 @@
 - **Document ID:** `[SF-Twin]_CDS-ARM-CELL-INTEGRATION_v1.0.0`
 - **Document Type:** `CDS`
 - **Scope:** `ARM Cell / ROS–Simulator Integration`
-- **Version:** `1.0.0`
+- **Version:** `1.1.0`
 - **Status:** `Draft`
 - **Owner:** `ARM Cell Integration`
 - **Related ADRs:** `ADR-ARM-CELL-0001`, `ADR-ARM-CELL-0003`
@@ -25,7 +25,10 @@ The integration family SHALL own:
 - adaptation from simulator-specific measured state into canonical robot state;
 - composition of shared robot-model, TF, and simulation-time authorities;
 - simulated-camera overlay derivation/composition needed to expose the RGB-D source through canonical ROS frames;
-- explicit simulation-session lifecycle behavior when simulator time moves backward.
+- explicit simulation-session lifecycle behavior when simulator time moves backward;
+- validation-only Isaac fixture lifecycle and seeded scene material creation;
+- simulator-specific realization of backend-neutral gripper commands,
+  capture-local snap attachment, detachment, and holding observation.
 
 The integration family SHALL preserve:
 
@@ -45,7 +48,9 @@ The integration family SHALL NOT own:
 - Motion task semantics;
 - Vision perception processing;
 - safety-rated E-Stop/STO behavior;
-- product-level acceptance policy.
+- product-level acceptance policy;
+- production perception or calibration authority;
+- Motion-owned PICK/PLACE ordering and TCP/tool conversion.
 
 ## 4. Authority Boundaries
 
@@ -64,7 +69,20 @@ ROS bringup composes ROS processes and configuration but does not take ownership
 The supported simulator-backed profile assumes an externally started and valid Isaac Sim
 session. ROS bringup does not own Isaac application startup or simulator scene construction.
 
-### 4.3 Shared interface semantics
+### 4.3 Validation fixture and gripper adaptation
+
+The deterministic PnP fixture and Isaac gripper adapter are validation/runtime
+integration infrastructure. The fixture may create eligible test material and
+register its known object reference with a validation-only Vision adapter. The
+Isaac gripper adapter may create/remove simulator joints only through the
+backend-neutral `GripperPort` behavior.
+
+Neither component may identify a grasp candidate from `target_id` or leak
+simulator prim identity into Vision, Motion, or Orchestration. Detailed
+behavior is defined by
+[`fds-deterministic-pnp-fixture.md`](fds-deterministic-pnp-fixture.md).
+
+### 4.4 Shared interface semantics
 
 Exact topic, TF, time, frame, unit, QoS, and invalid/stale semantics are owned by the relevant ICDs.
 
@@ -78,6 +96,12 @@ ROS bringup SHALL NOT become the owner of Isaac scene construction or simulator-
 
 ### VR-INT-OWN-03 — No cross-domain responsibility leakage
 Integration SHALL NOT absorb Motion, Vision, Orchestration, or Safety semantic ownership.
+
+### VR-INT-OWN-04 — Validation infrastructure isolation
+Fixture identity, Isaac prim paths, capture volumes, and fixed-joint details
+SHALL remain below the integration boundary and SHALL NOT redefine canonical
+Vision, Motion, or Orchestration contracts.
+
 
 ## 6. References
 
