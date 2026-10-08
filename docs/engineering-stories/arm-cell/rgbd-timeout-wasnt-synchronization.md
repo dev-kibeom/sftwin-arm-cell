@@ -11,18 +11,18 @@ RGB/depth synchronization lifecycle defect: after Isaac Sim Stop/Play, the two
 
 ## Investigation
 
-PR PR #261 added timing
+PR #261 added timing
 acceptance measurements for the individual streams, synchronized-pair cadence,
 request-to-observation wait, and processing time. Its live ROS-side evidence
 could not by itself distinguish Isaac source/render cadence from ROS publish
-drop. PR PR #262 experimentally
+drop. PR #262 experimentally
 sequenced the RGB and Depth helper execution in one graph lifecycle sequence
 to reduce phase divergence after restart. That topology risked adding delay to
-the steady-state simulation path. PR PR #263
+the steady-state simulation path. PR #263
 therefore restored direct helper fan-out while retaining the diagnostics; the
 Stop/Play resynchronization concern remained a separate bounded issue.
 
-PR PR #266 then made request
+PR #266 then made request
 diagnostics distinguish RGB and Depth arrivals, source stamps and receipt
 periods, actual synchronized-pair callbacks, policy evaluations, usable
 observations, and detector entry. The clean-start trace changed the diagnosis:
@@ -33,7 +33,7 @@ protected the request from older observations.
 
 ## Resolution
 
-PR PR #268 removed the
+PR #268 removed the
 request-relative settling condition and its related status/timeout wording.
 It retained post-request RGB/Depth receipt and source-watermark freshness,
 RGB-D synchronization, the 500 ms request deadline, and the 10 ms sync
