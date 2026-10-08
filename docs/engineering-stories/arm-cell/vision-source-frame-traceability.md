@@ -35,6 +35,5 @@ degradation.
 
 ## References
 
-- PR #231, PR #232, PR #233
 - [`Hub operator UI FDS`](../../components/arm-cell/integration/fds-operator-ui-hub.md)
 - [`Vision-Orchestration ICD`](../../interfaces/arm-cell/icd-vision-orchestration.md)

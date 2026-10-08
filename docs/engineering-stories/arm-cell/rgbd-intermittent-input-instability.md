@@ -12,15 +12,15 @@ those improvements from failures to deliver or synchronize a pair.
 
 ## Investigation
 
-PR #278 added reuse of a
-recent structurally valid RGB-D input pair when it meets the freshness policy.
+The Vision input path now reuses a recent structurally valid RGB-D input pair
+when it meets the freshness policy.
 This avoids waiting for another pair when an eligible input is already
 available. It does **not** cache detector results. If no eligible pair is
 available, the request continues through acquisition under the existing
 deadline.
 
-PR #282 connected
-Orchestration logs for delivery and `ExecuteCycle` dispatch/acceptance with
+Orchestration logs now correlate delivery and `ExecuteCycle`
+dispatch/acceptance with
 Vision dispatch and terminal outcomes using their IDs. This improves request
 traceability; it did not change the RGB-D input pipeline.
 
@@ -36,8 +36,8 @@ failures before detector entry:
 
 ## Improvement
 
-The #278 cache path reduces avoidable acquisition waiting when a fresh usable
-pair exists. The #282 correlation makes a delivery's `ExecuteCycle` and Vision
+The cache path reduces avoidable acquisition waiting when a fresh usable
+pair exists. Request correlation makes a delivery's `ExecuteCycle` and Vision
 events easier to follow. Neither result is a fix for the two observed
 pre-detector failure shapes, and neither proves that the input path is stable.
 
@@ -66,10 +66,6 @@ The separate resolved settling-policy defect is documented in
 
 ## References
 
-- PR #278 — reuse fresh
-  RGB-D input before the Vision deadline.
-- PR #282 — correlate
-  `ExecuteCycle` and Vision request logs.
 - [`Vision Frame Ingress FDS`](../../components/arm-cell/vision/fds-frame-ingress.md)
 - [`Detect Target FDS`](../../components/arm-cell/vision/fds-detect-target.md)
 - [`Vision–Orchestration ICD`](../../interfaces/arm-cell/icd-vision-orchestration.md)

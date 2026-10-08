@@ -1,7 +1,7 @@
-# M09-W01 Interface Realization Inventory
+# ROS Interface Realization Inventory
 
 This inventory records executable IDL mapping and delegated realization
-choices for the approved M09 shared/public contracts. Contract meaning remains
+choices for the approved shared/public contracts. Contract meaning remains
 owned by the linked ICDs.
 
 | Endpoint | ROS interface | Realization |

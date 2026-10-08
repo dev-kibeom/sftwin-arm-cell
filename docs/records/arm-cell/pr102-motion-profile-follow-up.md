@@ -1,9 +1,8 @@
-# PR #102 — Motion Profile Follow-up Record
+# Motion Profile Follow-up Record
 
 ## Integration identity
 
-- PR: #102
-- Scope: WU-14 attached post-acceptance investigation; WU-14 acceptance and lifecycle were not reopened.
+- Scope: Post-acceptance investigation; the acceptance claim was not reopened.
 
 ## Baseline and diagnosis
 
@@ -43,5 +42,4 @@ Raw CSVs/manifests were stored temporarily and are not durable. Runtime identity
 was not reported. Therefore the retained figures are a compact historical
 summary, not independently replayable raw evidence.
 
-This record does not establish a new acceptance qualification or change
-WU-14's `COMPLETED` state. Active Work Unit remains `None`.
+This record does not establish a new acceptance qualification.
