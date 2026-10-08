@@ -39,7 +39,7 @@ not when it reports command intent as physical fact.
 
 ## References
 
-- [PR #70](https://github.com/dev-kibeom/sftwin/pull/70), [#72](https://github.com/dev-kibeom/sftwin/pull/72), [#73](https://github.com/dev-kibeom/sftwin/pull/73)
-- [PR #92](https://github.com/dev-kibeom/sftwin/pull/92), [#93](https://github.com/dev-kibeom/sftwin/pull/93), [#94](https://github.com/dev-kibeom/sftwin/pull/94)
-- [PR #101](https://github.com/dev-kibeom/sftwin/pull/101), [#103](https://github.com/dev-kibeom/sftwin/pull/103), [#227](https://github.com/dev-kibeom/sftwin/pull/227)
+- PR #70, PR #72, PR #73
+- PR #92, PR #93, PR #94
+- PR #101, PR #103, PR #227
 - [`Motion task execution FDS`](../../components/arm-cell/motion/fds-task-execution.md)

@@ -54,5 +54,5 @@ snapshot lifecycle, and result semantics remain owned by Vision/Hub FDS and ICD 
 - [`docs/interfaces/arm-cell/icd-vision-orchestration.md`](../interfaces/arm-cell/icd-vision-orchestration.md)
 - [`docs/components/arm-cell/integration/fds-operator-ui-hub.md`](../components/arm-cell/integration/fds-operator-ui-hub.md)
 - [`docs/components/arm-cell/vision/fds-detect-target.md`](../components/arm-cell/vision/fds-detect-target.md)
-- [PR #231](https://github.com/dev-kibeom/sftwin/pull/231)
-- [PR #232](https://github.com/dev-kibeom/sftwin/pull/232)
+- PR #231
+- PR #232
