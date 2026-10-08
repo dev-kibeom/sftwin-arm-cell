@@ -47,5 +47,5 @@ remain owned by Product, Motion, Orchestration FDS, and their ICDs.
 
 - [`docs/product/demos/arm-cell/definition.md`](../product/demos/arm-cell/definition.md)
 - [`docs/components/arm-cell/motion/fds-task-execution.md`](../components/arm-cell/motion/fds-task-execution.md)
-- [PR #227](https://github.com/dev-kibeom/sftwin/pull/227)
-- [PR #103](https://github.com/dev-kibeom/sftwin/pull/103)
+- PR #227
+- PR #103

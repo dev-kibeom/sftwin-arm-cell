@@ -45,6 +45,6 @@ measure candidate behavior separately from trajectory executability.
 
 ## References
 
-- [PR #225](https://github.com/dev-kibeom/sftwin/pull/225), [#240](https://github.com/dev-kibeom/sftwin/pull/240), [#241](https://github.com/dev-kibeom/sftwin/pull/241)
-- [PR #245](https://github.com/dev-kibeom/sftwin/pull/245), [#246](https://github.com/dev-kibeom/sftwin/pull/246), [#253](https://github.com/dev-kibeom/sftwin/pull/253), [#270](https://github.com/dev-kibeom/sftwin/pull/270)
+- PR #225, PR #240, PR #241
+- PR #245, PR #246, PR #253, PR #270
 - [`Motion CDS`](../../components/arm-cell/motion/cds.md)
