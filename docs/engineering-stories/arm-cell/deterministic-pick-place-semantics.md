@@ -39,7 +39,4 @@ not when it reports command intent as physical fact.
 
 ## References
 
-- PR #70, PR #72, PR #73
-- PR #92, PR #93, PR #94
-- PR #101, PR #103, PR #227
 - [`Motion task execution FDS`](../../components/arm-cell/motion/fds-task-execution.md)

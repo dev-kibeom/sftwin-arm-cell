@@ -45,6 +45,4 @@ measure candidate behavior separately from trajectory executability.
 
 ## References
 
-- PR #225, PR #240, PR #241
-- PR #245, PR #246, PR #253, PR #270
 - [`Motion CDS`](../../components/arm-cell/motion/cds.md)

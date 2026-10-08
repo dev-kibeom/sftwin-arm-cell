@@ -1,21 +1,18 @@
-# M10-W06 joint_2 Drive-Equilibrium Investigation Record
+# joint_2 Drive-Equilibrium Investigation Record
 
 > Historical provenance only. This record does not establish or change a
-> requirement, design contract, verification/acceptance meaning, Work Unit
-> state, or PR merge authority.
+> requirement, design contract, verification, or acceptance meaning.
 
 ## Integration identity
 
-- Work Unit: M10-W06, production runtime integration and end-to-end path
-  investigation.
-- Related PR: #225, Draft at the time of these observations.
+- Scope: Production runtime integration and end-to-end path investigation.
 - Effective ROS domain: `0`; GUI was not used for these two instrumented runs.
 - Both runs used the same canonical Isaac scene/runtime scripts, production
   operational ROS composition, separate camera-TF overlay, and Integration
   material request → `MATERIAL_READY` → Orchestration auto-admission path.
   Neither run directly invoked ExecuteCycle or Motion.
-- Production operational profile at run time was a pre-existing local W06
-  worktree change, not edited by this diagnostic. Its captured copy is in the
+- Production operational profile at run time was a pre-existing configuration
+  change, not edited by this diagnostic. Its captured copy is in the
   local evidence directory below (SHA-256
   `0e5f0838e13a2a5f7c0ccd09581522a60074077628a2ced94ee5cabb8aa52fa5`). The
   camera snapshot used by the overlay is also retained there.
@@ -130,7 +127,7 @@ max effort `9600`, and max velocity `2.618` in both runs.
 | 3× production | 9.644898 mm | 0.0075516 rad | Approach, insertion, CLOSE, fresh HELD, and Retract completed |
 
 Therefore `simulation.joint_2_stiffness_scale: 2.75` is the smallest
-sufficient value in the tested bounded sequence. It is an initial W06
+sufficient value in the tested bounded sequence. It is an initial
 production integration value, not final drive tuning. Both full-PICK runs
 used the normal Integration material request → `MATERIAL_READY` → Orchestration
 auto-admission path; neither directly invoked ExecuteCycle or Motion. The
@@ -145,9 +142,10 @@ mission target. This is a downstream PLACE/configuration limitation, not a
 joint_2 PICK failure. The PLACE path was not changed in this tuning work.
 The articulation-reported velocity versus finite-difference discrepancy also
 remains a separate residual observation. The 2.75× evidence confirms full
-PICK, but does not establish the W06 Exit Gate: PLACE/nominal vertical path
-continuation and the combined fault/recovery, Hub-producer, and provenance
-claims still require their governing evidence on one baseline/runtime.
+PICK, but does not establish the broader integration exit criteria:
+PLACE/nominal vertical path continuation and the combined fault/recovery,
+Hub-producer, and provenance claims still require their governing evidence on
+one baseline/runtime.
 
 These follow-up observations supplement the historical record above. They do
 not promote a diagnostic treatment or add requirement, acceptance, or policy

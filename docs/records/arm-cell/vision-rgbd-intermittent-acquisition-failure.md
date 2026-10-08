@@ -52,7 +52,6 @@ The earlier settling-policy defect and its resolution are documented
 separately in [Debugging an RGB-D Timeout That Wasn't a Synchronization
 Problem](../../engineering-stories/arm-cell/rgbd-timeout-wasnt-synchronization.md).
 
-PR #278 enables eligible
-fresh-pair reuse; PR #282
-improves request correlation. Neither is evidence that the intermittent
-acquisition/pairing failure is resolved.
+The Vision input path enables eligible fresh-pair reuse, and request
+correlation connects Orchestration and Vision events. Neither is evidence that
+the intermittent acquisition/pairing failure is resolved.
