@@ -1,0 +1,13 @@
+# Keep the build context limited to the packages needed for the ROS build.
+**
+!ros2_ws/
+!ros2_ws/src/
+!ros2_ws/src/**
+
+# Exclude local build and interpreter artifacts if present in a checkout.
+ros2_ws/src/**/build/
+ros2_ws/src/**/install/
+ros2_ws/src/**/log/
+ros2_ws/src/**/__pycache__/
+ros2_ws/src/**/*.pyc
+ros2_ws/src/**/.pytest_cache/
