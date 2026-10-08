@@ -1,11 +1,6 @@
 import pytest
 
 from gripper_runtime.grasp_policy import GraspConfig
-from grasp_config import GraspConfig as LegacyGraspConfig
-
-
-def test_legacy_grasp_config_entrypoint_remains_compatible():
-    assert LegacyGraspConfig is GraspConfig
 
 
 def test_grasp_policy_preserves_default_thresholds():

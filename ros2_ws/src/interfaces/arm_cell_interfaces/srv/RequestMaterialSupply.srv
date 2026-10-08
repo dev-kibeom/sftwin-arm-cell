@@ -1,0 +1,9 @@
+# Hub-generated correlation identity for this operator request.
+unique_identifier_msgs/UUID request_id
+---
+# True means Integration accepted the request for its downstream VDA request.
+bool accepted
+# Assigned by Integration; meaningful only when accepted is true.
+unique_identifier_msgs/UUID delivery_id
+# Non-normative explanation for the operator or caller.
+string diagnostic_detail

@@ -127,6 +127,31 @@
       }
     },
     {
+      "display_name": "CNC FrontFrameTop",
+      "geometry": {
+        "dimensions_m": [
+          1.08,
+          0.07,
+          0.13
+        ],
+        "type": "box"
+      },
+      "id": "cnc_front_top",
+      "pose": {
+        "position_m": [
+          0.82,
+          0.305,
+          1.22
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
       "display_name": "CNC UpperHousing",
       "geometry": {
         "dimensions_m": [
@@ -300,11 +325,261 @@
           1.0
         ]
       }
+    },
+    {
+      "display_name": "AMR Base",
+      "geometry": {
+        "dimensions_m": [
+          0.78,
+          0.6,
+          0.26
+        ],
+        "type": "box"
+      },
+      "id": "amr_base",
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.17
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR UpperBody",
+      "geometry": {
+        "dimensions_m": [
+          0.72,
+          0.56,
+          0.2
+        ],
+        "type": "box"
+      },
+      "id": "amr_upper_body",
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.36
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR TrayLift",
+      "geometry": {
+        "dimensions_m": [
+          0.56,
+          0.42,
+          0.16
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_lift",
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.5
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray",
+      "geometry": {
+        "dimensions_m": [
+          0.66,
+          0.46,
+          0.045
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray",
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.64
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray LeftRail",
+      "geometry": {
+        "dimensions_m": [
+          0.025,
+          0.46,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_left",
+      "pose": {
+        "position_m": [
+          -0.125,
+          -0.85,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray RightRail",
+      "geometry": {
+        "dimensions_m": [
+          0.025,
+          0.46,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_right",
+      "pose": {
+        "position_m": [
+          0.525,
+          -0.85,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray FrontRail",
+      "geometry": {
+        "dimensions_m": [
+          0.66,
+          0.025,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_front",
+      "pose": {
+        "position_m": [
+          0.2,
+          -1.075,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray RearRail",
+      "geometry": {
+        "dimensions_m": [
+          0.66,
+          0.025,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_rear",
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.625,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR RawSlot support",
+      "geometry": {
+        "dimensions_m": [
+          0.24,
+          0.28,
+          0.008
+        ],
+        "type": "box"
+      },
+      "id": "amr_raw_slot_support",
+      "pose": {
+        "position_m": [
+          0.03,
+          -0.85,
+          0.666
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR FinishedSlot support",
+      "geometry": {
+        "dimensions_m": [
+          0.24,
+          0.28,
+          0.008
+        ],
+        "type": "box"
+      },
+      "id": "amr_finished_slot_support",
+      "pose": {
+        "position_m": [
+          0.37,
+          -0.85,
+          0.666
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     }
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "d09426908c5ae73cc04d20dd64f01f1930184c13c34e7b52056dd1d8dd23e58b",
-    "selection_sha256": "dab82b3a56c295a252e063417f6417a84a664c31b98138aefc5b0e9deffd4982"
+    "canonical_manifest_sha256": "cb30b1101671807f2fa38e760c30bd338481ea3920cf039f1b2a0f91c082ea50",
+    "selection_sha256": "43afa857dbd96023d586a3ee2405f68730000e5e17da4460c19312a9e9edd0d7"
   }
 }

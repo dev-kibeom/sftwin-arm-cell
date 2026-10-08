@@ -1,10 +1,10 @@
 # [SF-Twin] ARM Cell Safety Supervisor Component Design
 
-- **Document ID:** `[SF-Twin]_CDS-ARM-CELL-SAFETY_v1.0.0`
+- **Document ID:** `[SF-Twin]_CDS-ARM-CELL-SAFETY_v1.1.0`
 - **Document Type:** `CDS`
 - **Scope:** `ARM Cell / Software Safety Supervision`
-- **Version:** `1.0.0`
-- **Status:** `Draft`
+- **Version:** `1.1.0`
+- **Status:** `Review`
 - **Owner:** `ARM Cell Safety`
 
 ## 1. Purpose
@@ -23,6 +23,7 @@ Safety SHALL own:
 - required-input freshness/watchdog evaluation;
 - fail-closed startup;
 - stop-mode selection;
+- selected stop severity publication through `SafetyState.selected_stop_mode`;
 - direct StopMotion request to Motion;
 - stop escalation;
 - recovery eligibility;
@@ -48,6 +49,18 @@ MOTION_NORMAL
 `SAFE` and `MOTION_NORMAL` are not equivalent.
 
 A safe/idle process phase may still have `MOTION_NONE`.
+
+PackML is canonical external CNC/process state, not ARM mission state. After
+required inputs are valid and fresh, it may affect Safety capability or the
+`PACKML_STATE_EXECUTE` alone SHALL NOT globally force `MOTION_NONE`. Final
+Demo uses PackML only as canonical external-process state and exposes it via a
+read-only Isaac indicator. Future shared-zone coordination is a non-normative
+extension point.
+the [Safety Supervision FDS](fds-supervision.md) owns the dynamic state mapping.
+
+The capability model grants motion permission only. Safety SHALL NOT select
+PICK or PLACE, sequence tasks, or order missions. Orchestration owns task and
+mission ordering, while Motion executes the requested task.
 
 ## 5. Functional Safety Boundary
 

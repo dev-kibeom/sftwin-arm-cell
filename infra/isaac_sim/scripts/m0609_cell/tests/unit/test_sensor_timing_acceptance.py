@@ -9,74 +9,106 @@ SPEC.loader.exec_module(MODULE)
 
 
 def collector(**kwargs):
-    return MODULE.ExactTripleCollector(**kwargs)
+    return MODULE.SensorTimingCollector(**kwargs)
 
 
-def test_exact_triple_succeeds():
-    observed = collector(required_samples=1)
-    assert not observed.observe("rgb", 10)
-    assert not observed.observe("depth", 10)
-    assert observed.observe("camera_info", 10)
-    assert observed.triples[0]["spread_ns"] == 0
+def start_request(observed, start_s=10.0):
+    observed.observe_diagnostic(1, "RawPart", "", "", start_s)
 
 
-def test_camera_info_mismatch_is_not_accepted():
-    observed = collector(required_samples=1)
-    observed.observe("rgb", 10)
-    observed.observe("depth", 10)
-    observed.observe("camera_info", 11)
-    assert not observed.complete
+def finish_request(observed, *, result_code, detail, receipt_s):
+    observed.observe_diagnostic(
+        0, "RawPart", "", detail, receipt_s, result_code=result_code
+    )
 
 
-def test_one_nanosecond_mismatch_is_not_accepted():
-    observed = collector(required_samples=1)
-    observed.observe("rgb", 10)
-    observed.observe("depth", 11)
-    observed.observe("camera_info", 10)
-    assert not observed.complete
+def test_measurement_contains_only_samples_between_detecting_and_terminal_idle():
+    observed = collector(sync_slop_ms=10)
+    assert not observed.observe_image("rgb", 1_000_000_000, 9.9, 640, 480, "camera")
 
+    start_request(observed)
+    assert observed.observe_image("rgb", 2_000_000_000, 10.02, 640, 480, "camera")
+    assert observed.observe_image("depth", 2_000_000_000, 10.04, 640, 480, "camera")
+    finish_request(
+        observed,
+        result_code=0,
+        detail="observation_ready; processing_elapsed_ms=20.0",
+        receipt_s=10.15,
+    )
 
-def test_late_camera_info_and_arbitrary_order_succeed():
-    observed = collector(required_samples=1)
-    observed.observe("depth", 20)
-    observed.observe("rgb", 20)
-    assert not observed.complete
-    assert observed.observe("camera_info", 20)
     assert observed.complete
+    assert not observed.observe_image("rgb", 3_000_000_000, 10.16, 640, 480, "camera")
+    summary = observed.summary(0.3)
+    assert summary["rgb"]["count"] == 1
+    assert summary["depth"]["count"] == 1
+    assert summary["synchronized_pairs"]["count"] == 1
+    assert summary["terminal"]["result"] == "success"
+    assert summary["terminal"]["diagnostic_detail"].startswith("observation_ready")
+    assert summary["terminal"]["request_total_elapsed_ms"] == 150.0
 
 
-def test_missing_stream_remains_unverified_until_timeout_boundary():
-    observed = collector(required_samples=1)
-    observed.observe("rgb", 30)
-    observed.observe("depth", 30)
-    summary = observed.summary("NOT VERIFIED", 1.0)
+def test_pairs_only_source_stamps_within_configured_sync_slop():
+    observed = collector(sync_slop_ms=10)
+    start_request(observed)
+    observed.observe_image("rgb", 1_000_000_000, 10.02, 640, 480, "camera")
+    observed.observe_image("depth", 1_009_000_000, 10.04, 640, 480, "camera")
+    observed.observe_image("rgb", 2_000_000_000, 10.10, 640, 480, "camera")
+    observed.observe_image("depth", 2_011_000_000, 10.12, 640, 480, "camera")
+
+    summary = observed.summary(0.2)
+    assert summary["synchronized_pairs"]["count"] == 1
+    assert summary["synchronized_pairs"]["deltas_ms"] == [9.0]
+    assert summary["rgb_depth_candidates"]["nearest_delta_ms"] == 9.0
+    assert summary["rgb_depth_candidates"]["within_sync_slop_count"] == 1
+    assert summary["rgb"]["receipt_gaps_s"] == [0.08]
+
+
+def test_timeout_reports_when_no_request_pair_met_sync_slop():
+    observed = collector(sync_slop_ms=10)
+    start_request(observed)
+    observed.observe_image("rgb", 10_000_000_000, 10.02, 640, 480, "camera")
+    observed.observe_image("depth", 9_983_333_333, 10.03, 640, 480, "camera")
+    observed.observe_image("rgb", 10_050_000_000, 10.20, 640, 480, "camera")
+    detail = (
+        "RGB/depth observed but no pair within sync tolerance; "
+        "latest_rgb_depth_delta_ms=16.667; processing_elapsed_ms=not_started"
+    )
+    finish_request(observed, result_code=2, detail=detail, receipt_s=10.5)
+
+    summary = observed.summary(0.6)
+    assert summary["terminal"]["result"] == "timeout"
+    assert summary["terminal"]["diagnostic_detail"] == detail
+    assert summary["terminal"]["request_total_elapsed_ms"] == 500.0
+    assert summary["rgb_depth_candidates"]["nearest_delta_ms"] == 16.666667
+    assert summary["rgb_depth_candidates"]["within_sync_slop_count"] == 0
+    assert (
+        summary["rgb_depth_candidates"]["timeout_has_candidate_within_sync_slop"]
+        is False
+    )
+    assert summary["synchronized_pairs"]["count"] == 0
+
+
+def test_diagnostic_progress_records_first_usable_observation_time():
+    observed = collector()
+    start_request(observed, start_s=2.0)
+    observed.observe_diagnostic(1, "RawPart", "camera", "observation_ready", 2.125)
+    finish_request(observed, result_code=0, detail="ok", receipt_s=2.2)
+
+    summary = observed.summary(0.3)
+    assert (
+        summary["request_elapsed_to_first_receipt_ms"][
+            "first_usable_observation_diagnostic"
+        ]
+        == 125.0
+    )
+    assert MODULE.acceptance_exit_code(summary) == 0
+
+
+def test_no_detect_request_is_not_reported_as_a_captured_measurement():
+    observed = collector()
+    observed.observe_image("rgb", 1_000_000_000, 0.0, 640, 480, "camera")
+    summary = observed.summary(1.0)
+
+    assert summary["status"] == "NO_TERMINAL_REQUEST"
+    assert summary["request_lifecycle"]["captured"] is False
     assert MODULE.acceptance_exit_code(summary) == 1
-    assert summary["observed_samples"] == 0
-
-
-def test_sample_count_is_bounded_and_duplicate_is_deterministic():
-    observed = collector(required_samples=2)
-    for stamp in (1, 2, 3):
-        observed.observe("rgb", stamp)
-        observed.observe("depth", stamp)
-        observed.observe("camera_info", stamp)
-    assert len(observed.triples) == 2
-    assert observed.complete
-    assert observed.observe("rgb", 3) is False
-
-
-def test_pending_state_is_bounded_with_deterministic_oldest_drop():
-    observed = collector(required_samples=1, max_pending=2)
-    observed.observe("rgb", 1)
-    observed.observe("rgb", 2)
-    observed.observe("rgb", 3)
-    assert len(observed.pending["rgb"]) == 2
-    assert 1 not in observed.pending["rgb"]
-    assert observed.dropped_messages == 1
-
-
-def test_success_exit_code_is_zero():
-    observed = collector(required_samples=1)
-    for stream in MODULE.STREAMS:
-        observed.observe(stream, 40)
-    assert MODULE.acceptance_exit_code(observed.summary("VERIFIED", 0.1)) == 0

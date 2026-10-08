@@ -6,74 +6,602 @@
     {
       "id": "factory_floor",
       "display_name": "FactoryFloor",
-      "geometry": {"type": "box", "dimensions_m": [5.4, 5.4, 0.03]},
-      "pose": {"position_m": [0.25, -0.2, -0.015], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          5.4,
+          5.4,
+          0.03
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.25,
+          -0.2,
+          -0.015
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "pedestal",
       "display_name": "Pedestal",
-      "geometry": {"type": "box", "dimensions_m": [0.5, 0.5, 0.6]},
-      "pose": {"position_m": [0.15, -0.15, 0.3], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.5,
+          0.5,
+          0.6
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.15,
+          -0.15,
+          0.3
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "pedestal_top",
       "display_name": "PedestalTop",
-      "geometry": {"type": "box", "dimensions_m": [0.58, 0.58, 0.05]},
-      "pose": {"position_m": [0.15, -0.15, 0.625], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.58,
+          0.58,
+          0.05
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.15,
+          -0.15,
+          0.625
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "robot_riser",
       "display_name": "RobotRiser",
-      "geometry": {"type": "box", "dimensions_m": [0.25, 0.25, 0.03]},
-      "pose": {"position_m": [0.15, -0.15, 0.665], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.25,
+          0.25,
+          0.03
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.15,
+          -0.15,
+          0.665
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "cnc_base",
       "display_name": "CNC Base",
-      "geometry": {"type": "box", "dimensions_m": [1.22, 0.8, 0.84]},
-      "pose": {"position_m": [0.82, 0.72, 0.42], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          1.22,
+          0.8,
+          0.84
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.82,
+          0.72,
+          0.42
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "cnc_front_left",
+      "display_name": "CNC FrontFrameLeft",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.08,
+          0.07,
+          0.66
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.3,
+          0.305,
+          0.92
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "cnc_front_top",
+      "display_name": "CNC FrontFrameTop",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          1.08,
+          0.07,
+          0.13
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.82,
+          0.305,
+          1.22
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "cnc_upper_housing",
       "display_name": "CNC UpperHousing",
-      "geometry": {"type": "box", "dimensions_m": [1.22, 0.8, 0.48]},
-      "pose": {"position_m": [0.82, 0.74, 1.06], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          1.22,
+          0.8,
+          0.48
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.82,
+          0.74,
+          1.06
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "camera_rig_post_left",
       "display_name": "CameraRig PostLeft",
-      "geometry": {"type": "box", "dimensions_m": [0.055, 0.055, 1.9]},
-      "pose": {"position_m": [-0.56, -0.35, 0.95], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.055,
+          0.055,
+          1.9
+        ]
+      },
+      "pose": {
+        "position_m": [
+          -0.56,
+          -0.35,
+          0.95
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "camera_rig_post_right",
       "display_name": "CameraRig PostRight",
-      "geometry": {"type": "box", "dimensions_m": [0.055, 0.055, 1.9]},
-      "pose": {"position_m": [0.96, -0.35, 0.95], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.055,
+          0.055,
+          1.9
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.96,
+          -0.35,
+          0.95
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "camera_rig_top_beam",
       "display_name": "CameraRig TopBeam",
-      "geometry": {"type": "box", "dimensions_m": [1.58, 0.06, 0.06]},
-      "pose": {"position_m": [0.2, -0.35, 1.88], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          1.58,
+          0.06,
+          0.06
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.35,
+          1.88
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "camera_boom",
       "display_name": "CameraBoom",
-      "geometry": {"type": "box", "dimensions_m": [0.06, 0.52, 0.06]},
-      "pose": {"position_m": [0.2, -0.59, 1.82], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.06,
+          0.52,
+          0.06
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.59,
+          1.82
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "camera_drop_bracket",
       "display_name": "CameraDropBracket",
-      "geometry": {"type": "box", "dimensions_m": [0.08, 0.08, 0.04]},
-      "pose": {"position_m": [0.2, -0.83, 1.77], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.08,
+          0.08,
+          0.04
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.83,
+          1.77
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     },
     {
       "id": "cable_tray",
       "display_name": "CableTray",
-      "geometry": {"type": "box", "dimensions_m": [1.4, 0.05, 0.035]},
-      "pose": {"position_m": [0.2, -0.3, 1.95], "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0]}
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          1.4,
+          0.05,
+          0.035
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.3,
+          1.95
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_base",
+      "display_name": "AMR Base",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.78,
+          0.6,
+          0.26
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.17
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_upper_body",
+      "display_name": "AMR UpperBody",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.72,
+          0.56,
+          0.2
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.36
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_tray_lift",
+      "display_name": "AMR TrayLift",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.56,
+          0.42,
+          0.16
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.5
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_tray",
+      "display_name": "AMR Tray",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.66,
+          0.46,
+          0.045
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.85,
+          0.64
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_tray_rail_left",
+      "display_name": "AMR Tray LeftRail",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.025,
+          0.46,
+          0.07
+        ]
+      },
+      "pose": {
+        "position_m": [
+          -0.125,
+          -0.85,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_tray_rail_right",
+      "display_name": "AMR Tray RightRail",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.025,
+          0.46,
+          0.07
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.525,
+          -0.85,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_tray_rail_front",
+      "display_name": "AMR Tray FrontRail",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.66,
+          0.025,
+          0.07
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -1.075,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_tray_rail_rear",
+      "display_name": "AMR Tray RearRail",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.66,
+          0.025,
+          0.07
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.625,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_raw_slot_support",
+      "display_name": "AMR RawSlot support",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.24,
+          0.28,
+          0.008
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.03,
+          -0.85,
+          0.666
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "id": "amr_finished_slot_support",
+      "display_name": "AMR FinishedSlot support",
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.24,
+          0.28,
+          0.008
+        ]
+      },
+      "pose": {
+        "position_m": [
+          0.37,
+          -0.85,
+          0.666
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
     }
   ]
 }

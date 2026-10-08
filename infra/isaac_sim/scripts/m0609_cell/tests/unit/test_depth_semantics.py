@@ -1,6 +1,9 @@
 import pytest
 
-from depth_semantics import classify_depth_samples
+from depth_semantics import (
+    classify_depth_samples,
+    verify_declared_optical_z_for_coplanar_samples,
+)
 
 
 def samples(values):
@@ -42,6 +45,49 @@ def test_refuses_single_plane_samples_even_when_the_values_match():
     result = classify_depth_samples(
         samples([(1.0, 1.0, 1.0), (1.0, 1.0, 1.01), (1.0, 1.0, 1.02)]), 0.1, 10.0, 0.002
     )
+    assert result["status"] == "NOT VERIFIED"
+    assert "independent optical depths" in result["reason"]
+
+
+def test_accepts_coplanar_geometry_when_verified_helper_declares_optical_z():
+    result = verify_declared_optical_z_for_coplanar_samples(
+        samples([(1.0, 1.0, 1.01), (1.0, 1.0, 1.02), (1.0, 1.0, 1.03)]),
+        classify_depth_samples(
+            samples([(1.0, 1.0, 1.01), (1.0, 1.0, 1.02), (1.0, 1.0, 1.03)]),
+            0.1,
+            10.0,
+            0.002,
+        ),
+        {
+            "status": "VERIFIED",
+            "helper_type_token": "depth",
+            "source_mapping": "type=depth maps to SensorType.DistanceToImagePlane in ROS2CameraHelper source",
+        },
+        0.002,
+    )
+
+    assert result["status"] == "VERIFIED"
+    assert result["semantic"] == "optical_axis_z_m"
+    assert result["depth_unit"] == "metres"
+
+
+def test_rejects_coplanar_optical_z_when_helper_is_not_depth():
+    result = verify_declared_optical_z_for_coplanar_samples(
+        samples([(1.0, 1.0, 1.01), (1.0, 1.0, 1.02), (1.0, 1.0, 1.03)]),
+        classify_depth_samples(
+            samples([(1.0, 1.0, 1.01), (1.0, 1.0, 1.02), (1.0, 1.0, 1.03)]),
+            0.1,
+            10.0,
+            0.002,
+        ),
+        {
+            "status": "VERIFIED",
+            "helper_type_token": "color",
+            "source_mapping": "type=depth maps to SensorType.DistanceToImagePlane in ROS2CameraHelper source",
+        },
+        0.002,
+    )
+
     assert result["status"] == "NOT VERIFIED"
     assert "independent optical depths" in result["reason"]
 

@@ -4,7 +4,7 @@ Upstream:
 robotiq/ros
 
 Imported revision:
-<commit hash>
+3b6cf8ff9106384e72c23de7d3ba989fb6b41141
 
 Purpose:
 Vendored and adapted for SF-Twin standalone Isaac Sim integration.

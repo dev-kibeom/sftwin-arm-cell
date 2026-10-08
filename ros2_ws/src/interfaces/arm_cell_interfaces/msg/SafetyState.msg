@@ -11,8 +11,12 @@ uint8 SAFETY_STATE_EMERGENCY_STOPPED=6
 
 uint8 safety_state
 MotionCapability motion_capability
+StopMode selected_stop_mode
 SafetyCauseSet active_causes
 SafetyCauseSet latched_causes
 bool valid
 bool required_inputs_fresh
+bool motion_envelope_valid
+float32 max_velocity_scale
+float32 max_acceleration_scale
 string diagnostic_detail

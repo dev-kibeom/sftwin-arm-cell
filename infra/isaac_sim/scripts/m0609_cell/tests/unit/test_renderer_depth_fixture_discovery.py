@@ -86,7 +86,9 @@ def test_discovery_is_deterministic_and_candidate_count_is_hard_bounded():
     search = first["search"]
     assert search["grid_dimensions"] == [GRID_COLUMNS, GRID_ROWS]
     assert search["candidate_triples_evaluated"] <= MAX_CANDIDATE_TRIPLES
-    assert search["candidate_triples_evaluated"] <= search["candidate_triples_available"]
+    assert (
+        search["candidate_triples_evaluated"] <= search["candidate_triples_available"]
+    )
     assert first["candidate"]["targets"][0]["id"] == "z080"
     assert first["candidate"]["targets"][1]["id"] == "z110"
     assert first["candidate"]["targets"][2]["id"] == "z140"

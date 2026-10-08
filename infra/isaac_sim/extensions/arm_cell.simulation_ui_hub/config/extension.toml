@@ -1,0 +1,18 @@
+[package]
+version = "0.1.0"
+title = "ARM Cell Simulation UI Hub"
+description = "Isaac-hosted operator surface for canonical ARM Cell observations and owner-routed requests."
+category = "Simulation"
+
+[dependencies]
+"omni.ui" = {}
+"omni.kit.menu.utils" = {}
+"isaacsim.ros2.bridge" = {}
+
+[[python.module]]
+name = "arm_cell_simulation_ui_hub.extension"
+
+[settings]
+"/exts/arm_cell.simulation_ui_hub/auto_load" = true
+"/exts/arm_cell.simulation_ui_hub/observation_freshness_seconds" = 1.0
+"/exts/arm_cell.simulation_ui_hub/annotation_source_tolerance_seconds" = 0.15

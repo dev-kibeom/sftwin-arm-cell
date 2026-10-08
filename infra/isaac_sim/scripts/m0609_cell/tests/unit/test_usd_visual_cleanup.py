@@ -2,7 +2,7 @@ import pytest
 
 Sdf = pytest.importorskip("pxr.Sdf")
 
-from usd_visual_cleanup import cleanup_dangling_visual_references
+from scene_builder.usd_visual_cleanup import cleanup_dangling_visual_references
 
 
 ROBOT = "/m0609_robotiq_2f85"
@@ -43,9 +43,7 @@ def test_valid_visual_link_preserves_reference():
     layer = Sdf.Layer.CreateAnonymous()
     visual = visual_reference(layer, "visible_link", target_exists=True)
 
-    cleaned = cleanup_dangling_visual_references(
-        layer, ROBOT, {"visible_link": True}
-    )
+    cleaned = cleanup_dangling_visual_references(layer, ROBOT, {"visible_link": True})
 
     assert cleaned == []
     assert visual.referenceList.prependedItems == [

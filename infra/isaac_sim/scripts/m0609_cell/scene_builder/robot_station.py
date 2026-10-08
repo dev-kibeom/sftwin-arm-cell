@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from model_provenance import verify_current_artifact
+from scene_builder.model_provenance import verify_current_artifact
 
 
 def build_robot_station(context):
@@ -63,9 +63,13 @@ def build_robot_station(context):
             mat_steel,
         )
 
-    project_root = Path(
-        os.environ.get("SFTWIN_PROJECT_ROOT", "~/sftwin_project")
-    ).expanduser()
+    configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
+    if not configured_root:
+        raise RuntimeError(
+            "SFTWIN_PROJECT_ROOT is not configured. Run 1_before_play.py "
+            "before constructing the robot station."
+        )
+    project_root = Path(configured_root).expanduser().resolve()
     robot_usd = (
         project_root / "infra/isaac_sim/assets/usd/m0609_robotiq_2f85_generated.usd"
     )
@@ -93,7 +97,7 @@ def build_robot_station(context):
             print(">>> [SUCCESS] Doosan M0609 loaded")
     else:
         print(f">>> [WARN] Robot USD not found: {robot_usd}")
-        print(">>> Run 01_build_robot_usd.py first.")
+        print(">>> Run 0_pre_build.py first.")
 
     context.robot_x = robot_x
     context.robot_y = robot_y

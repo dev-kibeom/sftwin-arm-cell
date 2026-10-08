@@ -1,0 +1,185 @@
+{
+  "frame_id": "world",
+  "objects": [
+    {
+      "display_name": "Pedestal",
+      "geometry": {
+        "dimensions_m": [
+          0.5,
+          0.5,
+          0.6
+        ],
+        "type": "box"
+      },
+      "id": "pedestal",
+      "pose": {
+        "position_m": [
+          0.15,
+          -0.15,
+          0.3
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "CNC FrontFrameLeft",
+      "geometry": {
+        "dimensions_m": [
+          0.08,
+          0.07,
+          0.66
+        ],
+        "type": "box"
+      },
+      "id": "cnc_front_left",
+      "pose": {
+        "position_m": [
+          0.3,
+          0.305,
+          0.92
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "CNC FrontFrameTop",
+      "geometry": {
+        "dimensions_m": [
+          1.08,
+          0.07,
+          0.13
+        ],
+        "type": "box"
+      },
+      "id": "cnc_front_top",
+      "pose": {
+        "position_m": [
+          0.82,
+          0.305,
+          1.22
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "CameraRig PostLeft",
+      "geometry": {
+        "dimensions_m": [
+          0.055,
+          0.055,
+          1.9
+        ],
+        "type": "box"
+      },
+      "id": "camera_rig_post_left",
+      "pose": {
+        "position_m": [
+          -0.56,
+          -0.35,
+          0.95
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray LeftRail",
+      "geometry": {
+        "dimensions_m": [
+          0.025,
+          0.46,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_left",
+      "pose": {
+        "position_m": [
+          -0.125,
+          -0.85,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray RightRail",
+      "geometry": {
+        "dimensions_m": [
+          0.025,
+          0.46,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_right",
+      "pose": {
+        "position_m": [
+          0.525,
+          -0.85,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray RearRail",
+      "geometry": {
+        "dimensions_m": [
+          0.66,
+          0.025,
+          0.07
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_rail_rear",
+      "pose": {
+        "position_m": [
+          0.2,
+          -0.625,
+          0.675
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    }
+  ],
+  "schema_version": 1,
+  "source": {
+    "canonical_manifest_sha256": "cb30b1101671807f2fa38e760c30bd338481ea3920cf039f1b2a0f91c082ea50",
+    "selection_sha256": "d3bbb13c0d91d9e7e402124d166ef18e99e9c8fa21f6ecdbac4fb8dbe9c99d73"
+  }
+}

@@ -18,13 +18,20 @@ def load_module():
     return module
 
 
-def test_camera_overlay_requires_snapshot(tmp_path):
+def test_camera_overlay_requires_snapshot_when_no_local_artifact_exists(
+    tmp_path, monkeypatch
+):
     profile = tmp_path / "profile.yaml"
     profile.write_text("camera_snapshot: null\n")
     context = LaunchContext()
     context.launch_configurations.update({"profile": str(profile), "snapshot": ""})
+    module = load_module()
+    package_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
+    package_share.mkdir(parents=True)
+    module.get_package_share_directory = lambda _package: str(package_share)
+    monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     with pytest.raises(RuntimeError, match="inspector-generated"):
-        load_module().compose(context)
+        module.compose(context)
 
 
 def test_camera_overlay_has_exactly_two_approved_tf_edges(tmp_path):
@@ -83,3 +90,37 @@ def test_camera_overlay_snapshot_argument_overrides_profile(tmp_path):
     )
     nodes = load_module().compose(context)
     assert len(nodes) == 2
+
+
+def test_camera_overlay_discovers_before_play_artifact_from_project_root(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "checkout"
+    snapshot = (
+        root / ".local_artifacts/m0609_cell/camera_inspection/camera_snapshot.json"
+    )
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_text(
+        json.dumps(
+            {
+                "world_to_camera_link": {
+                    "parent_frame": "world",
+                    "child_frame": "camera_link",
+                    "translation_m": [0, 0, 0],
+                    "quaternion_xyzw": [0, 0, 0, 1],
+                },
+                "camera_link_to_optical": {
+                    "parent_frame": "camera_link",
+                    "child_frame": "camera_color_optical_frame",
+                    "translation_m": [0, 0, 0],
+                    "quaternion_xyzw": [0, 0, 0, 1],
+                },
+            }
+        )
+    )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(root))
+    context = LaunchContext()
+    profile = tmp_path / "profile.yaml"
+    profile.write_text("camera_snapshot: null\n")
+    context.launch_configurations.update({"profile": str(profile), "snapshot": ""})
+    assert len(load_module().compose(context)) == 2

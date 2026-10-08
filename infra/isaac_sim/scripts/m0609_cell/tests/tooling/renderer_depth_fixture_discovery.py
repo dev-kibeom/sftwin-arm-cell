@@ -207,7 +207,9 @@ def grid_pixels_for_target(depth, camera_info, optical_z_m):
 
     x_values = np.rint(np.linspace(x0, x1, GRID_COLUMNS)).astype(int)
     y_values = np.rint(np.linspace(y0, y1, GRID_ROWS)).astype(int)
-    positions = list(dict.fromkeys((int(x), int(y)) for y in y_values for x in x_values))
+    positions = list(
+        dict.fromkeys((int(x), int(y)) for y in y_values for x in x_values)
+    )
     accepted = []
     for pixel in positions:
         check = projected_footprint_clearance(view, camera_info, pixel, optical_z_m)
@@ -305,16 +307,12 @@ def discover_fixture_layout(depth, camera_info, sensor_stamp_ns=None):
                 {
                     "id": target_id,
                     "frame_id": CANONICAL_FRAME,
-                    "optical_xyz_m": list(
-                        pixel_to_optical_xyz(pixel, z, camera_info)
-                    ),
+                    "optical_xyz_m": list(pixel_to_optical_xyz(pixel, z, camera_info)),
                     "projected_pixel": list(pixel),
                     "baseline_depth_m": item.baseline_depth_m,
                     "footprint_min_depth_m": item.footprint_min_depth_m,
                     "required_baseline_depth_m": z + MINIMUM_DEPTH_CLEARANCE_M,
-                    "projected_footprint_bounds_xyxy": list(
-                        item.footprint_bounds_xyxy
-                    ),
+                    "projected_footprint_bounds_xyxy": list(item.footprint_bounds_xyxy),
                 }
                 for target_id, z, pixel, item in zip(
                     ("z080", "z110", "z140"),
@@ -369,7 +367,11 @@ def discover_fixture_layout(depth, camera_info, sensor_stamp_ns=None):
 
 
 def _report_for_pair(depth_message, camera_info):
-    from rgbd_assertions import decode_depth_frame, stamp_nanoseconds, validate_camera_info
+    from rgbd_assertions import (
+        decode_depth_frame,
+        stamp_nanoseconds,
+        validate_camera_info,
+    )
 
     if depth_message.encoding != "32FC1":
         raise ValueError("target-free baseline depth must use 32FC1")

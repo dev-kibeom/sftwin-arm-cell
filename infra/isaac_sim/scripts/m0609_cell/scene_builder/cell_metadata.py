@@ -147,7 +147,6 @@ def apply_integration_metadata(context):
         f"{CELL_ROOT}/Vision/Camera_Sensor": "vision_sensor",
         f"{CELL_ROOT}/AMR/Mockup": "mobile_robot_placeholder",
         f"{CELL_ROOT}/AMR/Mockup/Tray": "robot_pick_surface",
-        f"{CELL_ROOT}/AMR/Mockup/RawPart": "raw_workpiece",
         f"{CELL_ROOT}/CNC/WorkArea/Fixture": "cnc_fixture",
         f"{CELL_ROOT}/Safety/AMRInterface": "logistics_safety_interface",
     }

@@ -65,9 +65,11 @@
         <parent link="gripper_robotiq_85_base_link"/>
         <child link="sf_grasp_tcp"/>
 
-        <!-- Initial estimate.
-             Calibrate after visual/kinematic validation. -->
-        <origin xyz="0 0 0.15" rpy="0 0 0"/>
+        <!-- WU-14 validation TCP: nominal 70 mm opening, derived from the
+             midpoint of the inward-facing fingertip collision surfaces at
+             mimic q=0.176470588. The TCP orientation is unchanged: +Z is
+             the insertion direction used by the configured Motion profile. -->
+        <origin xyz="0 -0.0003749994 0.1357482403" rpy="0 0 0"/>
     </joint>
 
 </robot>

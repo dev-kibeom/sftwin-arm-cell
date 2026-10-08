@@ -3,14 +3,9 @@
 
 def run_probe():
     """Create the legacy test workpiece and expose its unchanged probe state."""
-    import importlib
     import omni.usd
     from pxr import Gf, UsdGeom, UsdPhysics
-    import grasp_config as grasp_config_module
-    import grasp_manager as grasp_module
-
-    importlib.reload(grasp_config_module)
-    importlib.reload(grasp_module)
+    from gripper_runtime.grasp_policy import GraspConfig
 
     stage = omni.usd.get_context().get_stage()
     TARGET_PATH = "/World/TestWorkpiece"
@@ -26,7 +21,7 @@ def run_probe():
         mass.CreateMassAttr().Set(0.1)
         print(f">>> [INFO] Created test workpiece: {TARGET_PATH}")
 
-    GRASP_CONFIG = grasp_config_module.GraspConfig(
+    GRASP_CONFIG = GraspConfig(
         position_tolerance_m=0.015,
         orientation_tolerance_deg=12.0,
         contact_width_tolerance_mm=2.0,
