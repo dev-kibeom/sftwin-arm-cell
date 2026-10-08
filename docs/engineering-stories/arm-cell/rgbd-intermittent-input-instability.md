@@ -12,14 +12,14 @@ those improvements from failures to deliver or synchronize a pair.
 
 ## Investigation
 
-PR [#278](https://github.com/dev-kibeom/sftwin/pull/278) added reuse of a
+PR #278 added reuse of a
 recent structurally valid RGB-D input pair when it meets the freshness policy.
 This avoids waiting for another pair when an eligible input is already
 available. It does **not** cache detector results. If no eligible pair is
 available, the request continues through acquisition under the existing
 deadline.
 
-PR [#282](https://github.com/dev-kibeom/sftwin/pull/282) connected
+PR #282 connected
 Orchestration logs for delivery and `ExecuteCycle` dispatch/acceptance with
 Vision dispatch and terminal outcomes using their IDs. This improves request
 traceability; it did not change the RGB-D input pipeline.
@@ -66,9 +66,9 @@ The separate resolved settling-policy defect is documented in
 
 ## References
 
-- [PR #278](https://github.com/dev-kibeom/sftwin/pull/278) — reuse fresh
+- PR #278 — reuse fresh
   RGB-D input before the Vision deadline.
-- [PR #282](https://github.com/dev-kibeom/sftwin/pull/282) — correlate
+- PR #282 — correlate
   `ExecuteCycle` and Vision request logs.
 - [`Vision Frame Ingress FDS`](../../components/arm-cell/vision/fds-frame-ingress.md)
 - [`Detect Target FDS`](../../components/arm-cell/vision/fds-detect-target.md)

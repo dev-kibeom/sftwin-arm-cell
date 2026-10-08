@@ -35,6 +35,6 @@ degradation.
 
 ## References
 
-- [PR #231](https://github.com/dev-kibeom/sftwin/pull/231), [#232](https://github.com/dev-kibeom/sftwin/pull/232), [#233](https://github.com/dev-kibeom/sftwin/pull/233)
+- PR #231, PR #232, PR #233
 - [`Hub operator UI FDS`](../../components/arm-cell/integration/fds-operator-ui-hub.md)
 - [`Vision-Orchestration ICD`](../../interfaces/arm-cell/icd-vision-orchestration.md)
