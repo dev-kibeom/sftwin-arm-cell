@@ -7,7 +7,6 @@
 - **Status:** Draft
 - **Owner:** Architecture Authority
 - **Source:** `[SF-Twin]_SAD_v13.0` decomposition
-
 - **Related Capabilities:** `BF-LITE`, `GF-D1`, `GF-D2`
 
 ## 1. Purpose
