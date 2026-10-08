@@ -12,14 +12,14 @@ those improvements from failures to deliver or synchronize a pair.
 
 ## Investigation
 
-PR PR #278 added reuse of a
+PR #278 added reuse of a
 recent structurally valid RGB-D input pair when it meets the freshness policy.
 This avoids waiting for another pair when an eligible input is already
 available. It does **not** cache detector results. If no eligible pair is
 available, the request continues through acquisition under the existing
 deadline.
 
-PR PR #282 connected
+PR #282 connected
 Orchestration logs for delivery and `ExecuteCycle` dispatch/acceptance with
 Vision dispatch and terminal outcomes using their IDs. This improves request
 traceability; it did not change the RGB-D input pipeline.
