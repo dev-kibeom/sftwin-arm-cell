@@ -66,3 +66,24 @@ def add_module_root(script_path, environ=None):
     if as_string not in sys.path:
         sys.path.insert(0, as_string)
     return module_root
+
+
+def clear_imported_package(package_name, module_cache=None):
+    """Remove one package and its children from a persistent Script Editor."""
+    cache = sys.modules if module_cache is None else module_cache
+    prefix = f"{package_name}."
+    for name in tuple(cache):
+        if name == package_name or name.startswith(prefix):
+            del cache[name]
+
+
+def clear_package_bytecode(package_path):
+    """Remove cached bytecode before reloading a live Script Editor package."""
+    cache_path = Path(package_path) / "__pycache__"
+    if not cache_path.is_dir():
+        return 0
+    removed = 0
+    for bytecode_path in cache_path.glob("*.pyc"):
+        bytecode_path.unlink(missing_ok=True)
+        removed += 1
+    return removed

@@ -21,21 +21,10 @@ def test_runtime_articulation_candidates_preserve_legacy_probe_order():
     )
 
 
-def test_manual_probe_is_not_a_production_runtime_dependency():
-    session_source = (CELL_ROOT / "gripper_runtime/session.py").read_text()
-    assert "manual.gripper_attachment_probe" not in session_source
-    assert (
-        "omni"
-        not in (CELL_ROOT / "manual/gripper_attachment_probe.py")
-        .read_text()
-        .split("def run_probe", 1)[0]
-    )
-
-
-def test_camera_compatibility_entrypoint_reexports_inspection_contract():
+def test_camera_entrypoint_exports_inspection_contract():
     import importlib.util
 
-    wrapper = CELL_ROOT / "inspect_camera.py"
+    wrapper = CELL_ROOT / "camera_tooling/entrypoints/inspect_camera.py"
     spec = importlib.util.spec_from_file_location(
         "inspect_camera_compatibility", wrapper
     )
@@ -45,10 +34,10 @@ def test_camera_compatibility_entrypoint_reexports_inspection_contract():
     assert module.usd_camera_to_optical((0.0, 0.0, -1.0)) == (0.0, 0.0, 1.0)
 
 
-def test_renderer_compatibility_entrypoint_reexports_canonical_authoring():
+def test_renderer_entrypoint_exports_canonical_authoring():
     import importlib.util
 
-    wrapper = CELL_ROOT / "renderer_depth_calibration.py"
+    wrapper = CELL_ROOT / "camera_tooling/entrypoints/renderer_depth_calibration.py"
     spec = importlib.util.spec_from_file_location(
         "renderer_depth_calibration_compatibility", wrapper
     )

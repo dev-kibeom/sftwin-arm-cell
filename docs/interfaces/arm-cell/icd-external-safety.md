@@ -1,10 +1,10 @@
 # [SF-Twin] ARM Cell External State ↔ Safety Interface Contract
 
-- **Document ID:** `[SF-Twin]_ICD-ARM-CELL-EXTERNAL-SAFETY_v1.1.0`
+- **Document ID:** `[SF-Twin]_ICD-ARM-CELL-EXTERNAL-SAFETY_v1.2.0`
 - **Document Type:** `ICD`
 - **Scope:** `AMR / PackML / Safety-HW Adapters ↔ Safety Supervisor`
-- **Version:** `1.1.0`
-- **Status:** `Draft`
+- **Version:** `1.2.0`
+- **Status:** `Approved`
 - **Owner:** `ARM Cell Shared Interface`
 
 ## 1. Endpoints and Authority
@@ -21,7 +21,7 @@ External adapters publish state and freshness evidence only. They SHALL NOT dete
 
 Every external state message contains `std_msgs/Header header` and `bool valid`. `header.stamp` is the timestamp assigned by the source adapter; `valid=false` means the sample cannot establish a valid external state.
 
-Safety evaluates source plausibility and freshness using the message semantics together with local receipt time. A publisher becoming silent is therefore observable as watchdog expiry; communication loss is not represented solely by an in-band fault flag. The threshold and rate remain profile configuration, not message constants.
+Safety evaluates source timestamp plausibility in the active ROS clock domain and receipt freshness with a separate local monotonic watchdog. Source timestamps later than current ROS time or older than the configured `source_timestamp_max_age_ms` bound are implausible and cannot establish fresh Safety state. This bound is profile configuration, not a message constant. A publisher becoming silent is observable as watchdog expiry; `COMMUNICATION_LOSS` denotes valid input timeout, while received invalid/implausible samples are represented by `REQUIRED_INPUT_INVALID`.
 
 ## 3. AMR Docking State
 
@@ -33,7 +33,7 @@ Safety evaluates source plausibility and freshness using the message semantics t
 
 [`PackMLState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/PackMLState.msg) fields are `header`, `state`, and `valid`.
 
-The supported canonical subset is exactly `PACKML_STATE_UNKNOWN`, `PACKML_STATE_IDLE`, `PACKML_STATE_STARTING`, `PACKML_STATE_EXECUTE`, `PACKML_STATE_COMPLETE`, and `PACKML_STATE_ABORTED`. It is not a declaration of the full PackML state machine. `IDLE`, `STARTING`, and `COMPLETE` may gate normal motion without being stop-level faults; Safety evaluates `EXECUTE` and `ABORTED` contextually.
+The supported canonical subset is exactly `PACKML_STATE_UNKNOWN`, `PACKML_STATE_IDLE`, `PACKML_STATE_STARTING`, `PACKML_STATE_EXECUTE`, `PACKML_STATE_COMPLETE`, and `PACKML_STATE_ABORTED`. It is not a declaration of the full PackML state machine. PackML is external CNC/process state, not ARM mission state. `EXECUTE` alone does not globally prohibit robot motion. Final Demo observes canonical CNC state as a read-only Isaac indicator projection and does not require CNC/shared-zone occupancy interlocking. `ABORTED` remains fail-closed by default and is evaluated under Safety recovery policy. Future shared-zone coordination is a non-normative extension point.
 
 ## 5. Safety Hardware State
 

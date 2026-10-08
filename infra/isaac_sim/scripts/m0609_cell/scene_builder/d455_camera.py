@@ -6,6 +6,7 @@ D455_ASSET_FALLBACK_URL = (
     "https://omniverse-content-production.s3-us-west-2.amazonaws.com/"
     "Assets/Isaac/5.1/Isaac/Sensors/Intel/RealSense/rsd455.usd"
 )
+EMBEDDED_IMU_PRIM_NAME = "Imu_Sensor"
 
 
 def d455_asset_url(assets_root):
@@ -41,6 +42,20 @@ def disable_rigid_bodies(root_prim, *, usd=None, usd_physics=None):
     return disabled
 
 
+def disable_embedded_imu(root_prim, *, usd=None):
+    """Deactivate unused IMU prims embedded in a visual-only camera asset."""
+    if usd is None:
+        _, usd, _, _ = _pxr_modules()
+
+    disabled = []
+    for prim in list(usd.PrimRange(root_prim)):
+        if not prim.IsValid() or prim.GetName() != EMBEDDED_IMU_PRIM_NAME:
+            continue
+        prim.SetActive(False)
+        disabled.append(str(prim.GetPath()))
+    return disabled
+
+
 def mount_d455(
     stage,
     asset_url,
@@ -51,6 +66,7 @@ def mount_d455(
     add_reference,
     gf=None,
     usd_geom=None,
+    embedded_imu_disabler=None,
     rigid_body_disabler=disable_rigid_bodies,
     report=print,
 ):
@@ -78,9 +94,17 @@ def mount_d455(
             float(rotation_xyz_deg[2]),
         )
     )
+    if embedded_imu_disabler is None:
+        disabled_imu_paths = disable_embedded_imu(d455_prim)
+    else:
+        disabled_imu_paths = embedded_imu_disabler(d455_prim)
     disabled_paths = rigid_body_disabler(d455_prim)
     d455_prim.SetCustomDataByKey("sf_twin:role", "realsense_d455_visual")
     report(">>> [SUCCESS] RealSense D455 mounted below compact bracket")
+    if disabled_imu_paths:
+        report(">>> [INFO] Unused D455 IMU sensors disabled:")
+        for path in disabled_imu_paths:
+            report(f"    - {path}")
     if disabled_paths:
         report(">>> [INFO] D455 rigid bodies disabled:")
         for path in disabled_paths:

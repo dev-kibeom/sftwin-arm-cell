@@ -5,6 +5,7 @@ builtin_interfaces/Duration timeout
 DetectTargetResultCode result_code
 geometry_msgs/PoseStamped target_pose
 bool has_target_pose
+bool has_target_yaw
 float32 estimated_height_m
 bool has_estimated_height
 string diagnostic_detail

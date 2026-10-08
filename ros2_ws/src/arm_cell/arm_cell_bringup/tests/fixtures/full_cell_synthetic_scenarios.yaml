@@ -1,0 +1,78 @@
+schema_version: 2
+verification_scope: synthetic_full_cell
+scenarios:
+  - name: nominal_mission
+    setup: {safety: normal, motion_active: false}
+    stimulus: {vision: target_then_depleted}
+    expected: {mission_exit: depleted, motion_submissions: 5, retract_count: 0}
+    vr: [VR-ICD-VIS-ORCH-01, VR-ICD-VIS-ORCH-02, VR-ICD-ORCH-CYCLE-01]
+  - name: target_depletion
+    setup: {safety: normal, motion_active: false}
+    stimulus: {vision: object_not_found}
+    expected: {mission_exit: depleted, motion_submissions: 1, retract_count: 0}
+    vr: [VR-ICD-VIS-ORCH-02, VR-ICD-ORCH-CYCLE-01]
+  - name: vision_error
+    setup: {safety: normal, motion_active: false}
+    stimulus: {vision: timeout}
+    expected: {mission_exit: vision_error, motion_submissions: 1, retract_count: 0}
+    vr: [VR-ICD-VIS-ORCH-03, VR-ICD-ORCH-CYCLE-02]
+  - name: motion_failure
+    setup: {safety: normal, motion_active: false}
+    stimulus: {motion_result: backend_error}
+    expected: {mission_exit: motion_error, motion_submissions: 1, retract_count: 0}
+    vr: [VR-ICD-ORCH-CYCLE-02]
+  - name: controlled_stop
+    setup: {safety: normal, motion_active: true}
+    stimulus: {safety_condition: premature_undock}
+    expected: {mission_exit: safety_preempted, selected_stop_mode: controlled, terminal_motion_state: stopped, retract_count: 1}
+    vr: [VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-05, VR-ICD-SAFE-MOT-06]
+  - name: immediate_stop
+    setup: {safety: normal, motion_active: true}
+    stimulus: {safety_condition: packml_abort}
+    expected: {mission_exit: safety_preempted, selected_stop_mode: immediate, terminal_motion_state: stopped, retract_count: 1}
+    vr: [VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-06, VR-ICD-SAFE-ORCH-04]
+  - name: emergency_stop
+    setup: {safety: normal, motion_active: true}
+    stimulus: {safety_condition: emergency_stop}
+    expected: {mission_exit: safety_preempted, selected_stop_mode: emergency, terminal_motion_state: stopped, retract_count: 0}
+    vr: [VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-05, VR-ICD-SAFE-MOT-07]
+  - name: communication_loss
+    setup: {safety: normal, motion_active: true}
+    stimulus: {external_fault: communication_loss}
+    expected: {mission_exit: safety_preempted, selected_stop_mode: immediate, terminal_motion_state: stopped, retract_count: 1}
+    vr: [VR-ICD-EXT-SAFE-02, VR-ICD-SAFE-MOT-01, VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-06]
+  - name: premature_undock
+    setup: {safety: normal, motion_active: true}
+    stimulus: {external_state: undocked_while_execute}
+    expected: {mission_exit: safety_preempted, selected_stop_mode: controlled, terminal_motion_state: stopped, retract_count: 1}
+    vr: [VR-ICD-EXT-SAFE-01, VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-06]
+  - name: packml_abort
+    setup: {safety: normal, motion_active: true}
+    stimulus: {external_state: packml_aborted}
+    expected: {mission_exit: safety_preempted, selected_stop_mode: immediate, terminal_motion_state: stopped, retract_count: 1}
+    vr: [VR-ICD-EXT-SAFE-01, VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-06, VR-ICD-ORCH-CYCLE-03]
+  - name: external_clear_without_safety_reset
+    setup: {safety: normal, motion_active: true}
+    stimulus: {external_fault_then_clear: communication_loss}
+    expected: {latched_until_reset: true, reset_required: true, recovery_capability_before_reset: none}
+    vr: [VR-ICD-EXT-SAFE-02, VR-ICD-SAFE-ORCH-01]
+  - name: recovery_success
+    setup: {safety: normal, motion_active: true}
+    stimulus: {safety_condition: premature_undock, retract_result: success}
+    expected: {mission_exit: safety_preempted, terminal_motion_state: stopped, retract_count: 1, original_result_preserved: safety_preempted}
+    vr: [VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-06, VR-ICD-ORCH-CYCLE-02]
+  - name: recovery_failure
+    setup: {safety: normal, motion_active: true}
+    stimulus: {safety_condition: premature_undock, retract_result: path_obstructed}
+    expected: {mission_exit: safety_preempted, retract_count: 1, recovery_result: path_obstructed, retry_count: 0}
+    vr: [VR-ICD-SAFE-MOT-04, VR-ICD-SAFE-MOT-06, VR-ICD-ORCH-CYCLE-02]
+  - name: mission_cancellation
+    setup: {safety: normal, motion_active: false}
+    stimulus: {caller: cancel_before_start}
+    expected: {mission_exit: cancelled, cancel_requests: 1, retry_count: 0}
+    vr: [VR-ICD-ORCH-CYCLE-02, VR-ICD-ORCH-CYCLE-03]
+  - name: capability_downgrade
+    setup: {safety: normal, motion_active: false}
+    stimulus: {safety_capability: recovery_only, task: go_home}
+    expected: {normal_task_result: permission_denied, retract_result: permitted, retry_count: 0}
+    vr: [VR-ICD-SAFE-ORCH-03, VR-ICD-SAFE-MOT-02]

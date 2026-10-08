@@ -1,0 +1,10 @@
+string target_id
+string run_id
+geometry_msgs/PoseStamped pose
+bool has_target_yaw
+builtin_interfaces/Duration ttl
+---
+bool accepted
+uint64 receipt_sequence
+int64 receipt_time_ns
+string diagnostic

@@ -1,0 +1,5 @@
+# Integration assigns delivery_id once and reuses it for this delivery.
+unique_identifier_msgs/UUID delivery_id
+---
+bool accepted
+string diagnostic_detail

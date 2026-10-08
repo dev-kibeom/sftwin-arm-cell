@@ -20,6 +20,8 @@ It does not define model/state/TF/time/static-scene/RGB-D contract semantics. Re
 related ADR/design documents for those contracts. Historical PASS results belong in Acceptance
 Reports, not in this Guide.
 
+This Guide is the operator procedure for Isaac runtime setup and operation.
+
 ## 2. Preconditions
 
 - Ubuntu environment with ROS 2 Humble installed.
@@ -33,14 +35,12 @@ Reports, not in this Guide.
   - MoveIt `move_group`
   - KDL kinematics
   - OMPL
-- Isaac Script Editor access for the numbered ARM Cell setup scripts.
+- Isaac Script Editor access for the role-based ARM Cell runtime scripts.
 - no competing `/clock`, canonical `/joint_states`, or `world -> base_link` publisher in the
   selected ROS domain.
 
-The current workflow spans both host-terminal commands and Isaac Script Editor actions.
-Where repository-owned executable scripts already exist, use them. Multi-command host-terminal
-bootstrap remains a candidate for future wrapper-script extraction; do not invent a wrapper
-outside an approved implementation task.
+The workflow uses both host-terminal commands and Isaac Script Editor actions. Use the
+repository-provided commands and role entrypoints described below.
 
 ## 3. Procedure
 
@@ -76,63 +76,130 @@ Expected observable:
 - Xacro expansion succeeds;
 - `check_urdf` accepts the generated URDF.
 
-### 3.3 Configure the Isaac Script Editor session
+### 3.3 Prepare the Isaac Script Editor session
 
-Before running numbered scripts, edit the operator value in:
-
-```text
-infra/isaac_sim/scripts/m0609_cell/0_setup_sftwin_env.py
-```
-
-Set `PROJECT_ROOT` to the absolute repository path and run the script once in Isaac Script
-Editor.
-
-If `SFTWIN_PROJECT_ROOT` is already configured for the current Isaac process, leave
-`PROJECT_ROOT = None` and run the setup script to validate it.
-
-Expected observable:
-
-- the repository root is accepted;
-- the M0609 module root is available to the Script Editor process.
+Set `SFTWIN_PROJECT_ROOT` in the Isaac process to the extracted repository root before running
+the role entrypoints. Leave `PROJECT_ROOT = None` unless a deliberate local override is needed.
+`1_before_play.py` validates that configured root, configures the Script Editor module path and
+ROS domain, and selects production runtime mode. The diagnostic PnP profile is not required.
 
 ### 3.4 Construct the Isaac ARM Cell baseline
 
-Run these scripts in Isaac Script Editor in order:
+After the ROS workspace build is complete, run the role-based entrypoints in Isaac Script
+Editor. Run `0_pre_build.py` only when generated robot assets need rebuilding; for a normal live
+run, start with `1_before_play.py`:
 
 ```text
-01_build_robot_usd.py
-02_setup_scene.py
-03_build_actiongraph.py
+Asset rebuild (when needed): 0_pre_build.py
+Normal live run:             1_before_play.py -> Play -> 2_after_play.py
 ```
 
-Then start/Play the simulation and allow at least one physics frame.
+`0_pre_build.py` prepares the generated robot asset. `1_before_play.py` authors the robot and scene,
+exports the composed camera geometry snapshot, and builds the ROS ActionGraph while the stage
+is stopped. `2_after_play.py` initializes
+the gripper physics runtime and loads the Simulation UI Hub after Play. Keep the Script Editor
+session alive while the simulator runs.
 
 Expected observable:
 
-- the ARM Cell stage is constructed;
-- the ROS graph publishes the expected Isaac-side state/clock channels for the selected profile.
+- the active stage contains the production ARM Cell scene and ROS ActionGraph before Play;
+- after Play, gripper runtime reports ready and the Hub observes the selected ROS domain.
 
-### 3.5 Initialize the runtime gripper when required
+The implementation steps live under `scripts/m0609_cell/runtime_steps/`; operators run only the
+role entrypoints above. Re-running a role reads the current checkout source into the persistent
+Script Editor process.
 
-After the simulation is playing, run:
+### 3.4.1 Live development iteration
 
-```text
-04_set_gripper.py
+- After ROS/C++ code changes, rebuild the ROS workspace and restart the production ROS launch.
+- For idle-mutable Motion tuning, use `ros2 param set`; accepted updates apply to the next
+  Motion action without restarting ROS. Updates are rejected while a goal is pending or active.
+- Rerun `2_after_play.py` to rebuild the gripper runtime after runtime-module edits; restart Isaac
+  Kit to load edits to an already-enabled extension.
+- After scene or ActionGraph changes, stop simulation and run `1_before_play.py` again, then press
+  Play and run `2_after_play.py`.
+- A normal Stop followed by Play keeps the current Isaac Kit runtime alive. After an Isaac Kit
+  restart or stage/ActionGraph rebuild, use a fresh sequence: `1_before_play.py` → Play →
+  `2_after_play.py`, then start or restart `ros2 launch arm_cell_bringup arm_cell.launch.py` as
+  needed.
+
+`operational_profile.yaml` remains the startup default and reproducible source. ROS parameters
+are per-run overrides. The current Motion parameter classes are:
+
+| Class | Examples | Application |
+|---|---|---|
+| Static / restart-required | backend mode, arm joint names, topics, robot description, kinematics, transforms, mission target/pose, Safety thresholds | Restart the owning ROS node or rebuild/relaunch the Isaac stage |
+| Idle-mutable | approach/retract distances, approach-entry and tracking tolerances, progress stall timeout, holding confirmation timeout | Change with `ros2 param set` while Motion is idle; active or pending goals reject the update |
+| Runtime-safe | planning time and PLACE planning budgets, velocity/acceleration scaling | Updates queue for the next Motion action; the current PICK/PLACE/GO_HOME keeps its immutable snapshot |
+
+Example:
+
+```bash
+ros2 param set /motion_node planning_time_s 20.0
+ros2 param set /motion_node place_total_planning_time_s 75.0
 ```
 
-Keep the created runtime objects and retained physics callback alive for the simulation session.
+Motion parameter updates validate type, finite value and supported range. A rejected parameter
+update returns a reason; keep the existing effective value or restart with an edited profile.
 
-Expected observable:
+### 3.5.1 Run the M09 combined mocked composition
 
-- runtime gripper setup completes without initialization failure.
+Build/source the ROS workspace as in 3.1, then construct the Isaac cell as in
+3.3–3.5. In a ROS Humble terminal, launch the combined M09 profile:
 
-The existence of a `/gripper/command` subscriber alone is not sufficient proof that runtime
-gripper actuation is initialized.
+```bash
+source /opt/ros/humble/setup.bash
+source ros2_ws/install/setup.bash
+ros2 launch arm_cell_bringup arm_cell_m09_combined.launch.py
+```
 
-Until the Motion task backend owns gripper lifecycle and grasp-target registration, this is a
-**provisional simulator-backend bootstrap**. The retained Script Editor session and
-`/gripper/command` are not canonical Motion or mission interfaces; this Guide owns the operator
-procedure only.
+In the same Isaac Script Editor session, run `2_after_play.py` after `1_before_play.py` and Play.
+This loads the repository Hub extension into the active
+Kit process and enables it. Keep the simulator playing and the ROS launch
+alive. Register the fixed perception target using the profile's
+`runtime_runner_entrypoint` in Isaac and `registration_helper_entrypoint` in
+the ROS terminal, as described by the existing PnP validation procedure.
+
+Expected observations:
+
+- ROS advertises `/integration/request_material`,
+  `/integration/material_readiness`, `/orchestration/execute_cycle`, and
+  `/vision/detect_target` from their owning components;
+- the Isaac Hub shows current owner-published AMR, handoff, readiness, Safety,
+  Motion, and Orchestration feedback;
+- requesting material in the Hub reports only the Integration response first;
+  handoff/readiness and mission progress appear from owner feeds;
+- the fixed target is consumed by the existing Vision seam and the mission
+  reports its canonical terminal result.
+
+This profile is an M09 mock/fixed integration composition. It does not qualify
+production perception, hardware behavior, or Final Demo acceptance.
+
+### 3.5.2 Run the normal production composition
+
+Complete the build in 3.1, then prepare and play Isaac using 3.3–3.4. Rebuild generated robot
+assets with `0_pre_build.py` only when they need updating. For a normal live run:
+
+1. Run `1_before_play.py`.
+2. Press Play and wait for a physics frame.
+3. Run `2_after_play.py`.
+4. From a ROS Humble terminal, start the public production entrypoint:
+
+   ```bash
+   ros2 launch arm_cell_bringup arm_cell.launch.py
+   ```
+
+The launch uses `config/operational_profile.yaml`, preserves the established production
+composition and includes `isaac_planning.launch.py`. A deployment profile can be selected with
+`profile:=/absolute/path/to/profile.yaml`. The Simulation UI Hub is the production mission and
+fault control surface after this launch; it routes requests to canonical owners.
+
+Expected ROS observables include production `/vision/detect_target`,
+`/integration/request_material`, `/integration/material_readiness`, Safety,
+Motion, and Orchestration owner endpoints. Confirm that the Hub subscribes to
+the current owner-published producer topics. This runtime setup does not itself
+establish production live acceptance. Production mission, Hub nominal PnP, Safety fault, and
+E-stop behavior require their own live acceptance checks.
 
 ### 3.6 Launch the robot-only planning profile
 
@@ -148,6 +215,13 @@ Expected observable:
 
 - the ROS planning profile remains running;
 - canonical state/TF/planning services become available.
+
+For the validation profile, MoveIt applies the planning/time-parameterization value
+`planning_max_acceleration_rad_s2: 1.0`. This is a project-defined tuning seed, not a
+measured M0609 hardware or Isaac acceleration ceiling. Isaac execution samples the validated
+trajectory with `LinearTrajectorySampler`: it preserves waypoint geometry and
+`time_from_start`, but does not claim to reproduce TOTG's continuous velocity or acceleration
+interpolation.
 
 ### 3.7 Launch the Milestone 1B bounded static-scene profile
 
@@ -188,7 +262,7 @@ Before Stop/reset/stage replacement:
 1. stop the complete ROS launch with `Ctrl-C`;
 2. reset/reopen/rebuild the Isaac graph as required;
 3. press Play;
-4. rerun `04_set_gripper.py` after Play when gripper runtime behavior is needed;
+4. rerun `2_after_play.py` after Play when gripper runtime behavior is needed;
 5. relaunch the complete ROS profile.
 
 If reset occurs while ROS is still running and backward time/state is observed, restart the
@@ -215,10 +289,10 @@ Expected observable:
 
 ### 3.11 Run synthetic integration checks
 
-From repository root using an unused ROS domain:
+From the repository root after the preflight has selected the active ROS domain:
 
 ```bash
-ROS_DOMAIN_ID=84 python3 -m pytest \
+python3 -m pytest \
   tests/integration/arm_cell \
   --state-source=synthetic \
   -q
@@ -245,7 +319,66 @@ Expected observable:
 
 Do not weaken collision checking to force a pass when the loaded pose/goal is invalid.
 
-### 3.13 Perform read-only runtime diagnostics
+### 3.13 Run the deterministic PnP validation preflight
+
+Run the preflight from the same repository checkout used to build and source the ROS overlay.
+It accepts any branch or worktree; the checkout must be clean, and its ROS overlay and Isaac
+process must resolve to that same checkout.
+
+```bash
+python3 ros2_ws/src/arm_cell/arm_cell_bringup/scripts/pnp_validation_preflight.py \
+  --repo-root "$PWD"
+```
+
+It fails before live testing when the working tree is not clean, the required files
+or executable bits are missing, the validation profile paths do not resolve, the ROS overlay
+prefix is not the current checkout, or `ros2 pkg executables` cannot discover the registration
+helper. It prints the effective `ROS_DOMAIN_ID`; the canonical default is `0` and an explicitly
+configured domain is preserved.
+
+After the ROS validation composition is running, check live discovery before opening the Isaac
+validation runner:
+
+```bash
+python3 ros2_ws/src/arm_cell/arm_cell_bringup/scripts/pnp_validation_preflight.py \
+  --repo-root "$PWD" \
+  --live
+```
+
+The live preflight is fail-closed for Fixed Vision validation ownership. It requires exactly
+one `/fixed_detect_target_node`; zero, duplicate, or ambiguous validation instances stop the
+flow before registration. Before starting a new deterministic diagnostic composition, stop the complete
+previous validation launch with `Ctrl-C`, wait for its nodes to disappear, and start one fresh
+launch. Do not manually start another Fixed Vision node and do not kill unrelated processes.
+Run the `--live` preflight again and proceed to registration only after it reports one
+authoritative instance. Registration and immediate DetectTarget readback must then be performed
+against that same composition; a readback failure is a validation blocker, not a reason to retry
+registration through another node.
+
+`1_before_play.py` prepares `SFTWIN_PROJECT_ROOT` and the effective `ROS_DOMAIN_ID`. The default
+domain is `0`; an
+explicitly configured valid domain is preserved. After both preflight phases pass, prepare with `0_pre_build.py`, construct the Isaac stage with `1_before_play.py`,
+press Play, and run `2_after_play.py`.
+Then run `pnp_validation/entrypoints/start_validation.py`. It switches the gripper runtime to
+the diagnostic profile, creates the
+deterministic cube fixture, and writes the registration handoff:
+
+```text
+Isaac: 0_pre_build.py -> 1_before_play.py -> Play -> 2_after_play.py
+       -> pnp_validation/entrypoints/start_validation.py
+ROS:   arm_cell_m09_combined.launch.py -> register_pnp_fixture.py
+       -> /vision/detect_target verification
+```
+
+This route uses cube + Fixed Vision to isolate Motion/PnP behavior. It is not a production mission
+entrypoint and cannot replace production acceptance.
+
+If you switch checkouts, rebuild and source that checkout's ROS overlay, set
+`SFTWIN_PROJECT_ROOT` to its root in the Isaac process, and rerun both preflight phases before
+continuing. The role entrypoints are Script Editor Python files selected for the current Isaac/Kit
+execution model; they do not require a shell to attach to the running Kit process.
+
+### 3.14 Perform read-only runtime diagnostics
 
 With the normal profile running:
 
@@ -276,12 +409,13 @@ print(UsdGeom.GetStageMetersPerUnit(stage))
 print(UsdGeom.XformCache().GetLocalToWorldTransform(prim))
 ```
 
-### 3.14 Export the Milestone 1C camera snapshot
+### 3.15 Inspect the composed camera snapshot
 
-After loading the scene and starting Play, run:
+`1_before_play.py` exports this snapshot automatically after scene composition. For a manual
+read-only refresh or inspection, run:
 
 ```text
-infra/isaac_sim/scripts/m0609_cell/inspect_camera.py
+infra/isaac_sim/scripts/m0609_cell/camera_tooling/entrypoints/inspect_camera.py
 ```
 
 in Isaac Script Editor.
@@ -300,14 +434,11 @@ Expected observable:
 - the snapshot path is printed;
 - non-rigid composed camera transforms fail snapshot export instead of being silently accepted.
 
-### 3.15 Launch the camera TF overlay and inspect RGB-D channels
+### 3.16 Inspect camera TF and RGB-D channels
 
 From a sourced ROS terminal:
 
 ```bash
-ros2 launch arm_cell_bringup isaac_camera.launch.py \
-  snapshot:=.local_artifacts/m0609_cell/camera_inspection/camera_snapshot.json
-
 ros2 topic info /camera/color/image_raw --verbose
 ros2 topic info /camera/aligned_depth_to_color/image_raw --verbose
 ros2 topic info /camera/color/camera_info --verbose
@@ -318,10 +449,10 @@ ros2 run tf2_ros tf2_echo camera_link camera_color_optical_frame
 
 Expected observable:
 
-- the camera overlay remains running;
+- the canonical operational launch owns camera TF composition;
 - RGB, depth, CameraInfo, and camera TF are inspectable.
 
-### 3.16 Prepare and invoke RGB-D live-acceptance tooling
+### 3.17 Prepare and invoke RGB-D live-acceptance tooling
 
 Load both ROS environments:
 
@@ -344,12 +475,12 @@ Expected observable:
 Use the accepted procedure/arguments for the specific RGB-D acceptance run. Do not treat
 `--help` as acceptance evidence.
 
-### 3.17 Author temporary renderer-depth calibration targets when required
+### 3.18 Author temporary renderer-depth calibration targets when required
 
 Use:
 
 ```text
-infra/isaac_sim/scripts/m0609_cell/renderer_depth_calibration.py
+infra/isaac_sim/scripts/m0609_cell/camera_tooling/entrypoints/renderer_depth_calibration.py
 ```
 
 in Isaac Script Editor with the current-session camera snapshot.
@@ -363,12 +494,12 @@ Expected observable:
 - only the temporary acceptance target root is replaced;
 - the stage is not saved by the calibration authoring step.
 
-### 3.18 Capture a future RGB-D regression fixture
+### 3.19 Capture a future RGB-D regression fixture
 
 Capture the required source channels together for the accepted RGB-D fixture procedure,
 including RGB, depth, CameraInfo, `/clock`, and required static TF.
 
-Store large source captures outside version control or under the approved artifact location.
+Store large source captures outside version control or under `.local_artifacts/`.
 When a derived small fixture is promoted, preserve the source capture URI and SHA-256 in its
 manifest.
 
@@ -425,7 +556,7 @@ Then rerun the command from the intended repository location.
 
 **Diagnostic**
 
-Confirm `04_set_gripper.py` was executed **after Play** in the current simulator session.
+Confirm `2_after_play.py` was executed **after Play** in the current simulator session.
 
 **Recovery**
 
@@ -446,7 +577,7 @@ bypass readback validation merely to keep the profile running.
 
 **Recovery**
 
-Inspect the actual state and collision/contact result. Move to an approved valid stationary
+Inspect the actual state and collision/contact result. Move to a valid stationary
 pose or correct the environment; do not disable collision checking to obtain a pass.
 
 ### Camera snapshot export rejects the composed transform

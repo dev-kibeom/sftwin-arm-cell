@@ -48,7 +48,9 @@ def test_canonical_spec_has_three_stable_immutable_targets_and_one_z_source():
     )
     assert TARGET_DEPTHS_M == (0.8, 1.1, 1.4)
     assert all(target.frame_id == CANONICAL_FRAME for target in CANDIDATE_A.targets)
-    assert all(target.dimensions_m == (0.08, 0.08, 0.004) for target in CANDIDATE_A.targets)
+    assert all(
+        target.dimensions_m == (0.08, 0.08, 0.004) for target in CANDIDATE_A.targets
+    )
     assert [target.material_id for target in CANDIDATE_A.targets] == [
         "renderer_depth_red",
         "renderer_depth_green",
@@ -81,7 +83,10 @@ def test_fallback_candidates_are_finite_deterministic_and_camera_derived():
         for candidate in first
         for target in candidate.targets
     )
-    assert first[0].targets[0].front_optical_xyz_m != CANDIDATE_A.targets[0].front_optical_xyz_m
+    assert (
+        first[0].targets[0].front_optical_xyz_m
+        != CANDIDATE_A.targets[0].front_optical_xyz_m
+    )
 
 
 def test_candidate_a_is_evaluated_first_and_fallbacks_stop_when_it_passes(monkeypatch):
@@ -90,7 +95,9 @@ def test_candidate_a_is_evaluated_first_and_fallbacks_stop_when_it_passes(monkey
     monkeypatch.setattr(
         probe,
         "fallback_candidates",
-        lambda _: pytest.fail("fallback layouts must not be created after Candidate A passes"),
+        lambda _: pytest.fail(
+            "fallback layouts must not be created after Candidate A passes"
+        ),
     )
     report = evaluate_candidates(valid_depth(), CameraInfo)
     assert [item["candidate_id"] for item in report["evaluated_candidates"]] == ["A"]
@@ -222,7 +229,9 @@ def test_probe_report_serializes_numpy_boolean_values():
     report = evaluate_candidates(valid_depth(), info)
     decoded = json.loads(serialize_report(report))
     assert decoded["evaluated_candidates"][0]["targets"][0]["border_pass"] is True
-    assert decoded["evaluated_candidates"][0]["targets"][0]["depth_clearance_pass"] is True
+    assert (
+        decoded["evaluated_candidates"][0]["targets"][0]["depth_clearance_pass"] is True
+    )
 
 
 def test_probe_has_no_local_artifact_input_dependency():

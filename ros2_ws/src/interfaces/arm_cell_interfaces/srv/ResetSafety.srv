@@ -1,0 +1,7 @@
+# Explicit operator acknowledgement for this Safety-owned reset attempt.
+unique_identifier_msgs/UUID request_id
+bool operator_acknowledged
+---
+# applied reports policy application only; SafetyState remains the outcome oracle.
+bool applied
+string diagnostic_detail

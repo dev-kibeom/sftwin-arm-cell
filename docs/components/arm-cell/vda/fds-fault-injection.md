@@ -4,8 +4,12 @@
 - **Document Type:** `FDS`
 - **Scope:** `Integration Fault Injection`
 - **Version:** `1.0.0`
-- **Status:** `Draft`
+- **Status:** `Review`
 - **Owner:** `ARM Cell External Integration`
+
+The scene-level non-bypass invariant is owned by [ARM Cell Simulation
+Environment Semantics](../simulation-environment-semantics.md). This FDS owns
+the external mock stimulus behavior and its owner-boundary effects.
 
 ## 1. E-Stop Injection
 
@@ -37,6 +41,22 @@ communication restored
 → fresh state published immediately
 ```
 
+## 5. Transient Communication Degradation
+
+The Final Demo scenario seam SHALL also support a bounded delay/jitter
+stimulus that leaves required inputs valid and inside Safety's configured
+freshness limit while placing them in its configured degraded-freshness band.
+Safety then publishes the configured reduced velocity/acceleration envelope.
+The stimulus is distinct from Communication Loss: if a required input crosses
+the stale/invalid limit, Safety denies motion and uses its approved stop
+policy instead of continuing at reduced speed. Clearing the transient
+stimulus restores prompt fresh publication; Safety restores its normal
+envelope only after fresh state is re-established.
+
+Delay duration and degraded-band limits are profile configuration/calibration
+values, not demo-defined constants. This seam changes publisher timing/freshness
+only; it does not write Safety capability or motion-envelope state.
+
 ## 5. Verification Requirements
 
 ### VR-VDA-FAULT-01 — Actual communication suppression
@@ -49,4 +69,12 @@ Communication restoration SHALL produce fresh state without waiting for an unrel
 Clearing mock E-Stop SHALL NOT directly clear Safety's independent latch/reset policy.
 
 ### VR-VDA-FAULT-04 — Undock clear does not redock
-Clearing premature-undock injection SHALL NOT silently synthesize a docked state.
+Given premature-undock injection has caused `UNDOCKED`, when the injection is
+cleared, then clearing SHALL NOT itself synthesize `DOCKED`. The normal initial
+state remains `DOCKED` when no undock event has occurred.
+
+### VR-VDA-FAULT-05 — Degradation distinct from loss
+The bounded transient delay stimulus SHALL preserve valid/fresh required
+inputs within the configured degraded band, while Communication Loss SHALL
+cross the required-input freshness limit. The oracle is source sample age,
+validity, and Safety's resulting envelope/capability.

@@ -20,7 +20,14 @@ import xacro
 import yaml
 
 
+def node_ros_arguments():
+    """Keep planning-side helper processes at the framework-safe default."""
+    return ["--log-level", "info"]
+
+
 def compose(context):
+    # Debug selection belongs to explicitly owned production diagnostics.
+    ros_arguments = node_ros_arguments()
     config = yaml.safe_load(
         Path(LaunchConfiguration("profile").perform(context)).read_text()
     )
@@ -36,17 +43,26 @@ def compose(context):
     for key in ("x", "y", "z", "roll", "pitch", "yaw"):
         arguments.extend(["--" + key, str(pose[key])])
     moveit = Path(get_package_share_directory("arm_cell_moveit_config"))
+    default_scene_file = str(moveit / "config/m0609_static_scene.json")
     static_loader = Node(
         package="arm_cell_moveit_config",
         executable="load_static_scene.py",
         output="screen",
+        ros_arguments=ros_arguments,
         parameters=[
             {
                 "use_sim_time": True,
                 "scene_file": str(
-                    Path(get_package_share_directory("arm_cell_moveit_config"))
-                    / "config/m0609_static_scene.json"
+                    LaunchConfiguration(
+                        "scene_file", default=default_scene_file
+                    ).perform(context)
                 ),
+                "verify_nominal_state": LaunchConfiguration(
+                    "verify_nominal_state", default="false"
+                )
+                .perform(context)
+                .lower()
+                == "true",
             }
         ],
     )
@@ -55,6 +71,7 @@ def compose(context):
             package="arm_cell_sim_adapter",
             executable="joint_state_adapter",
             output="screen",
+            ros_arguments=ros_arguments,
             parameters=[model],
             remappings=[
                 ("raw_joint_states", config["raw_joint_states"]),
@@ -82,6 +99,7 @@ def compose(context):
             launch_arguments={
                 "use_rviz": LaunchConfiguration("use_rviz"),
                 "joint_states": config["joint_states"],
+                "planning_profile": LaunchConfiguration("planning_profile", default=""),
             }.items(),
         ),
     ]
@@ -113,9 +131,19 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument("static_scene", default_value="false"),
+            DeclareLaunchArgument("log_level", default_value="info"),
+            DeclareLaunchArgument("verify_nominal_state", default_value="false"),
+            DeclareLaunchArgument(
+                "scene_file",
+                default_value=str(
+                    Path(get_package_share_directory("arm_cell_moveit_config"))
+                    / "config/m0609_static_scene.json"
+                ),
+            ),
             DeclareLaunchArgument(
                 "profile", default_value=str(share / "config/isaac_planning.yaml")
             ),
+            DeclareLaunchArgument("planning_profile", default_value=""),
             OpaqueFunction(function=compose),
         ]
     )

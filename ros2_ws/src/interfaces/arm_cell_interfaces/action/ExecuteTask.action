@@ -6,6 +6,22 @@ float32 estimated_object_height_m
 bool has_estimated_object_height
 float32 grasp_width_mm
 bool has_grasp_width
+# PLACE process envelope for the Desired Object Pose. Zero permits only the
+# nominal value on that dimension.
+float64 place_position_tolerance_m
+float64 place_orientation_tolerance_rad
+# Typed PLACE object orientation constraint values.
+uint8 PLACE_ORIENTATION_FIXED=0
+uint8 PLACE_ORIENTATION_BOUNDED=1
+uint8 PLACE_ORIENTATION_FREE=2
+uint8 place_orientation_constraint
+# PLACE recipe approach/retract geometry relative to the desired object pose.
+geometry_msgs/Vector3 place_approach_direction_object
+float64 place_approach_distance_m
+float64 place_retract_distance_m
+# Optional soft preference for the computed PLACE TCP orientation, expressed in base_link.
+bool has_place_tool_orientation_preference
+geometry_msgs/Quaternion place_tool_orientation_preference
 ---
 # Result. The terminal action state is independent from this canonical result code.
 MotionTaskResultCode result_code

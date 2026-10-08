@@ -16,7 +16,6 @@ enum class IngressStatus
   kDuplicateObservation,
   kSynchronizationSlopExceeded,
   kStaleObservation,
-  kUnsettledObservation,
   kReceiptStaleObservation,
   kCalibrationUnavailable,
   kIncompatibleMetadata,
@@ -47,7 +46,6 @@ struct SynchronizedObservationCandidate
 
 struct SensorIngressConfig
 {
-  int64_t settling_duration_ns;
   int64_t request_timeout_ns;
   std::optional<int64_t> max_receipt_age_ns;
 };
@@ -80,10 +78,17 @@ class SensorIngressPolicy
 public:
   explicit SensorIngressPolicy(SensorIngressConfig config);
 
-  IngressResult begin_acquisition(int64_t flush_watermark_stamp_ns, int64_t now_monotonic_ns);
+  IngressResult begin_acquisition(
+    int64_t flush_watermark_stamp_ns, int64_t now_monotonic_ns,
+    std::optional<int64_t> request_timeout_ns = std::nullopt);
   IngressResult evaluate(
     const SynchronizedObservationCandidate & candidate,
     int64_t now_monotonic_ns);
+  IngressResult evaluate_cached(
+    const SynchronizedObservationCandidate & candidate,
+    int64_t now_monotonic_ns, int64_t maximum_receipt_age_ns,
+    std::optional<int64_t> current_sensor_stamp_ns = std::nullopt);
+  static bool is_compatible_candidate(const SynchronizedObservationCandidate & candidate);
   IngressResult check_deadline(int64_t now_monotonic_ns);
   IngressResult reset_after_lifecycle();
   IngressResult invalidate_epoch_from_clock();
@@ -95,6 +100,7 @@ private:
   bool epoch_invalidated_ = false;
   std::optional<int64_t> last_synchronized_epoch_stamp_ns_;
   std::optional<int64_t> flush_watermark_stamp_ns_;
+  std::optional<int64_t> request_start_monotonic_ns_;
   std::optional<int64_t> deadline_monotonic_ns_;
   SensorIngressConfig config_;
 

@@ -10,6 +10,7 @@ CAMERA_PATH = f"{CELL_ROOT}/Vision/Camera_Sensor"
 GRAPH_PATH = f"{CELL_ROOT}/ROS2/ActionGraph"
 
 GRIPPER_COMMAND_TOPIC = "/gripper/command"
+GRIPPER_STATUS_TOPIC = "/gripper/status"
 JOINT_STATE_TOPIC = "/isaac/joint_states"
 JOINT_COMMAND_TOPIC = "/joint_commands"
 RGB_TOPIC = "/camera/color/image_raw"

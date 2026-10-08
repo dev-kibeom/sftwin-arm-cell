@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import scene_builder.camera_extrinsic as camera_extrinsic
+from graph_builder.graph_contract import CAMERA_HEIGHT, CAMERA_WIDTH
 from scene_builder.camera_extrinsic import (
     author_camera_sensor_from_d455_color,
     d455_color_rigid_world_transform,
@@ -10,11 +11,13 @@ from scene_builder.camera_extrinsic import (
 from scene_builder.d455_camera import (
     D455_ASSET_FALLBACK_URL,
     d455_asset_url,
+    disable_embedded_imu,
     mount_d455,
 )
 from scene_builder.logical_camera import (
     CAMERA_SENSOR_CLIPPING_RANGE_M,
     CAMERA_SENSOR_FOCAL_LENGTH,
+    CAMERA_SENSOR_RESOLUTION,
     create_logical_camera_sensor,
 )
 
@@ -31,6 +34,8 @@ class _Prim:
         self.valid = valid
         self.parent = parent
         self.custom_data = {}
+        self.attributes = {}
+        self.applied_apis = []
 
     def IsValid(self):
         return self.valid
@@ -49,6 +54,24 @@ class _Prim:
 
     def SetCustomDataByKey(self, key, value):
         self.custom_data[key] = value
+
+    def SetActive(self, active):
+        self.active = active
+
+    def ApplyAPI(self, schema):
+        self.applied_apis.append(schema)
+        return True
+
+    def HasAPI(self, schema):
+        return schema in self.applied_apis
+
+    def GetAttribute(self, name):
+        return self.attributes.setdefault(name, _Attribute())
+
+
+class _Attribute:
+    def Set(self, value):
+        self.value = value
 
 
 class _Stage:
@@ -108,6 +131,10 @@ class _Gf:
     def Vec2f(*value):
         return value
 
+    @staticmethod
+    def Vec2i(*value):
+        return value
+
 
 def _usd_geom(composed_by_prim):
     class _Camera:
@@ -134,6 +161,19 @@ def test_d455_color_lookup_requires_exactly_one_color_camera():
     root.children = [other]
     with pytest.raises(RuntimeError, match="Expected exactly one D455 Color camera"):
         find_d455_color_camera(stage, "/D455", usd=_Usd, usd_geom=usd_geom)
+
+
+def test_disable_embedded_imu_deactivates_only_sensor_prims_under_d455():
+    imu = _Prim("Imu_Sensor", "/D455/RSD455/Imu_Sensor")
+    body = _Prim("Body", "/D455/RSD455/Body")
+    root = _Prim("D455", "/D455")
+    root.children = [body, imu]
+
+    disabled = disable_embedded_imu(root, usd=_Usd)
+
+    assert disabled == ["/D455/RSD455/Imu_Sensor"]
+    assert imu.active is False
+    assert not hasattr(body, "active")
 
 
 def test_accepted_d455_world_translation_and_proper_rotation_are_preserved():
@@ -168,6 +208,8 @@ def test_accepted_d455_world_translation_and_proper_rotation_are_preserved():
 
 def test_d455_mount_owns_reference_mount_metadata_and_rigid_body_handling_only():
     d455_prim = _Prim(path="/D455")
+    imu = _Prim("Imu_Sensor", "/D455/RSD455/Imu_Sensor")
+    d455_prim.children = [imu]
     stage = _Stage({"/D455": d455_prim})
     calls = []
     reports = []
@@ -210,6 +252,7 @@ def test_d455_mount_owns_reference_mount_metadata_and_rigid_body_handling_only()
         add_reference=lambda **kwargs: calls.append(("reference", kwargs)),
         gf=_Gf,
         usd_geom=usd_geom,
+        embedded_imu_disabler=lambda prim: disable_embedded_imu(prim, usd=_Usd),
         rigid_body_disabler=lambda prim: ["/D455/body"],
         report=reports.append,
     )
@@ -226,6 +269,7 @@ def test_d455_mount_owns_reference_mount_metadata_and_rigid_body_handling_only()
         ("rotation", (0.0, 90.0, 0.0)),
     ]
     assert d455_prim.custom_data == {"sf_twin:role": "realsense_d455_visual"}
+    assert imu.active is False
     assert d455_asset_url(None) == D455_ASSET_FALLBACK_URL
     assert (
         d455_asset_url("omniverse://assets")
@@ -296,12 +340,16 @@ def test_extrinsic_authoring_clears_then_authors_the_derived_local_transform(
 
 
 def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
+    assert CAMERA_SENSOR_RESOLUTION == (CAMERA_WIDTH, CAMERA_HEIGHT)
     camera_prim = _Prim(path="/World/SF_Twin_Cell/Vision/Camera_Sensor")
     focal = type(
         "Attribute", (), {"Set": lambda self, value: setattr(self, "value", value)}
     )()
     clipping = type(
         "Attribute", (), {"Set": lambda self, value: setattr(self, "value", value)}
+    )()
+    horizontal_aperture = type(
+        "Attribute", (), {"Get": lambda self: 20.955, "Set": lambda self, value: None}
     )()
     camera = type(
         "CameraInstance",
@@ -310,6 +358,7 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
             "GetPrim": lambda self: camera_prim,
             "GetFocalLengthAttr": lambda self: focal,
             "GetClippingRangeAttr": lambda self: clipping,
+            "GetHorizontalApertureAttr": lambda self: horizontal_aperture,
         },
     )()
     paths = []
@@ -345,6 +394,56 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
     assert paths == ["/World/SF_Twin_Cell/Vision/Camera_Sensor"]
     assert focal.value == CAMERA_SENSOR_FOCAL_LENGTH
     assert clipping.value == CAMERA_SENSOR_CLIPPING_RANGE_M
+    assert camera_prim.GetAttribute("verticalAperture").value == pytest.approx(
+        horizontal_aperture.Get()
+        * CAMERA_SENSOR_RESOLUTION[1]
+        / CAMERA_SENSOR_RESOLUTION[0]
+    )
+    assert camera_prim.applied_apis == ["OmniLensDistortionOpenCvPinholeAPI"]
+    assert (
+        camera_prim.GetAttribute("omni:lensdistortion:model").value == "opencvPinhole"
+    )
+    assert camera_prim.GetAttribute("omni:lensdistortion:opencvPinhole:cx").value == (
+        CAMERA_SENSOR_RESOLUTION[0] / 2
+    )
+    assert camera_prim.GetAttribute("omni:lensdistortion:opencvPinhole:cy").value == (
+        CAMERA_SENSOR_RESOLUTION[1] / 2
+    )
+    expected_focal_px = (
+        CAMERA_SENSOR_FOCAL_LENGTH
+        * CAMERA_SENSOR_RESOLUTION[0]
+        / horizontal_aperture.Get()
+    )
+    assert camera_prim.GetAttribute(
+        "omni:lensdistortion:opencvPinhole:fx"
+    ).value == pytest.approx(expected_focal_px)
+    assert camera_prim.GetAttribute(
+        "omni:lensdistortion:opencvPinhole:fy"
+    ).value == pytest.approx(expected_focal_px)
+    assert (
+        camera_prim.GetAttribute("omni:lensdistortion:opencvPinhole:imageSize").value
+        == CAMERA_SENSOR_RESOLUTION
+    )
+    for coefficient in (
+        "k1",
+        "k2",
+        "k3",
+        "k4",
+        "k5",
+        "k6",
+        "p1",
+        "p2",
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+    ):
+        assert (
+            camera_prim.GetAttribute(
+                f"omni:lensdistortion:opencvPinhole:{coefficient}"
+            ).value
+            == 0.0
+        )
     assert camera_prim.custom_data == {
         "sf_twin:role": "amr_pickup_overhead_camera",
         "sf_twin:observes": "amr_tray_and_workpiece",

@@ -27,14 +27,33 @@ import omni.kit.commands
 from omni.isaac.core.utils.extensions import enable_extension
 from pxr import Usd, UsdPhysics
 
-from model_provenance import build_manifest, write_manifest
-from usd_visual_cleanup import cleanup_generated_base_layer
+from scene_builder.model_provenance import (
+    build_manifest,
+    write_manifest,
+    xacro_subprocess_environment,
+)
+from shared.script_editor_bootstrap import module_root_from_project_root
+from scene_builder.usd_visual_cleanup import cleanup_generated_base_layer
 
 # ---------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------
 
-PROJECT_ROOT = Path(os.path.expanduser("~/sftwin_project"))
+
+def resolve_project_root():
+    configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
+    if not configured_root:
+        raise RuntimeError("SFTWIN_PROJECT_ROOT is required for asset preparation")
+    root = Path(configured_root).expanduser().resolve()
+    module_root_from_project_root(root)
+    if not (root / "ros2_ws/src/arm_cell").is_dir():
+        raise RuntimeError(
+            f"SFTWIN_PROJECT_ROOT is not a validated SFTwin repository: {root}"
+        )
+    return root
+
+
+PROJECT_ROOT = resolve_project_root()
 ASSET_ROOT = PROJECT_ROOT / "infra" / "isaac_sim" / "assets"
 
 XACRO_PATH = ASSET_ROOT / "urdf" / "assemblies" / "m0609_robotiq_2f85.xacro"
@@ -80,6 +99,7 @@ def validate_urdf():
         [executable, str(GENERATED_URDF)],
         capture_output=True,
         text=True,
+        env=xacro_subprocess_environment(),
     )
 
     if result.stdout:
@@ -150,6 +170,7 @@ def build_urdf_from_xacro():
         command,
         capture_output=True,
         text=True,
+        env=xacro_subprocess_environment(),
     )
 
     if result.stdout:
@@ -230,7 +251,8 @@ def build_usd_from_urdf():
     if cleaned:
         print(">>> [SUCCESS] Removed dangling visual references: " + ", ".join(cleaned))
     write_manifest(
-        PROVENANCE, build_manifest(GENERATED_URDF, GENERATED_URDF, OUTPUT_USD)
+        PROVENANCE,
+        build_manifest(XACRO_PATH, GENERATED_URDF, OUTPUT_USD, find_xacro()),
     )
     print(f">>> [SUCCESS] Robot USD generated:\n    {OUTPUT_USD}")
     print(f">>> [SUCCESS] Provenance  : {PROVENANCE}")
@@ -308,9 +330,8 @@ try:
     print("\n" + "=" * 70)
     print(">>> SF-Twin Robot Builder : M0609 + Robotiq 2F-85")
 
-    # Keep the current workflow: URDF is generated/validated outside Isaac Sim.
-    check_file(GENERATED_URDF, "Generated URDF")
-
+    build_urdf_from_xacro()
+    validate_urdf()
     build_usd_from_urdf()
     validate_isaac_gripper_import()
 

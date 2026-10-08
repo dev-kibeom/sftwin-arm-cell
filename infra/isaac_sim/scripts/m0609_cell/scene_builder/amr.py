@@ -1,21 +1,23 @@
 """AMR mockup, tray, workpiece, docking target, and AMR-local metadata."""
 
+from scene_builder.rawpart_profile import author_support_fiducial
+
 
 def build_amr(context):
     stage = context.stage
     CELL_ROOT = context.cell_root
     COLORS = context.colors
     fixed_box = context.fixed_box
-    dynamic_box = context.dynamic_box
+    static_box = context.static_box
     create_cylinder = context.create_cylinder
     set_custom_data = context.set_custom_data
     set_vec3_attribute = context.set_vec3_attribute
+    dynamic_box = context.dynamic_box
     mat_frame = context.materials["mat_frame"]
     mat_steel_dark = context.materials["mat_steel_dark"]
     mat_vision = context.materials["mat_vision"]
     mat_raw = context.materials["mat_raw"]
     mat_finished = context.materials["mat_finished"]
-    mat_kraft = context.materials["mat_kraft"]
     mat_white = context.materials["mat_white"]
     mat_black = context.materials["mat_black"]
     # -----------------------------------------------------------------------------
@@ -24,53 +26,48 @@ def build_amr(context):
     amr_x, amr_y = 0.20, -0.85
     amr_tray_z = 0.64
 
-    fixed_box(
+    static_box(
+        "amr_base",
         f"{CELL_ROOT}/AMR/Mockup/Base",
         "amr_base",
-        [amr_x, amr_y, 0.17],
-        [0.78, 0.60, 0.26],
         COLORS["charcoal"],
         mat_frame,
     )
 
-    fixed_box(
+    static_box(
+        "amr_upper_body",
         f"{CELL_ROOT}/AMR/Mockup/UpperBody",
         "amr_upper_body",
-        [amr_x, amr_y, 0.36],
-        [0.72, 0.56, 0.20],
         COLORS["steel_dark"],
         mat_steel_dark,
     )
 
-    fixed_box(
+    static_box(
+        "amr_tray_lift",
         f"{CELL_ROOT}/AMR/Mockup/TrayLift",
         "amr_tray_lift",
-        [amr_x, amr_y, 0.50],
-        [0.56, 0.42, 0.16],
         COLORS["frame"],
         mat_frame,
     )
 
-    fixed_box(
+    static_box(
+        "amr_tray",
         f"{CELL_ROOT}/AMR/Mockup/Tray",
         "amr_tray",
-        [amr_x, amr_y, amr_tray_z],
-        [0.66, 0.46, 0.045],
         COLORS["vision"],
         mat_vision,
     )
 
-    for name, pos, scale in [
-        ("LeftRail", [amr_x - 0.325, amr_y, amr_tray_z + 0.035], [0.025, 0.46, 0.07]),
-        ("RightRail", [amr_x + 0.325, amr_y, amr_tray_z + 0.035], [0.025, 0.46, 0.07]),
-        ("FrontRail", [amr_x, amr_y - 0.225, amr_tray_z + 0.035], [0.66, 0.025, 0.07]),
-        ("RearRail", [amr_x, amr_y + 0.225, amr_tray_z + 0.035], [0.66, 0.025, 0.07]),
+    for object_id, name in [
+        ("amr_tray_rail_left", "LeftRail"),
+        ("amr_tray_rail_right", "RightRail"),
+        ("amr_tray_rail_front", "FrontRail"),
+        ("amr_tray_rail_rear", "RearRail"),
     ]:
-        fixed_box(
+        static_box(
+            object_id,
             f"{CELL_ROOT}/AMR/Mockup/TrayRails/{name}",
             name,
-            pos,
-            scale,
             COLORS["frame"],
             mat_frame,
         )
@@ -79,57 +76,40 @@ def build_amr(context):
     done_slot_x = amr_x + 0.17
     slot_y = amr_y
 
-    fixed_box(
+    static_box(
+        "amr_raw_slot_support",
         f"{CELL_ROOT}/AMR/Mockup/TraySlots/RawSlot",
         "raw_slot",
-        [raw_slot_x, slot_y, amr_tray_z + 0.026],
-        [0.24, 0.28, 0.008],
         COLORS["raw"],
         mat_raw,
     )
-
-    fixed_box(
-        f"{CELL_ROOT}/AMR/Mockup/TraySlots/FinishedSlot",
-        "finished_slot",
-        [done_slot_x, slot_y, amr_tray_z + 0.026],
-        [0.24, 0.28, 0.008],
-        COLORS["finished"],
-        mat_finished,
+    author_support_fiducial(
+        context,
+        context.rawpart_profile,
+        (raw_slot_x, slot_y, amr_tray_z + 0.030),
     )
 
+    rawpart_dimensions = context.rawpart_profile["dimensions_m"]
+    raw_slot_top_z = amr_tray_z + 0.030
     dynamic_box(
         f"{CELL_ROOT}/AMR/Mockup/RawPart",
         "raw_part",
-        [raw_slot_x, slot_y, amr_tray_z + 0.085],
-        [0.14, 0.14, 0.08],
-        COLORS["kraft"],
-        mass=0.45,
-        material=mat_kraft,
+        [
+            raw_slot_x,
+            slot_y,
+            raw_slot_top_z + float(rawpart_dimensions[2]) / 2.0,
+        ],
+        rawpart_dimensions,
+        COLORS["raw"],
+        material=mat_raw,
     )
 
-    fixed_box(
-        f"{CELL_ROOT}/AMR/Mockup/RawPartMarker/Base",
-        "raw_part_marker_base",
-        [raw_slot_x, slot_y, amr_tray_z + 0.128],
-        [0.072, 0.072, 0.004],
-        COLORS["white"],
-        mat_white,
-    )
-    fixed_box(
-        f"{CELL_ROOT}/AMR/Mockup/RawPartMarker/Q1",
-        "raw_part_marker_q1",
-        [raw_slot_x - 0.022, slot_y - 0.022, amr_tray_z + 0.132],
-        [0.025, 0.025, 0.003],
-        COLORS["black"],
-        mat_black,
-    )
-    fixed_box(
-        f"{CELL_ROOT}/AMR/Mockup/RawPartMarker/Q2",
-        "raw_part_marker_q2",
-        [raw_slot_x + 0.022, slot_y + 0.022, amr_tray_z + 0.132],
-        [0.025, 0.025, 0.003],
-        COLORS["black"],
-        mat_black,
+    static_box(
+        "amr_finished_slot_support",
+        f"{CELL_ROOT}/AMR/Mockup/TraySlots/FinishedSlot",
+        "finished_slot",
+        COLORS["finished"],
+        mat_finished,
     )
 
     for i, (dx, dy) in enumerate(
@@ -174,9 +154,6 @@ def build_amr(context):
     )
     set_custom_data(
         stage, f"{CELL_ROOT}/AMR/Mockup/Tray", "sf_twin:role", "direct_pick_tray"
-    )
-    set_custom_data(
-        stage, f"{CELL_ROOT}/AMR/Mockup/RawPart", "sf_twin:role", "raw_workpiece"
     )
     set_custom_data(
         stage,

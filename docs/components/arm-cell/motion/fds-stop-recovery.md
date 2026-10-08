@@ -76,7 +76,10 @@ StopMotion acceptance SHALL NOT equal stop completion.
 Safety direct stop SHALL function without waiting for Orchestration cancel.
 
 ### VR-MOT-STOP-06 — Stop-path availability
-Normal execution SHALL NOT indefinitely block stop dispatch.
+Given normal planning/execution work is deliberately blocked or long-running,
+when `StopMotion` arrives, then stop handling / backend stop dispatch can make
+progress before the normal work is released. This VR is behavioral and does
+not prescribe a mutex, executor thread count, or callback-group type.
 
 ### VR-MOT-STOP-07 — Gripper bounded behavior
 Active gripper behavior SHALL be bounded by stop policy.

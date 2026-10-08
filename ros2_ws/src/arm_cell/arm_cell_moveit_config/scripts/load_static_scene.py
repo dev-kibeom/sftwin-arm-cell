@@ -8,8 +8,9 @@ from pathlib import Path
 import rclpy
 from geometry_msgs.msg import Pose
 from moveit_msgs.msg import CollisionObject, PlanningSceneComponents
-from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
+from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene, GetStateValidity
 from rclpy.node import Node
+from rclpy.duration import Duration
 from shape_msgs.msg import SolidPrimitive
 from tf2_geometry_msgs import do_transform_pose
 from tf2_ros import Buffer, TransformListener
@@ -89,16 +90,37 @@ class StaticSceneLoader(Node):
     def __init__(self):
         super().__init__("load_static_scene")
         self.declare_parameter("scene_file", "")
+        self.declare_parameter("verify_nominal_state", False)
         scene_file = self.get_parameter("scene_file").value
         if not scene_file:
             raise StaticSceneValidationError("scene_file parameter is required")
         self.artifact = load_artifact(Path(scene_file))
+        self.declare_parameter("selected_ids", [])
+        selected_ids = [
+            str(value) for value in self.get_parameter("selected_ids").value
+        ]
+        if selected_ids:
+            selected = set(selected_ids)
+            available = {obj["id"] for obj in self.artifact["objects"]}
+            if not selected.issubset(available):
+                raise StaticSceneValidationError(
+                    f"static scene selection contains unknown ids: {sorted(selected - available)}"
+                )
+            self.artifact = {
+                **self.artifact,
+                "objects": [
+                    obj for obj in self.artifact["objects"] if obj["id"] in selected
+                ],
+            }
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.apply_client = self.create_client(
             ApplyPlanningScene, "/apply_planning_scene"
         )
         self.read_client = self.create_client(GetPlanningScene, "/get_planning_scene")
+        self.validity_client = self.create_client(
+            GetStateValidity, "/check_state_validity"
+        )
 
     def call(self, client, request):
         if not client.wait_for_service(timeout_sec=20.0):
@@ -163,6 +185,7 @@ class StaticSceneLoader(Node):
                 received.header.frame_id,
                 self.artifact["frame_id"],
                 rclpy.time.Time(),
+                timeout=Duration(seconds=5.0),
             )
             pose = do_transform_pose(expected_pose, transform)
             actual_pose = received.pose
@@ -187,6 +210,23 @@ class StaticSceneLoader(Node):
                 ],
                 f"{object_id} pose",
             )
+        verify_nominal = getattr(self, "verify_nominal_state", None)
+        if verify_nominal is None:
+            parameter = getattr(self, "get_parameter", None)
+            verify_nominal = bool(
+                parameter("verify_nominal_state").value
+                if callable(parameter)
+                else False
+            )
+        if verify_nominal:
+            validity_request = GetStateValidity.Request()
+            validity_request.robot_state = scene.robot_state
+            validity_request.group_name = "arm"
+            validity = self.call(self.validity_client, validity_request)
+            if not validity.valid:
+                raise StaticSceneLoadError(
+                    "nominal current robot state is colliding with validation static scene"
+                )
 
 
 def main():

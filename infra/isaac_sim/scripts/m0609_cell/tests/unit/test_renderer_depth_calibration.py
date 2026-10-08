@@ -217,20 +217,27 @@ def test_b2_u01_canonical_spec_matches_approved_xyz():
         "z110",
         "z140",
     )
-    assert tuple(target.front_optical_xyz_m for target in CANONICAL_TARGETS) == APPROVED_XYZ
+    assert (
+        tuple(target.front_optical_xyz_m for target in CANONICAL_TARGETS)
+        == APPROVED_XYZ
+    )
     assert all(target.frame_id == CANONICAL_FRAME for target in CANONICAL_TARGETS)
 
 
 def test_b2_u02_z_has_one_canonical_source_of_truth():
     assert TARGET_DEPTHS_M == tuple(xyz[2] for xyz in APPROVED_XYZ)
-    assert all("expected_z" not in target.__dataclass_fields__ for target in CANONICAL_TARGETS)
+    assert all(
+        "expected_z" not in target.__dataclass_fields__ for target in CANONICAL_TARGETS
+    )
 
 
 def test_b2_u03_optical_target_is_placed_from_current_snapshot():
     placements = authoring.target_placements(snapshot())
     # A 90-degree optical-to-world rotation maps (x, y, z) to (-y, x, z).
     first = placements[0]
-    assert first["front_world_m"] == pytest.approx((1.1211460933089256, 1.7260570322473844, 3.8))
+    assert first["front_world_m"] == pytest.approx(
+        (1.1211460933089256, 1.7260570322473844, 3.8)
+    )
     assert first["center_world_m"] == pytest.approx(
         (1.1211460933089256, 1.7260570322473844, 3.802)
     )
@@ -254,9 +261,13 @@ def test_b2_u05_authoring_replaces_stale_namespace_idempotently(monkeypatch):
     stage.DefinePrim("/World/SF_Twin_Acceptance/RendererDepth/stale")
     stage.DefinePrim("/World/Production/Keep")
     first = authoring.author_targets(stage, snapshot())
-    first_paths = sorted(path for path in stage.prims if path.startswith(authoring.ROOT + "/"))
+    first_paths = sorted(
+        path for path in stage.prims if path.startswith(authoring.ROOT + "/")
+    )
     second = authoring.author_targets(stage, snapshot())
-    second_paths = sorted(path for path in stage.prims if path.startswith(authoring.ROOT + "/"))
+    second_paths = sorted(
+        path for path in stage.prims if path.startswith(authoring.ROOT + "/")
+    )
     assert first["target_ids"] == second["target_ids"] == ["z080", "z110", "z140"]
     assert first_paths == second_paths
     assert not any(path.endswith("/stale") for path in second_paths)

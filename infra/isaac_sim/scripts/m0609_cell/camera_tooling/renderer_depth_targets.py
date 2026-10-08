@@ -57,7 +57,9 @@ def target_placements(snapshot):
         or pose.get("parent_frame") != "world"
         or pose.get("child_frame") != CANONICAL_FRAME
     ):
-        raise RuntimeError("camera snapshot does not identify the canonical optical frame")
+        raise RuntimeError(
+            "camera snapshot does not identify the canonical optical frame"
+        )
     translation = pose.get("translation_m")
     quaternion = pose.get("quaternion_xyzw")
     if (
