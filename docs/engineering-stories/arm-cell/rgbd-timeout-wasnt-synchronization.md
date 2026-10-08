@@ -11,18 +11,18 @@ RGB/depth synchronization lifecycle defect: after Isaac Sim Stop/Play, the two
 
 ## Investigation
 
-PR [#261](https://github.com/dev-kibeom/sftwin/pull/261) added timing
+PR PR #261 added timing
 acceptance measurements for the individual streams, synchronized-pair cadence,
 request-to-observation wait, and processing time. Its live ROS-side evidence
 could not by itself distinguish Isaac source/render cadence from ROS publish
-drop. PR [#262](https://github.com/dev-kibeom/sftwin/pull/262) experimentally
+drop. PR PR #262 experimentally
 sequenced the RGB and Depth helper execution in one graph lifecycle sequence
 to reduce phase divergence after restart. That topology risked adding delay to
-the steady-state simulation path. PR [#263](https://github.com/dev-kibeom/sftwin/pull/263)
+the steady-state simulation path. PR PR #263
 therefore restored direct helper fan-out while retaining the diagnostics; the
 Stop/Play resynchronization concern remained a separate bounded issue.
 
-PR [#266](https://github.com/dev-kibeom/sftwin/pull/266) then made request
+PR PR #266 then made request
 diagnostics distinguish RGB and Depth arrivals, source stamps and receipt
 periods, actual synchronized-pair callbacks, policy evaluations, usable
 observations, and detector entry. The clean-start trace changed the diagnosis:
@@ -33,7 +33,7 @@ protected the request from older observations.
 
 ## Resolution
 
-PR [#268](https://github.com/dev-kibeom/sftwin/pull/268) removed the
+PR PR #268 removed the
 request-relative settling condition and its related status/timeout wording.
 It retained post-request RGB/Depth receipt and source-watermark freshness,
 RGB-D synchronization, the 500 ms request deadline, and the 10 ms sync
@@ -61,14 +61,14 @@ that gate does not rule out independent failures earlier in the input path.
 
 ## References
 
-- [PR #261](https://github.com/dev-kibeom/sftwin/pull/261) — timing
+- PR #261 — timing
   acceptance measurements and timeout diagnostics.
-- [PR #262](https://github.com/dev-kibeom/sftwin/pull/262) — sequenced helper
+- PR #262 — sequenced helper
   lifecycle experiment.
-- [PR #263](https://github.com/dev-kibeom/sftwin/pull/263) — restored
+- PR #263 — restored
   fan-out and retained diagnostics.
-- [PR #266](https://github.com/dev-kibeom/sftwin/pull/266) — request-scoped
+- PR #266 — request-scoped
   RGB-D synchronization diagnostics.
-- [PR #268](https://github.com/dev-kibeom/sftwin/pull/268) — removed
+- PR #268 — removed
   per-request settling.
 - [`Vision Frame Ingress FDS`](../../components/arm-cell/vision/fds-frame-ingress.md)

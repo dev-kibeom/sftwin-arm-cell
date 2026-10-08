@@ -57,6 +57,6 @@ MissionRecipe, Motion CDS/FDS, and relevant ICDs.
 
 - [`docs/components/arm-cell/motion/cds.md`](../components/arm-cell/motion/cds.md)
 - [`docs/interfaces/arm-cell/icd-orchestration-motion.md`](../interfaces/arm-cell/icd-orchestration-motion.md)
-- [PR #242](https://github.com/dev-kibeom/sftwin/pull/242)
-- [PR #246](https://github.com/dev-kibeom/sftwin/pull/246)
-- [PR #270](https://github.com/dev-kibeom/sftwin/pull/270)
+- PR #242
+- PR #246
+- PR #270

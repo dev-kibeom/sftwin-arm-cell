@@ -35,6 +35,6 @@ causes.
 
 ## References
 
-- [PR #257](https://github.com/dev-kibeom/sftwin/pull/257), [#258](https://github.com/dev-kibeom/sftwin/pull/258), [#259](https://github.com/dev-kibeom/sftwin/pull/259)
+- PR #257, PR #258, PR #259
 - [`Safety supervision FDS`](../../components/arm-cell/safety/fds-supervision.md)
 - [`Safety stop/recovery FDS`](../../components/arm-cell/safety/fds-stop-recovery.md)
