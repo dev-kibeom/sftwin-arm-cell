@@ -102,7 +102,7 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 
 ## Documentation
 
-- [Demo definition](docs/product/demos/arm-cell/definition.md)
+- [ARM Cell demo definition](docs/product/demos/arm-cell/definition.md)
 - [System architecture](docs/architecture/) and [ARM Cell component designs](docs/components/arm-cell/)
 - [ROS and simulator interface contracts](docs/interfaces/arm-cell/)
 - [Architecture Decision Records (ADRs)](docs/adr/)
