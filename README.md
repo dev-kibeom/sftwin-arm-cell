@@ -12,13 +12,17 @@ Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공�
 
 현재 프로파일에는 시뮬레이션 자재 공급 경로와 Isaac Sim UI Hub가 포함되어 있습니다. 외부 AMR/VDA, PLC, 안전 하드웨어 상태는 mock 어댑터로 표현합니다. AMR 내비게이션과 안전 등급 E-stop/STO 하드웨어는 구현하지 않습니다.
 
+## 시연 영상
+
+[YouTube에서 시연 영상 보기](https://youtu.be/6eOcrNFdf2g)
+
 ## 주요 기능
 
 - ROS 계획 및 Isaac Sim 셀 구성에 함께 사용하는 Doosan M0609·Robotiq 2F-85 로봇 설명 모델
 - canonical joint state, 시뮬레이션 시간, TF, RGB-D 카메라 입력을 연결하는 ROS 통합
 - MoveIt 2 기반 로봇 계획과 제한 범위를 명시한 planning scene 프로파일
 - Vision은 관측 Geometry와 후보를 제공하고 Task Execution은 후보 순서를 정하며 Motion은 선택 후보를 제외한 요청별 planning occupancy를 구성하는 책임 분리
-- Geometry-first RGB-D RawPart 검출과 부분 관측에서의 형상 가설 복원, detector profile 및 source-frame 진단 정보
+- 깊이맵 기반 Geometry-first Vision: 공장 RawPart 작업의 직육면체 형상에 특화해 별도 구현한 `cuboid_top_face` 알고리즘으로, 관측된 직교 L자 상판 윤곽과 프로파일 치수를 사용해 완전·부분 관측의 형상·자세 가설을 평가·복원합니다. Detector profile과 source-frame 진단 정보도 제공합니다.
 - backend-neutral ROS 인터페이스를 통한 PICK, PLACE, GO_HOME 및 복구 모션 작업
 - 재사용 가능한 Behavior Tree Action 기반 작업 실행, PICK 후보 순서 및 Occupancy 제외 휴리스틱
 - fail-closed 시작, 모션 capability, Motion에 직접 전달하는 정지 요청을 지원하는 소프트웨어 Safety 감독

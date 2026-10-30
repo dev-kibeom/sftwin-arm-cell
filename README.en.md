@@ -12,13 +12,17 @@ The ARM Cell uses Isaac Sim as its simulated robot and sensor environment and RO
 
 The current profile includes a simulated material-delivery path and an Isaac Sim UI Hub for operator observation and requests. External AMR/VDA, PLC, and safety-hardware state are represented by a mock adapter. The project does not implement AMR navigation or safety-rated E-stop/STO hardware.
 
+## Demo Video
+
+[Watch the demo on YouTube](https://youtu.be/6eOcrNFdf2g)
+
 ## Key Features
 
 - Shared Doosan M0609 and Robotiq 2F-85 robot description for ROS planning and Isaac Sim construction.
 - ROS integration for canonical joint state, simulation time, TF, and RGB-D camera input.
 - MoveIt 2 robot planning with explicitly scoped planning-scene profiles.
 - A Vision/Task Execution/Motion boundary where Vision reports candidate geometry, Task Execution decides candidate order, and Motion builds request-specific planning occupancy excluding the selected candidate.
-- Geometry-first RGB-D RawPart detection, partial-observation shape hypotheses, detector profiles, and source-frame diagnostics.
+- Depth-map-based, Geometry-first Vision for factory RawPart work: the separately implemented `cuboid_top_face` algorithm specializes in cuboid workpieces and uses observed orthogonal L-shaped top edges and profile dimensions to evaluate and reconstruct shape and pose hypotheses from complete or partial observations. It also provides detector profiles and source-frame diagnostics.
 - PICK, PLACE, GO_HOME, and recovery motion tasks behind backend-neutral ROS interfaces.
 - Reusable Behavior Tree task actions plus PICK candidate ordering and occupancy-exclusion heuristics.
 - Software Safety supervision with fail-closed startup, motion capability, and a direct stop path to Motion.
