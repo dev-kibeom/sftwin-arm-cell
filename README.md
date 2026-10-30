@@ -83,7 +83,7 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 - **복구·결과·Safety 소유권:** Orchestration은 미션 수준 재시도와 Safety 승인 복구를 조정하고, Task Execution은 작업 내부 복구·후보 전환·PnP Action terminal 결과를 소유합니다. Motion은 선택 후보의 계획 탐색 재시도와 개별 movement 실행·취소·terminal 및 정지 근거를 소유하고, Safety는 독립적으로 모션 권한과 직접 정지를 결정합니다.
 - **시뮬레이터 경계:** v0.3.0은 공통 ROS 계약 뒤에 simulator별 상태·그리퍼 realization을 두는 기존 경계를 유지합니다. 이는 구현 교체를 고려한 설계 방향이며, Public 구현은 Isaac Sim 중심이고 실물 로봇 어댑터나 운전을 검증하지 않았습니다.
 
-세부 계약은 [구성요소 아키텍처](docs/design/arm-cell/architecture/components.md), [Task Execution CDS](docs/design/arm-cell/components/task-execution/cds.md), [Motion Execution FDS](docs/design/arm-cell/components/motion/fds-motion-execution.md), [Orchestration–Task Execution ICD](docs/design/arm-cell/interfaces/icd-orchestration-task-execution.md)와 [Vision–Motion Occupancy 기록](docs/record/arm-cell/engineering-story/vision-to-motion-occupancy-ownership.md)을 참고하세요.
+세부 계약은 [구성요소 아키텍처](docs/design/architecture/components.md), [Task Execution CDS](docs/design/components/task-execution/cds.md), [Motion Execution FDS](docs/design/components/motion/fds-motion-execution.md), [Orchestration–Task Execution ICD](docs/design/interfaces/icd-orchestration-task-execution.md)와 [Vision–Motion Occupancy 기록](docs/record/engineering-story/vision-to-motion-occupancy-ownership.md)을 참고하세요.
 
 ### 설계 의도
 
@@ -99,7 +99,7 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 ## 설계 기록과 Sim-to-Real 방향
 
-Geometry-first Vision, Vision/Motion Occupancy 소유권, 재사용 Motion BT, Orchestration·Safety Recovery 및 Sim-to-Real 경계를 다룬 [Engineering Story](docs/record/arm-cell/engineering-story/)와 [아키텍처·알고리즘 결정 기록](docs/record/arm-cell/)을 제공합니다. 이 기록은 현재 계약을 대체하지 않으며 실물 로봇 지원이나 성능 우위를 입증하지 않습니다.
+Geometry-first Vision, Vision/Motion Occupancy 소유권, 재사용 Motion BT, Orchestration·Safety Recovery 및 Sim-to-Real 경계를 다룬 [Engineering Story](docs/record/engineering-story/)와 [아키텍처·알고리즘 결정 기록](docs/record/)을 제공합니다. 이 기록은 현재 계약을 대체하지 않으며 실물 로봇 지원이나 성능 우위를 입증하지 않습니다.
 
 ## 기술 스택
 
@@ -144,20 +144,20 @@ docker build --progress=plain -t sftwin-arm-cell:humble .
 
 ### Isaac Sim에서 실행
 
-실시간 실행에는 호스트에 ROS 2 Humble과 Isaac Sim 5.1이 필요합니다. ROS 빌드만으로 simulator가 시작되거나 라이브 런타임이 검증되지는 않습니다. 사전 조건, 지원 launch profile, Isaac Script Editor entrypoint(`1_before_play.py` → Play → `2_after_play.py`)는 [ARM Cell Isaac Sim 가이드](docs/guides/arm-cell-isaac-sim.md)를 참고하세요.
+실시간 실행에는 호스트에 ROS 2 Humble과 Isaac Sim 5.1이 필요합니다. ROS 빌드만으로 simulator가 시작되거나 라이브 런타임이 검증되지는 않습니다. 사전 조건, 지원 launch profile, Isaac Script Editor entrypoint(`1_before_play.py` → Play → `2_after_play.py`)는 [ARM Cell Isaac Sim 가이드](docs/guides/isaac-sim.md)를 참고하세요.
 
 ## 문서 탐색
 
 - [v0.3.0 릴리즈 노트](docs/releases/v0.3.0.ko.md) / [English](docs/releases/v0.3.0.en.md)
 
-- [ARM Cell 데모 정의](docs/product/arm-cell/definition.md)
-- [최종 라이브 인수 계약](docs/product/arm-cell/acceptance.md)
-- [시스템 아키텍처](docs/design/arm-cell/architecture/), [ARM Cell 컴포넌트 설계](docs/design/arm-cell/components/)
-- [ROS 및 simulator 인터페이스 계약](docs/design/arm-cell/interfaces/)
-- [알고리즘 설계](docs/design/arm-cell/algorithms/)
-- [아키텍처 결정 기록(ADR)](docs/record/arm-cell/architecture-decision/)
-- [Engineering Stories](docs/record/arm-cell/engineering-story/)
-- [기술 기록](docs/record/arm-cell/)
+- [ARM Cell 데모 정의](docs/product/definition.md)
+- [최종 라이브 인수 계약](docs/product/acceptance.md)
+- [시스템 아키텍처](docs/design/architecture/), [ARM Cell 컴포넌트 설계](docs/design/components/)
+- [ROS 및 simulator 인터페이스 계약](docs/design/interfaces/)
+- [알고리즘 설계](docs/design/algorithms/)
+- [아키텍처 결정 기록(ADR)](docs/record/architecture-decision/)
+- [Engineering Stories](docs/record/engineering-story/)
+- [기술 기록](docs/record/)
 - [Acceptance 보고서](docs/reports/acceptance/)
 - [운영 가이드](docs/guides/)
 

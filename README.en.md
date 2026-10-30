@@ -83,11 +83,11 @@ Behavior Tree mission flow and MoveIt planning were already present in v0.2.0. T
 - **Recovery, results, and Safety ownership:** Orchestration coordinates mission-level retries and Safety-authorized recovery; Task Execution owns candidate transitions, task-internal recovery, and the PnP Action terminal result. Motion owns selected-candidate planning retries plus individual movement execution, cancellation, terminal results, and stop evidence, while Safety independently decides motion permission and direct stop requests.
 - **Simulator boundary:** v0.3.0 retains the existing boundary that keeps simulator-specific state and gripper realization behind shared ROS contracts. This supports replaceable implementations as a design direction; the Public implementation remains Isaac Sim focused and does not validate physical-robot adapters or operation.
 
-For the detailed contracts, see [component architecture](docs/design/arm-cell/architecture/components.md), [Task Execution CDS](docs/design/arm-cell/components/task-execution/cds.md), [Motion Execution FDS](docs/design/arm-cell/components/motion/fds-motion-execution.md), the [Orchestration–Task Execution ICD](docs/design/arm-cell/interfaces/icd-orchestration-task-execution.md), and the [Vision/Motion occupancy story](docs/record/arm-cell/engineering-story/vision-to-motion-occupancy-ownership.md).
+For the detailed contracts, see [component architecture](docs/design/architecture/components.md), [Task Execution CDS](docs/design/components/task-execution/cds.md), [Motion Execution FDS](docs/design/components/motion/fds-motion-execution.md), the [Orchestration–Task Execution ICD](docs/design/interfaces/icd-orchestration-task-execution.md), and the [Vision/Motion occupancy story](docs/record/engineering-story/vision-to-motion-occupancy-ownership.md).
 
 ## Design Records and Sim-to-Real Direction
 
-The [Engineering Stories](docs/record/arm-cell/engineering-story/) and [architecture/algorithm decision records](docs/record/arm-cell/) cover geometry-first Vision, Vision/Motion occupancy ownership, reusable Motion BT actions, Orchestration and Safety recovery, and the Sim-to-Real boundary. These historical records do not replace current contracts or establish physical-robot support or performance superiority.
+The [Engineering Stories](docs/record/engineering-story/) and [architecture/algorithm decision records](docs/record/) cover geometry-first Vision, Vision/Motion occupancy ownership, reusable Motion BT actions, Orchestration and Safety recovery, and the Sim-to-Real boundary. These historical records do not replace current contracts or establish physical-robot support or performance superiority.
 
 ## Technology Stack
 
@@ -132,20 +132,20 @@ See the [Docker build guide](docs/guides/docker-humble-build.md) for prerequisit
 
 ### Run with Isaac Sim
 
-Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS build alone does not start the simulator or establish a live runtime. Follow the [ARM Cell Isaac Sim guide](docs/guides/arm-cell-isaac-sim.md) for prerequisites, the supported launch profiles, and the Isaac Script Editor entrypoints (`1_before_play.py` → Play → `2_after_play.py`).
+Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS build alone does not start the simulator or establish a live runtime. Follow the [ARM Cell Isaac Sim guide](docs/guides/isaac-sim.md) for prerequisites, the supported launch profiles, and the Isaac Script Editor entrypoints (`1_before_play.py` → Play → `2_after_play.py`).
 
 ## Documentation
 
 - [v0.3.0 release notes](docs/releases/v0.3.0.en.md) / [한국어](docs/releases/v0.3.0.ko.md)
 
-- [ARM Cell demo definition](docs/product/arm-cell/definition.md)
-- [Final live acceptance contract](docs/product/arm-cell/acceptance.md)
-- [System architecture](docs/design/arm-cell/architecture/) and [ARM Cell component designs](docs/design/arm-cell/components/)
-- [ROS and simulator interface contracts](docs/design/arm-cell/interfaces/)
-- [Algorithm procedures](docs/design/arm-cell/algorithms/)
-- [Architecture Decision Records (ADRs)](docs/record/arm-cell/architecture-decision/)
-- [Engineering Stories](docs/record/arm-cell/engineering-story/)
-- [Technical records](docs/record/arm-cell/)
+- [ARM Cell demo definition](docs/product/definition.md)
+- [Final live acceptance contract](docs/product/acceptance.md)
+- [System architecture](docs/design/architecture/) and [ARM Cell component designs](docs/design/components/)
+- [ROS and simulator interface contracts](docs/design/interfaces/)
+- [Algorithm procedures](docs/design/algorithms/)
+- [Architecture Decision Records (ADRs)](docs/record/architecture-decision/)
+- [Engineering Stories](docs/record/engineering-story/)
+- [Technical records](docs/record/)
 - [Acceptance reports](docs/reports/acceptance/)
 - [Operator guides](docs/guides/)
 
@@ -156,7 +156,7 @@ The public source contains the Vision, Motion, Orchestration, Safety, Material I
 - **Build and Docker runtime plugin:** The v0.3.0 Docker image build succeeded and compiled the 12-package `arm_cell_bringup` build closure. PR #12 installed TRAC-IK 2.0.1 in `/opt/trac_ik` and verified MoveIt pluginlib loading, ARM Cell IK plugin initialization, and `solve_type=Distance`. The probe does not calculate an IK solution for a target pose, and it does not validate the full Motion Launch or Isaac Sim PnP. Earlier Public PR #2 and v0.2.0 export build results are separate historical baselines. The full-checkout ROS test failures remain as recorded in the release notes; successful compilation and plugin initialization do not resolve them.
 - **Planning evidence:** Historical Milestone 1A robot-only planning and Milestone 1B bounded static-scene acceptance are documented in the [acceptance reports](docs/reports/acceptance/). The reports preserve their evidence limits: exact historical commit/tag identifiers are unavailable, and Milestone 1B does not establish general reachability or full-cell collision coverage.
 - **Live runtime:** The v0.3.0 Docker verification did not include the full Motion Launch, target-pose IK solution, Isaac Sim connection or live run, or PnP. Separate historical Private live reports record robot-only planning and a limited static-scene check, but they do not establish full mission acceptance and have limited baseline-revision traceability. Use the Isaac guide for the supported profile in a configured environment.
-- **RGB-D known issue:** Vision can intermittently fail to acquire a usable RGB-D pair before detector processing starts. Distinct depth-reception gaps and missing synchronization callbacks are recorded; a common cause and resolution remain unconfirmed. See the [open acquisition issue record](docs/record/arm-cell/engineering-story/vision-rgbd-intermittent-acquisition-failure.md).
+- **RGB-D known issue:** Vision can intermittently fail to acquire a usable RGB-D pair before detector processing starts. Distinct depth-reception gaps and missing synchronization callbacks are recorded; a common cause and resolution remain unconfirmed. See the [open acquisition issue record](docs/record/engineering-story/vision-rgbd-intermittent-acquisition-failure.md).
 - **E-Stop recovery evidence:** A separate Private-environment clean live record from 2026-10-30 shows reset, SafetyRecovery, and GO_HOME succeeding, after which the Mission resumed PnP. A later approach ended with `BACKEND_UNAVAILABLE`, so the complete Mission did not succeed. This is separate from the Public Docker verification, supports only that execution condition, and does not establish a general success rate.
 - **Simulation and safety boundary:** The VDA/external-state adapter is a mock subset; it is not full VDA 5050 or AMR navigation. Software Safety is not safety-rated E-stop/STO hardware and is not a substitute for it. Isaac Sim is the supported development environment; physical robot operation is not validated here.
 
