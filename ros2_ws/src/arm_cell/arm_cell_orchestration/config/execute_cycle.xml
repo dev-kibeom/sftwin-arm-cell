@@ -1,0 +1,53 @@
+<root main_tree_to_execute="ExecuteCycle">
+  <BehaviorTree ID="ExecuteCycle">
+    <Fallback name="MissionOrRecovery">
+      <Sequence name="ExecuteCycle">
+        <ValidateRecipe/>
+        <Fallback name="InitialHomeOrRecovery">
+          <InitialHome/>
+          <Sequence name="InitialHomeRecoveryContinuation">
+            <SafetyRecoveryRequired/>
+            <SafetyRecovery/>
+            <ContinueBatch/>
+          </Sequence>
+        </Fallback>
+        <RepeatQuantity quantity="{quantity}">
+          <Fallback name="TargetEpisodeOrRecovery">
+          <Sequence name="TargetEpisode">
+            <BeginTargetEpisode/>
+            <ApprovedAcquisition>
+              <Sequence name="Acquisition">
+                <DetectTarget/>
+                <EvaluateAcquisition/>
+              </Sequence>
+            </ApprovedAcquisition>
+            <PnpWithWorkRecovery>
+              <ExecutePnp/>
+              <RetryHome/>
+              <ApprovedAcquisition>
+                <Sequence name="RetryAcquisition">
+                  <DetectTarget/>
+                  <EvaluateAcquisition/>
+                </Sequence>
+              </ApprovedAcquisition>
+              <ExecuteDisturb/>
+              <DisturbanceReacquisition>
+                <Sequence name="DisturbanceAcquisition">
+                  <DetectTarget/>
+                  <EvaluateAcquisition/>
+                </Sequence>
+              </DisturbanceReacquisition>
+            </PnpWithWorkRecovery>
+          </Sequence>
+          <Sequence name="SafetyRecoveryContinuation">
+            <SafetyRecoveryRequired/>
+            <SafetyRecovery/>
+            <ContinueBatch/>
+          </Sequence>
+          </Fallback>
+        </RepeatQuantity>
+        <CommitMission/>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+</root>

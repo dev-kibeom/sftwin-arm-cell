@@ -1,16 +1,29 @@
 from types import SimpleNamespace
 from pathlib import Path
+import json
 
 import scene_builder.amr as amr
 from scene_builder.amr import build_amr
 from scene_builder.cell_metadata import initialize_cell_metadata
 from scene_builder.composition import CELL_ROOT, LEGACY_CLEANUP
 from scene_builder.rawpart_profile import load_rawpart_profile
+from scene_builder.static_environment import load_canonical_static_geometry
 from scene_builder.reachability import (
     planar_distance_xy,
     report_reach,
     spatial_distance_xyz,
 )
+
+
+def _canonical_tray_support_origin(project_root):
+    manifest = json.loads(
+        (project_root / "config/arm_cell/m0609_static_environment.json").read_text()
+    )
+    objects = {item["id"]: item for item in manifest["objects"]}
+    tray = objects["amr_tray"]
+    center = tray["pose"]["position_m"]
+    dimensions = tray["geometry"]["dimensions_m"]
+    return (center[0], center[1], center[2] + dimensions[2] / 2)
 
 
 def test_cell_metadata_initialization_owns_root_children_and_identity_metadata():
@@ -85,15 +98,17 @@ def test_composition_retains_legacy_cleanup_order_and_canonical_cell_root():
     ]
 
 
-def test_amr_scene_uses_operational_profile_for_raw_slot_fiducial(monkeypatch):
+def test_amr_scene_uses_tray_and_front_rail_marker(monkeypatch):
+    project_root = Path(__file__).resolve().parents[6]
+    support_origin = _canonical_tray_support_origin(project_root)
     created_paths = []
     authored_boxes = []
     authored_dynamic_boxes = []
-    profile = load_rawpart_profile(Path(__file__).resolve().parents[6])
+    profile = load_rawpart_profile(project_root)
 
     def record_support_fiducial(context, passed_profile, support_origin):
         assert context.rawpart_profile is passed_profile
-        created_paths.append(f"{CELL_ROOT}/AMR/Mockup/RawSlotSupportFiducial")
+        created_paths.append(f"{CELL_ROOT}/AMR/Mockup/TraySupportFiducial")
         authored_boxes.append(("support_origin", support_origin))
 
     monkeypatch.setattr(amr, "author_support_fiducial", record_support_fiducial)
@@ -106,9 +121,13 @@ def test_amr_scene_uses_operational_profile_for_raw_slot_fiducial(monkeypatch):
         created_paths.append(path)
         authored_dynamic_boxes.append((path, name, position, dimensions, args, kwargs))
 
+    def record_static_box(object_id, path, name, color, material):
+        record_box(path, object_id, name, color, material)
+
     context = SimpleNamespace(
         stage=object(),
         cell_root=CELL_ROOT,
+        static_geometry=load_canonical_static_geometry(project_root=project_root),
         rawpart_profile=profile,
         colors={
             name: [0.0, 0.0, 0.0]
@@ -125,6 +144,7 @@ def test_amr_scene_uses_operational_profile_for_raw_slot_fiducial(monkeypatch):
             )
         },
         fixed_box=record_box,
+        static_box=record_static_box,
         dynamic_box=record_dynamic_box,
         create_cylinder=lambda *args, **kwargs: None,
         set_custom_data=lambda *args, **kwargs: None,
@@ -146,22 +166,43 @@ def test_amr_scene_uses_operational_profile_for_raw_slot_fiducial(monkeypatch):
 
     build_amr(context)
 
-    assert f"{CELL_ROOT}/AMR/Mockup/RawPart" in created_paths
-    assert f"{CELL_ROOT}/AMR/Mockup/RawSlotSupportFiducial" in created_paths
-    raw_slot = next(
-        args
-        for path, args in authored_boxes
-        if path == f"{CELL_ROOT}/AMR/Mockup/TraySlots/RawSlot"
+    assert f"{CELL_ROOT}/AMR/Mockup/RawPart" not in created_paths
+    assert f"{CELL_ROOT}/AMR/Mockup/TraySupportFiducial" in created_paths
+    assert f"{CELL_ROOT}/AMR/Mockup/TrayMarkerPost" in created_paths
+    assert not any("TraySlots" in path for path in created_paths)
+    # Marker post is a static manifest object.
+    assert any(
+        item[0] == f"{CELL_ROOT}/AMR/Mockup/TrayMarkerPost" for item in authored_boxes
     )
-    assert raw_slot[2] == [0.24, 0.28, 0.008]
-    assert ("support_origin", (0.03, -0.85, 0.67)) in authored_boxes
-    raw_part = next(
-        entry
-        for entry in authored_dynamic_boxes
-        if entry[0] == f"{CELL_ROOT}/AMR/Mockup/RawPart"
+    assert ("support_origin", support_origin) in authored_boxes
+
+
+def test_tray_marker_post_joins_front_rail_to_marker_underside():
+    project_root = Path(__file__).resolve().parents[6]
+    manifest = json.loads(
+        (project_root / "config/arm_cell/m0609_static_environment.json").read_text()
     )
-    _, _, position, dimensions, args, kwargs = raw_part
-    assert dimensions == profile["dimensions_m"]
-    assert position == [0.03, -0.85, 0.67 + dimensions[2] / 2.0]
-    assert args[0] == context.colors["raw"]
-    assert kwargs["material"] is context.materials["mat_raw"]
+    objects = {item["id"]: item for item in manifest["objects"]}
+    front_rail = objects["amr_tray_rail_front"]
+    marker_post = objects["amr_tray_marker_post"]
+    profile = load_rawpart_profile(project_root)
+
+    post_center = marker_post["pose"]["position_m"]
+    half_post_height = marker_post["geometry"]["dimensions_m"][2] / 2.0
+    rail_top = (
+        front_rail["pose"]["position_m"][2]
+        + front_rail["geometry"]["dimensions_m"][2] / 2.0
+    )
+    marker_relation = profile["fiducial"]["marker_in_support"]["position_m"]
+    support_origin = _canonical_tray_support_origin(project_root)
+    marker_center_xy = (
+        support_origin[0] + marker_relation[0],
+        support_origin[1] + marker_relation[1],
+    )
+    marker_plane_z = support_origin[2] + marker_relation[2]
+    marker_half_size = profile["fiducial"]["size_m"] / 2.0
+
+    assert abs(post_center[2] - half_post_height - rail_top) < 1e-9
+    assert abs(marker_plane_z - (post_center[2] + half_post_height) - 0.0001) < 1e-9
+    assert abs(post_center[0] - marker_center_xy[0]) <= marker_half_size
+    assert abs(post_center[1] - marker_center_xy[1]) <= marker_half_size

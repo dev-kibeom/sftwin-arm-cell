@@ -1,0 +1,21 @@
+<root>
+  <BehaviorTree ID="PickRetractFailureRecovery">
+    <Sequence name="PickRetractFailureRecovery">
+      <PreparePickRetractRecovery/>
+      <Fallback name="ReturnObjectAfterRetractFailure">
+        <Sequence name="ResolveEligiblePickReturn">
+          <PickRetractRecoveryNeeded/>
+          <Fallback name="UseFreshReleasedObservationOrOpen">
+            <PickRetractAlreadyReturned/>
+            <Sequence name="OpenAndConfirmPickReturn">
+              <PickRetractOpenRequired/>
+              <OpenPickRetractReturn/>
+              <ConfirmPickRetractReturn/>
+            </Sequence>
+          </Fallback>
+        </Sequence>
+        <PickRetractRecoveryNotNeeded/>
+      </Fallback>
+    </Sequence>
+  </BehaviorTree>
+</root>

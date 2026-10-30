@@ -8,7 +8,7 @@
 - **Report Owner:** `ARM Cell Integration`
 - **Acceptance Date:** `Historical acceptance; exact date not recorded in source documentation`
 - **Baseline:** `Historical Milestone 1B baseline; exact commit/tag not recorded`
-- **Related Design:** `ADR 0002`, `docs/components/arm-cell/motion/cds-static-scene.md`
+- **Related Design:** `Architecture Record 0002`, [current Motion CDS](../../design/arm-cell/components/motion/cds.md)
 
 ## 1. Acceptance Scope
 
@@ -38,9 +38,9 @@ static-scene VRs for traceability only; it does not retroactively create validat
 
 | Legacy Design Claim | Source Design |
 |---|---|
-| static scene is an explicit bounded profile over the robot-only baseline | legacy combined interface source; current mapping: `cds-static-scene.md` |
-| selected canonical objects are applied and read back | legacy Motion design source; current mapping: `cds-static-scene.md` |
-| reapplication preserves unrelated PlanningScene objects | ADR 0002 / integration test |
+| static scene is an explicit bounded profile over the robot-only baseline | legacy combined interface source; current mapping: [Motion CDS](../../design/arm-cell/components/motion/cds.md) |
+| selected canonical objects are applied and read back | legacy Motion design source; current mapping: [Motion CDS](../../design/arm-cell/components/motion/cds.md) |
+| reapplication preserves unrelated PlanningScene objects | Architecture Record 0002 / integration test |
 | obstacle-aware planning can reroute around a deterministic test-only obstacle | Motion design / synthetic rerouting test |
 | one collision-free request succeeds in the approved bounded scene | Motion design / real-cell smoke test |
 
@@ -146,8 +146,8 @@ Re-evaluate the relevant claims when dependency surfaces change, including:
 
 ## 11. References
 
-- `docs/adr/0002-arm-cell-static-planning-scene.md`
-- `docs/components/arm-cell/motion/cds-static-scene.md`
+- `docs/record/arm-cell/architecture-decision/static-planning-scene.md`
+- `docs/design/arm-cell/components/motion/cds.md` (current consolidated design)
 - `docs/guides/arm-cell-isaac-sim.md`
 - `tests/integration/arm_cell/test_static_scene_integration.py`
 - `tests/integration/arm_cell/test_synthetic_rerouting.py`

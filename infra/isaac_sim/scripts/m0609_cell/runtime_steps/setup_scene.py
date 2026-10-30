@@ -1,5 +1,7 @@
 """Script Editor-safe entrypoint for the M0609 cell scene composition."""
 
+import atexit
+import logging
 import os
 import sys
 import math
@@ -53,6 +55,11 @@ def _add_cell_module_root():
 _add_cell_module_root()
 
 from scene_builder.composition import run_scene_build
+from scene_builder.material_supply import MaterialSupplyProfile
+from scene_builder.material_supply_adapter import IsaacMaterialSupplyAdapter
+from scene_builder.material_supply_sidecar import MaterialSupplySidecarClient
+
+LOGGER = logging.getLogger(__name__)
 
 
 ARM_JOINT_NAMES = (
@@ -131,10 +138,6 @@ def _author_initial_home_targets(stage):
         joints[name].SetCustomDataByKey(
             "sf_twin:initial_home_position_rad", position_rad
         )
-        print(
-            f">>> [HOME] initial drive target {name}: "
-            f"{position_rad:.9f} rad ({math.degrees(position_rad):.3f} deg)"
-        )
 
 
 def _apply_joint_2_stiffness_profile(stage):
@@ -165,14 +168,205 @@ def _apply_joint_2_stiffness_profile(stage):
     if not math.isfinite(base_stiffness) or base_stiffness <= 0.0:
         raise RuntimeError("joint_2 imported angular stiffness must be positive")
     stiffness.Set(base_stiffness * scale)
-    print(
-        f">>> [DRIVE] joint_2 stiffness scale={scale:.6f} "
-        f"imported={base_stiffness:.6f} authored={base_stiffness * scale:.6f}; "
-        "damping, max effort, velocity, gravity, and other joints unchanged"
+
+
+_material_supply_adapter = None
+_material_supply_update_subscription = None
+_material_supply_timeline_subscription = None
+_live_test_session = None
+
+
+def _start_live_test_session():
+    global _live_test_session
+    if _live_test_session is not None:
+        return
+    try:
+        from shared.live_test_session import LiveTestSession
+
+        from shared.environment_setup import resolve_diagnostics_selection
+
+        selected = resolve_diagnostics_selection()
+        _live_test_session = LiveTestSession(
+            Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
+            / ".local_artifacts",
+            selected,
+        )
+        os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"] = str(_live_test_session.descriptor)
+        if _material_supply_adapter is not None:
+            _material_supply_adapter.set_live_test_session_id(
+                _live_test_session.session_id
+            )
+    except Exception as error:
+        _live_test_session = None
+        print(f"Live test session recording could not be started: {error}")
+
+
+def _finish_live_test_session():
+    global _live_test_session
+    if _live_test_session is None:
+        return
+    session = _live_test_session
+    _live_test_session = None
+    if _material_supply_adapter is not None:
+        _material_supply_adapter.set_live_test_session_id(None)
+    os.environ.pop("SFTWIN_LIVE_TEST_SESSION_PATH", None)
+    try:
+        descriptor = session.finish()
+    except Exception as error:
+        print(f"Live test session recording could not be finalized: {error}")
+        return
+    if descriptor is None:
+        return
+
+
+def _spin_material_supply_while_playing():
+    if _material_supply_adapter is None:
+        return
+    import omni.timeline
+
+    if omni.timeline.get_timeline_interface().is_playing():
+        _material_supply_adapter.spin_once()
+
+
+def _on_material_supply_timeline_event(event):
+    import omni.timeline
+
+    event_type = getattr(event, "type", None)
+    try:
+        is_stopped = int(event_type) == int(omni.timeline.TimelineEventType.STOP)
+    except (TypeError, ValueError):
+        is_stopped = event_type == omni.timeline.TimelineEventType.STOP
+    is_playing = False
+    try:
+        is_playing = int(event_type) == int(omni.timeline.TimelineEventType.PLAY)
+    except (TypeError, ValueError, AttributeError):
+        is_playing = event_type == getattr(
+            omni.timeline.TimelineEventType, "PLAY", object()
+        )
+    if is_playing:
+        _start_live_test_session()
+    if is_stopped:
+        reset_gripper = getattr(
+            globals().get("runtime_session"), "reset_for_simulation_stop", None
+        )
+        gripper_reset = True
+        if callable(reset_gripper):
+            try:
+                gripper_reset = bool(reset_gripper())
+            except Exception as error:
+                gripper_reset = False
+                print(f"Simulation Stop could not reset the gripper: {error}")
+        close_writer = getattr(
+            globals().get("runtime_session"), "close_diagnostic_writer", None
+        )
+        if callable(close_writer):
+            try:
+                close_writer()
+            except Exception as error:
+                print(f"Simulation Stop could not close diagnostic writer: {error}")
+        try:
+            _author_initial_home_targets(World.instance().stage)
+        except Exception as error:
+            gripper_reset = False
+            print(f"Simulation Stop could not restore the HOME pose: {error}")
+        if _material_supply_adapter is not None:
+            result = _material_supply_adapter.reset_generated_materials(
+                attachment_reset=lambda: gripper_reset
+            )
+            if result:
+                print("Simulation Stop reset completed.")
+        _finish_live_test_session()
+
+
+def _close_material_supply_adapter():
+    global _material_supply_adapter
+    global _material_supply_update_subscription
+    global _material_supply_timeline_subscription
+
+    if _material_supply_update_subscription is not None:
+        _material_supply_update_subscription.unsubscribe()
+        _material_supply_update_subscription = None
+    if _material_supply_timeline_subscription is not None:
+        _material_supply_timeline_subscription.unsubscribe()
+        _material_supply_timeline_subscription = None
+    if _material_supply_adapter is not None:
+        _material_supply_adapter.close()
+        _material_supply_adapter = None
+
+
+atexit.register(_close_material_supply_adapter)
+
+
+def _start_material_supply_adapter(context):
+    """Connect the Isaac supply realization to Integration's accepted event."""
+    global _material_supply_adapter
+    global _material_supply_update_subscription
+    global _material_supply_timeline_subscription
+
+    _close_material_supply_adapter()
+
+    project_root = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
+    supply_config_path = project_root / "infra/isaac_sim/config/material_supply.yaml"
+    if not supply_config_path.is_file():
+        raise RuntimeError(
+            f"material supply configuration is unavailable: {supply_config_path}"
+        )
+    supply_config = yaml.safe_load(supply_config_path.read_text()) or {}
+    operational_profile = _load_operational_profile()
+    material_handoff = operational_profile.get("material_handoff", {})
+    profile = MaterialSupplyProfile.from_mapping(
+        supply_config,
+        operational_profile.get("vision", {}),
+        operational_profile.get("material_definitions", {}),
     )
+    sidecar = MaterialSupplySidecarClient.launch(project_root)
+    try:
+        import omni.timeline
+
+        _material_supply_adapter = IsaacMaterialSupplyAdapter(
+            stage=World.instance().stage,
+            sidecar=sidecar,
+            profile=profile,
+            delivery_deadline_ms=material_handoff.get("delivery_deadline_ms"),
+            shelf_origin_m=(
+                context.tray_x,
+                context.tray_y,
+                context.amr_tray_z + 0.0225,
+            ),
+            artifact_directory=project_root / ".local_artifacts/isaac_pose_recordings",
+            timeline=omni.timeline.get_timeline_interface(),
+        )
+    except Exception:
+        sidecar.close()
+        raise
+    try:
+        import omni.kit.app
+        import omni.timeline
+
+        _material_supply_update_subscription = (
+            omni.kit.app.get_app()
+            .get_update_event_stream()
+            .create_subscription_to_pop(
+                lambda _event: _spin_material_supply_while_playing(),
+                name="arm_cell_isaac_material_supply_adapter",
+            )
+        )
+        _material_supply_timeline_subscription = (
+            omni.timeline.get_timeline_interface()
+            .get_timeline_event_stream()
+            .create_subscription_to_pop(
+                _on_material_supply_timeline_event,
+                name="arm_cell_isaac_timeline_session_and_stop_cleanup",
+            )
+        )
+        if omni.timeline.get_timeline_interface().is_playing():
+            _start_live_test_session()
+    except Exception:
+        _close_material_supply_adapter()
+        raise
 
 
-run_scene_build(
+context = run_scene_build(
     world_cls=World,
     enable_extension=enable_extension,
     delete_prim=delete_prim,
@@ -186,3 +380,4 @@ run_scene_build(
 
 _author_initial_home_targets(World.instance().stage)
 _apply_joint_2_stiffness_profile(World.instance().stage)
+_start_material_supply_adapter(context)

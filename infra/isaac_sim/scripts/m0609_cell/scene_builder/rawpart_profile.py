@@ -21,9 +21,16 @@ def load_rawpart_profile(project_root):
     profile = config.get("vision", {}).get("detector_profiles", {}).get("RawPart")
     if not isinstance(profile, dict) or profile.get("target_id") != "RawPart":
         raise ValueError("Vision must configure the RawPart target profile")
-    if profile.get("shape") != "box":
-        raise ValueError("RawPart profile shape must be box")
-    _vector(profile, "dimensions_m", 3, positive=True)
+    material = config.get("material_definitions", {}).get("RawPart")
+    if not isinstance(material, dict) or material.get("material_id") != "RawPart":
+        raise ValueError("material_definitions must define RawPart")
+    if profile.get("material_id") != material["material_id"]:
+        raise ValueError(
+            "Vision RawPart profile must reference its material definition"
+        )
+    if material.get("shape") != "box":
+        raise ValueError("RawPart material shape must be box")
+    _vector(material, "nominal_dimensions_m", 3, positive=True)
     _vector(profile, "dimension_tolerance_m", 3, nonnegative=True)
     _vector(profile.get("workspace_roi_m", {}), "x", 2)
     _vector(profile.get("workspace_roi_m", {}), "y", 2)
@@ -35,24 +42,23 @@ def load_rawpart_profile(project_root):
     for key in ("support_contact_tolerance_m", "top_surface_geometry_tolerance_m"):
         if not _positive_finite(profile.get(key)):
             raise ValueError(f"RawPart profile {key} must be positive and finite")
-    support = _vector(profile, "support_region_dimensions_m", 2, positive=True)
+    _vector(profile, "support_region_dimensions_m", 2, positive=True)
     fiducial = profile.get("fiducial")
     if not isinstance(fiducial, dict):
         raise ValueError("RawPart profile fiducial is required")
-    if fiducial.get("support_frame") != "RawSlot":
-        raise ValueError("RawPart fiducial support_frame must be RawSlot")
+    if fiducial.get("support_frame") != "Tray":
+        raise ValueError("RawPart fiducial support_frame must be Tray")
     relation = fiducial.get("marker_in_support")
     if not isinstance(relation, dict):
         raise ValueError("RawPart fiducial marker_in_support relation is required")
-    position = _vector(relation, "position_m", 3)
+    _vector(relation, "position_m", 3)
     _vector(relation, "rpy_rad", 3)
     size = fiducial.get("size_m")
     if not _positive_finite(size):
         raise ValueError("RawPart fiducial size_m must be positive and finite")
-    if not all(
-        abs(position[axis]) + size / 2.0 <= support[axis] / 2.0 for axis in (0, 1)
-    ):
-        raise ValueError("RawPart fiducial marker_in_support lies outside RawSlot")
+    roll, pitch, _yaw = (float(value) for value in relation["rpy_rad"])
+    if abs(roll) > 1e-9 or abs(pitch) > 1e-9:
+        raise ValueError("Tray fiducial must face upward on a horizontal plane")
     dictionary_name = fiducial.get("dictionary")
     if not isinstance(dictionary_name, str) or not hasattr(cv2.aruco, dictionary_name):
         raise ValueError("RawPart fiducial dictionary is unsupported")
@@ -116,7 +122,7 @@ def marker_black_cells(profile):
 
 
 def marker_cell_quads(profile):
-    """Return each marker square's four corners in the RawSlot support frame."""
+    """Return each marker square's four corners in the Tray support frame."""
     fiducial = profile["fiducial"]
     relation = fiducial["marker_in_support"]
     size = fiducial["size_m"]
@@ -158,12 +164,12 @@ def author_support_fiducial(context, profile, support_origin_world):
     from pxr import Gf, UsdGeom, Vt
 
     profile_fiducial = profile["fiducial"]
-    if profile_fiducial["support_frame"] != "RawSlot":
-        raise ValueError("RawPart scene fiducial must use the RawSlot support frame")
+    if profile_fiducial["support_frame"] != "Tray":
+        raise ValueError("RawPart scene fiducial must use the Tray support frame")
     origin = tuple(float(value) for value in support_origin_world)
     mesh = UsdGeom.Mesh.Define(
         context.stage,
-        f"{context.cell_root}/AMR/Mockup/RawSlotSupportFiducial",
+        f"{context.cell_root}/AMR/Mockup/TraySupportFiducial",
     )
     points = []
     indices = []

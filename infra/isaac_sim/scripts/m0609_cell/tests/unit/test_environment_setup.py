@@ -76,6 +76,8 @@ def test_live_environment_bootstrap_needs_no_diagnostic_profile(monkeypatch):
     assert result["SFTWIN_PROJECT_ROOT"] == str(PROJECT_ROOT)
     assert environment["ROS_DOMAIN_ID"] == "0"
     assert environment["SFTWIN_RUNTIME_MODE"] == "production"
+    assert result["SFTWIN_DIAGNOSTICS"] == "none"
+    assert environment["SFTWIN_DIAGNOSTICS"] == "none"
     assert "SFTWIN_PNP_PROFILE" not in environment
     assert python_paths == [str(CELL_ROOT)]
 
@@ -105,6 +107,32 @@ def test_before_play_bootstraps_live_environment_without_running_setup_entrypoin
         assert setup.os.environ["ROS_DOMAIN_ID"] == "0"
         assert setup.os.environ["SFTWIN_RUNTIME_MODE"] == "production"
         assert "SFTWIN_PNP_PROFILE" not in setup.os.environ
+
+
+def test_before_play_selection_sets_existing_diagnostics_environment(
+    monkeypatch, tmp_path
+):
+    import importlib
+    import runpy
+    import sys
+    from types import ModuleType
+
+    source = (CELL_ROOT / "1_before_play.py").read_text(encoding="utf-8")
+    configured = tmp_path / "1_before_play.py"
+    configured.write_text(
+        source.replace(
+            'DIAGNOSTICS_SELECTION = "none"', 'DIAGNOSTICS_SELECTION = "motion,vision"'
+        ),
+        encoding="utf-8",
+    )
+    entrypoint = ModuleType("shared.role_entrypoint")
+    entrypoint.run = lambda *_args: None
+    monkeypatch.setitem(sys.modules, "shared.role_entrypoint", entrypoint)
+    monkeypatch.setattr(importlib, "reload", lambda module: module)
+    with monkeypatch.context() as scoped:
+        scoped.delenv("SFTWIN_DIAGNOSTICS", raising=False)
+        runpy.run_path(str(configured))
+        assert setup.os.environ["SFTWIN_DIAGNOSTICS"] == "motion,vision"
 
 
 def test_pre_build_uses_explicit_project_root_without_live_runtime_setup(monkeypatch):
@@ -199,4 +227,41 @@ def test_bootstrap_profile_is_consumable_by_task3_capture_config():
     capture_config = capture_config_from_profile(profile)
 
     assert capture_config is not None
-    assert capture_config.expected_contact_width_mm == 70.0
+    assert capture_config.capture_volume_dimensions_m == (0.12, 0.12, 0.12)
+
+
+def test_standalone_diagnostics_selection_matches_bringup_component_meaning():
+    assert (
+        setup.resolve_diagnostics_selection({"SFTWIN_DIAGNOSTICS": "none"})
+        == frozenset()
+    )
+    assert setup.resolve_diagnostics_selection(
+        {"SFTWIN_DIAGNOSTICS": "motion, safety"}
+    ) == frozenset({"motion", "safety"})
+    assert (
+        setup.resolve_diagnostics_selection({"SFTWIN_DIAGNOSTICS": "all"})
+        == setup.DIAGNOSTIC_COMPONENTS
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "camera",
+        "clock",
+        "gripper",
+        "vision,",
+        "vision,,motion",
+        "vision,vision",
+        "all,vision",
+    ],
+)
+def test_standalone_diagnostics_selection_rejects_invalid_values(value):
+    with pytest.raises(RuntimeError, match="SFTWIN_DIAGNOSTICS"):
+        setup.resolve_diagnostics_selection({"SFTWIN_DIAGNOSTICS": value})
+
+
+def test_standalone_diagnostics_selection_explains_mixed_sentinels():
+    for value in ("all,vision", "none,motion"):
+        with pytest.raises(RuntimeError, match="must be used alone"):
+            setup.resolve_diagnostics_selection({"SFTWIN_DIAGNOSTICS": value})

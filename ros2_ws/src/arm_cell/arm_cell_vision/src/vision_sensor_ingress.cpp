@@ -19,25 +19,27 @@ bool valid_sample(const SensorSample & sample)
 bool compatible_candidate(const SynchronizedObservationCandidate & candidate)
 {
   if (!candidate.common_stamp_ns || *candidate.common_stamp_ns < 0 ||
-    !valid_sample(candidate.rgb) || !valid_sample(candidate.depth) ||
+    !valid_sample(candidate.depth) ||
     !valid_sample(candidate.camera_info))
   {
     return false;
   }
   const auto stamp = *candidate.common_stamp_ns;
-  return *candidate.rgb.stamp_ns == stamp &&
-         candidate.rgb.width == candidate.depth.width &&
+  const bool rgb_available = candidate.rgb.stamp_ns || candidate.rgb.width > 0 ||
+    candidate.rgb.height > 0 || !candidate.rgb.frame_id.empty();
+  return *candidate.depth.stamp_ns == stamp &&
          candidate.depth.width == candidate.camera_info.width &&
-         candidate.rgb.height == candidate.depth.height &&
          candidate.depth.height == candidate.camera_info.height &&
-         candidate.rgb.frame_id == candidate.depth.frame_id &&
-         candidate.depth.frame_id == candidate.camera_info.frame_id;
+         candidate.depth.frame_id == candidate.camera_info.frame_id &&
+         (!rgb_available || (valid_sample(candidate.rgb) &&
+         candidate.rgb.width == candidate.depth.width &&
+         candidate.rgb.height == candidate.depth.height &&
+         candidate.rgb.frame_id == candidate.depth.frame_id));
 }
 
 bool exact_stamps_present(const SynchronizedObservationCandidate & candidate)
 {
-  return candidate.common_stamp_ns && candidate.rgb.stamp_ns && candidate.depth.stamp_ns &&
-         candidate.camera_info.stamp_ns;
+  return candidate.common_stamp_ns && candidate.depth.stamp_ns && candidate.camera_info.stamp_ns;
 }
 
 bool receipt_is_fresh(
@@ -56,7 +58,7 @@ IngressResult result(IngressStatus status)
 }  // namespace
 
 SynchronizedObservation::SynchronizedObservation(SynchronizedObservationCandidate candidate)
-: rgb_(std::move(candidate.rgb)), depth_(std::move(candidate.depth)),
+  : rgb_(std::move(candidate.rgb)), depth_(std::move(candidate.depth)),
   camera_info_(std::move(candidate.camera_info)), stamp_ns_(*candidate.common_stamp_ns)
 {
 }
@@ -79,8 +81,8 @@ SensorIngressPolicy::SensorIngressPolicy(SensorIngressConfig config)
 bool SensorIngressPolicy::is_compatible_candidate(
   const SynchronizedObservationCandidate & candidate)
 {
-  return exact_stamps_present(candidate) && valid_sample(candidate.rgb) &&
-         valid_sample(candidate.depth) && valid_sample(candidate.camera_info) &&
+  return exact_stamps_present(candidate) && valid_sample(candidate.depth) &&
+         valid_sample(candidate.camera_info) &&
          compatible_candidate(candidate);
 }
 
@@ -120,16 +122,15 @@ IngressResult SensorIngressPolicy::evaluate(
     clear_request_state();
     return result(IngressStatus::kRequestTimeout);
   }
-  if (!exact_stamps_present(candidate) || !valid_sample(candidate.rgb) ||
-    !valid_sample(candidate.depth) || !valid_sample(candidate.camera_info))
+  if (!exact_stamps_present(candidate) || !valid_sample(candidate.depth) ||
+    !valid_sample(candidate.camera_info))
   {
     return result(IngressStatus::kMalformedObservation);
   }
   if (!compatible_candidate(candidate)) {
     return result(IngressStatus::kIncompatibleMetadata);
   }
-  if (*candidate.rgb.receipt_monotonic_ns <= *request_start_monotonic_ns_ ||
-    *candidate.depth.receipt_monotonic_ns <= *request_start_monotonic_ns_)
+  if (*candidate.depth.receipt_monotonic_ns <= *request_start_monotonic_ns_)
   {
     return result(IngressStatus::kStaleObservation);
   }
@@ -148,8 +149,7 @@ IngressResult SensorIngressPolicy::evaluate(
   if (stamp <= *flush_watermark_stamp_ns_) {
     return result(IngressStatus::kStaleObservation);
   }
-  if (!receipt_is_fresh(candidate.rgb, now, config_.max_receipt_age_ns) ||
-    !receipt_is_fresh(candidate.depth, now, config_.max_receipt_age_ns))
+  if (!receipt_is_fresh(candidate.depth, now, config_.max_receipt_age_ns))
   {
     return result(IngressStatus::kReceiptStaleObservation);
   }
@@ -174,16 +174,15 @@ IngressResult SensorIngressPolicy::evaluate_cached(
     clear_request_state();
     return result(IngressStatus::kRequestTimeout);
   }
-  if (!exact_stamps_present(candidate) || !valid_sample(candidate.rgb) ||
-    !valid_sample(candidate.depth) || !valid_sample(candidate.camera_info))
+  if (!exact_stamps_present(candidate) || !valid_sample(candidate.depth) ||
+    !valid_sample(candidate.camera_info))
   {
     return result(IngressStatus::kMalformedObservation);
   }
   if (!compatible_candidate(candidate)) {
     return result(IngressStatus::kIncompatibleMetadata);
   }
-  if (!receipt_is_fresh(candidate.rgb, now, maximum_receipt_age_ns) ||
-    !receipt_is_fresh(candidate.depth, now, maximum_receipt_age_ns))
+  if (!receipt_is_fresh(candidate.depth, now, maximum_receipt_age_ns))
   {
     return result(IngressStatus::kReceiptStaleObservation);
   }
@@ -227,6 +226,12 @@ IngressResult SensorIngressPolicy::reset_after_lifecycle()
   clear_request_state();
   epoch_invalidated_ = false;
   last_synchronized_epoch_stamp_ns_.reset();
+  return result(IngressStatus::kWaiting);
+}
+
+IngressResult SensorIngressPolicy::end_acquisition()
+{
+  clear_request_state();
   return result(IngressStatus::kWaiting);
 }
 

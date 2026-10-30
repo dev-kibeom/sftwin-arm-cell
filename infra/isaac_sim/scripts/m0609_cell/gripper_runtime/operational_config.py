@@ -3,11 +3,8 @@
 import json
 from pathlib import Path
 
-from gripper_runtime.grasp_attachment import (
-    CaptureReferenceConfig,
-    EligibleObjectRegistry,
-)
 from gripper_runtime.grasp_policy import CaptureConfig
+from gripper_runtime.grasp_stage import CaptureReferenceConfig, EligibleObjectRegistry
 
 
 def load_production_mission_recipe(profile, profile_path):
@@ -28,11 +25,14 @@ def load_production_mission_recipe(profile, profile_path):
 
 
 def production_capture_configuration(profile, mission_recipe):
-    """Derive capture geometry and contact width from production mission inputs."""
-    raw_part = profile["vision"]["detector_profiles"]["RawPart"]
+    """Build the production Capture Volume and optional geometry reference."""
+    del mission_recipe  # Gripper Capture no longer consumes Motion's grasp policy.
     motion = profile["motion"]
     capture = profile["gripper_capture"]
-    dimensions = tuple(float(value) for value in raw_part["dimensions_m"])
+    dimensions = tuple(
+        float(value)
+        for value in profile["material_definitions"]["RawPart"]["nominal_dimensions_m"]
+    )
     observation_to_object = tuple(
         float(value) for value in motion["observation_to_object_translation"]
     )
@@ -54,12 +54,8 @@ def production_capture_configuration(profile, mission_recipe):
     config = CaptureConfig(
         capture_volume_dimensions_m=tuple(
             float(value) for value in capture["volume_dimensions_m"]
-        ),
-        position_tolerance_m=float(capture["position_tolerance_m"]),
-        orientation_tolerance_deg=float(capture["orientation_tolerance_deg"]),
-        expected_contact_width_mm=float(mission_recipe["grasp"]["width_mm"]),
-        contact_width_tolerance_mm=float(capture["contact_width_tolerance_mm"]),
+        )
     ).validate()
     registry = EligibleObjectRegistry()
-    registry.register("/World/SF_Twin_Cell/AMR/Mockup/RawPart")
+    registry.register_subtree("/World/SF_Twin_Cell/MaterialSupply/Deliveries")
     return config, reference, registry

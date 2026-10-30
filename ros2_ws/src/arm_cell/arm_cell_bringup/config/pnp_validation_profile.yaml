@@ -12,6 +12,8 @@ safety:
 motion:
   backend_mode: isaac
   arm_joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
+  # Fixed tray return target; degrees [-90, 10, 100, 0, 0, 90] converted to radians.
+  place_tray_return_joint_positions: [-1.5707963267948966, 0.17453292519943295, 1.7453292519943295, 0.0, 0.0, 1.5707963267948966]
   # Validation-only planning/time-parameterization policy seed.  This is not
   # a measured M0609 or Isaac acceleration ceiling.
   planning_max_acceleration_rad_s2: 5.0
@@ -29,27 +31,8 @@ motion:
   # Observation freshness remains governed independently by the holding
   # freshness contract.
   holding_confirmation_timeout_ms: 1500
-  # APPROACH entry acceptance is separate from capture-volume tolerance and
-  # joint tracking diagnostics. Validation-only simulation tolerance is 10 mm.
-  # The latest accepted run measured approximately 7.58 mm; an earlier Isaac
-  # audit measured approximately 8.5 mm after bounded final-target hold. FK,
-  # TCP definition, and joint-state mapping were consistent and the residual
-  # was traced to articulation tracking. This is not a hardware accuracy
-  # requirement or a final-position accuracy claim; higher-fidelity validation
-  # may use a tighter band later. PICK keeps this 10 mm bound.
-  approach_entry_position_tolerance_m: 0.010
-  # PLACE validation calibration based on the observed 10.544 mm TCP residual.
-  # This may be used for Task 5 acceptance after a successful fresh full cycle;
-  # consider a tighter value only with separate calibration evidence.
-  place_approach_entry_position_tolerance_m: 0.015
-  approach_entry_orientation_tolerance_rad: 0.08726646259971647
-  # PLACE validation calibration based on the observed 0.015994 rad residual.
-  # This may be used for Task 5 acceptance after a successful fresh full cycle;
-  # consider a tighter value only with separate calibration evidence.
-  place_tracking_tolerance_rad: 0.020
-  approach_entry_require_settled: true
-  approach_entry_settled_joint_delta_rad: 0.001
-  approach_entry_settled_samples: 3
+  cartesian_tcp_orientation_tolerance_rad: 0.08726646259971647
+  trajectory_goal_tolerance_rad: 0.03
   retract_joint_positions: [0.0, -0.5, 1.0, -1.3, -1.0, 0.0]
   # The fixture detected pose is the top-surface centroid. Motion derives the
   # fixture object's geometric center. This is validation-only geometry; the
@@ -61,12 +44,7 @@ motion:
   # Relative X-180 tool convention: TCP +X remains the closing axis and
   # TCP +Z is the physical body-to-contact/insertion axis.
   object_to_grasp_tcp_quaternion: [1.0, 0.0, 0.0, 0.0]
-  target_roll_tolerance_rad: 0.034906585
-  target_pitch_tolerance_rad: 0.034906585
-  target_roll_sample_step_rad: 0.034906585
-  target_pitch_sample_step_rad: 0.034906585
   insertion_axis_tcp: [0.0, 0.0, 1.0]
-  pick_approach_distance_m: 0.05
   pick_retract_distance_m: 0.05
   validation_grasp_contact_policy_enabled: true
   validation_grasp_contact_object_id_prefix: wu14_fixture_
@@ -75,17 +53,18 @@ motion:
     - gripper_robotiq_85_right_finger_tip_link
   enable_test_backend_controls: false
   calibration_profile_reference: config/isaac_planning.yaml
-  tolerance_profile_reference: docs/components/arm-cell/integration/fds-deterministic-pnp-fixture.md#calibration-boundary
+  tolerance_profile_reference: docs/design/arm-cell/components/simulation/fds-deterministic-pnp-fixture.md#calibration-boundary
 
 orchestration:
   mission_target_id: cube_profile
-  vision_request_timeout_ms: 500
+  safety_state_freshness_timeout_ms: 500
+  vision_request_timeout_ms: 30000
   recipe_directory: recipes
 
 validation:
   runtime_runner_entrypoint: infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py
   registration_helper_entrypoint: ros2_ws/src/arm_cell/arm_cell_bringup/scripts/register_pnp_fixture.py
-  registration_handoff_schema: wu14-pnp-registration/v1
+  registration_handoff_schema: wu14-pnp-registration/v2
   registration_ttl_s: 30.0
   registration_ttl_max_s: 60.0
   holding_freshness_ms: 500.0
@@ -134,13 +113,10 @@ fixture:
 
 capture:
   volume_dimensions_m: [0.12, 0.12, 0.12]
-  position_tolerance_m: 0.015
-  # Canonical Task 3 CaptureConfig unit: degrees. No implicit conversion.
-  orientation_tolerance_deg: 10.0
-  expected_contact_width_mm: 70.0
-  contact_width_tolerance_mm: 2.0
 
 place:
+  # Validation tolerance for final fixture orientation after PLACE.
+  orientation_tolerance_deg: 10.0
   # Euclidean distance between expected and actual detached fixture centers.
   # Expected center is derived from the configured PLACE TCP pose and the
   # object_to_grasp_tcp transform above; this is a WU-14 validation tolerance.

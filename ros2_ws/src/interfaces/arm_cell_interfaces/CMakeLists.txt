@@ -9,39 +9,55 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(shape_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(unique_identifier_msgs REQUIRED)
 
 set(msg_files
   "msg/AMRDockingState.msg"
   "msg/DetectTargetResultCode.msg"
+  "msg/DisturbanceCandidate.msg"
+  "msg/DisturbanceFailureReason.msg"
+  "msg/DisturbanceOutcome.msg"
+  "msg/DisturbancePhase.msg"
+  "msg/CollisionPrimitive.msg"
+  "msg/HandoffTrigger.msg"
+  "msg/HandoffTriggerStatus.msg"
   "msg/MissionExitReason.msg"
   "msg/MissionPhase.msg"
   "msg/MaterialHandoffState.msg"
   "msg/MaterialReadiness.msg"
+  "msg/TransferCompletion.msg"
   "msg/MotionCapability.msg"
   "msg/MotionStatus.msg"
   "msg/MotionTaskPhase.msg"
   "msg/MotionTaskResultCode.msg"
   "msg/MotionTaskType.msg"
   "msg/PackMLState.msg"
+  "msg/PickCandidate.msg"
   "msg/SafetyCauseSet.msg"
   "msg/SafetyHardwareState.msg"
   "msg/SafetyState.msg"
+  "msg/SceneStability.msg"
   "msg/StopMode.msg"
   "msg/VisionDiagnostic.msg"
+  "msg/VisionCalibration.msg"
+  "msg/VisionDetectorSnapshot.msg"
 )
 
 set(srv_files
   "srv/DetectTarget.srv"
   "srv/RequestMaterial.srv"
-  "srv/RequestMaterialSupply.srv"
+  "srv/RequestGripperOpen.srv"
   "srv/ResetSafety.srv"
   "srv/StopMotion.srv"
 )
 
 set(action_files
   "action/ExecuteCycle.action"
+  "action/ExecuteDisturb.action"
+  "action/ExecutePnp.action"
   "action/ExecuteTask.action"
 )
 
@@ -52,7 +68,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES
     builtin_interfaces
     geometry_msgs
+    shape_msgs
     std_msgs
+    sensor_msgs
     unique_identifier_msgs
 )
 

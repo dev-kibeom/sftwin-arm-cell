@@ -61,7 +61,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_safety_input_tracker tests/test_safety_input_tracker.cpp)
   target_link_libraries(test_safety_input_tracker ${PROJECT_NAME}_core)
   target_include_directories(test_safety_input_tracker PRIVATE include)
-  ament_target_dependencies(test_safety_input_tracker arm_cell_interfaces)
+  ament_target_dependencies(test_safety_input_tracker rclcpp arm_cell_interfaces)
 
   ament_add_gtest(test_safety_stop_coordination tests/test_safety_stop_coordination.cpp)
   target_link_libraries(test_safety_stop_coordination ${PROJECT_NAME}_core)

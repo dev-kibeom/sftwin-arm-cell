@@ -12,13 +12,15 @@ find_package(builtin_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(shape_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(arm_cell_interfaces REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc calib3d aruco)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs calib3d aruco freetype)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/RegisterFixedTarget.srv"
@@ -41,18 +43,33 @@ target_compile_features(fixed_target_registry PUBLIC cxx_std_17)
 target_include_directories(fixed_target_registry PUBLIC include)
 ament_target_dependencies(fixed_target_registry geometry_msgs)
 
-add_library(detect_target_processor src/detect_target_processor.cpp)
-target_sources(detect_target_processor PRIVATE src/rawpart_depth_profile.cpp)
+add_library(detect_target_processor src/detect_target_processor.cpp src/calibration_file.cpp)
+target_sources(detect_target_processor PRIVATE
+  src/cuboid_disturbance_regions.cpp
+  src/cuboid_top_face.cpp
+  src/cuboid_unresolved.cpp
+  src/cuboid_top_face_geometry.cpp
+  src/cuboid_top_face_selection.cpp
+  src/rawpart_depth_profile.cpp
+  src/depth_scene_stability.cpp)
 target_compile_features(detect_target_processor PUBLIC cxx_std_17)
 target_include_directories(detect_target_processor PUBLIC include)
 ament_target_dependencies(detect_target_processor arm_cell_interfaces geometry_msgs sensor_msgs std_msgs tf2)
 target_include_directories(detect_target_processor PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(detect_target_processor ${OpenCV_LIBS})
 add_library(detect_target_service src/detect_target_service.cpp)
+target_sources(detect_target_service PRIVATE
+  src/vision_detector_snapshot.cpp
+  src/vision_snapshot_render.cpp
+  src/vision_snapshot_geometry.cpp
+  src/vision_snapshot_diagnostics.cpp
+  src/vision_snapshot_serialization.cpp)
 target_compile_features(detect_target_service PUBLIC cxx_std_17)
 target_include_directories(detect_target_service PUBLIC include)
 target_link_libraries(detect_target_service detect_target_processor vision_ros_ingress)
-ament_target_dependencies(detect_target_service arm_cell_interfaces geometry_msgs std_msgs)
+ament_target_dependencies(detect_target_service arm_cell_interfaces geometry_msgs shape_msgs std_msgs sensor_msgs std_srvs rclcpp tf2)
+target_include_directories(detect_target_service PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(detect_target_service ${OpenCV_LIBS})
 install(TARGETS
   vision_sensor_ingress
   vision_ros_ingress
@@ -69,9 +86,15 @@ rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typ
 target_link_libraries(fixed_detect_target_node "${cpp_typesupport_target}")
 install(TARGETS fixed_detect_target_node DESTINATION lib/${PROJECT_NAME})
 
-add_executable(detect_target_node src/detect_target_node.cpp)
-target_link_libraries(detect_target_node detect_target_service)
-ament_target_dependencies(detect_target_node rclcpp tf2_ros arm_cell_interfaces)
+add_library(detect_target_node_component STATIC src/detect_target_node.cpp)
+target_include_directories(detect_target_node_component PRIVATE src)
+target_link_libraries(detect_target_node_component detect_target_service)
+ament_target_dependencies(detect_target_node_component
+  rclcpp tf2 tf2_ros sensor_msgs std_msgs std_srvs arm_cell_interfaces)
+add_executable(detect_target_node src/detect_target_node_main.cpp)
+target_include_directories(detect_target_node PRIVATE src)
+target_link_libraries(detect_target_node detect_target_node_component)
+ament_target_dependencies(detect_target_node rclcpp)
 install(TARGETS detect_target_node DESTINATION lib/${PROJECT_NAME})
 add_executable(vision_ros_ingress_node src/vision_ros_ingress_node.cpp)
 target_link_libraries(vision_ros_ingress_node vision_ros_ingress)
@@ -118,12 +141,31 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_detect_target_processor tests/test_detect_target_processor.cpp)
   target_link_libraries(test_detect_target_processor detect_target_processor)
+  set(CUBOID_FIXTURE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/cuboid_figure4")
+  ament_add_gtest(test_cuboid_top_face tests/test_cuboid_top_face.cpp)
+  target_compile_definitions(test_cuboid_top_face PRIVATE CUBOID_FIXTURE_DIR="${CUBOID_FIXTURE_DIR}")
+  target_link_libraries(test_cuboid_top_face detect_target_processor ${OpenCV_LIBS})
+  target_include_directories(test_cuboid_top_face PRIVATE ${OpenCV_INCLUDE_DIRS})
   ament_add_gtest(test_rawpart_detect_target tests/test_rawpart_detect_target.cpp)
   target_link_libraries(test_rawpart_detect_target detect_target_processor ${OpenCV_LIBS})
   target_include_directories(test_rawpart_detect_target PRIVATE ${OpenCV_INCLUDE_DIRS})
+  ament_add_gtest(test_depth_scene_stability tests/test_depth_scene_stability.cpp)
+  target_link_libraries(test_depth_scene_stability detect_target_processor ${OpenCV_LIBS})
+  target_include_directories(test_depth_scene_stability PRIVATE ${OpenCV_INCLUDE_DIRS})
   ament_add_gtest(test_detect_target_service tests/test_detect_target_service.cpp)
   target_link_libraries(test_detect_target_service detect_target_service)
   ament_target_dependencies(test_detect_target_service rclcpp arm_cell_interfaces)
+  ament_add_gtest(test_detect_target_node_stable_guard
+    tests/test_detect_target_node_stable_guard.cpp)
+  target_include_directories(test_detect_target_node_stable_guard PRIVATE src)
+  target_link_libraries(test_detect_target_node_stable_guard detect_target_node_component)
+  ament_target_dependencies(test_detect_target_node_stable_guard
+    rclcpp tf2 tf2_ros sensor_msgs std_msgs std_srvs arm_cell_interfaces)
+  ament_add_gtest(test_vision_detector_snapshot tests/test_vision_detector_snapshot.cpp)
+  target_link_libraries(test_vision_detector_snapshot detect_target_service)
+  ament_target_dependencies(test_vision_detector_snapshot rclcpp arm_cell_interfaces)
+  ament_add_gtest(test_calibration_file tests/test_calibration_file.cpp)
+  target_link_libraries(test_calibration_file detect_target_processor)
 endif()
 
 ament_package()

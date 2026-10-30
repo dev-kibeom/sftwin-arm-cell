@@ -1,11 +1,16 @@
 # timeout is relative to Vision receipt and is measured with Vision's steady clock.
 string target_id
+# Recipe selects one algorithm for the entire Acquisition. No failure fallback.
+# Default selects the supported algorithm for callers without a Recipe; explicit empty is invalid.
+string algorithm "cuboid_top_face"
 builtin_interfaces/Duration timeout
 ---
 DetectTargetResultCode result_code
-geometry_msgs/PoseStamped target_pose
-bool has_target_pose
-bool has_target_yaw
-float32 estimated_height_m
-bool has_estimated_height
 string diagnostic_detail
+uint64 scene_generation
+string acquisition_id
+# All SELECTED HIGH/MEDIUM normal PICK candidates from this Acquisition.
+PickCandidate[] material_candidates
+# Unresolved observation regions from this same Acquisition; empty when none.
+# Each candidate carries its own base_link center and observation timestamp.
+DisturbanceCandidate[] disturbance_candidates

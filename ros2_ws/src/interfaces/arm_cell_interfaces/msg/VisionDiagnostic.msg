@@ -9,16 +9,7 @@ uint8 state
 string target_id
 uint8 result_code
 bool valid
-bool centroid_pixel_valid
-float32 centroid_pixel_x
-float32 centroid_pixel_y
-bool object_region_valid
-uint32 object_region_x
-uint32 object_region_y
-uint32 object_region_width
-uint32 object_region_height
 bool support_region_valid
 geometry_msgs/Point32[] support_region
-bool yaw_available
 # Non-normative detail for the latest terminal DetectTarget event.
 string diagnostic_detail

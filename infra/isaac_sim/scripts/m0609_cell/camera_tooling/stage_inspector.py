@@ -425,6 +425,15 @@ def authoritative_box_bounds(center, dimensions):
     )
 
 
+def selected_reference_prim_paths(reference_prim_paths):
+    """Preserve the legacy default only when no explicit list was supplied."""
+    return (
+        [DEFAULT_REFERENCE_PRIM]
+        if reference_prim_paths is None
+        else list(reference_prim_paths)
+    )
+
+
 def inset_top_surface_points(minimum, maximum):
     """Return a centre and two inset off-axis points from USD world-space bounds."""
     x0, y0, z0 = minimum
@@ -460,7 +469,7 @@ def inspect_stage(output_path, reference_prim_paths=None):
     link_rotation, optical_rotation = ros_camera_rotations(usd_rotation)
     reference_geometry = []
     bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
-    for path in reference_prim_paths or [DEFAULT_REFERENCE_PRIM]:
+    for path in selected_reference_prim_paths(reference_prim_paths):
         prim = stage.GetPrimAtPath(path)
         if not prim.IsValid():
             raise RuntimeError(f"reference prim not found: {path}")
@@ -590,7 +599,7 @@ def script_editor_output_path(
 
 
 def script_editor_reference_prims(environ):
-    raw = environ.get("SFTWIN_CAMERA_REFERENCE_PRIMS", DEFAULT_REFERENCE_PRIM)
+    raw = environ.get("SFTWIN_CAMERA_REFERENCE_PRIMS", "")
     return [path.strip() for path in raw.split(",") if path.strip()]
 
 

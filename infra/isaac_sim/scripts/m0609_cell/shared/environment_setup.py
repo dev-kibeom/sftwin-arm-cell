@@ -10,6 +10,38 @@ VALIDATION_PROFILE_RELATIVE_PATH = Path(
     "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
 )
 DEFAULT_ROS_DOMAIN_ID = "0"
+DIAGNOSTIC_COMPONENTS = frozenset({"motion", "vision", "safety", "orchestration"})
+
+
+def resolve_diagnostics_selection(environ=None):
+    """Resolve the documented component selection used by standalone Isaac UI."""
+    environment = os.environ if environ is None else environ
+    value = environment.get("SFTWIN_DIAGNOSTICS", "none").strip()
+    if value == "none":
+        selected = frozenset()
+    elif value == "all":
+        selected = DIAGNOSTIC_COMPONENTS
+    else:
+        components = [part.strip() for part in value.split(",")]
+        if any(not component for component in components):
+            raise RuntimeError(
+                "SFTWIN_DIAGNOSTICS must be 'none', 'all', or a comma-separated "
+                "list of motion,vision,safety,orchestration"
+            )
+        if "all" in components or "none" in components:
+            raise RuntimeError(
+                "SFTWIN_DIAGNOSTICS values 'all' and 'none' must be used alone"
+            )
+        if len(set(components)) != len(components):
+            raise RuntimeError("SFTWIN_DIAGNOSTICS contains a duplicate component name")
+        unknown = sorted(set(components) - DIAGNOSTIC_COMPONENTS)
+        if unknown:
+            raise RuntimeError(
+                "SFTWIN_DIAGNOSTICS contains unsupported component(s): "
+                + ",".join(unknown)
+            )
+        selected = frozenset(components)
+    return selected
 
 
 def validate_project_root(project_root):
@@ -80,9 +112,13 @@ def configure_live_environment(project_root=None, environ=None):
     environment = os.environ if environ is None else environ
     root, source = resolve_project_root(project_root, environment)
     ros_domain_id = resolve_ros_domain_id(environment)
+    selected_diagnostics = resolve_diagnostics_selection(environment)
     module_root = root / CELL_RELATIVE_PATH
     environment["SFTWIN_PROJECT_ROOT"] = str(root)
     environment["SFTWIN_RUNTIME_MODE"] = "production"
+    environment["SFTWIN_DIAGNOSTICS"] = (
+        ",".join(sorted(selected_diagnostics)) if selected_diagnostics else "none"
+    )
     if str(module_root) not in sys.path:
         sys.path.insert(0, str(module_root))
     return {
@@ -91,4 +127,5 @@ def configure_live_environment(project_root=None, environ=None):
         "module_root": str(module_root),
         "resolution_source": source,
         "ROS_DOMAIN_ID": ros_domain_id,
+        "SFTWIN_DIAGNOSTICS": environment["SFTWIN_DIAGNOSTICS"],
     }

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
-
+from pnp_validation.editor_lifecycle import ValidationSessionOwner
 from pnp_validation.fixture import Pose, PoseReference, ValidationManifest
 from pnp_validation.handoff import (
     HANDOFF_SCHEMA_VERSION,
@@ -11,7 +11,6 @@ from pnp_validation.handoff import (
     atomic_write_json,
     atomic_write_registration_handoff,
 )
-from pnp_validation.editor_lifecycle import ValidationSessionOwner
 
 
 class _LifecycleStream:
@@ -43,7 +42,7 @@ def _manifest():
         dimensions=(0.07, 0.07, 0.08),
         spawn_pose=Pose(0.2, -0.1, 0.8, 0.25),
         registered_top_surface_pose=PoseReference(0.2, -0.1, 0.84, 0.25),
-        has_target_yaw=True,
+        orientation_symmetry_order=1,
         ttl_s=30.0,
         capture_profile_reference="profile.yaml:capture",
         tolerance_profile_reference="profile.yaml:tolerances",
@@ -61,6 +60,8 @@ def test_registration_handoff_has_versioned_manifest_schema():
     assert data["request"]["run_id"] == "run-1"
     assert data["request"]["target_id"] == "cube_profile"
     assert data["request"]["ttl_s"] == 30.0
+    assert data["request"]["orientation_symmetry_order"] == 1
+    assert "has_target_yaw" not in data["request"]
 
 
 def test_registration_handoff_is_written_atomically(tmp_path):
@@ -106,10 +107,11 @@ def test_isaac_entrypoint_has_no_direct_ros_python_dependency():
     )
 
 
-def test_validation_runner_owns_validation_specific_environment_defaults():
+def test_validation_runner_owns_validation_specific_environment_defaults(monkeypatch):
     source = (
         Path(__file__).parents[2] / "pnp_validation/entrypoints/start_validation.py"
     )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     spec = importlib.util.spec_from_file_location("run_pnp_validation", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -132,10 +134,11 @@ def test_validation_runner_owns_validation_specific_environment_defaults():
     )
 
 
-def test_validation_runner_allocates_a_fresh_run_on_script_editor_rerun():
+def test_validation_runner_allocates_a_fresh_run_on_script_editor_rerun(monkeypatch):
     source = (
         Path(__file__).parents[2] / "pnp_validation/entrypoints/start_validation.py"
     )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     spec = importlib.util.spec_from_file_location("run_pnp_validation_rerun", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -155,10 +158,11 @@ def test_validation_runner_allocates_a_fresh_run_on_script_editor_rerun():
     )
 
 
-def test_stop_owner_cleans_owned_state_and_artifacts(tmp_path):
+def test_stop_owner_cleans_owned_state_and_artifacts(tmp_path, monkeypatch):
     source = (
         Path(__file__).parents[2] / "pnp_validation/entrypoints/start_validation.py"
     )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     spec = importlib.util.spec_from_file_location("run_pnp_validation_teardown", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -304,22 +308,24 @@ def test_stop_owner_rechecks_stale_owned_path_before_deleting_foreign_prim(tmp_p
     assert owner.teardown() is False
 
 
-def test_validation_runner_requires_bootstrap_owned_profile():
+def test_validation_runner_requires_bootstrap_owned_profile(monkeypatch):
     source = (
         Path(__file__).parents[2] / "pnp_validation/entrypoints/start_validation.py"
     )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     spec = importlib.util.spec_from_file_location("run_pnp_validation", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    with pytest.raises(RuntimeError, match="1_before_play"):
+    with pytest.raises(RuntimeError, match="SFTWIN_PNP_PROFILE is not configured"):
         module.configure_validation_environment(environ={})
 
 
-def test_validation_runner_rejects_missing_common_bootstrap_environment():
+def test_validation_runner_rejects_missing_common_bootstrap_environment(monkeypatch):
     source = (
         Path(__file__).parents[2] / "pnp_validation/entrypoints/start_validation.py"
     )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     spec = importlib.util.spec_from_file_location("run_pnp_validation", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -328,10 +334,11 @@ def test_validation_runner_rejects_missing_common_bootstrap_environment():
         module.validate_bootstrap_environment({})
 
 
-def test_validation_runner_reports_effective_bootstrap_domain():
+def test_validation_runner_reports_effective_bootstrap_domain(monkeypatch):
     source = (
         Path(__file__).parents[2] / "pnp_validation/entrypoints/start_validation.py"
     )
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     spec = importlib.util.spec_from_file_location("run_pnp_validation", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

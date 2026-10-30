@@ -75,6 +75,7 @@ std::vector<float> background_depth()
   return std::vector<float>(8 * 6, 1.0F);
 }
 
+
 TEST(DetectTargetProcessor, FindsObjectAndReturnsObjectCentricBasePose)
 {
   auto values = background_depth();
@@ -90,7 +91,7 @@ TEST(DetectTargetProcessor, FindsObjectAndReturnsObjectCentricBasePose)
     result.result_code,
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS);
   ASSERT_TRUE(result.has_target_pose);
-  EXPECT_TRUE(result.has_target_yaw);
+  EXPECT_EQ(result.orientation_symmetry_order, 1U);
   EXPECT_EQ(result.target_pose.header.frame_id, "base_link");
   EXPECT_NEAR(result.target_pose.pose.position.z, 0.9, 1e-5);
   ASSERT_TRUE(result.has_estimated_height);
@@ -159,7 +160,7 @@ TEST(DetectTargetProcessor, PreservesPositionWhenYawIsUnobservable)
     result.result_code,
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS);
   EXPECT_TRUE(result.has_target_pose);
-  EXPECT_FALSE(result.has_target_yaw);
+  EXPECT_EQ(result.orientation_symmetry_order, 0U);
   EXPECT_NEAR(result.target_pose.pose.position.z, 0.9, 1e-5);
 }
 

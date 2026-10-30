@@ -124,7 +124,7 @@ class FixtureProfile:
     deletion_delay_s: float = 3.0
     holding_freshness_ms: float = 500.0
     open_readiness_timeout_s: float = 2.0
-    has_target_yaw: bool = True
+    orientation_symmetry_order: int = 1
     capture_profile_reference: str = "pnp_validation_profile.yaml:capture"
     tolerance_profile_reference: str = "pnp_validation_profile.yaml:tolerances"
     support_surface_id: str | None = None
@@ -135,6 +135,10 @@ class FixtureProfile:
         _positive_dimensions(self.fixture_dimensions, "fixture dimensions")
         if not self.target_id:
             raise ValueError("target_id must not be empty")
+        if type(
+            self.orientation_symmetry_order
+        ) is not int or self.orientation_symmetry_order not in (0, 1, 4):
+            raise ValueError("orientation symmetry order must be 0, 1, or 4")
         if not 0.0 < self.registration_ttl_s <= self.max_registration_ttl_s:
             raise ValueError("registration TTL must be in the configured range")
         if self.max_registration_ttl_s > 60.0:
@@ -392,7 +396,7 @@ class ValidationManifest:
     dimensions: tuple[float, float, float]
     spawn_pose_world: PoseReference
     registered_top_surface_pose_base_link: PoseReference
-    has_target_yaw: bool
+    orientation_symmetry_order: int
     ttl_s: float
     capture_profile_reference: str
     tolerance_profile_reference: str
@@ -411,7 +415,7 @@ class ValidationManifest:
         dimensions: tuple[float, float, float],
         spawn_pose_world: PoseReference | Pose | None = None,
         registered_top_surface_pose_base_link: PoseReference | None = None,
-        has_target_yaw: bool,
+        orientation_symmetry_order: int,
         ttl_s: float,
         capture_profile_reference: str,
         tolerance_profile_reference: str,
@@ -430,6 +434,10 @@ class ValidationManifest:
             raise ValueError(
                 "manifest must include explicit spawn and registration poses"
             )
+        if type(
+            orientation_symmetry_order
+        ) is not int or orientation_symmetry_order not in (0, 1, 4):
+            raise ValueError("orientation symmetry order must be 0, 1, or 4")
         if not isinstance(spawn_pose_world, PoseReference):
             spawn_pose_world = PoseReference(
                 spawn_pose_world.x,
@@ -457,7 +465,9 @@ class ValidationManifest:
             "registered_top_surface_pose_base_link",
             registered_top_surface_pose_base_link,
         )
-        object.__setattr__(self, "has_target_yaw", has_target_yaw)
+        object.__setattr__(
+            self, "orientation_symmetry_order", orientation_symmetry_order
+        )
         object.__setattr__(self, "ttl_s", ttl_s)
         object.__setattr__(self, "capture_profile_reference", capture_profile_reference)
         object.__setattr__(
@@ -496,7 +506,7 @@ class ValidationManifest:
                 profile.geometry_frame,
             ),
             registered_top_surface_pose_base_link=registered_top_surface_pose_base_link,
-            has_target_yaw=profile.has_target_yaw,
+            orientation_symmetry_order=profile.orientation_symmetry_order,
             ttl_s=profile.registration_ttl_s,
             capture_profile_reference=profile.capture_profile_reference,
             tolerance_profile_reference=profile.tolerance_profile_reference,
@@ -519,7 +529,7 @@ class ValidationManifest:
                 **_pose_dict(self.registered_top_surface_pose_base_link),
                 "frame_id": self.registered_top_surface_pose_base_link.frame_id,
             },
-            "has_target_yaw": self.has_target_yaw,
+            "orientation_symmetry_order": self.orientation_symmetry_order,
             "ttl_s": self.ttl_s,
             "capture_profile_reference": self.capture_profile_reference,
             "tolerance_profile_reference": self.tolerance_profile_reference,

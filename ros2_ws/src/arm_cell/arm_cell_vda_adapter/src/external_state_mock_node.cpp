@@ -1,13 +1,14 @@
 #include <chrono>
+#include <array>
 #include <functional>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
-#include <optional>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/set_bool.hpp>
-#include <arm_cell_interfaces/srv/request_material.hpp>
+#include <arm_cell_interfaces/msg/handoff_trigger.hpp>
 #include <arm_cell_interfaces/msg/material_handoff_state.hpp>
 
 #include "arm_cell_vda_adapter/external_state_mock.hpp"
@@ -45,17 +46,13 @@ public:
     hardware_publisher_ = create_publisher<SafetyHardwareState>("/safety/hardware_state", 10);
     material_handoff_publisher_ = create_publisher<arm_cell_interfaces::msg::MaterialHandoffState>(
       "/vda/material_handoff_state", rclcpp::QoS(10));
-    material_request_service_ = create_service<arm_cell_interfaces::srv::RequestMaterial>(
-      "/vda/request_material",
-      [this](
-        const std::shared_ptr<arm_cell_interfaces::srv::RequestMaterial::Request> request,
-        std::shared_ptr<arm_cell_interfaces::srv::RequestMaterial::Response> response) {
-        response->accepted = material_delivery_.request(
-          request->delivery_id, MaterialDeliveryMock::Clock::now());
-        response->diagnostic_detail = response->accepted ?
-        "delivery episode accepted" :
-        "delivery identity is invalid, duplicated, or active";
-        if (response->accepted) {
+    accepted_handoff_subscription_ =
+      create_subscription<arm_cell_interfaces::msg::HandoffTrigger>(
+      "/integration/accepted_handoff", rclcpp::QoS(10),
+      [this](const arm_cell_interfaces::msg::HandoffTrigger::SharedPtr trigger) {
+        if (material_delivery_.consume_accepted_trigger(
+          *trigger, MaterialDeliveryMock::Clock::now()))
+        {
           publish_material_handoff();
         }
       });
@@ -67,6 +64,7 @@ public:
     create_fault_service("invalid_state", Fault::kInvalidState);
     create_fault_service("communication_loss", Fault::kCommunicationLoss);
     create_fault_service("communication_degradation", Fault::kCommunicationDegradation);
+    create_safety_signal_loss_service();
 
     timer_ = create_wall_timer(
       std::chrono::milliseconds(period_ms), [this]() {
@@ -84,15 +82,61 @@ private:
         [this, fault, name](
           const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
           std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
-          mock_.set_fault(fault, request->data);
+          const bool accepted = mock_.set_fault(fault, request->data);
           if (name == "material_handoff_failure" && request->data) {
             material_delivery_.fail_active();
             publish_material_handoff();
           }
-          response->success = true;
-          response->message = request->data ? "fault activated" : "fault cleared";
+          response->success = accepted;
+          response->message = accepted ?
+            (request->data ? "fault activated" : "fault cleared") :
+            "communication_loss and safety_signal_loss cannot be active together";
           publish();
         }));
+  }
+
+  void create_safety_signal_loss_service()
+  {
+    safety_signal_loss_service_ = create_service<std_srvs::srv::SetBool>(
+      "~/fault/safety_signal_loss",
+      [this](
+        const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+        std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
+        if (request->data) {
+          if (safety_signal_loss_timer_) {
+            response->success = false;
+            response->message = "safety signal loss is already active";
+            return;
+          }
+          if (!mock_.set_fault(Fault::kSafetySignalLoss, true)) {
+            response->success = false;
+            response->message = "communication_loss is already active";
+            return;
+          }
+          safety_signal_loss_timer_ = create_wall_timer(
+            std::chrono::seconds(5), [this]() {
+              safety_signal_loss_timer_->cancel();
+              safety_signal_loss_timer_.reset();
+              mock_.set_fault(Fault::kSafetySignalLoss, false);
+              publish_safety_hardware();
+            });
+          response->success = true;
+          response->message = "Safety-HW publication suppressed for five seconds";
+          return;
+        }
+        const bool was_active = static_cast<bool>(safety_signal_loss_timer_);
+        if (safety_signal_loss_timer_) {
+          safety_signal_loss_timer_->cancel();
+          safety_signal_loss_timer_.reset();
+        }
+        mock_.set_fault(Fault::kSafetySignalLoss, false);
+        response->success = true;
+        response->message = was_active ?
+          "Safety-HW suppression canceled" : "no Safety-HW suppression was active";
+        if (was_active) {
+          publish_safety_hardware();
+        }
+      });
   }
 
   void publish()
@@ -111,17 +155,76 @@ private:
     }
     amr_publisher_->publish(states.amr);
     packml_publisher_->publish(states.packml);
-    hardware_publisher_->publish(states.hardware);
+    if (states.publish_safety_hardware) {
+      hardware_publisher_->publish(states.hardware);
+    }
     last_external_publish_ = steady_now;
+  }
+
+  void publish_safety_hardware()
+  {
+    const auto states = mock_.snapshot(now());
+    if (states.publish && states.publish_safety_hardware) {
+      hardware_publisher_->publish(states.hardware);
+    }
   }
 
   void publish_material_handoff()
   {
-    const auto state = material_delivery_.snapshot(
+    const auto states = material_delivery_.snapshot_all(
       MaterialDeliveryMock::Clock::now(),
       static_cast<builtin_interfaces::msg::Time>(now()));
-    if (state) {
-      material_handoff_publisher_->publish(*state);
+    for (const auto & state : states) {
+      const auto phase = last_material_phases_.find(state.delivery_id.uuid);
+      if (phase == last_material_phases_.end() || phase->second != state.phase) {
+        const auto delivery_id = format_delivery_id(state.delivery_id);
+        if (state.phase == arm_cell_interfaces::msg::MaterialHandoffState::HANDOFF_FAILED) {
+          RCLCPP_ERROR(get_logger(),
+                       "VDA mock handoff phase failed phase=FAILED");
+        } else if (!state.valid) {
+          RCLCPP_WARN(get_logger(), "VDA mock handoff phase invalid phase=%s",
+                      phase_name(state.phase));
+        } else {
+          RCLCPP_INFO(get_logger(), "VDA mock handoff phase changed phase=%s",
+                      phase_name(state.phase));
+        }
+        last_material_phases_[state.delivery_id.uuid] = state.phase;
+      }
+      material_handoff_publisher_->publish(state);
+    }
+  }
+
+  static std::string format_delivery_id(
+    const unique_identifier_msgs::msg::UUID & delivery_id)
+  {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string text;
+    text.reserve(32);
+    for (const auto byte : delivery_id.uuid) {
+      text.push_back(digits[(byte >> 4U) & 0x0fU]);
+      text.push_back(digits[byte & 0x0fU]);
+    }
+    return text;
+  }
+
+  static const char * phase_name(uint8_t phase)
+  {
+    using Handoff = arm_cell_interfaces::msg::MaterialHandoffState;
+    switch (phase) {
+      case Handoff::HANDOFF_UNKNOWN:
+        return "HANDOFF_UNKNOWN";
+      case Handoff::HANDOFF_ARRIVED:
+        return "ARRIVED";
+      case Handoff::HANDOFF_DOCKED:
+        return "DOCKED";
+      case Handoff::HANDOFF_UNLOADED:
+        return "UNLOADED";
+      case Handoff::HANDOFF_DEPARTED:
+        return "DEPARTED";
+      case Handoff::HANDOFF_FAILED:
+        return "HANDOFF_FAILED";
+      default:
+        return "UNKNOWN";
     }
   }
 
@@ -132,12 +235,15 @@ private:
   rclcpp::Publisher<SafetyHardwareState>::SharedPtr hardware_publisher_;
   rclcpp::Publisher<arm_cell_interfaces::msg::MaterialHandoffState>::SharedPtr
     material_handoff_publisher_;
-  rclcpp::Service<arm_cell_interfaces::srv::RequestMaterial>::SharedPtr
-    material_request_service_;
+  rclcpp::Subscription<arm_cell_interfaces::msg::HandoffTrigger>::SharedPtr
+    accepted_handoff_subscription_;
   std::vector<rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr> fault_services_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr safety_signal_loss_service_;
+  rclcpp::TimerBase::SharedPtr safety_signal_loss_timer_;
   rclcpp::TimerBase::SharedPtr timer_;
   std::chrono::milliseconds degraded_publish_period_{0};
   std::chrono::steady_clock::time_point last_external_publish_{};
+  std::map<std::array<uint8_t, 16>, uint8_t> last_material_phases_;
 };
 
 }  // namespace arm_cell_vda_adapter

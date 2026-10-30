@@ -1,0 +1,38 @@
+<root main_tree_to_execute="MotionTask">
+  <BehaviorTree ID="MotionTask">
+    <Fallback name="MotionTaskDispatch">
+      <Sequence name="PickPlannedTask">
+        <IsTask type="PICK"/>
+        <IsStrategy task="PICK" strategy="PLANNED"/>
+        <SubTree ID="PickCandidateSearch"/>
+      </Sequence>
+      <Sequence name="PickWaypointTask">
+        <IsTask type="PICK"/>
+        <IsStrategy task="PICK" strategy="WAYPOINT"/>
+        <UnsupportedWaypoint task="PICK"/>
+      </Sequence>
+      <Sequence name="PlacePlannedTask">
+        <IsTask type="PLACE"/>
+        <IsStrategy task="PLACE" strategy="PLANNED"/>
+        <SubTree ID="PlaceExecution"/>
+      </Sequence>
+      <Sequence name="PlaceWaypointTask">
+        <IsTask type="PLACE"/>
+        <IsStrategy task="PLACE" strategy="WAYPOINT"/>
+        <SubTree ID="PlaceExecution"/>
+      </Sequence>
+      <Sequence name="ReturnHeldTask">
+        <IsTask type="RETURN_HELD"/>
+        <ReturnHeldToTray/>
+      </Sequence>
+      <Sequence name="GoHomeTask">
+        <IsTask type="GO_HOME"/>
+        <ExecuteDirectTask/>
+      </Sequence>
+      <Sequence name="RetractTask">
+        <IsTask type="RETRACT"/>
+        <ExecuteDirectTask/>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+</root>

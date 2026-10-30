@@ -1,0 +1,11 @@
+uint8 STATE_CALIBRATING=0
+uint8 STATE_READY=1
+uint8 STATE_NEEDS_CALIBRATION=2
+
+std_msgs/Header header
+uint8 state
+uint32 accepted_frames
+uint32 required_frames
+float64 median_depth_residual_m
+geometry_msgs/TransformStamped tray_from_camera
+string diagnostic_detail

@@ -117,28 +117,38 @@ class ValidationSessionOwner:
         # across timeline STOP. They belong to the Kit app runtime and are
         # needed when Play resumes; after_play reruns replace them explicitly.
         session = self._session
-        joint_remaining = (
-            self._joint_remaining(session) if self._runtime is not None else False
-        )
+        reset_simulation = getattr(session, "reset_for_simulation_stop", None)
+        if callable(reset_simulation):
+            try:
+                result = bool(reset_simulation()) and result
+            except Exception as error:
+                result = False
+                print(f"[WU-14] Gripper simulation reset failed: {error}")
+        joint_remaining = self._joint_remaining(session)
         if joint_remaining:
             result = False
-        if self._runtime is not None:
-            self._clear_registry()
-        if not self._remove_owned_fixture():
-            result = False
+        failed_callbacks = {}
+        if result:
+            for name, callback in tuple(self._cleanup_callbacks.items()):
+                try:
+                    if callback() is False:
+                        result = False
+                        failed_callbacks[name] = callback
+                except Exception as error:
+                    result = False
+                    failed_callbacks[name] = callback
+                    print(f"[WU-14] validation cleanup callback failed: {error}")
+        self._cleanup_callbacks = failed_callbacks
+        if result:
+            if self._runtime is not None:
+                self._clear_registry()
+            if not self._remove_owned_fixture():
+                result = False
+            if not self._clear_artifacts(self._environment):
+                result = False
         fixture_remaining = self._fixture_remaining()
         if fixture_remaining:
             result = False
-        if not self._clear_artifacts(self._environment):
-            result = False
-        for callback in tuple(self._cleanup_callbacks.values()):
-            try:
-                if callback() is False:
-                    result = False
-            except Exception as error:
-                result = False
-                print(f"[WU-14] validation cleanup callback failed: {error}")
-        self._cleanup_callbacks.clear()
         for name, subscription in tuple(self._subscriptions.items()):
             if name != "runtime_physics":
                 self._unsubscribe(subscription)
@@ -146,6 +156,7 @@ class ValidationSessionOwner:
         callbacks_remaining = bool(self._subscriptions)
         if callbacks_remaining:
             result = False
+        self._teardown_complete = result
         self._clear_validation_state()
         if self._namespace is not None:
             self._namespace["pnp_validation_session_owner"] = self
@@ -184,6 +195,15 @@ class ValidationSessionOwner:
     @staticmethod
     def _joint_remaining(session):
         manager = getattr(session, "grasp_manager", None)
+        if manager is None:
+            return False
+        joint_owner = getattr(manager, "joint_owner", None)
+        owned_path = getattr(joint_owner, "owned_joint_path", None)
+        if owned_path is not None:
+            return bool(owned_path)
+        has_joint = getattr(joint_owner, "has_owned_joint", None)
+        if callable(has_joint):
+            return bool(has_joint())
         return bool(getattr(manager, "attach_joint_path", None))
 
     def _remove_owned_fixture(self):

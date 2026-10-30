@@ -29,13 +29,12 @@ struct SensorSample
 {
   std::optional<int64_t> stamp_ns;
   std::optional<int64_t> receipt_monotonic_ns;
-  int32_t width;
-  int32_t height;
+  int32_t width = 0;
+  int32_t height = 0;
   std::string frame_id;
 };
 
-// This is an internal adapter-to-policy value. The ROS adapter owns bounded
-// RGB/depth association and supplies independently validated cached CameraInfo.
+// Depth defines an observation. RGB is optional presentation/calibration data.
 struct SynchronizedObservationCandidate
 {
   SensorSample rgb;
@@ -90,6 +89,7 @@ public:
     std::optional<int64_t> current_sensor_stamp_ns = std::nullopt);
   static bool is_compatible_candidate(const SynchronizedObservationCandidate & candidate);
   IngressResult check_deadline(int64_t now_monotonic_ns);
+  IngressResult end_acquisition();
   IngressResult reset_after_lifecycle();
   IngressResult invalidate_epoch_from_clock();
 

@@ -1,6 +1,6 @@
 # ROS 2 Humble Docker Build Guide
 
-This guide builds the public v0.2.0 ARM Cell ROS 2 workspace with the repository's Dockerfile. It produces a build image; it does not start ROS nodes or Isaac Sim.
+This guide builds the current ARM Cell ROS 2 workspace with the repository's Dockerfile. It produces a build image; it does not start ROS nodes or Isaac Sim.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ cd sftwin-arm-cell
 docker build --progress=plain -t sftwin-arm-cell:humble .
 ```
 
-The Dockerfile installs build tools and dependencies with `rosdep`, then runs:
+The Dockerfile installs build tools and compile dependencies with `rosdep`, explicitly skips the unavailable Humble TRAC-IK runtime plugin, then runs:
 
 ```bash
 colcon build --packages-up-to arm_cell_bringup
@@ -32,7 +32,7 @@ A successful build exits with status 0 and BuildKit reports the resulting image 
 
 ## Scope of this check
 
-This verifies image construction and compilation of the ROS workspace through `arm_cell_bringup`. It does not run the resulting ROS applications, connect to ROS middleware, or launch Isaac Sim. For Isaac Sim setup and live operation, see the [ARM Cell Isaac Sim guide](arm-cell-isaac-sim.md).
+This verifies image construction and compilation of the ROS workspace through `arm_cell_bringup`. It does not run the resulting ROS applications, connect to ROS middleware, or launch Isaac Sim. The build image skips the TRAC-IK runtime plugin because no Humble binary package is available in the configured repositories. A runtime environment using the default IK profile must provide `trac_ik_kinematics_plugin` separately. For Isaac Sim setup and live operation, see the [ARM Cell Isaac Sim guide](arm-cell-isaac-sim.md).
 
 ## Common environment issues
 

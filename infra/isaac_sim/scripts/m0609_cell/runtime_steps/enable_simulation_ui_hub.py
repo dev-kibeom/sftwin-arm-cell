@@ -36,10 +36,16 @@ def enable_simulation_ui_hub():
     python_path = str(extension_path / "python")
     if python_path not in sys.path:
         sys.path.insert(0, python_path)
+    package_path = Path(python_path) / "arm_cell_simulation_ui_hub"
+    bytecode_cache = package_path / "__pycache__"
+    if bytecode_cache.is_dir():
+        for bytecode_path in bytecode_cache.glob("*.pyc"):
+            bytecode_path.unlink(missing_ok=True)
     importlib.invalidate_caches()
     for module_name in (
         "arm_cell_simulation_ui_hub.sidecar",
         "arm_cell_simulation_ui_hub.runtime",
+        "arm_cell_simulation_ui_hub.extension",
     ):
         module = sys.modules.get(module_name)
         if module is not None:
@@ -49,4 +55,5 @@ def enable_simulation_ui_hub():
 
 
 if __name__ == "__main__":
-    print(f"Simulation UI Hub enabled: {enable_simulation_ui_hub()}")
+    enabled = enable_simulation_ui_hub()
+    print("Simulation UI Hub is enabled and available in this Kit session.")

@@ -4,7 +4,11 @@ import importlib.util
 from pathlib import Path
 
 from launch import LaunchContext
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch_ros.actions import Node
 
 
@@ -28,11 +32,16 @@ def test_combined_launch_connects_integration_to_existing_pnp_composition():
         isinstance(action, DeclareLaunchArgument) and action.name == "profile"
         for action in actions
     )
+    adapter_action = next(
+        action for action in actions if isinstance(action, OpaqueFunction)
+    )
+    context = LaunchContext()
+    nodes = adapter_action._OpaqueFunction__function(context)
     integration = [
         action
-        for action in actions
+        for action in nodes
         if isinstance(action, Node)
-        and action.node_package == "arm_cell_integration"
+        and action.node_package == "arm_cell_gateway"
         and action.node_executable == "material_handoff_node"
     ]
     assert len(integration) == 1

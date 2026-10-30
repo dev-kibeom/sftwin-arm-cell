@@ -28,7 +28,7 @@ def _module():
 
 def _handoff():
     return {
-        "schema_version": "wu14-pnp-registration/v1",
+        "schema_version": "wu14-pnp-registration/v2",
         "status": "FIXTURE_READY_FOR_REGISTRATION",
         "run_id": "run-1",
         "target_id": "cube_profile",
@@ -42,7 +42,7 @@ def _handoff():
                 "z": 0.84,
                 "yaw": 0.25,
             },
-            "has_target_yaw": True,
+            "orientation_symmetry_order": 1,
             "ttl_s": 30.0,
         },
         "fixture": {
@@ -86,9 +86,55 @@ def test_request_mapping_preserves_context_pose_frame_and_ttl(monkeypatch):
     assert request.run_id == "run-1"
     assert request.pose.header.frame_id == "base_link"
     assert request.pose.pose.position.z == pytest.approx(0.84)
-    assert request.has_target_yaw is True
+    assert request.orientation_symmetry_order == 1
     assert request.ttl.sec == 30
     assert request.ttl.nanosec == 0
+
+
+def test_order_zero_leaves_the_registration_quaternion_unusable(monkeypatch):
+    module = _module()
+
+    class Message:
+        def __init__(self):
+            self.header = SimpleNamespace(frame_id="", stamp=None)
+            self.pose = SimpleNamespace(
+                position=SimpleNamespace(x=0.0, y=0.0, z=0.0),
+                orientation=SimpleNamespace(x=0.0, y=0.0, z=0.0, w=0.0),
+            )
+
+    class Duration:
+        def __init__(self, sec=0, nanosec=0):
+            self.sec = sec
+            self.nanosec = nanosec
+
+    monkeypatch.setitem(
+        sys.modules, "geometry_msgs.msg", SimpleNamespace(PoseStamped=Message)
+    )
+    monkeypatch.setitem(
+        sys.modules, "builtin_interfaces.msg", SimpleNamespace(Duration=Duration)
+    )
+
+    class Request:
+        pass
+
+    handoff = _handoff()
+    handoff["request"]["orientation_symmetry_order"] = 0
+    request = module.request_from_handoff(handoff, Request)
+
+    assert request.orientation_symmetry_order == 0
+    assert request.pose.pose.orientation.z == 0.0
+    assert request.pose.pose.orientation.w == 0.0
+
+
+def test_unknown_orientation_symmetry_order_is_rejected(tmp_path):
+    module = _module()
+    handoff = _handoff()
+    handoff["request"]["orientation_symmetry_order"] = 2
+    path = tmp_path / "handoff.json"
+    path.write_text(json.dumps(handoff))
+
+    with pytest.raises(ValueError, match="orientation symmetry order"):
+        module.load_handoff(path)
 
 
 def test_receipt_requires_acceptance_and_positive_receipt_fields():

@@ -11,7 +11,7 @@ import tempfile
 from .fixture import ValidationManifest
 
 
-HANDOFF_SCHEMA_VERSION = "wu14-pnp-registration/v1"
+HANDOFF_SCHEMA_VERSION = "wu14-pnp-registration/v2"
 CLEANUP_HANDOFF_SCHEMA_VERSION = "wu14-pnp-cleanup/v1"
 
 
@@ -45,7 +45,7 @@ class RegistrationHandoff:
     run_id: str
     target_id: str
     pose: dict[str, object]
-    has_target_yaw: bool
+    orientation_symmetry_order: int
     ttl_s: float
     fixture_prim_identity: str
     seed: int
@@ -67,7 +67,7 @@ class RegistrationHandoff:
                 "z": pose.z,
                 "yaw": pose.yaw,
             },
-            has_target_yaw=manifest.has_target_yaw,
+            orientation_symmetry_order=manifest.orientation_symmetry_order,
             ttl_s=manifest.ttl_s,
             fixture_prim_identity=manifest.fixture_prim_identity,
             seed=manifest.seed,
@@ -85,7 +85,7 @@ class RegistrationHandoff:
                 "run_id": self.run_id,
                 "target_id": self.target_id,
                 "pose": dict(self.pose),
-                "has_target_yaw": self.has_target_yaw,
+                "orientation_symmetry_order": self.orientation_symmetry_order,
                 "ttl_s": self.ttl_s,
             },
             "fixture": {

@@ -7,27 +7,24 @@ PICK/PLACE/GO_HOME state machine.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import hashlib
 import json
 import math
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Protocol
 
-import yaml
+from gripper_runtime.robotiq_actuator import Robotiq2F85Actuator
+from scene_builder.static_environment import load_canonical_static_geometry
 
 from .fixture import (
-    Aabb,
     CleanupDecision,
     FixtureOwnership,
-    FixtureProfile,
     Pose,
     RigidTransform,
     ValidationManifest,
     cleanup_decision,
-    fixture_center_from_tcp_target,
     sample_spawn_pose,
-    SUPPORTED_GEOMETRY_FRAMES,
     top_surface_reference,
 )
 from .handoff import CLEANUP_HANDOFF_SCHEMA_VERSION, atomic_write_json
@@ -37,12 +34,26 @@ from .live_fixture import (
     cube_geometry_from_transform,
     sample_amr_top_candidate,
 )
-from gripper_runtime.grasp_attachment import CaptureReferenceConfig
-from gripper_runtime.grasp_policy import CaptureConfig
-from gripper_runtime.robotiq_actuator import Robotiq2F85Actuator
+from .profile import (
+    CANONICAL_AMR_TOP_PLANE_PATH,
+    _angular_distance,
+    capture_config_from_profile,
+    capture_reference_config_from_profile,
+    fixture_profile_from_validation_config,
+    load_validation_profile,
+    validate_validation_profile,
+)
 
+__all__ = [
+    "CANONICAL_AMR_TOP_PLANE_PATH",
+    "capture_config_from_profile",
+    "capture_reference_config_from_profile",
+    "fixture_profile_from_validation_config",
+    "load_validation_profile",
+    "validate_validation_profile",
+    "_angular_distance",
+]
 
-CANONICAL_AMR_TOP_PLANE_PATH = "/World/SF_Twin_Cell/AMR/Mockup/Tray"
 MISSION_COMPLETION_SCHEMA_VERSION = "wu14-pnp-mission-completion/v1"
 
 
@@ -89,43 +100,6 @@ def validation_start_diagnostic(grasp_manager, baseline_generation, reason):
         or bool(getattr(observation, "attached", False)),
         "owned_joint": getattr(grasp_manager, "attach_joint_path", None),
     }
-
-
-def capture_config_from_profile(profile: dict) -> CaptureConfig:
-    """Load Task 3's canonical CaptureConfig without unit conversion."""
-    capture = profile.get("capture", {})
-    if "orientation_tolerance_rad" in capture:
-        raise ValueError(
-            "validation capture profile must use orientation_tolerance_deg"
-        )
-    return CaptureConfig(
-        capture_volume_dimensions_m=tuple(capture["volume_dimensions_m"]),
-        position_tolerance_m=float(capture["position_tolerance_m"]),
-        orientation_tolerance_deg=float(capture["orientation_tolerance_deg"]),
-        expected_contact_width_mm=float(capture["expected_contact_width_mm"]),
-        contact_width_tolerance_mm=float(capture["contact_width_tolerance_mm"]),
-    ).validate()
-
-
-def capture_reference_config_from_profile(profile: dict) -> CaptureReferenceConfig:
-    """Load the validation fixture geometry used by Isaac capture queries."""
-    fixture = profile["fixture"]
-    motion = profile["motion"]
-    observation_to_object = motion["observation_to_object_translation"]
-    translation = motion["object_to_grasp_tcp_translation"]
-    if len(observation_to_object) != 3 or len(translation) != 3:
-        raise ValueError(
-            "observation and object grasp transforms must have three values"
-        )
-    config = CaptureReferenceConfig(
-        fixture_dimensions_m=tuple(float(value) for value in fixture["dimensions_m"]),
-        observation_to_grasp_tcp_m=float(observation_to_object[2])
-        + float(translation[2]),
-        insertion_axis_tcp=tuple(
-            float(value) for value in motion["insertion_axis_tcp"]
-        ),
-    )
-    return config.validate()
 
 
 def prepare_validation_start_state(grasp_manager) -> bool:
@@ -262,192 +236,6 @@ def validation_start_state_ready(grasp_manager, baseline_generation) -> bool:
     return True
 
 
-def validate_validation_profile(profile: dict) -> dict:
-    """Reject validation recipes that cannot fit the configured 2F-85 aperture."""
-    capture_config_from_profile(profile)
-    open_readiness_timeout_s = float(
-        profile.get("validation", {}).get("open_readiness_timeout_s", 2.0)
-    )
-    if not math.isfinite(open_readiness_timeout_s) or open_readiness_timeout_s <= 0.0:
-        raise ValueError("validation open_readiness_timeout_s must be positive")
-    fixture = profile["fixture"]
-    geometry_frame = fixture.get("geometry_frame")
-    support_surface_id = fixture.get("support_surface_id", CANONICAL_AMR_TOP_PLANE_PATH)
-    support_surface_frame = fixture.get("support_surface_frame", "amr_top")
-    if geometry_frame not in SUPPORTED_GEOMETRY_FRAMES:
-        raise ValueError("fixture geometry_frame must be explicitly supported")
-    place = profile.get("place", {})
-    tolerance = float(place.get("position_tolerance_m", 0.0))
-    if not math.isfinite(tolerance) or tolerance <= 0.0:
-        raise ValueError("PLACE position_tolerance_m must be positive and finite")
-    if not isinstance(support_surface_id, str) or not support_surface_id.startswith(
-        "/"
-    ):
-        raise ValueError("fixture support_surface_id must be a canonical prim path")
-    if support_surface_frame != "amr_top":
-        raise ValueError("fixture support_surface_frame must be amr_top")
-    dimensions_m = tuple(float(value) for value in fixture["dimensions_m"])
-    if len(dimensions_m) != 3 or any(value <= 0.0 for value in dimensions_m):
-        raise ValueError("fixture dimensions must contain three positive values")
-
-    # The deterministic top-grasp recipe uses the fixture X dimension as its
-    # declared grasp dimension; X and Y are equal in the validation profile.
-    grasp_dimension_mm = dimensions_m[0] * 1000.0
-    if grasp_dimension_mm > Robotiq2F85Actuator.MAX_WIDTH_MM:
-        raise ValueError("fixture grasp dimension exceeds Robotiq 2F-85 opening")
-    expected_width_mm = float(profile["capture"]["expected_contact_width_mm"])
-    if not math.isclose(grasp_dimension_mm, expected_width_mm, abs_tol=1e-9):
-        raise ValueError(
-            "fixture grasp dimension and capture expected contact width must match"
-        )
-    motion = profile["motion"]
-    observation_translation = motion.get("observation_to_object_translation")
-    if (
-        not isinstance(observation_translation, list)
-        or len(observation_translation) != 3
-        or not all(math.isfinite(float(value)) for value in observation_translation)
-    ):
-        raise ValueError(
-            "validation observation_to_object_translation must have three finite values"
-        )
-    observation_reference = motion.get("observation_reference")
-    if not isinstance(observation_reference, str) or not observation_reference:
-        raise ValueError("validation fixture observation reference is not declared")
-    if not math.isclose(float(observation_translation[0]), 0.0, abs_tol=1e-9):
-        raise ValueError("validation observation_to_object_translation x must be zero")
-    if not math.isclose(float(observation_translation[1]), 0.0, abs_tol=1e-9):
-        raise ValueError("validation observation_to_object_translation y must be zero")
-    if not math.isclose(
-        float(observation_translation[2]),
-        -float(fixture["dimensions_m"][2]) * 0.5,
-        abs_tol=1e-9,
-    ):
-        raise ValueError(
-            "validation observation reference must resolve to geometric center"
-        )
-    grasp_translation = motion.get("object_to_grasp_tcp_translation")
-    if (
-        not isinstance(grasp_translation, list)
-        or len(grasp_translation) != 3
-        or not all(math.isfinite(float(value)) for value in grasp_translation)
-    ):
-        raise ValueError(
-            "validation object_to_grasp_tcp_translation must have three finite values"
-        )
-    if not math.isclose(float(grasp_translation[0]), 0.0, abs_tol=1e-9):
-        raise ValueError("validation object_to_grasp_tcp_translation x must be zero")
-    if not math.isclose(float(grasp_translation[1]), 0.0, abs_tol=1e-9):
-        raise ValueError("validation object_to_grasp_tcp_translation y must be zero")
-    if motion.get("object_to_grasp_tcp_quaternion") != [1.0, 0.0, 0.0, 0.0]:
-        raise ValueError(
-            "validation tool convention must use the canonical TCP X-180 quaternion"
-        )
-    if motion.get("insertion_axis_tcp") != [0.0, 0.0, 1.0]:
-        raise ValueError(
-            "validation insertion_axis_tcp must be the physical TCP +Z axis"
-        )
-    if not math.isclose(
-        float(motion.get("pick_approach_distance_m")), 0.05, abs_tol=1e-9
-    ):
-        raise ValueError("validation pick_approach_distance_m must remain 0.05 m")
-    recipe = fixture.get("grasp_recipe")
-    if not isinstance(recipe, dict):
-        raise ValueError("validation fixture grasp_recipe is required")
-    band = recipe.get("measured_contact_band_m")
-    selected_offset = recipe.get("object_top_to_grasp_tcp_z_m")
-    if (
-        not isinstance(band, list)
-        or len(band) != 2
-        or not all(math.isfinite(float(value)) for value in band)
-        or float(band[0]) >= float(band[1])
-        or not math.isfinite(float(selected_offset))
-        or not float(band[0]) <= float(selected_offset) <= float(band[1])
-    ):
-        raise ValueError("validation grasp recipe contact band is invalid")
-    if not math.isclose(
-        float(observation_translation[2]) + float(grasp_translation[2]),
-        float(selected_offset),
-        abs_tol=1e-9,
-    ):
-        raise ValueError(
-            "validation motion grasp offset must match fixture recipe offset"
-        )
-    if motion.get("validation_grasp_contact_policy_enabled") is not True:
-        raise ValueError("validation grasp contact policy must be explicitly enabled")
-    policy_links = motion.get("validation_grasp_contact_links")
-    if policy_links != [
-        "gripper_robotiq_85_left_finger_tip_link",
-        "gripper_robotiq_85_right_finger_tip_link",
-    ]:
-        raise ValueError("validation grasp policy must allow only both fingertip links")
-    prefix = motion.get("validation_grasp_contact_object_id_prefix")
-    if not isinstance(prefix, str) or not prefix.startswith("wu14_fixture_"):
-        raise ValueError("validation grasp policy fixture prefix is invalid")
-    return profile
-
-
-def _angular_distance(first: float, second: float) -> float:
-    return abs((first - second + math.pi) % (2.0 * math.pi) - math.pi)
-
-
-def load_validation_profile(path: str | Path) -> dict:
-    profile_path = Path(path)
-    profile = yaml.safe_load(profile_path.read_text()) or {}
-    orchestration = profile.get("orchestration", {})
-    target_id = orchestration.get("mission_target_id")
-    recipe_directory = orchestration.get("recipe_directory", "recipes")
-    if not isinstance(target_id, str) or not target_id:
-        raise ValueError("validation profile must select a mission target_id")
-    recipe_path = profile_path.parent / recipe_directory / f"{target_id}.json"
-    profile["_mission_recipe"] = json.loads(recipe_path.read_text())
-    return validate_validation_profile(profile)
-
-
-def fixture_profile_from_validation_config(config: dict) -> FixtureProfile:
-    """Build the pure fixture profile shared by Isaac validation entrypoints."""
-    fixture = config["fixture"]
-    bounds = fixture["spawn_bounds_m"]
-    orchestration = config["orchestration"]
-    recipe = config["_mission_recipe"]
-    motion = config["motion"]
-    expected_base = fixture_center_from_tcp_target(
-        tcp_position=recipe["place"]["desired_object_pose"]["position"],
-        tcp_quaternion_xyzw=recipe["place"]["desired_object_pose"]["orientation_xyzw"],
-        object_to_tcp_translation=motion["object_to_grasp_tcp_translation"],
-        object_to_tcp_quaternion_xyzw=motion["object_to_grasp_tcp_quaternion"],
-    )
-    return FixtureProfile(
-        target_id=recipe["target_id"],
-        fixture_dimensions=tuple(fixture["dimensions_m"]),
-        spawn_bounds=Aabb(tuple(bounds["min"]), tuple(bounds["max"])),
-        excluded_volumes=tuple(
-            Aabb(tuple(volume["min"]), tuple(volume["max"]))
-            for volume in fixture["excluded_volumes_m"]
-        ),
-        seed=int(fixture["seed"]),
-        expected_fixture_release_position_base=expected_base,
-        place_position_tolerance_m=float(config["place"]["position_tolerance_m"]),
-        geometry_frame=fixture["geometry_frame"],
-        orientation_tolerance_rad=math.radians(
-            float(config["capture"]["orientation_tolerance_deg"])
-        ),
-        registration_ttl_s=float(config["validation"]["registration_ttl_s"]),
-        max_registration_ttl_s=float(config["validation"]["registration_ttl_max_s"]),
-        deletion_delay_s=float(config["place"]["deletion_delay_s"]),
-        holding_freshness_ms=float(
-            config["validation"].get("holding_freshness_ms", 500.0)
-        ),
-        open_readiness_timeout_s=float(
-            config["validation"].get("open_readiness_timeout_s", 2.0)
-        ),
-        support_surface_id=fixture.get(
-            "support_surface_id", CANONICAL_AMR_TOP_PLANE_PATH
-        ),
-        support_surface_frame=fixture.get("support_surface_frame", "amr_top"),
-        spawn_clearance_m=float(fixture.get("spawn_clearance_m", 0.001)),
-    )
-
-
 class FixtureRuntime(Protocol):
     """Thin Isaac-facing seam injected by the live runner."""
 
@@ -529,7 +317,7 @@ class IsaacFixtureRuntime:
     OWNER_KEY = "sf_twin:validation_fixture_owner"
     OWNER_VALUE = "wu14_validation_fixture"
     AMR_TOP_PLANE_PATH = CANONICAL_AMR_TOP_PLANE_PATH
-    AMR_RAW_SLOT_PATH = "/World/SF_Twin_Cell/AMR/Mockup/TraySlots/RawSlot"
+    AMR_TRAY_PATH = "/World/SF_Twin_Cell/AMR/Mockup/Tray"
 
     def __init__(
         self,
@@ -564,7 +352,7 @@ class IsaacFixtureRuntime:
 
     @staticmethod
     def _new_registry():
-        from gripper_runtime.grasp_attachment import EligibleObjectRegistry
+        from gripper_runtime.grasp_stage import EligibleObjectRegistry
 
         return EligibleObjectRegistry()
 
@@ -624,7 +412,6 @@ class IsaacFixtureRuntime:
 
     def _default_cube(self, prim_path, world_pose, dimensions):
         import numpy as np
-
         from scene_builder.primitives import dynamic_box
 
         colors = np.array([0.52, 0.36, 0.20])
@@ -825,12 +612,12 @@ class IsaacFixtureRuntime:
             "rail_provenance": rail_provenance,
         }
 
-    def read_raw_slot_geometry(self, canonical_path=None):
-        """Read the exact RawSlot primitive for candidate-source provenance."""
-        path = canonical_path or self.AMR_RAW_SLOT_PATH
+    def read_tray_geometry(self, canonical_path=None):
+        """Read the canonical Tray support for candidate-source provenance."""
+        path = canonical_path or self.AMR_TRAY_PATH
         prim = self.stage.GetPrimAtPath(path)
         if prim is None or not prim.IsValid():
-            raise RuntimeError(f"missing canonical AMR RawSlot prim: {path}")
+            raise RuntimeError(f"missing canonical AMR Tray prim: {path}")
         _, _, usd, usd_geom, _ = self._pxr_modules()
         cube = usd_geom.Cube(prim)
         size = cube.GetSizeAttr().Get() or 1.0
@@ -854,11 +641,12 @@ class IsaacFixtureRuntime:
     def assert_amr_top_plane_snapshot(
         support,
         *,
-        expected_center=(0.20, -0.85, 0.64),
-        expected_dimensions=(0.66, 0.46, 0.045),
-        expected_top_z=0.6625,
         tolerance=1e-6,
     ):
+        tray = load_canonical_static_geometry()["amr_tray"]
+        expected_center = tray["pose"]["position_m"]
+        expected_dimensions = tray["geometry"]["dimensions_m"]
+        expected_top_z = float(expected_center[2]) + float(expected_dimensions[2]) / 2
         observed_center = support["world_center_m"]
         observed_dimensions = support["world_dimensions_m"]
         if any(
@@ -1104,8 +892,7 @@ class IsaacFixtureRuntime:
                 f"norm={self._quaternion_norm(quaternion):.15f}"
             )
             print(
-                "[WU-14] world_rpy "
-                f"roll={roll:.15f} pitch={pitch:.15f} yaw={yaw:.15f}"
+                f"[WU-14] world_rpy roll={roll:.15f} pitch={pitch:.15f} yaw={yaw:.15f}"
             )
             print(
                 "[WU-14] expected_vs_actual "
@@ -1428,10 +1215,10 @@ class IsaacFixtureCommandWorker:
             payload.get("prim_path", "/World/SFTwin/ValidationFixture/Cube")
         )
         support = self.runtime.resolve_amr_top_plane()
-        raw_slot = self.runtime.read_raw_slot_geometry()
+        tray = self.runtime.read_tray_geometry()
         geometry = {
             "support_geometry": support,
-            "raw_slot_geometry": raw_slot,
+            "tray_geometry": tray,
         }
         if self.runtime._owned_path != prim_path:
             return {"prim_path": prim_path, "owned": False, **geometry}

@@ -3,6 +3,7 @@
 
 import json
 import math
+import time
 from pathlib import Path
 
 import rclpy
@@ -10,10 +11,9 @@ from geometry_msgs.msg import Pose
 from moveit_msgs.msg import CollisionObject, PlanningSceneComponents
 from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene, GetStateValidity
 from rclpy.node import Node
-from rclpy.duration import Duration
 from shape_msgs.msg import SolidPrimitive
 from tf2_geometry_msgs import do_transform_pose
-from tf2_ros import Buffer, TransformListener
+from tf2_ros import Buffer, TransformException, TransformListener
 
 
 class StaticSceneValidationError(Exception):
@@ -91,10 +91,16 @@ class StaticSceneLoader(Node):
         super().__init__("load_static_scene")
         self.declare_parameter("scene_file", "")
         self.declare_parameter("verify_nominal_state", False)
+        self.declare_parameter("tf_wait_timeout_s", 20.0)
         scene_file = self.get_parameter("scene_file").value
         if not scene_file:
             raise StaticSceneValidationError("scene_file parameter is required")
         self.artifact = load_artifact(Path(scene_file))
+        self.tf_wait_timeout_s = float(self.get_parameter("tf_wait_timeout_s").value)
+        if not math.isfinite(self.tf_wait_timeout_s) or self.tf_wait_timeout_s <= 0:
+            raise StaticSceneValidationError(
+                "tf_wait_timeout_s must be finite and greater than zero"
+            )
         self.declare_parameter("selected_ids", [])
         selected_ids = [
             str(value) for value in self.get_parameter("selected_ids").value
@@ -120,6 +126,30 @@ class StaticSceneLoader(Node):
         self.read_client = self.create_client(GetPlanningScene, "/get_planning_scene")
         self.validity_client = self.create_client(
             GetStateValidity, "/check_state_validity"
+        )
+
+    def lookup_transform_when_available(self, target_frame, source_frame):
+        """Wait while processing TF callbacks, bounded by a wall-clock deadline."""
+        deadline = time.monotonic() + self.tf_wait_timeout_s
+        while rclpy.ok():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            rclpy.spin_once(self, timeout_sec=min(0.1, remaining))
+            if self.tf_buffer.can_transform(
+                target_frame, source_frame, rclpy.time.Time()
+            ):
+                try:
+                    return self.tf_buffer.lookup_transform(
+                        target_frame, source_frame, rclpy.time.Time()
+                    )
+                except TransformException:
+                    # The tree can change between the availability check and lookup.
+                    continue
+        raise StaticSceneLoadError(
+            "TF unavailable before deadline: "
+            f"{source_frame} -> {target_frame} "
+            f"(timeout={self.tf_wait_timeout_s:.1f}s)"
         )
 
     def call(self, client, request):
@@ -181,11 +211,8 @@ class StaticSceneLoader(Node):
                 expected_pose.orientation.z,
                 expected_pose.orientation.w,
             ) = expected["pose"]["quaternion_xyzw"]
-            transform = self.tf_buffer.lookup_transform(
-                received.header.frame_id,
-                self.artifact["frame_id"],
-                rclpy.time.Time(),
-                timeout=Duration(seconds=5.0),
+            transform = self.lookup_transform_when_available(
+                received.header.frame_id, self.artifact["frame_id"]
             )
             pose = do_transform_pose(expected_pose, transform)
             actual_pose = received.pose
@@ -235,7 +262,7 @@ def main():
         node = StaticSceneLoader()
         node.apply_and_verify()
         node.get_logger().info(
-            f"Static planning scene applied and verified: {len(node.artifact['objects'])} objects"
+            f"Planning collision environment ready; static scene applied and verified: {len(node.artifact['objects'])} objects"
         )
         rclpy.spin(node)
         return 0
@@ -243,10 +270,11 @@ def main():
         OSError,
         StaticSceneValidationError,
         StaticSceneLoadError,
+        TransformException,
         json.JSONDecodeError,
     ) as error:
         rclpy.logging.get_logger("load_static_scene").error(
-            f"Static scene load failed before or during mutation: {error}"
+            f"Planning collision environment could not be prepared: {error}"
         )
         return 1
     finally:

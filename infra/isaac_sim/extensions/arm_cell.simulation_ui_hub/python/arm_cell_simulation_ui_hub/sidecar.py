@@ -28,6 +28,10 @@ _OBSERVATIONS = (
     "motion",
     "amr",
     "handoff",
+    "accepted_handoff",
+    "transfer_completion",
+    "scene_stability",
+    "vision_calibration",
     "readiness",
     "packml",
     "execute_cycle",
@@ -91,6 +95,7 @@ class IsaacRosSidecar:
             scenario_ports or OwnerScenarioPorts.from_process_registry()
         )
         self.request_state: dict[str, str] = {}
+        self.request_detail: dict[str, str] = {}
         self.fault_active = {scenario: False for scenario in VDA_MOCK_FAULT_SCENARIOS}
         self._observations = {name: f"{name}: unavailable" for name in _OBSERVATIONS}
         self._target_pixel: tuple[str, tuple[float, float] | None] = (
@@ -99,17 +104,34 @@ class IsaacRosSidecar:
         )
         self._vision_state = "unavailable"
         self._vision_overlay: dict[str, Any] | None = None
+        self._vision_detector_snapshot: dict[str, Any] | None = None
+        self._retry_detection_result: dict[str, Any] = {
+            "request_id": None,
+            "target_id": None,
+            "state": "unavailable",
+            "result_code": None,
+            "acquisition_id": "",
+            "diagnostic_detail": "Retry Detection has not been requested",
+            "snapshot": None,
+        }
+        self._vision_calibration_result: dict[str, Any] = {
+            "request_id": None,
+            "state": "ready",
+            "message": "",
+        }
+        self._retry_detection_eligibility = (False, "Owner observations unavailable")
         self._camera_frame: tuple[Any, int, int] | None = None
         self._camera_identity: tuple[float, str] | None = None
         self._video_mode = "LIVE"
-        self._display_source = "rgb"
-        self._display_status = "RGB · LIVE"
+        self._display_source = "none"
+        self._display_status = "DIAGNOSTIC VIDEO OFF"
         self._sidecar_available: bool | None = None
         self._sidecar_camera_frame_available: bool | None = None
         self._closed = False
         self._rpc_broken = False
         self._fault_rpc_in_flight = False
         self._last_poll_at = 0.0
+        self._tf_buffer_clear_pending = False
         ready = self._read_message()
         if not ready.get("ready"):
             self.close()
@@ -150,25 +172,58 @@ class IsaacRosSidecar:
         if now - self._last_poll_at < _UI_POLL_INTERVAL_SECONDS:
             return
         self._last_poll_at = now
+        clear_tf_buffer = getattr(self, "_tf_buffer_clear_pending", False)
         try:
             response = self._rpc(
                 {
                     "op": "poll",
-                    "force_camera_frame": self._camera_frame is None,
-                    "display_source": getattr(self, "_display_source", "rgb"),
+                    "force_camera_frame": (
+                        self._camera_frame is None
+                        and getattr(self, "_display_source", "none") != "none"
+                    ),
+                    "display_source": getattr(self, "_display_source", "none"),
+                    "clear_tf_buffer": clear_tf_buffer,
                 }
             )
             if response.get("ready") is False:
                 raise RuntimeError("Hub ROS observation process is unavailable")
-        except (OSError, RuntimeError, json.JSONDecodeError):
+        except (OSError, RuntimeError, json.JSONDecodeError) as error:
             self._rpc_broken = True
-            self._mark_sidecar_unavailable()
+            self._mark_sidecar_unavailable(str(error))
             return
+        if clear_tf_buffer:
+            self._tf_buffer_clear_pending = False
         if self._sidecar_available is False:
             _LOGGER.info("Hub operator video sidecar recovered")
         self._sidecar_available = True
         self._observations.update(response.get("observations", {}))
         self.request_state.update(response.get("requests", {}))
+        if not hasattr(self, "request_detail"):
+            self.request_detail = {}
+        self.request_detail.update(response.get("request_details", {}))
+        retry_result = response.get("retry_detection_result")
+        if retry_result is not None and retry_result.get("request_id") == getattr(
+            self, "_retry_detection_result", {}
+        ).get("request_id"):
+            snapshot = retry_result.get("snapshot")
+            if snapshot is not None and "image_data_b64" in snapshot:
+                snapshot = dict(snapshot)
+                encoded = snapshot.pop("image_data_b64")
+                try:
+                    snapshot["image_data"] = base64.b64decode(encoded, validate=True)
+                except (ValueError, TypeError):
+                    snapshot["image_data"] = b""
+                    snapshot["transfer_error"] = "Snapshot image transfer failed"
+                retry_result = {**retry_result, "snapshot": snapshot}
+            self._retry_detection_result = retry_result
+        calibration_result = response.get("vision_calibration_result")
+        if calibration_result is not None and calibration_result.get(
+            "request_id"
+        ) == getattr(self, "_vision_calibration_result", {}).get("request_id"):
+            self._vision_calibration_result = calibration_result
+        if "retry_detection_eligibility" in response:
+            eligible, reason = response["retry_detection_eligibility"]
+            self._retry_detection_eligibility = (bool(eligible), str(reason))
         self.fault_active.update(response.get("fault_active", {}))
         target = response.get("target_pixel", {})
         pixel = target.get("pixel")
@@ -178,6 +233,26 @@ class IsaacRosSidecar:
         )
         self._vision_state = response.get("vision_state", "unavailable")
         self._vision_overlay = response.get("vision_overlay")
+        if response.get("vision_detector_snapshot_changed"):
+            snapshot = response.get("vision_detector_snapshot")
+            if snapshot is not None:
+                try:
+                    self._vision_detector_snapshot = {
+                        **snapshot,
+                        "image_data": base64.b64decode(
+                            snapshot.get("image_data_b64", ""), validate=True
+                        ),
+                    }
+                except (ValueError, TypeError) as error:
+                    _LOGGER.warning(
+                        "Hub Vision Snapshot transfer unavailable: %s", error
+                    )
+                    _LOGGER.debug("Hub Vision Snapshot transfer detail: %s", error)
+                    self._vision_detector_snapshot = {
+                        **snapshot,
+                        "image_data": b"",
+                        "transfer_error": "Snapshot image transfer failed",
+                    }
         self._video_mode = response.get("video_mode", "LIVE")
         self._display_source = response.get(
             "display_source", getattr(self, "_display_source", "rgb")
@@ -218,11 +293,15 @@ class IsaacRosSidecar:
                 self._vision_state = "unavailable"
                 self._vision_overlay = None
                 if self._sidecar_camera_frame_available is not False:
-                    _LOGGER.warning("Hub raw camera frame unavailable")
+                    _LOGGER.warning("Hub raw camera frame unavailable: %s", error)
                     _LOGGER.debug("Hub raw camera frame transfer detail: %s", error)
                 self._sidecar_camera_frame_available = False
 
-    def _mark_sidecar_unavailable(self) -> None:
+    def clear_tf_buffer(self) -> None:
+        """Queue a TF reset for the ROS process without blocking the Kit thread."""
+        self._tf_buffer_clear_pending = True
+
+    def _mark_sidecar_unavailable(self, cause="ROS sidecar disconnected") -> None:
         for name in _OBSERVATIONS:
             self._observations[name] = f"{name}: unavailable"
         self._camera_frame = None
@@ -236,8 +315,17 @@ class IsaacRosSidecar:
         for request_id, state in tuple(request_state.items()):
             if state == "pending":
                 request_state[request_id] = "failed: ROS sidecar unavailable"
+        retry_result = getattr(self, "_retry_detection_result", None)
+        if retry_result is not None and retry_result.get("state") == "pending":
+            retry_result.update(
+                {
+                    "state": "failed",
+                    "diagnostic_detail": "ROS sidecar unavailable",
+                    "snapshot": None,
+                }
+            )
         if self._sidecar_available is not False:
-            _LOGGER.warning("Hub operator video sidecar unavailable")
+            _LOGGER.warning("Hub operator video sidecar unavailable: %s", cause)
         self._sidecar_available = False
 
     def camera_frame_rgba(self) -> tuple[Any, int, int] | None:
@@ -258,13 +346,68 @@ class IsaacRosSidecar:
     def vision_display(self) -> tuple[str, dict[str, Any] | None]:
         return self._vision_state, self._vision_overlay
 
+    def vision_detector_snapshot(self) -> dict[str, Any] | None:
+        return self._vision_detector_snapshot
+
+    def retry_detection_result(self) -> dict[str, Any]:
+        return dict(self._retry_detection_result)
+
+    @property
+    def retry_detection_inflight(self) -> bool:
+        return self._retry_detection_result.get("state") == "pending"
+
+    def retry_detection_eligibility(self) -> tuple[bool, str]:
+        if self._rpc_broken or self._closed:
+            return False, "Hub ROS sidecar is unavailable"
+        return self._retry_detection_eligibility
+
+    def request_retry_detection(self, target_id: str) -> tuple[str, None]:
+        if self._fault_rpc_in_flight or self._rpc_broken or self._closed:
+            raise RuntimeError("Hub ROS sidecar is busy or unavailable")
+        response = self._rpc({"op": "request_retry_detection", "target_id": target_id})
+        self._retry_detection_result = response["retry_detection_result"]
+        return str(self._retry_detection_result["request_id"]), None
+
+    def vision_calibration_result(self) -> dict[str, Any]:
+        return dict(self._vision_calibration_result)
+
+    def request_vision_calibration(self) -> tuple[str, None]:
+        if self._vision_calibration_result.get("state") == "pending":
+            return str(self._vision_calibration_result["request_id"]), None
+        if self._fault_rpc_in_flight or self._rpc_broken or self._closed:
+            raise RuntimeError("Hub ROS sidecar is busy or unavailable")
+        response = self._rpc({"op": "request_vision_calibration"})
+        self._vision_calibration_result = response["vision_calibration_result"]
+        return str(self._vision_calibration_result["request_id"]), None
+
+    def request_gripper_open(
+        self, object_supported: bool, release_area_clear: bool
+    ) -> tuple[str, None]:
+        """Forward an operator release request to the Motion service client."""
+        if self._fault_rpc_in_flight or self._rpc_broken or self._closed:
+            raise RuntimeError("Hub ROS sidecar is busy or unavailable")
+        response = self._rpc(
+            {
+                "op": "request_gripper_open",
+                "object_supported": bool(object_supported),
+                "release_area_clear": bool(release_area_clear),
+            }
+        )
+        request_id = str(response["request_id"])
+        self.request_state[request_id] = response["state"]
+        if response.get("diagnostic_detail"):
+            self.request_detail[request_id] = response["diagnostic_detail"]
+        return request_id, None
+
     def video_mode(self) -> str:
         return self._video_mode
 
     def set_display_source(self, source_id: str) -> None:
-        if source_id not in {"rgb", "depth"}:
+        if source_id not in {"none", "rgb", "depth", "tray"}:
             raise ValueError(f"unsupported Hub display source: {source_id}")
         self._display_source = source_id
+        self._camera_frame = None
+        self._camera_identity = None
 
     def display_source(self) -> str:
         return self._display_source
@@ -275,21 +418,33 @@ class IsaacRosSidecar:
     def observation_text(self, name: str, *, now: float | None = None) -> str:
         return self._observations.get(name, f"{name}: unavailable")
 
-    def request_material(self) -> tuple[str, None]:
-        if self._fault_rpc_in_flight or self._rpc_broken:
-            raise RuntimeError("Hub ROS sidecar is busy or unavailable")
-        response = self._rpc({"op": "request_material"})
-        request_id = response["request_id"]
-        self.request_state[request_id] = response["state"]
-        return request_id, None
-
     def acknowledge_and_reset(self) -> tuple[str, None]:
         if self._fault_rpc_in_flight or self._rpc_broken:
             raise RuntimeError("Hub ROS sidecar is busy or unavailable")
         response = self._rpc({"op": "acknowledge_and_reset"})
         request_id = response["request_id"]
         self.request_state[request_id] = response["state"]
+        self.request_detail[request_id] = response.get("diagnostic_detail", "")
         return request_id, None
+
+    def publish_handoff_trigger(
+        self,
+        material_type: str,
+        quantity: int,
+        *,
+        random_seed: int | None = None,
+    ) -> str:
+        if self._fault_rpc_in_flight or self._rpc_broken:
+            raise RuntimeError("Hub ROS sidecar is busy or unavailable")
+        response = self._rpc(
+            {
+                "op": "publish_handoff_trigger",
+                "material_type": material_type,
+                "quantity": quantity,
+                "random_seed": random_seed,
+            }
+        )
+        return response["delivery_id"]
 
     def set_external_fault(self, scenario: str, active: bool) -> tuple[str, None]:
         if scenario not in VDA_MOCK_FAULT_SCENARIOS:
@@ -366,6 +521,7 @@ def _serve(fd: int) -> None:
     writer = connection.makefile("wb")
     runtime = None
     last_image_identity = None
+    last_detector_snapshot_id = None
     pending_request = b""
     try:
         from .runtime import HubRuntime
@@ -414,7 +570,42 @@ def _serve(fd: int) -> None:
                     "request_id": request_id,
                     "state": runtime.request_state[request_id],
                 }
-            elif operation in ("request_material", "acknowledge_and_reset"):
+            elif operation == "request_retry_detection":
+                runtime.request_retry_detection(request["target_id"])
+                result_reader = getattr(runtime, "retry_detection_result", None)
+                result = {
+                    "retry_detection_result": result_reader() if result_reader else {}
+                }
+            elif operation == "request_vision_calibration":
+                runtime.request_vision_calibration()
+                result_reader = getattr(runtime, "vision_calibration_result", None)
+                result = {
+                    "vision_calibration_result": (
+                        result_reader() if result_reader else {}
+                    )
+                }
+            elif operation == "request_gripper_open":
+                request_id, _future = runtime.request_gripper_open(
+                    bool(request["object_supported"]),
+                    bool(request["release_area_clear"]),
+                )
+                result = {
+                    "request_id": request_id,
+                    "state": runtime.request_state[request_id],
+                    "diagnostic_detail": runtime.request_detail.get(request_id, ""),
+                }
+            elif operation == "publish_handoff_trigger":
+                delivery_id = runtime.publish_handoff_trigger(
+                    request["material_type"],
+                    int(request["quantity"]),
+                    random_seed=(
+                        None
+                        if request.get("random_seed") is None
+                        else int(request["random_seed"])
+                    ),
+                )
+                result = {"delivery_id": delivery_id}
+            elif operation == "acknowledge_and_reset":
                 method = getattr(runtime, operation)
                 request_id, _future = method()
                 result = {
@@ -422,18 +613,59 @@ def _serve(fd: int) -> None:
                     "state": runtime.request_state[request_id],
                 }
             else:
-                requested_source = request.get("display_source", "rgb")
+                if request.get("clear_tf_buffer"):
+                    runtime.clear_tf_buffer()
+                requested_source = request.get("display_source", "none")
                 if hasattr(runtime, "set_display_source"):
                     runtime.set_display_source(requested_source)
                 now = time.monotonic()
+                eligibility_reader = getattr(
+                    runtime, "retry_detection_eligibility", None
+                )
                 result = {
                     "observations": {
                         name: runtime.observation_text(name, now=now)
                         for name in _OBSERVATIONS
                     },
                     "requests": dict(runtime.request_state),
+                    "request_details": dict(getattr(runtime, "request_detail", {})),
+                    "retry_detection_result": (
+                        runtime.retry_detection_result()
+                        if hasattr(runtime, "retry_detection_result")
+                        else {}
+                    ),
+                    "vision_calibration_result": (
+                        runtime.vision_calibration_result()
+                        if hasattr(runtime, "vision_calibration_result")
+                        else {}
+                    ),
+                    "retry_detection_eligibility": (
+                        eligibility_reader()
+                        if eligibility_reader is not None
+                        else (False, "Owner observations unavailable")
+                    ),
                     "fault_active": dict(getattr(runtime, "fault_active", {})),
                 }
+                retry_result = result["retry_detection_result"]
+                if retry_result.get("snapshot") is not None:
+                    result["retry_detection_result"] = {
+                        **retry_result,
+                        "snapshot": None,
+                    }
+                snapshot_reader = getattr(runtime, "vision_detector_snapshot", None)
+                detector_snapshot = snapshot_reader() if snapshot_reader else None
+                if detector_snapshot is not None:
+                    snapshot_id = detector_snapshot["snapshot_id"]
+                    if snapshot_id != last_detector_snapshot_id:
+                        result["vision_detector_snapshot_changed"] = True
+                        result["vision_detector_snapshot"] = {
+                            **detector_snapshot,
+                            "image_data_b64": base64.b64encode(
+                                detector_snapshot["image_data"]
+                            ).decode("ascii"),
+                        }
+                        result["vision_detector_snapshot"].pop("image_data", None)
+                        last_detector_snapshot_id = snapshot_id
                 state, pixel = runtime.selected_target_pixel(now=now)
                 result["target_pixel"] = {"state": state, "pixel": pixel}
                 vision_state, vision_overlay = runtime.vision_display(now=now)

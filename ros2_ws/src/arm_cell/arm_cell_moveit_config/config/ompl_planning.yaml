@@ -6,7 +6,13 @@ planner_configs:
   RRTConnect:
     type: geometric::RRTConnect
     range: 0.0
+  RRTstarkConfigDefault:
+    type: geometric::RRTstar
+    optimization_objective: PathLengthOptimizationObjective
+    range: 0.0
+    goal_bias: 0.05
+    delay_collision_checking: 1
 arm:
   default_planner_config: RRTConnect
-  planner_configs: [RRTConnect]
+  planner_configs: [RRTConnect, RRTstarkConfigDefault]
   longest_valid_segment_fraction: 0.005

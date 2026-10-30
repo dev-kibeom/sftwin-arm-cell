@@ -73,7 +73,7 @@ private:
     registration.target_id = request.target_id;
     registration.run_id = request.run_id;
     registration.pose = request.pose;
-    registration.has_target_yaw = request.has_target_yaw;
+    registration.orientation_symmetry_order = request.orientation_symmetry_order;
     registration.ttl_ns = duration_ns(request.ttl);
     if (registration.ttl_ns == 0) {
       registration.ttl_ns = 30'000'000'000LL;
@@ -90,6 +90,12 @@ private:
     const arm_cell_interfaces::srv::DetectTarget::Request & request,
     arm_cell_interfaces::srv::DetectTarget::Response & response)
   {
+    if (request.algorithm != "cuboid_top_face") {
+      response.result_code.value =
+        arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_INVALID_RESULT;
+      response.diagnostic_detail = "Fixed Validation supports only cuboid_top_face";
+      return;
+    }
     const auto result = registry_.consume(request.target_id, steady_now_ns());
     if (!result) {
       response.result_code.value =
@@ -102,9 +108,13 @@ private:
 
     response.result_code.value =
       arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
-    response.target_pose = result->pose;
-    response.has_target_pose = true;
-    response.has_target_yaw = result->has_target_yaw;
+    response.acquisition_id = "fixed-" + std::to_string(result->receipt_sequence);
+    arm_cell_interfaces::msg::PickCandidate candidate;
+    candidate.acquisition_id = response.acquisition_id;
+    candidate.candidate_id = "candidate-1";
+    candidate.target_pose = result->pose;
+    candidate.orientation_symmetry_order = result->orientation_symmetry_order;
+    response.material_candidates = {std::move(candidate)};
     response.diagnostic_detail = "fixed validation registration";
   }
 

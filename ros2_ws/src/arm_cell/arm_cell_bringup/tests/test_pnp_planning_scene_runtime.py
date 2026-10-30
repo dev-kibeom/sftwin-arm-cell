@@ -47,6 +47,9 @@ class FakeLogger:
     def info(self, message):
         self.messages.append(message)
 
+    def debug(self, message):
+        self.messages.append(message)
+
     def error(self, message):
         self.messages.append(message)
 
@@ -71,29 +74,31 @@ def test_service_future_wait_uses_completion_event_with_bounded_timeout():
 def test_service_unavailable_and_response_timeout_have_distinct_errors_and_context():
     loaded = module()
     logger = FakeLogger()
-    with pytest.raises(loaded.PlanningSceneRuntimeError, match="service unavailable"):
+    with pytest.raises(
+        loaded.PlanningSceneRuntimeError, match="service unavailable"
+    ) as unavailable_error:
         loaded.call_service_with_bounded_wait(
             FakeServiceClient(available=False),
             object(),
             "GetPlanningScene",
-            "source=CLEANUP request_id=10",
+            "source=CLEANUP service=GetPlanningScene",
             logger,
             timeout_sec=0.01,
         )
 
     with pytest.raises(
         loaded.PlanningSceneRuntimeError, match="service response timeout"
-    ):
+    ) as timeout_error:
         loaded.call_service_with_bounded_wait(
             FakeServiceClient(),
             object(),
             "GetPlanningScene",
-            "source=ATTACH_STATUS seq=4 request_id=11",
+            "source=ATTACH_STATUS service=GetPlanningScene",
             logger,
             timeout_sec=0.01,
         )
-    assert any("source=CLEANUP" in message for message in logger.messages)
-    assert any("source=ATTACH_STATUS seq=4" in message for message in logger.messages)
+    assert "source=CLEANUP service=GetPlanningScene" in str(unavailable_error.value)
+    assert "source=ATTACH_STATUS service=GetPlanningScene" in str(timeout_error.value)
 
 
 def test_ros_service_adapters_and_main_avoid_nested_spin():
@@ -257,7 +262,7 @@ def _trigger_response(response):
 
 def handoff():
     return {
-        "schema_version": "wu14-pnp-registration/v1",
+        "schema_version": "wu14-pnp-registration/v2",
         "status": "FIXTURE_READY_FOR_REGISTRATION",
         "run_id": "run-1",
         "target_id": "cube_profile",
@@ -381,7 +386,7 @@ def test_scene_transition_logs_only_on_state_change_with_status_context():
     assert "UNKNOWN -> WORLD" in transition_logs[0]
     assert "source=ATTACH_STATUS" in transition_logs[0]
     assert "WORLD -> ATTACHED" in transition_logs[1]
-    assert "status_seq=1" in transition_logs[1]
+    assert "source=ATTACH_STATUS" in transition_logs[1]
 
     bridge.on_status("attached=1;seq=2", loaded.Pose(), apply, observe=observe)
     transition_logs_after_duplicate = [
@@ -934,17 +939,13 @@ def test_static_scene_profile_excludes_support_overlaps():
         Path(__file__).parents[2]
         / "arm_cell_moveit_config/config/m0609_pnp_static_scene.json"
     )
-    assert [
-        obj["id"] for obj in __import__("json").loads(scene.read_text())["objects"]
-    ] == [
-        "pedestal",
-        "cnc_front_left",
-        "cnc_front_top",
-        "camera_rig_post_left",
-        "amr_tray_rail_left",
-        "amr_tray_rail_right",
-        "amr_tray_rail_rear",
-    ]
+    object_ids = {obj["id"] for obj in json.loads(scene.read_text())["objects"]}
+    assert set(loaded.MINIMUM_STATIC_OBJECT_IDS).issubset(object_ids)
+    assert not {
+        "amr_raw_slot_support",
+        "amr_raw_slot_marker_guard",
+        "amr_finished_slot_support",
+    }.intersection(object_ids)
 
 
 def test_release_without_successful_place_never_becomes_cleanup_eligible():

@@ -30,14 +30,14 @@ def _registration(
     target_id="cube_profile",
     run_id="run-1",
     pose=None,
-    has_target_yaw=True,
+    orientation_symmetry_order=1,
     ttl=(0, 0),
 ):
     request = RegisterFixedTarget.Request()
     request.target_id = target_id
     request.run_id = run_id
     request.pose = pose or _pose()
-    request.has_target_yaw = has_target_yaw
+    request.orientation_symmetry_order = orientation_symmetry_order
     request.ttl.sec = ttl[0]
     request.ttl.nanosec = ttl[1]
     return request
@@ -97,10 +97,9 @@ class FixedVisionRosHarness:
                     f"returncode={self.process.returncode}, "
                     f"stdout={stdout!r}, stderr={stderr!r}"
                 )
-            if (
-                self.registration_client.wait_for_service(timeout_sec=0.2)
-                and self.detect_client.wait_for_service(timeout_sec=0.2)
-            ):
+            if self.registration_client.wait_for_service(
+                timeout_sec=0.2
+            ) and self.detect_client.wait_for_service(timeout_sec=0.2):
                 return
         raise AssertionError("Fixed Vision ROS services did not become available")
 
@@ -137,36 +136,62 @@ def fixed_vision():
 
 def test_registration_detects_registered_pose_and_consumes_once(fixed_vision):
     response = fixed_vision.register(
-        _registration(has_target_yaw=True, pose=_pose(stamp=(11, 22)))
+        _registration(orientation_symmetry_order=1, pose=_pose(stamp=(11, 22)))
     )
     assert response.accepted
     assert response.receipt_sequence > 0
     assert response.receipt_time_ns > 0
 
-    result = fixed_vision.detect(_detect())
+    request = _detect()
+    request.algorithm = "cuboid_top_face"
+    result = fixed_vision.detect(request)
     assert result.result_code.value == DetectTargetResultCode.DETECT_RESULT_SUCCESS
-    assert result.has_target_pose
-    assert result.has_target_yaw
-    assert result.target_pose.header.frame_id == "base_link"
-    assert result.target_pose.header.stamp.sec == 11
-    assert result.target_pose.header.stamp.nanosec == 22
-    assert result.target_pose.pose.position.x == pytest.approx(0.2)
-    assert result.target_pose.pose.position.y == pytest.approx(-0.1)
-    assert result.target_pose.pose.position.z == pytest.approx(0.35)
-    assert result.target_pose.pose.orientation.w == pytest.approx(1.0)
+    assert len(result.material_candidates) == 1
+    assert result.material_candidates[0].orientation_symmetry_order == 1
+    assert result.material_candidates[0].target_pose.header.frame_id == "base_link"
+    assert result.material_candidates[0].target_pose.header.stamp.sec == 11
+    assert result.material_candidates[0].target_pose.header.stamp.nanosec == 22
+    assert result.material_candidates[0].target_pose.pose.position.x == pytest.approx(
+        0.2
+    )
+    assert result.material_candidates[0].target_pose.pose.position.y == pytest.approx(
+        -0.1
+    )
+    assert result.material_candidates[0].target_pose.pose.position.z == pytest.approx(
+        0.35
+    )
+    assert result.material_candidates[
+        0
+    ].target_pose.pose.orientation.w == pytest.approx(1.0)
 
-    depleted = fixed_vision.detect(_detect())
+    depleted = fixed_vision.detect(request)
     assert (
         depleted.result_code.value
         == DetectTargetResultCode.DETECT_RESULT_OBJECT_NOT_FOUND
     )
 
 
+@pytest.mark.parametrize("algorithm", ["legacy_rectangle", "", "unsupported"])
+def test_unsupported_algorithm_does_not_consume_registration(fixed_vision, algorithm):
+    assert fixed_vision.register(_registration()).accepted
+    request = _detect()
+    request.algorithm = algorithm
+    rejected = fixed_vision.detect(request)
+    assert (
+        rejected.result_code.value
+        == DetectTargetResultCode.DETECT_RESULT_INVALID_RESULT
+    )
+    assert "cuboid_top_face" in rejected.diagnostic_detail
+    assert (
+        fixed_vision.detect(_detect()).result_code.value
+        == DetectTargetResultCode.DETECT_RESULT_SUCCESS
+    )
+
+
 def test_unknown_target_returns_invalid_result(fixed_vision):
     result = fixed_vision.detect(_detect("unknown_profile"))
     assert (
-        result.result_code.value
-        == DetectTargetResultCode.DETECT_RESULT_INVALID_RESULT
+        result.result_code.value == DetectTargetResultCode.DETECT_RESULT_INVALID_RESULT
     )
 
 
@@ -188,9 +213,7 @@ def test_registration_rejects_invalid_requests(fixed_vision, registration_reques
 
 
 def test_different_run_isolated_and_same_run_replaces_record(fixed_vision):
-    first = fixed_vision.register(
-        _registration(run_id="run-a", pose=_pose(x=0.1))
-    )
+    first = fixed_vision.register(_registration(run_id="run-a", pose=_pose(x=0.1)))
     assert first.accepted
 
     different_run = fixed_vision.register(
@@ -199,14 +222,16 @@ def test_different_run_isolated_and_same_run_replaces_record(fixed_vision):
     assert not different_run.accepted
 
     replacement = fixed_vision.register(
-        _registration(run_id="run-a", pose=_pose(x=0.7), has_target_yaw=False)
+        _registration(run_id="run-a", pose=_pose(x=0.7), orientation_symmetry_order=0)
     )
     assert replacement.accepted
 
     result = fixed_vision.detect(_detect())
     assert result.result_code.value == DetectTargetResultCode.DETECT_RESULT_SUCCESS
-    assert result.target_pose.pose.position.x == pytest.approx(0.7)
-    assert not result.has_target_yaw
+    assert result.material_candidates[0].target_pose.pose.position.x == pytest.approx(
+        0.7
+    )
+    assert result.material_candidates[0].orientation_symmetry_order == 0
 
 
 def test_zero_ttl_is_accepted_as_default_and_short_ttl_expires(fixed_vision):
@@ -216,9 +241,7 @@ def test_zero_ttl_is_accepted_as_default_and_short_ttl_expires(fixed_vision):
         DetectTargetResultCode.DETECT_RESULT_SUCCESS
     )
 
-    short_ttl = fixed_vision.register(
-        _registration(run_id="expiring", ttl=(0, 1))
-    )
+    short_ttl = fixed_vision.register(_registration(run_id="expiring", ttl=(0, 1)))
     assert short_ttl.accepted
     time.sleep(0.05)
     expired = fixed_vision.detect(_detect())
@@ -228,23 +251,31 @@ def test_zero_ttl_is_accepted_as_default_and_short_ttl_expires(fixed_vision):
     )
 
 
-def test_false_yaw_preserves_registration_provenance_without_tool_correction(fixed_vision):
+def test_unobservable_orientation_preserves_registration_provenance_without_tool_correction(
+    fixed_vision,
+):
     pose = _pose(x=0.31, y=0.12, z=0.44, stamp=(19, 987654321))
     response = fixed_vision.register(
         _registration(
             run_id="no-yaw",
             pose=pose,
-            has_target_yaw=False,
+            orientation_symmetry_order=0,
         )
     )
     assert response.accepted
 
     result = fixed_vision.detect(_detect())
     assert result.result_code.value == DetectTargetResultCode.DETECT_RESULT_SUCCESS
-    assert not result.has_target_yaw
-    assert result.target_pose.header.frame_id == "base_link"
-    assert result.target_pose.header.stamp.sec == 19
-    assert result.target_pose.header.stamp.nanosec == 987654321
-    assert result.target_pose.pose.position.x == pytest.approx(0.31)
-    assert result.target_pose.pose.position.y == pytest.approx(0.12)
-    assert result.target_pose.pose.position.z == pytest.approx(0.44)
+    assert result.material_candidates[0].orientation_symmetry_order == 0
+    assert result.material_candidates[0].target_pose.header.frame_id == "base_link"
+    assert result.material_candidates[0].target_pose.header.stamp.sec == 19
+    assert result.material_candidates[0].target_pose.header.stamp.nanosec == 987654321
+    assert result.material_candidates[0].target_pose.pose.position.x == pytest.approx(
+        0.31
+    )
+    assert result.material_candidates[0].target_pose.pose.position.y == pytest.approx(
+        0.12
+    )
+    assert result.material_candidates[0].target_pose.pose.position.z == pytest.approx(
+        0.44
+    )

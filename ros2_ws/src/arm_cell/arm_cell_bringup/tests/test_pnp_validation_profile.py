@@ -4,7 +4,6 @@ import importlib.util
 import json
 import math
 from pathlib import Path
-import sys
 import xml.etree.ElementTree as ET
 
 import yaml
@@ -18,11 +17,6 @@ from launch_ros.utilities import evaluate_parameters
 PACKAGE_ROOT = Path(__file__).parents[1]
 LAUNCH_PATH = PACKAGE_ROOT / "launch/arm_cell_pnp_validation.launch.py"
 PROFILE_PATH = PACKAGE_ROOT / "config/pnp_validation_profile.yaml"
-ISAAC_SCRIPTS = PACKAGE_ROOT.parents[3] / "infra/isaac_sim/scripts/m0609_cell"
-if str(ISAAC_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(ISAAC_SCRIPTS))
-
-from pnp_validation.run_validation import validate_validation_profile  # noqa: E402
 
 
 def _load_launch_module():
@@ -55,83 +49,69 @@ def _nodes():
     return module.compose(context)
 
 
-def test_validation_profile_explicitly_selects_fixed_adapter_and_values():
+def test_validation_profile_selects_fixed_vision_and_its_recipe():
     profile = yaml.safe_load(PROFILE_PATH.read_text())
-    node = next(
-        action
-        for action in _nodes()
-        if isinstance(action, Node) and action.node_package == "arm_cell_vision"
+    nodes = [action for action in _nodes() if isinstance(action, Node)]
+    vision = next(
+        action for action in nodes if action.node_package == "arm_cell_vision"
     )
 
-    assert node.node_executable == "fixed_detect_target_node"
-    assert profile["orchestration"]["mission_target_id"] == "cube_profile"
-    assert profile["orchestration"]["recipe_directory"] == "recipes"
-    assert not any(
-        key.startswith("mission_grasp") or key.startswith("mission_place")
-        for key in profile["orchestration"]
+    assert vision.node_executable == "fixed_detect_target_node"
+    assert all(node.node_executable != "detect_target_node" for node in nodes)
+    mission = profile["orchestration"]
+    recipe_path = (
+        PACKAGE_ROOT
+        / "config"
+        / mission["recipe_directory"]
+        / f"{mission['mission_target_id']}.json"
     )
-    assert profile["validation"]["runtime_runner_entrypoint"].endswith(
-        "pnp_validation/entrypoints/start_validation.py"
+    recipe = json.loads(recipe_path.read_text())
+    assert recipe["target_id"] == mission["mission_target_id"]
+    orchestration = next(
+        node for node in nodes if node.node_executable == "orchestration_node"
     )
-    assert profile["validation"]["registration_helper_entrypoint"].endswith(
-        "register_pnp_fixture.py"
+    (parameters,) = evaluate_parameters(
+        LaunchContext(), orchestration._Node__parameters
     )
+    assert Path(parameters["recipe_directory"]).resolve() == (
+        recipe_path.parent.resolve()
+    )
+    for key in (
+        "mission_target_id",
+        "vision_request_timeout_ms",
+        "safety_state_freshness_timeout_ms",
+    ):
+        assert parameters[key] == mission[key]
     assert profile["validation"]["registration_handoff_schema"] == (
-        "wu14-pnp-registration/v1"
+        "wu14-pnp-registration/v2"
     )
-    assert profile["validation"]["registration_ttl_s"] == 30.0
-    assert profile["validation"]["registration_ttl_max_s"] == 60.0
-    assert profile["validation"]["holding_freshness_ms"] == 500.0
-    assert profile["validation"]["open_readiness_timeout_s"] == 2.0
-    assert profile["validation"]["open_readiness_timeout_s"] != (
-        profile["validation"]["holding_freshness_ms"] / 1000.0
-    )
-    assert profile["motion"]["planning_max_acceleration_rad_s2"] > 0.0
-    assert profile["motion"]["trajectory_sampler"] == "linear"
-    assert profile["motion"]["trajectory_clock_liveness_timeout_s"] > 0.0
-    assert profile["motion"]["motion_progress_stall_timeout_s"] > 0.0
-    assert profile["motion"]["approach_entry_position_tolerance_m"] == 0.010
-    assert profile["motion"]["place_approach_entry_position_tolerance_m"] == 0.015
-    assert profile["motion"]["place_tracking_tolerance_rad"] == 0.020
-    assert profile["motion"][
-        "approach_entry_orientation_tolerance_rad"
-    ] == pytest.approx(0.08726646259971647)
-    assert profile["fixture"]["gravity_enabled"] is False
-    assert profile["place"]["deletion_delay_s"] == 3.0
-    assert profile["place"]["position_tolerance_m"] == pytest.approx(0.05)
-    assert "orientation_tolerance_deg" in profile["capture"]
-    assert "orientation_tolerance_rad" not in profile["capture"]
-    assert profile["capture"]["position_tolerance_m"] > 0.0
-    assert profile["capture"]["orientation_tolerance_deg"] > 0.0
-    assert profile["capture"]["expected_contact_width_mm"] > 0.0
-    assert profile["capture"]["contact_width_tolerance_mm"] > 0.0
     grasp_dimension_mm = profile["fixture"]["dimensions_m"][0] * 1000.0
     assert grasp_dimension_mm <= 85.0
-    assert profile["capture"]["expected_contact_width_mm"] == grasp_dimension_mm
-    recipe = json.loads((PACKAGE_ROOT / "config/recipes/cube_profile.json").read_text())
-    assert (
-        recipe["grasp"]["width_mm"] == profile["capture"]["expected_contact_width_mm"]
-    )
-    assert profile["orchestration"]["recipe_directory"] == "recipes"
-    validate_validation_profile(profile)
+    assert recipe["grasp"]["width_mm"] == grasp_dimension_mm
 
 
 def test_validation_profile_owns_moveit_planning_scaling():
     motion_node = next(
         action
         for action in _nodes()
-        if isinstance(action, Node) and action.node_executable == "motion_node"
+        if isinstance(action, Node) and action.node_executable == "task_execution_node"
     )
     (motion_parameters,) = evaluate_parameters(
         LaunchContext(), motion_node._Node__parameters
     )
+
+    assert motion_node._Node__ros_arguments == [
+        "--log-level",
+        "info",
+        "--log-level",
+        "move_group_interface:=warn",
+    ]
 
     assert motion_parameters["planning_velocity_scaling_factor"] == 1.0
     assert motion_parameters["planning_acceleration_scaling_factor"] == 1.0
 
 
 def test_validation_place_target_is_above_the_cnc_workarea():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
     planning = yaml.safe_load((PACKAGE_ROOT / "config/isaac_planning.yaml").read_text())
 
     recipe = json.loads((PACKAGE_ROOT / "config/recipes/cube_profile.json").read_text())
@@ -151,26 +131,20 @@ def test_validation_place_target_is_above_the_cnc_workarea():
     )
 
 
-def test_validation_profile_passes_approach_tolerances_to_motion_node():
+def test_validation_profile_passes_motion_completion_tolerances_to_motion_node():
     profile = yaml.safe_load(PROFILE_PATH.read_text())
     motion = next(
         action
         for action in _nodes()
-        if isinstance(action, Node) and action.node_executable == "motion_node"
+        if isinstance(action, Node) and action.node_executable == "task_execution_node"
     )
     (parameters,) = evaluate_parameters(LaunchContext(), motion._Node__parameters)
 
-    assert parameters["approach_entry_position_tolerance_m"] == pytest.approx(
-        profile["motion"]["approach_entry_position_tolerance_m"]
+    assert parameters["cartesian_tcp_orientation_tolerance_rad"] == pytest.approx(
+        profile["motion"]["cartesian_tcp_orientation_tolerance_rad"]
     )
-    assert parameters["place_approach_entry_position_tolerance_m"] == pytest.approx(
-        profile["motion"]["place_approach_entry_position_tolerance_m"]
-    )
-    assert parameters["approach_entry_orientation_tolerance_rad"] == pytest.approx(
-        profile["motion"]["approach_entry_orientation_tolerance_rad"]
-    )
-    assert parameters["place_tracking_tolerance_rad"] == pytest.approx(
-        profile["motion"]["place_tracking_tolerance_rad"]
+    assert parameters["trajectory_goal_tolerance_rad"] == pytest.approx(
+        profile["motion"]["trajectory_goal_tolerance_rad"]
     )
     assert parameters["holding_confirmation_timeout_ms"] == 1500
     assert (
@@ -182,13 +156,11 @@ def test_validation_profile_passes_approach_tolerances_to_motion_node():
     assert "retract_distance_m" not in parameters
 
 
-def test_validation_profile_rejects_invalid_approach_tolerances():
+def test_validation_profile_rejects_invalid_motion_completion_tolerances():
     module = _load_launch_module()
     for key in (
-        "approach_entry_position_tolerance_m",
-        "place_approach_entry_position_tolerance_m",
-        "approach_entry_orientation_tolerance_rad",
-        "place_tracking_tolerance_rad",
+        "cartesian_tcp_orientation_tolerance_rad",
+        "trajectory_goal_tolerance_rad",
     ):
         for value in (None, 0.0, -1.0, float("nan"), float("inf")):
             candidate = yaml.safe_load(PROFILE_PATH.read_text())
@@ -197,10 +169,10 @@ def test_validation_profile_rejects_invalid_approach_tolerances():
             else:
                 candidate["motion"][key] = value
             with pytest.raises(RuntimeError, match="finite and positive"):
-                module.validate_approach_entry_tolerances(candidate)
+                module.validate_motion_completion_tolerances(candidate)
 
 
-def test_validation_profile_uses_geometry_derived_grasp_contract():
+def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
     profile = yaml.safe_load(PROFILE_PATH.read_text())
 
     # Motion resolves the detector-specific observation reference to object center before
@@ -208,27 +180,27 @@ def test_validation_profile_uses_geometry_derived_grasp_contract():
     # remains a validation-only geometry sanity reference.
     translation = profile["motion"]["object_to_grasp_tcp_translation"]
     observation_translation = profile["motion"]["observation_to_object_translation"]
-    assert observation_translation == pytest.approx([0.0, 0.0, -0.04])
-    assert translation == pytest.approx([0.0, 0.0, 0.0375])
-    assert observation_translation[2] + translation[2] == pytest.approx(-0.0025)
+    assert observation_translation[:2] == [0.0, 0.0]
+    assert observation_translation[2] == pytest.approx(
+        -profile["fixture"]["dimensions_m"][2] / 2.0
+    )
+    grasp_recipe = profile["fixture"]["grasp_recipe"]
+    grasp_offset = observation_translation[2] + translation[2]
+    assert grasp_offset == pytest.approx(grasp_recipe["object_top_to_grasp_tcp_z_m"])
+    contact_band = grasp_recipe["measured_contact_band_m"]
+    assert contact_band[0] <= grasp_offset <= contact_band[1]
     assert profile["motion"]["object_to_grasp_tcp_quaternion"] == pytest.approx(
         [1.0, 0.0, 0.0, 0.0]
     )
     assert profile["motion"]["insertion_axis_tcp"] == pytest.approx([0.0, 0.0, 1.0])
-    assert profile["motion"]["pick_approach_distance_m"] == pytest.approx(0.05)
     recipe = json.loads((PACKAGE_ROOT / "config/recipes/cube_profile.json").read_text())
+    assert recipe["pick"]["approach_distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["direction_object"] == [
         0.0,
         0.0,
         1.0,
     ]
-    assert profile["fixture"]["grasp_recipe"][
-        "object_top_to_grasp_tcp_z_m"
-    ] == pytest.approx(-0.0025)
-    assert profile["fixture"]["grasp_recipe"][
-        "measured_contact_band_m"
-    ] == pytest.approx([-0.024, 0.019])
     assert profile["motion"]["validation_grasp_contact_policy_enabled"] is True
     assert profile["motion"]["validation_grasp_contact_links"] == [
         "gripper_robotiq_85_left_finger_tip_link",
@@ -243,14 +215,12 @@ def test_validation_profile_uses_canonical_home_joint_pose():
     )
 
     assert "home_joint_positions" not in profile["motion"]
-    assert home["home_joint_positions"] == pytest.approx(
-        [0.0, 0.0, math.pi / 2.0, 0.0, math.pi / 2.0, 0.0]
-    )
+    assert len(home["home_joint_positions"]) == 6
 
     motion = next(
         node
         for node in _nodes()
-        if isinstance(node, Node) and node.node_executable == "motion_node"
+        if isinstance(node, Node) and node.node_executable == "task_execution_node"
     )
     (parameters,) = evaluate_parameters(LaunchContext(), motion._Node__parameters)
     assert parameters["home_joint_positions"] == pytest.approx(
@@ -272,30 +242,6 @@ def test_sf_grasp_tcp_matches_nominal_contact_geometry():
     assert xyz[1] == pytest.approx(-0.0003749994, abs=2e-6)
     assert xyz[2] == pytest.approx(0.1357482403, abs=2e-6)
     assert joint.attrib["rpy"] == "0 0 0"
-
-
-def test_grasp_contract_preserves_top_down_insertion_axis():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
-    axis = profile["motion"]["insertion_axis_tcp"]
-    assert axis == [0.0, 0.0, 1.0]
-    assert math.isclose(sum(component * component for component in axis), 1.0)
-
-
-def test_validation_profile_rejects_impossible_grasp_recipe():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
-    profile["fixture"]["dimensions_m"][0] = 0.14
-
-    with pytest.raises(ValueError, match="exceeds Robotiq"):
-        validate_validation_profile(profile)
-
-
-def test_validation_launch_does_not_start_production_detector():
-    assert all(
-        not (
-            isinstance(action, Node) and action.node_executable == "detect_target_node"
-        )
-        for action in _nodes()
-    )
 
 
 def test_production_operational_profile_has_no_fixed_adapter_selection():

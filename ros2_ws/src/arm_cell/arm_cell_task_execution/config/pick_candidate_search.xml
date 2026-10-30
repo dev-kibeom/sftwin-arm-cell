@@ -1,0 +1,15 @@
+<root>
+  <BehaviorTree ID="PickCandidateSearch">
+    <Sequence name="PickCandidateSearch">
+      <PreparePickSearch/>
+      <SearchCandidates name="MaterialCandidateSearch">
+        <SelectNextPickCandidate/>
+        <Sequence name="ExecuteSelectedPickCandidate">
+          <SubTree ID="PickExecution"/>
+          <RecordPickCandidateSuccess/>
+        </Sequence>
+        <CanTransitionPickCandidate/>
+      </SearchCandidates>
+    </Sequence>
+  </BehaviorTree>
+</root>
