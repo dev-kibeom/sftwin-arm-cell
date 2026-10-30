@@ -12,6 +12,10 @@ The ARM Cell uses Isaac Sim as its simulated robot and sensor environment and RO
 
 The current profile includes a simulated material-delivery path and an Isaac Sim UI Hub for operator observation and requests. External AMR/VDA, PLC, and safety-hardware state are represented by a mock adapter. The project does not implement AMR navigation or safety-rated E-stop/STO hardware.
 
+## Demo Video
+
+[Watch the demo on YouTube](https://youtu.be/6eOcrNFdf2g)
+
 ## Key Features
 
 - Shared Doosan M0609 and Robotiq 2F-85 robot description for ROS planning and Isaac Sim construction.

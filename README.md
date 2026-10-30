@@ -12,6 +12,10 @@ Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공�
 
 현재 프로파일에는 시뮬레이션 자재 공급 경로와 Isaac Sim UI Hub가 포함되어 있습니다. 외부 AMR/VDA, PLC, 안전 하드웨어 상태는 mock 어댑터로 표현합니다. AMR 내비게이션과 안전 등급 E-stop/STO 하드웨어는 구현하지 않습니다.
 
+## 시연 영상
+
+[YouTube에서 시연 영상 보기](https://youtu.be/6eOcrNFdf2g)
+
 ## 주요 기능
 
 - ROS 계획 및 Isaac Sim 셀 구성에 함께 사용하는 Doosan M0609·Robotiq 2F-85 로봇 설명 모델
