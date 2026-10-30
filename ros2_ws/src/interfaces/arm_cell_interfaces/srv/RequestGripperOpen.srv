@@ -1,0 +1,11 @@
+# Operator confirmations; Motion validates both before invoking GripperPort.open().
+bool object_supported_or_restrained
+bool release_area_clear
+---
+# Accepted means the Motion owner admitted the request, not that the Gripper opened.
+bool accepted
+# Separately reports whether the backend accepted an Open command.
+bool command_issued
+# True only after a fresh RELEASED holding observation.
+bool released_confirmed
+string diagnostic_detail

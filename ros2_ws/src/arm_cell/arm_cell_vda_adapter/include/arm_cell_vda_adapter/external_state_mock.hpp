@@ -26,12 +26,14 @@ enum class Fault : std::uint8_t
   kInvalidState,
   kCommunicationLoss,
   kCommunicationDegradation,
+  kSafetySignalLoss,
   kMaterialHandoffFailure,
 };
 
 struct ExternalStateSnapshot
 {
   bool publish{true};
+  bool publish_safety_hardware{true};
   bool communication_degraded{false};
   AMRDockingState amr;
   PackMLState packml;
@@ -41,7 +43,7 @@ struct ExternalStateSnapshot
 class ExternalStateMock final
 {
 public:
-  void set_fault(Fault fault, bool active);
+  bool set_fault(Fault fault, bool active);
 
   [[nodiscard]] ExternalStateSnapshot snapshot(const rclcpp::Time & stamp) const;
 
@@ -53,6 +55,7 @@ private:
   bool invalid_state_{false};
   bool communication_loss_{false};
   bool communication_degradation_{false};
+  bool safety_signal_loss_{false};
 };
 
 }  // namespace arm_cell_vda_adapter

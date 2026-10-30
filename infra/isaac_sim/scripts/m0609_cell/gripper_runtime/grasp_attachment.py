@@ -4,26 +4,49 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 
+from gripper_runtime.capture_diagnostics import CaptureDiagnosticRecord
+from gripper_runtime.grasp_joint import UsdFixedJointOwner
+from gripper_runtime.grasp_qualification import (
+    GraspQualification,
+    GripperCharacteristics,
+)
 from gripper_runtime.grasp_policy import (
+    CaptureAssessment,
     CaptureCandidate,
     CaptureDecision,
     CapturePolicy,
+    CaptureResult,
+)
+from gripper_runtime.grasp_stage import (
+    CanonicalCaptureReference,
+    CaptureReferenceConfig,
+    EligibleObjectRegistry,
+    StageCaptureQuery,
 )
 from gripper_runtime.holding_scenario import observe_with_scenario
 
 LOGGER = logging.getLogger(__name__)
 
-
-def _pxr_modules():
-    from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
-
-    return Gf, Sdf, Usd, UsdGeom, UsdPhysics
+__all__ = [
+    "CanonicalCaptureReference",
+    "CaptureCandidate",
+    "CaptureDecision",
+    "CapturePolicy",
+    "CaptureReferenceConfig",
+    "EligibleObjectRegistry",
+    "GraspManager",
+    "GraspState",
+    "HoldingObservation",
+    "HoldingState",
+    "StageCaptureQuery",
+    "UsdFixedJointOwner",
+]
 
 
 class GraspState(Enum):
     EMPTY = "empty"
     SEEKING = "seeking"
-    CONTACT = "contact"
+    ATTACHING = "attaching"
     GRASPED = "grasped"
 
 
@@ -46,386 +69,6 @@ class HoldingObservation:
             and self.sequence > 0
             and now >= self.observed_at
             and now - self.observed_at <= max_age
-        )
-
-
-@dataclass(frozen=True)
-class CaptureReferenceConfig:
-    """Fixture geometry needed to derive the semantic grasp reference."""
-
-    fixture_dimensions_m: tuple
-    observation_to_grasp_tcp_m: float
-    insertion_axis_tcp: tuple
-
-    def validate(self):
-        if len(self.fixture_dimensions_m) != 3:
-            raise ValueError("fixture_dimensions_m must have three values")
-        if any(
-            not math.isfinite(float(value)) or float(value) <= 0.0
-            for value in self.fixture_dimensions_m
-        ):
-            raise ValueError("fixture dimensions must be finite and positive")
-        if not math.isfinite(float(self.observation_to_grasp_tcp_m)):
-            raise ValueError("observation-to-TCP offset must be finite")
-        if len(self.insertion_axis_tcp) != 3:
-            raise ValueError("insertion_axis_tcp must have three values")
-        if not all(math.isfinite(float(value)) for value in self.insertion_axis_tcp):
-            raise ValueError("insertion_axis_tcp must be finite")
-        if (
-            math.sqrt(sum(float(value) ** 2 for value in self.insertion_axis_tcp))
-            <= 1e-12
-        ):
-            raise ValueError("insertion_axis_tcp must be non-zero")
-        return self
-
-
-@dataclass(frozen=True)
-class CanonicalCaptureReference:
-    position: tuple
-    top_normal: tuple
-
-
-class EligibleObjectRegistry:
-    """Fixture-owned registry of candidate prim identities."""
-
-    def __init__(self):
-        self._paths = set()
-
-    def register(self, prim_path):
-        self._paths.add(str(prim_path))
-
-    def unregister(self, prim_path):
-        self._paths.discard(str(prim_path))
-
-    def paths(self):
-        return tuple(sorted(self._paths))
-
-
-def _world_frame_relative_to_body(body_world, frame_world):
-    body_inv = body_world.GetInverse()
-    frame_world_pos = frame_world.ExtractTranslation()
-    local_pos_d = body_inv.Transform(frame_world_pos)
-    body_world_q = body_world.ExtractRotationQuat()
-    frame_world_q = frame_world.ExtractRotationQuat()
-    local_q_d = body_world_q.GetInverse() * frame_world_q
-    local_q_d.Normalize()
-
-    gf, _, _, _, _ = _pxr_modules()
-    qi = local_q_d.GetImaginary()
-    return (
-        gf.Vec3f(
-            float(local_pos_d[0]),
-            float(local_pos_d[1]),
-            float(local_pos_d[2]),
-        ),
-        gf.Quatf(
-            float(local_q_d.GetReal()),
-            gf.Vec3f(float(qi[0]), float(qi[1]), float(qi[2])),
-        ),
-    )
-
-
-class StageCaptureQuery:
-    """Convert current USD stage observations into pure-policy candidates."""
-
-    def __init__(self, stage, tcp_path, registry, gripper, reference_config=None):
-        self.stage = stage
-        self.tcp_path = str(tcp_path)
-        self.registry = registry
-        self.gripper = gripper
-        self.reference_config = None
-        self._last_reference_diagnostics = None
-        if reference_config is not None:
-            self.configure_reference(reference_config)
-
-    def configure_reference(self, reference_config):
-        self.reference_config = reference_config.validate()
-        return True
-
-    def reference_diagnostics(self):
-        return self._last_reference_diagnostics
-
-    def query(self):
-        if self.reference_config is None:
-            self._last_reference_diagnostics = None
-            return False, []
-        tcp_prim = self.stage.GetPrimAtPath(self.tcp_path)
-        if not tcp_prim.IsValid():
-            return False, []
-
-        tcp_world = self._world_transform(self.tcp_path)
-        candidates = []
-        for path in self.registry.paths():
-            target_prim = self.stage.GetPrimAtPath(path)
-            if not target_prim.IsValid():
-                return False, []
-
-            target_world = self._world_transform(path)
-            reference = self._canonical_capture_reference(
-                target_world, self.reference_config
-            )
-            target_position = target_world.ExtractTranslation()
-            tcp_position = tcp_world.ExtractTranslation()
-            delta = tuple(
-                float(tcp_position[index]) - reference.position[index]
-                for index in range(3)
-            )
-            position_error = math.sqrt(sum(float(value) ** 2 for value in delta))
-            orientation_error = self._orientation_error_deg(
-                tcp_world,
-                target_world,
-                self.reference_config.insertion_axis_tcp,
-            )
-            local_position = tcp_world.GetInverse().Transform(target_position)
-            candidates.append(
-                CaptureCandidate(
-                    prim_path=path,
-                    eligible=True,
-                    tcp_local_position_m=(
-                        float(local_position[0]),
-                        float(local_position[1]),
-                        float(local_position[2]),
-                    ),
-                    position_error_m=position_error,
-                    orientation_error_deg=orientation_error,
-                    measured_opening_mm=float(self.gripper.get_width()),
-                )
-            )
-            self._last_reference_diagnostics = {
-                "raw_candidate_position": tuple(
-                    float(value) for value in target_position
-                ),
-                "canonical_capture_position": reference.position,
-                "canonical_top_normal": reference.top_normal,
-            }
-        return True, candidates
-
-    @staticmethod
-    def _canonical_capture_reference(target_world, config):
-        top_normal = StageCaptureQuery._normalized_direction(
-            StageCaptureQuery._transform_direction(target_world, (0.0, 0.0, 1.0))
-        )
-        height = float(config.fixture_dimensions_m[2])
-        offset = float(config.observation_to_grasp_tcp_m)
-        center = target_world.ExtractTranslation()
-        position = tuple(
-            float(center[index]) + top_normal[index] * (height / 2.0 + offset)
-            for index in range(3)
-        )
-        return CanonicalCaptureReference(position, top_normal)
-
-    def _world_transform(self, prim_path):
-        _, _, usd, usd_geom, _ = _pxr_modules()
-        prim = self.stage.GetPrimAtPath(prim_path)
-        return usd_geom.Xformable(prim).ComputeLocalToWorldTransform(
-            usd.TimeCode.Default()
-        )
-
-    @staticmethod
-    def _orientation_error_deg(
-        tcp_world, target_world, insertion_axis_tcp=(0.0, 0.0, 1.0)
-    ):
-        """Return error for the cube's top-grasp axes, not raw frame rotation.
-
-        The TCP +Z axis approaches the cube top face and its +X axis is the
-        Robotiq closing direction.  The cube's local +Z is its top normal;
-        either top-face edge (+X or +Y) is valid for the symmetric cube.
-        """
-        approach_error = StageCaptureQuery._axis_error_deg(
-            StageCaptureQuery._transform_direction(tcp_world, insertion_axis_tcp),
-            tuple(
-                -value
-                for value in StageCaptureQuery._transform_direction(
-                    target_world, (0.0, 0.0, 1.0)
-                )
-            ),
-        )
-        closing_axis = StageCaptureQuery._transform_direction(
-            tcp_world, (1.0, 0.0, 0.0)
-        )
-        closing_error = min(
-            StageCaptureQuery._axis_error_deg(
-                closing_axis,
-                StageCaptureQuery._transform_direction(target_world, (1.0, 0.0, 0.0)),
-                sign_invariant=True,
-            ),
-            StageCaptureQuery._axis_error_deg(
-                closing_axis,
-                StageCaptureQuery._transform_direction(target_world, (0.0, 1.0, 0.0)),
-                sign_invariant=True,
-            ),
-        )
-        return max(approach_error, closing_error)
-
-    @staticmethod
-    def _normalized_direction(direction):
-        norm = math.sqrt(sum(float(value) ** 2 for value in direction))
-        if norm <= 1e-12:
-            raise ValueError("transform direction must be non-zero")
-        return tuple(float(value) / norm for value in direction)
-
-    @staticmethod
-    def _transform_direction(transform, axis):
-        try:
-            from pxr import Gf
-
-            axis_value = Gf.Vec3d(*axis)
-        except ImportError:
-            axis_value = axis
-        direction = transform.TransformDir(axis_value)
-        return tuple(float(direction[index]) for index in range(3))
-
-    @staticmethod
-    def _axis_error_deg(first, second, *, sign_invariant=False):
-        first_norm = math.sqrt(sum(float(value) ** 2 for value in first))
-        second_norm = math.sqrt(sum(float(value) ** 2 for value in second))
-        if first_norm <= 1e-12 or second_norm <= 1e-12:
-            return 180.0
-        dot = sum(float(a) * float(b) for a, b in zip(first, second))
-        dot = dot / (first_norm * second_norm)
-        if sign_invariant:
-            dot = abs(dot)
-        dot = max(-1.0, min(1.0, dot))
-        return math.degrees(math.acos(dot))
-
-
-class UsdFixedJointOwner:
-    """Own and mutate only the adapter-created fixed joint."""
-
-    JOINT_NAME = "sf_scripted_grasp_joint"
-
-    def __init__(self, stage, tcp_path):
-        self.stage = stage
-        self.tcp_path = str(tcp_path)
-        self._owned_joint_path = None
-        self._target_path = None
-
-    def has_owned_joint(self):
-        return self._owned_joint_path is not None
-
-    def owned_joint_valid(self):
-        if self._owned_joint_path is None or self._target_path is None:
-            return False
-        return self._signature_valid(self._owned_joint_path, self._target_path)
-
-    def _signature_valid(self, joint_path, target_path):
-        joint = self.stage.GetPrimAtPath(joint_path)
-        target = self.stage.GetPrimAtPath(target_path)
-        tcp = self.stage.GetPrimAtPath(self.tcp_path)
-        if not joint.IsValid() or not target.IsValid() or not tcp.IsValid():
-            return False
-        if str(joint.GetTypeName()) != "PhysicsFixedJoint":
-            return False
-        body0 = [
-            str(path) for path in joint.GetRelationship("physics:body0").GetTargets()
-        ]
-        body1 = [
-            str(path) for path in joint.GetRelationship("physics:body1").GetTargets()
-        ]
-        return body0 == [self.tcp_path] and body1 == [str(target_path)]
-
-    def reconcile_stale(self):
-        """Remove only valid canonical joints left by an earlier runtime."""
-        joint_paths = set()
-        traverse = getattr(self.stage, "Traverse", None)
-        if callable(traverse):
-            for prim in traverse():
-                if prim.GetName() == self.JOINT_NAME:
-                    joint_paths.add(str(prim.GetPath()))
-        if self._target_path is not None:
-            joint_paths.add(self._joint_path(self._target_path))
-
-        for joint_path in sorted(joint_paths):
-            target_path = joint_path[: -len(self.JOINT_NAME) - 1]
-            if not self._signature_valid(joint_path, target_path):
-                return False
-            self.stage.RemovePrim(joint_path)
-            if self.stage.GetPrimAtPath(joint_path).IsValid():
-                return False
-        self._owned_joint_path = None
-        self._target_path = None
-        return True
-
-    def create(self, target_path):
-        target_path = str(target_path)
-        target_prim = self.stage.GetPrimAtPath(target_path)
-        tcp_prim = self.stage.GetPrimAtPath(self.tcp_path)
-        if not target_prim.IsValid() or not tcp_prim.IsValid():
-            raise RuntimeError("TCP or candidate prim became invalid before attach")
-
-        tcp_world = self._world_transform(self.tcp_path)
-        target_world = self._world_transform(target_path)
-        local_pos0, local_rot0 = _world_frame_relative_to_body(
-            tcp_world,
-            target_world,
-        )
-
-        gf, sdf, _, _, usd_physics = _pxr_modules()
-        joint_path = sdf.Path(target_path).AppendChild(self.JOINT_NAME)
-        existing = self.stage.GetPrimAtPath(joint_path)
-        if existing.IsValid():
-            return False
-
-        joint = usd_physics.FixedJoint.Define(self.stage, joint_path)
-        joint.CreateBody0Rel().SetTargets([sdf.Path(self.tcp_path)])
-        joint.CreateBody1Rel().SetTargets([sdf.Path(target_path)])
-        joint.CreateLocalPos0Attr().Set(local_pos0)
-        joint.CreateLocalRot0Attr().Set(local_rot0)
-        joint.CreateLocalPos1Attr().Set(gf.Vec3f(0.0, 0.0, 0.0))
-        joint.CreateLocalRot1Attr().Set(gf.Quatf(1.0, gf.Vec3f(0.0, 0.0, 0.0)))
-        self._owned_joint_path = str(joint_path)
-        self._target_path = target_path
-        return True
-
-    @classmethod
-    def _joint_path(cls, target_path):
-        return f"{str(target_path).rstrip('/')}/{cls.JOINT_NAME}"
-
-    def remove_owned(self):
-        joint_path = self._owned_joint_path
-        target_path = self._target_path
-        if joint_path is None or target_path is None:
-            return False
-
-        try:
-            joint = self.stage.GetPrimAtPath(joint_path)
-            target = self.stage.GetPrimAtPath(target_path)
-            if not joint.IsValid() or not target.IsValid():
-                return False
-            if not self._signature_valid(joint_path, target_path):
-                return False
-            self.stage.RemovePrim(joint_path)
-            removed_joint = self.stage.GetPrimAtPath(joint_path)
-            remaining_target = self.stage.GetPrimAtPath(target_path)
-        except Exception:
-            return False
-        if removed_joint.IsValid() or not remaining_target.IsValid():
-            return False
-
-        self._owned_joint_path = None
-        self._target_path = None
-        return True
-
-    def target_exists(self):
-        return (
-            self._target_path is not None
-            and self.stage.GetPrimAtPath(self._target_path).IsValid()
-        )
-
-    @property
-    def owned_joint_path(self):
-        return self._owned_joint_path
-
-    @staticmethod
-    def _path(value):
-        _, sdf, _, _, _ = _pxr_modules()
-        return sdf.Path(value)
-
-    def _world_transform(self, prim_path):
-        _, _, usd, usd_geom, _ = _pxr_modules()
-        prim = self.stage.GetPrimAtPath(prim_path)
-        return usd_geom.Xformable(prim).ComputeLocalToWorldTransform(
-            usd.TimeCode.Default()
         )
 
 
@@ -455,11 +98,12 @@ class GraspManager:
         self.gripper = gripper
         self.verbose = verbose
         self.config = None
-        self.ready = False
+        # Capture configuration constrains CLOSE, not physical OPEN/release.
+        # Lifecycle/attachment cleanup failures still invalidate the runtime.
+        self.ready = True
         if config is not None:
             try:
                 self.config = config.validate()
-                self.ready = True
             except (TypeError, ValueError):
                 self.config = None
         self.registry = registry or EligibleObjectRegistry()
@@ -491,6 +135,11 @@ class GraspManager:
         self.last_width_error_mm = None
         self._capture_transition_failed = False
         self._capture_transaction_armed = False
+        self._close_transaction_failure_reason = None
+        self._last_release_command_generation = None
+        self._pending_release_command = None
+        self._release_detach_event = None
+        self.capture_reference_id = None
         self._holding = HoldingObservation(
             HoldingState.UNKNOWN,
             time.monotonic(),
@@ -498,12 +147,366 @@ class GraspManager:
         )
         self._holding_sequence = 1
         self._last_holding_semantics = self._semantic_signature(HoldingState.UNKNOWN)
+        self._diagnostic_log_incidents = {}
+        self.capture_diagnostic_writer = None
+        self.physx_observer = None
+        self.capture_diagnostic_record = None
+        self.capture_diagnostic_target_path = None
+        self._close_command_generation = None
+
+    def set_diagnostic_observers(self, writer=None, physx_observer=None):
+        self.capture_diagnostic_writer = writer
+        self.physx_observer = physx_observer
+
+    def _report_diagnostic_log_incident(self, operation, error=None):
+        previous = self._diagnostic_log_incidents.get(operation)
+        if error is None:
+            if previous is not None:
+                LOGGER.debug("Capture diagnostic %s recovered", operation)
+                self._diagnostic_log_incidents.pop(operation, None)
+            return
+        cause = (type(error).__name__, str(error))
+        if previous != cause:
+            LOGGER.warning(
+                "Capture diagnostic %s failed; capture result is unchanged: %s",
+                operation,
+                error,
+            )
+            self._diagnostic_log_incidents[operation] = cause
+
+    def _diagnostic_append(self, kind, payload, **kwargs):
+        record = self.capture_diagnostic_record
+        if record is None:
+            return
+        try:
+            record.append(kind, payload, **kwargs)
+            self._report_diagnostic_log_incident("observation")
+        except Exception as error:
+            self._report_diagnostic_log_incident("observation", error)
+
+    def _ensure_capture_diagnostic_record(self, motion_goal_uuid):
+        writer = self.capture_diagnostic_writer
+        if (
+            writer is None
+            or not isinstance(motion_goal_uuid, str)
+            or not motion_goal_uuid
+        ):
+            return None
+        record = self.capture_diagnostic_record
+        if (
+            record is not None
+            and not record._finalized
+            and record.motion_goal_uuid != motion_goal_uuid
+        ):
+            self._diagnostic_outcome("capture_reference_replaced")
+            record = self.capture_diagnostic_record
+        if (
+            record is None
+            or record._finalized
+            or record.motion_goal_uuid != motion_goal_uuid
+        ):
+            self.capture_diagnostic_record = CaptureDiagnosticRecord(
+                writer, motion_goal_uuid, motion_goal_uuid
+            )
+        return self.capture_diagnostic_record
+
+    def _record_capture_decision(self, candidates, result):
+        writer = self.capture_diagnostic_writer
+        if writer is None:
+            return
+        try:
+            goal_uuid = self.capture_reference_id
+            record = self.capture_diagnostic_record
+            if (
+                record is None
+                or record._finalized
+                or record.motion_goal_uuid != goal_uuid
+            ):
+                record = self._ensure_capture_diagnostic_record(goal_uuid)
+            if record is None:
+                return
+            record = self.capture_diagnostic_record
+            attempt = record.data["coverage"].get("capture_attempts", 0) + 1
+            record.data["coverage"]["capture_attempts"] = attempt
+            config = self.config
+            limits = {
+                "capture_volume_dimensions_m": getattr(
+                    config, "capture_volume_dimensions_m", None
+                ),
+            }
+            if attempt <= 8:
+                stage_candidates = [
+                    {
+                        "prim_path": candidate.prim_path,
+                        "eligible": candidate.eligible,
+                        "shape": candidate.shape,
+                        "position_error_m": candidate.position_error_m,
+                        "orientation_error_deg": candidate.orientation_error_deg,
+                        "expected_orientation_error_deg": candidate.expected_orientation_error_deg,
+                        "rawpart_orientation_error_deg": candidate.rawpart_orientation_error_deg,
+                        "rawpart_rejection_reason": candidate.rawpart_rejection_reason,
+                        "measured_opening_mm": candidate.measured_opening_mm,
+                        "expected_contact_width_mm": (
+                            candidate.capture_reference.get("expected_contact_width_mm")
+                            if candidate.capture_reference
+                            else None
+                        ),
+                        "tcp_stage_world_pose": candidate.tcp_stage_world_pose
+                        or {
+                            "status": "unavailable",
+                            "reason": "StageCaptureQuery did not provide pose",
+                        },
+                        "rawpart_stage_world_pose": candidate.stage_world_pose
+                        or {
+                            "status": "unavailable",
+                            "reason": "StageCaptureQuery did not provide pose",
+                        },
+                        "relative_pose": candidate.relative_pose
+                        or {
+                            "status": "unavailable",
+                            "reason": "candidate relative pose unavailable",
+                        },
+                        "capture_reference": candidate.capture_reference
+                        or {
+                            "status": "unavailable",
+                            "reason": "no Capture Reference applied",
+                        },
+                    }
+                    for candidate in candidates[:64]
+                ]
+                candidate_coverage = {
+                    "candidate_count": len(candidates),
+                    "candidates_omitted": max(
+                        0, len(candidates) - len(stage_candidates)
+                    ),
+                    "candidates": stage_candidates,
+                    **limits,
+                }
+            else:
+                record.data["coverage"]["capture_attempts_omitted"] = attempt - 8
+                candidate_coverage = {
+                    "candidate_count": len(candidates),
+                    "status": "unavailable",
+                    "reason": "bounded detail limit of eight capture attempts per Motion Goal reached",
+                    **limits,
+                }
+            query_diagnostics = getattr(
+                self.candidate_source, "reference_diagnostics", lambda: None
+            )()
+            reference_frame = next(
+                (
+                    item.capture_reference.get("frame_id")
+                    for item in candidates
+                    if item.capture_reference and item.capture_reference.get("frame_id")
+                ),
+                None,
+            )
+            if reference_frame is None and isinstance(query_diagnostics, dict):
+                reference_frame = query_diagnostics.get("frame_id")
+            record.append(
+                "observation",
+                {
+                    "attempt": attempt,
+                    "source": "usd_stage_and_capture_decision_inputs",
+                    "capture_reference": {
+                        "motion_goal_uuid": goal_uuid,
+                        "reference_id": goal_uuid,
+                        "frame_id": reference_frame,
+                        "applied_frame": next(
+                            (
+                                item.capture_reference.get("applied_frame")
+                                for item in candidates
+                                if item.capture_reference
+                                and item.capture_reference.get("applied_frame")
+                            ),
+                            None,
+                        )
+                        or {
+                            "status": "unavailable",
+                            "reason": (
+                                query_diagnostics.get("rejection_reason")
+                                if isinstance(query_diagnostics, dict)
+                                else "no candidate Capture Reference frame was applied"
+                            ),
+                        },
+                    },
+                    "query_diagnostics": query_diagnostics,
+                    **candidate_coverage,
+                },
+            )
+            assessments = list(result.assessments[:64])
+            record.append(
+                "decision",
+                {
+                    "attempt": attempt,
+                    "policy": "CapturePolicy.evaluate",
+                    "decision": result.decision.value,
+                    "selected_candidate": (
+                        result.candidate.prim_path
+                        if result.candidate is not None
+                        else None
+                    ),
+                    "assessments": [assessment.__dict__ for assessment in assessments],
+                    "assessments_omitted": max(
+                        0, len(result.assessments) - len(assessments)
+                    ),
+                    "failure_reason": (
+                        None
+                        if result.decision is CaptureDecision.CAPTURE_ELIGIBLE
+                        else self._capture_rejection_reason(result)
+                    ),
+                },
+            )
+            self._report_diagnostic_log_incident("decision recording")
+        except Exception as error:
+            # Diagnostic serialization must never affect the Capture decision.
+            self._report_diagnostic_log_incident("decision recording", error)
+
+    def _diagnostic_physx_pair(self, target_path):
+        if self.physx_observer is None:
+            return {
+                "source": "physx_rigid_body",
+                "status": "unavailable",
+                "reason": "PhysX observer was not configured in this runtime session",
+                "tcp": {
+                    "status": "unavailable",
+                    "reason": "PhysX observer was not configured",
+                },
+                "rawpart": {
+                    "status": "unavailable",
+                    "reason": "PhysX observer was not configured",
+                },
+            }
+        try:
+            return self.physx_observer.observe_pair(self.tcp_path, target_path)
+        except Exception as error:
+            return {
+                "source": "physx_rigid_body",
+                "status": "unavailable",
+                "reason": f"{type(error).__name__}: {error}",
+            }
+
+    def _diagnostic_outcome(
+        self,
+        reason,
+        finalize=True,
+        *,
+        capture_decision=None,
+        capture_result=None,
+        transition_reason=None,
+    ):
+        record = self.capture_diagnostic_record
+        if record is None:
+            return
+        try:
+            observation = self._holding
+            record.set_outcome(
+                observation.state.value,
+                reason,
+                observation.sequence,
+                observation.observed_at,
+                capture_decision=(
+                    capture_decision.value
+                    if isinstance(capture_decision, CaptureDecision)
+                    else capture_decision
+                ),
+                capture_result=capture_result,
+                transition_reason=transition_reason,
+            )
+            if finalize:
+                self.finalize_capture_diagnostic(reason)
+            self._report_diagnostic_log_incident("outcome")
+        except Exception as error:
+            self._report_diagnostic_log_incident("outcome", error)
+
+    def finalize_capture_diagnostic(self, reason=None):
+        record = self.capture_diagnostic_record
+        if record is None:
+            return False
+        try:
+            if self.capture_diagnostic_target_path is not None:
+                expected = int(record.data["coverage"].get("physics_step_limit", 4))
+                observed = int(record.data["coverage"].get("physics_steps_observed", 0))
+                if observed < expected:
+                    record.data["coverage"]["physics_steps_unavailable"] = {
+                        "count": expected - observed,
+                        "reason": reason
+                        or "capture ended before bounded observation window completed",
+                    }
+            observation = self._holding
+            record.set_outcome(
+                observation.state.value,
+                reason or (record._outcome or {}).get("reason", "capture_complete"),
+                observation.sequence,
+                observation.observed_at,
+            )
+            queued = record.finalize()
+            self.capture_diagnostic_record = None
+            self.capture_diagnostic_target_path = None
+            self._report_diagnostic_log_incident("finalization")
+            return queued
+        except Exception as error:
+            self._report_diagnostic_log_incident("finalization", error)
+            self.capture_diagnostic_record = None
+            self.capture_diagnostic_target_path = None
+            return False
 
     def configure_capture_reference(self, reference_config):
         configure = getattr(self.candidate_source, "configure_reference", None)
         if not callable(configure):
             return False
         return bool(configure(reference_config))
+
+    def configure_selected_grasp_reference(self, values):
+        reference_id = None
+        frame_id = None
+        if isinstance(values, dict):
+            reference_id = values.get("motion_goal_uuid")
+            frame_id = values.get("frame_id")
+            if values.get("invalidate") is True:
+                if reference_id == self.capture_reference_id:
+                    self._diagnostic_outcome("capture_reference_invalidated")
+                    clear = getattr(
+                        self.candidate_source, "clear_expected_tcp_reference", None
+                    )
+                    if callable(clear):
+                        clear()
+                    self.capture_reference_id = None
+                return False
+            values = values.get("values")
+        if (
+            self.capture_reference_id
+            and reference_id
+            and reference_id != self.capture_reference_id
+        ):
+            self._diagnostic_outcome("capture_reference_replaced")
+        if values is None or len(values) != 9:
+            invalidate = getattr(
+                self.candidate_source, "invalidate_expected_tcp_reference", None
+            )
+            if callable(invalidate):
+                invalidate("capture_reference_unavailable", frame_id)
+            self.capture_reference_id = reference_id
+            return True
+        configure = getattr(
+            self.candidate_source, "configure_expected_tcp_reference", None
+        )
+        if not callable(configure):
+            return False
+        self.capture_reference_id = reference_id
+        try:
+            position = values[0:3]
+            orientation = values[3:7]
+            width_mm = float(values[7])
+            symmetry_order = int(values[8])
+            configure(frame_id, position, orientation, symmetry_order, width_mm)
+        except (TypeError, ValueError, ArithmeticError):
+            invalidate = getattr(
+                self.candidate_source, "invalidate_expected_tcp_reference", None
+            )
+            if callable(invalidate):
+                invalidate("capture_reference_unavailable", frame_id)
+        return True
 
     def _discover_tcp_path(self):
         candidates = []
@@ -522,7 +525,7 @@ class GraspManager:
             )
         return candidates[0]
 
-    def _record(self, state):
+    def _record(self, state, reason=None):
         previous_state = self._holding.state
         self._holding = HoldingObservation(
             state,
@@ -530,18 +533,29 @@ class GraspManager:
             self._holding_sequence,
         )
         if state is not previous_state:
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "holding_transition",
+                    "from": previous_state.value,
+                    "to": state.value,
+                    "sequence": self._holding_sequence,
+                    **({"reason": str(reason)} if reason else {}),
+                },
+            )
             LOGGER.info(
-                "gripper holding state changed from=%s to=%s",
+                "gripper holding state changed from=%s to=%s reason=%s",
                 previous_state.value,
                 state.value,
+                reason or "unspecified",
             )
-            LOGGER.debug(
-                "gripper holding transition diagnostics width_mm=%.3f",
-                self.gripper.get_width(),
-            )
+            LOGGER.debug("Gripper holding transition observed")
+            return True
+        return False
 
     def note_gripper_command_applied(self):
         """Start a fresh status observation after a newly applied command."""
+        self._pending_release_command = None
         self._holding_sequence += 1
         self._holding = HoldingObservation(
             self._holding.state,
@@ -549,6 +563,24 @@ class GraspManager:
             self._holding_sequence,
         )
         return self._holding_sequence
+
+    def note_open_release_command_applied(self, generation, width_mm):
+        """Remember one newly applied open command as a release intent."""
+        try:
+            generation = int(generation)
+            width_mm = float(width_mm)
+        except (TypeError, ValueError):
+            return False
+        if generation == self._last_release_command_generation:
+            return False
+        self._last_release_command_generation = generation
+        self._pending_release_command = (generation, width_mm)
+        return True
+
+    def consume_release_detach_event(self):
+        event = self._release_detach_event
+        self._release_detach_event = None
+        return event
 
     def _semantic_signature(self, state):
         # Keep this tuple aligned with GripperRuntimeSession's published flags;
@@ -598,12 +630,60 @@ class GraspManager:
             self._holding_sequence,
         )
 
-    def arm_close_transaction(self):
+    def arm_close_transaction(self, execution_id=None, command_generation=None):
         """Arm capture for a newly accepted close command."""
+        self._close_transaction_failure_reason = None
+        self._ensure_capture_diagnostic_record(
+            self.capture_reference_id or execution_id
+        )
         if not self.ready or self.joint_owner.has_owned_joint():
+            self._close_transaction_failure_reason = (
+                "runtime_unavailable" if not self.ready else "attachment_already_owned"
+            )
+            self._diagnostic_append(
+                "decision",
+                {
+                    "phase": "close_transaction_arm",
+                    "result": "rejected",
+                    "close_requested": True,
+                    "reason": self._close_transaction_failure_reason,
+                    "command_generation": command_generation,
+                },
+            )
+            return False
+        if self.config is None:
+            self._close_transaction_failure_reason = "capture_configuration_unavailable"
+            self._capture_transition_failed = True
+            self._diagnostic_append(
+                "decision",
+                {
+                    "phase": "close_transaction_arm",
+                    "result": "rejected",
+                    "close_requested": True,
+                    "reason": self._close_transaction_failure_reason,
+                    "command_generation": command_generation,
+                },
+            )
             return False
         self._capture_transition_failed = False
         self._capture_transaction_armed = True
+        self._close_command_generation = command_generation
+        self._diagnostic_append(
+            "observation",
+            {
+                "phase": "close_transaction_arm",
+                "result": "accepted",
+                "close_requested": True,
+                "command_generation": command_generation,
+                "execution_id": execution_id,
+                "capture_reference_id": self.capture_reference_id,
+                "capture_reference_matches_execution": (
+                    None
+                    if self.capture_reference_id is None or execution_id is None
+                    else self.capture_reference_id == execution_id
+                ),
+            },
+        )
         return True
 
     def reconcile_stale_owned_joint(self):
@@ -636,137 +716,474 @@ class GraspManager:
         else:
             cleanup_ok = self.reconcile_stale_owned_joint()
         self.ready = False
-        self._mark_unknown()
+        self._mark_unknown("runtime_shutdown")
         return cleanup_ok
 
-    def _mark_unknown(self):
+    def reset_for_simulation_stop(self):
+        """Drop only Isaac-owned grasp state before the Stage clears material."""
+        self._capture_transaction_armed = False
+        self._close_command_generation = None
+        self._pending_release_command = None
+        cleanup_ok = True
+        if self.joint_owner.has_owned_joint():
+            cleanup_ok = (
+                self.joint_owner.owned_joint_valid()
+                and self.joint_owner.remove_owned()
+                and not self.joint_owner.has_owned_joint()
+            )
+        if cleanup_ok:
+            cleanup_ok = self.reconcile_stale_owned_joint()
+        if not cleanup_ok:
+            self.ready = False
+            self._mark_unknown()
+            return False
+
+        clear_reference = getattr(
+            self.candidate_source, "clear_expected_tcp_reference", None
+        )
+        if callable(clear_reference):
+            clear_reference()
+        self.capture_reference_id = None
+        cancel_motion = getattr(self.gripper, "cancel_motion", None)
+        if callable(cancel_motion):
+            cancel_motion()
+        self._mark_unknown()
+        return True
+
+    def _mark_unknown(self, reason="state_unavailable"):
         self.state = GraspState.SEEKING
         self.object_detected = False
         self.resistance = False
-        self._record(HoldingState.UNKNOWN)
+        return self._record(HoldingState.UNKNOWN, reason)
 
-    def _log_capture_success(self, actuator_state, candidate):
-        target_position = getattr(self.gripper, "target_position", None)
-        position_to_width = getattr(type(self.gripper), "position_to_width", None)
-        commanded_width = (
-            position_to_width(target_position)
-            if target_position is not None and callable(position_to_width)
-            else None
-        )
-        actual_width = self.gripper.get_width()
-        width_error = (
-            abs(actual_width - self.config.expected_contact_width_mm)
-            if self.config is not None
-            else None
-        )
-        reference_diagnostics = getattr(
-            self.candidate_source, "reference_diagnostics", lambda: None
-        )()
-        LOGGER.debug(
-            "gripper capture succeeded actuator_state=%s candidate=%s "
-            "position_error_m=%.6f position_tolerance_m=%.6f "
-            "orientation_error_deg=%.3f orientation_tolerance_deg=%.3f "
-            "commanded_width_mm=%s observed_width_mm=%.3f width_error_mm=%s "
-            "width_tolerance_mm=%.3f sequence=%d reference=%s",
-            actuator_state,
-            candidate.prim_path,
-            candidate.position_error_m,
-            self.config.position_tolerance_m,
-            candidate.orientation_error_deg,
-            self.config.orientation_tolerance_deg,
-            commanded_width,
-            actual_width,
-            width_error,
-            self.config.contact_width_tolerance_mm,
-            self._holding_sequence,
-            reference_diagnostics,
-        )
+    def _log_capture_success(self, candidate):
+        del candidate
+        LOGGER.info("Gripper captured an object and is holding it")
 
-    def _attempt_capture(self, actuator_state, runtime_available, candidates):
-        result = CapturePolicy.evaluate(
-            close_active=True,
+    def _attempt_capture(
+        self, actuator_state, runtime_available, candidates, decision=None
+    ):
+        result = decision or CapturePolicy.evaluate(
+            close_active=actuator_state == "holding",
             candidates=candidates,
             config=self.config,
             runtime_available=runtime_available,
+            owned_joint_path=getattr(self.joint_owner, "owned_joint_path", None),
         )
+        self._record_capture_decision(candidates, result)
         if result.decision is CaptureDecision.CAPTURE_ELIGIBLE:
-            self.state = GraspState.CONTACT
+            self.state = GraspState.ATTACHING
             self.resistance = True
-            self.gripper.stop()
+            target_path = result.candidate.prim_path
+            physx_before = self._diagnostic_physx_pair(target_path)
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "attach_immediately_before_joint_creation",
+                    "source": "physx_rigid_body",
+                    "pair": physx_before,
+                },
+            )
             try:
-                created = self.joint_owner.create(result.candidate.prim_path)
+                created = self.joint_owner.create(target_path)
             except Exception as error:
+                joint_diagnostics = getattr(
+                    self.joint_owner, "last_create_diagnostics", None
+                )
+                joint_diagnostics = (
+                    dict(joint_diagnostics)
+                    if isinstance(joint_diagnostics, dict)
+                    else {}
+                )
+                joint_diagnostics.update(
+                    ownership_validation="not_performed",
+                    call_result="raised",
+                    error_type=type(error).__name__,
+                    error=str(error),
+                )
+                if joint_diagnostics.get("creation_result") in (None, "pending"):
+                    joint_diagnostics["creation_result"] = "failed"
+                joint_diagnostics.setdefault(
+                    "joint_path", UsdFixedJointOwner._joint_path(target_path)
+                )
+                joint_diagnostics.setdefault("body0_path", self.tcp_path)
+                joint_diagnostics.setdefault("body1_path", target_path)
+                joint_diagnostics.setdefault(
+                    "stage_pose_before",
+                    {
+                        "status": "unavailable",
+                        "reason": "joint creation raised before pre-creation Stage observation",
+                    },
+                )
+                for key in ("local_pos0", "local_rot0", "local_pos1", "local_rot1"):
+                    joint_diagnostics.setdefault(
+                        key,
+                        {
+                            "status": "unavailable",
+                            "reason": "joint creation raised before the authored value could be read",
+                        },
+                    )
+                joint_diagnostics.setdefault(
+                    "stage_pose_after",
+                    {
+                        "status": "unavailable",
+                        "reason": "joint creation raised before post-creation Stage observation",
+                    },
+                )
+                self._diagnostic_append(
+                    "observation",
+                    {
+                        "phase": "fixed_joint_creation",
+                        "details": joint_diagnostics,
+                    },
+                )
                 LOGGER.warning(
-                    "gripper capture failed reason=attachment_create_failed "
-                    "candidate=%s error_type=%s error=%s",
-                    result.candidate.prim_path,
-                    type(error).__name__,
-                    error,
+                    "Gripper could not attach the selected object: attachment_create_failed"
                 )
                 self._capture_transition_failed = True
                 self._capture_transaction_armed = False
-                self._mark_unknown()
+                transitioned = self._mark_unknown("attachment_create_failed")
+                self._diagnostic_outcome(
+                    "attachment_create_failed",
+                    capture_decision=result.decision,
+                    capture_result="failed",
+                    transition_reason=(
+                        "attachment_create_failed" if transitioned else None
+                    ),
+                )
                 return self.state
-            if not created or not self.joint_owner.owned_joint_valid():
+            try:
+                ownership_valid = bool(created and self.joint_owner.owned_joint_valid())
+            except Exception as error:
+                ownership_valid = False
+                self._diagnostic_append(
+                    "observation",
+                    {
+                        "phase": "fixed_joint_ownership_validation",
+                        "result": "failed",
+                        "error_type": type(error).__name__,
+                        "error": str(error),
+                    },
+                )
+            set_validation = getattr(self.joint_owner, "set_ownership_validation", None)
+            if callable(set_validation):
+                try:
+                    set_validation(ownership_valid)
+                except Exception as error:
+                    ownership_valid = False
+                    self._diagnostic_append(
+                        "observation",
+                        {
+                            "phase": "fixed_joint_ownership_validation",
+                            "result": "failed",
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                        },
+                    )
+            joint_diagnostics = getattr(
+                self.joint_owner, "last_create_diagnostics", None
+            )
+            if not isinstance(joint_diagnostics, dict):
+                joint_diagnostics = {
+                    "joint_path": UsdFixedJointOwner._joint_path(target_path),
+                    "body0_path": self.tcp_path,
+                    "body1_path": target_path,
+                    "status": "unavailable",
+                    "reason": "joint owner did not expose creation details",
+                }
+            if not created:
+                for key in ("local_pos0", "local_rot0", "local_pos1", "local_rot1"):
+                    joint_diagnostics.setdefault(
+                        key,
+                        {
+                            "status": "unavailable",
+                            "reason": "joint was not created; no authored USD joint frame exists",
+                        },
+                    )
+                joint_diagnostics.setdefault(
+                    "stage_pose_after",
+                    {
+                        "status": "unavailable",
+                        "reason": "joint was not created",
+                    },
+                )
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "fixed_joint_creation",
+                    "details": joint_diagnostics,
+                },
+            )
+            if created:
+                self._diagnostic_append(
+                    "observation",
+                    {
+                        "phase": "attach_immediately_after_joint_creation",
+                        "source": "physx_rigid_body",
+                        "pair": self._diagnostic_physx_pair(target_path),
+                    },
+                )
+            if not created or not ownership_valid:
+                failure_reason = (
+                    "attachment_create_failed"
+                    if not created
+                    else "attachment_ownership_validation_failed"
+                )
                 LOGGER.warning(
-                    "gripper capture failed reason=attachment_ownership_validation "
-                    "candidate=%s created=%s",
-                    result.candidate.prim_path,
-                    created,
+                    "Gripper could not attach the selected object: %s",
+                    failure_reason,
                 )
                 self._capture_transition_failed = True
                 self._capture_transaction_armed = False
-                self._mark_unknown()
+                transitioned = self._mark_unknown(failure_reason)
+                self._diagnostic_outcome(
+                    failure_reason,
+                    capture_decision=result.decision,
+                    capture_result="failed",
+                    transition_reason=failure_reason if transitioned else None,
+                )
                 return self.state
             if not self._release_for_capture(result.candidate.prim_path):
-                LOGGER.warning(
-                    "gripper capture failed reason=contact_policy_transition "
-                    "candidate=%s",
-                    result.candidate.prim_path,
-                )
+                LOGGER.warning("Gripper could not complete the capture transition")
                 cleanup_ok = self._detach_owned_joint()
                 if not cleanup_ok:
                     self.ready = False
                 self._capture_transition_failed = True
                 self._capture_transaction_armed = False
-                self._mark_unknown()
+                transitioned = self._mark_unknown("pre_capture_transition_failed")
+                self._diagnostic_outcome(
+                    "pre_capture_transition_failed",
+                    capture_decision=result.decision,
+                    capture_result="failed",
+                    transition_reason=(
+                        "pre_capture_transition_failed" if transitioned else None
+                    ),
+                )
                 return self.state
             self._capture_transaction_armed = False
             self.state = GraspState.GRASPED
             self.object_detected = True
-            self._record(HoldingState.HELD)
-            self._log_capture_success(actuator_state, result.candidate)
-            return self.state
-
-        if result.decision in (
-            CaptureDecision.AMBIGUOUS,
-            CaptureDecision.INVALID_CONFIG,
-            CaptureDecision.UNKNOWN_RUNTIME,
-        ):
-            LOGGER.warning(
-                "gripper capture rejected decision=%s actuator_state=%s "
-                "candidate_count=%d sequence=%d",
-                result.decision.value,
-                actuator_state,
-                len(candidates),
-                self._holding_sequence,
+            transitioned = self._record(HoldingState.HELD, "attachment_created")
+            self._log_capture_success(result.candidate)
+            clear_reference = getattr(
+                self.candidate_source, "clear_expected_tcp_reference", None
             )
-            self._capture_transition_failed = True
-            self._capture_transaction_armed = False
-            self._mark_unknown()
+            if callable(clear_reference):
+                clear_reference()
+            self.capture_reference_id = None
+            self.capture_diagnostic_target_path = target_path
+            self._diagnostic_outcome(
+                "capture_held",
+                finalize=False,
+                capture_decision=result.decision,
+                capture_result="captured",
+                transition_reason=("attachment_created" if transitioned else None),
+            )
             return self.state
 
         self.state = GraspState.SEEKING
         self.object_detected = False
         self.resistance = False
         if actuator_state == "closing":
-            # A close transaction can legitimately be ineligible while the
-            # fingers are still moving toward the expected contact width.
-            # Keep the prior semantic holding observation until either HELD
-            # or a terminal close-completion result is available.
+            # Closing is an active search interval, not a terminal rejection.
             return self.state
-        self._record(HoldingState.UNKNOWN)
+        reason = self._capture_rejection_reason(result)
+        LOGGER.warning(
+            "Gripper could not capture an object: %s",
+            reason,
+        )
+        self._capture_transition_failed = True
+        self._capture_transaction_armed = False
+        transitioned = self._mark_unknown(reason)
+        self._diagnostic_outcome(
+            reason,
+            capture_decision=result.decision,
+            capture_result="rejected",
+            transition_reason=reason if transitioned else None,
+        )
         return self.state
+
+    def _evaluate_capture_transaction(self, actuator_state):
+        """Search during CLOSE and make one final Capture assessment at HOLDING."""
+        if (
+            not self.ready
+            or not self._capture_transaction_armed
+            or self._pending_release_command is not None
+            or self._capture_transition_failed
+            or actuator_state not in ("closing", "holding")
+        ):
+            return False
+
+        try:
+            runtime_available, candidates = self.candidate_source.query()
+        except Exception as error:
+            runtime_available, candidates = False, []
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "capture_candidate_query",
+                    "result": "failed",
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                },
+            )
+        try:
+            selection = CapturePolicy.evaluate(
+                close_active=True,
+                candidates=candidates,
+                config=self.config,
+                runtime_available=runtime_available,
+                owned_joint_path=getattr(self.joint_owner, "owned_joint_path", None),
+            )
+        except Exception as error:
+            selection = CaptureResult(
+                CaptureDecision.UNKNOWN_RUNTIME,
+                assessments=(CaptureAssessment("", False, "unknown_runtime"),),
+            )
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "capture_policy_evaluation",
+                    "result": "failed",
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                },
+            )
+        try:
+            qualification = (
+                GraspQualification.evaluate(
+                    material_shape=selection.candidate.shape,
+                    gripper_characteristics=GripperCharacteristics(
+                        getattr(self.gripper, "MODEL_ID", None)
+                    ),
+                )
+                if selection.decision is CaptureDecision.CAPTURE_ELIGIBLE
+                else None
+            )
+        except Exception as error:
+            qualification = None
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "grasp_qualification",
+                    "result": "failed",
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                },
+            )
+        self._diagnostic_append(
+            "decision",
+            {
+                "phase": "grasp_qualification",
+                "result": (
+                    "accepted"
+                    if qualification is not None and qualification.eligible
+                    else "rejected" if qualification is not None else "not_evaluated"
+                ),
+                "reason": None if qualification is None else qualification.reason,
+                "material_shape": (
+                    selection.candidate.shape
+                    if selection.decision is CaptureDecision.CAPTURE_ELIGIBLE
+                    else None
+                ),
+                "gripper_model_id": getattr(self.gripper, "MODEL_ID", None),
+            },
+        )
+        if selection.decision is not CaptureDecision.CAPTURE_ELIGIBLE:
+            reason = self._capture_rejection_reason(selection)
+        elif qualification is None or not qualification.eligible:
+            reason = (
+                qualification.reason
+                if qualification is not None
+                else "qualification_unavailable"
+            )
+        else:
+            if actuator_state == "closing":
+                try:
+                    self.gripper.stop()
+                except Exception as error:
+                    reason = "gripper_stop_failed"
+                    self._diagnostic_append(
+                        "observation",
+                        {
+                            "phase": "close_interruption",
+                            "result": "failed",
+                            "actuator_state": actuator_state,
+                            "error_type": type(error).__name__,
+                            "error": str(error),
+                        },
+                    )
+                    self._record_capture_decision(candidates, selection)
+                    LOGGER.warning("Gripper could not capture an object: %s", reason)
+                    self._capture_transaction_armed = False
+                    self._capture_transition_failed = True
+                    transitioned = self._mark_unknown(reason)
+                    self._diagnostic_outcome(
+                        reason,
+                        capture_decision=selection.decision,
+                        capture_result="failed",
+                        transition_reason=reason if transitioned else None,
+                    )
+                    return True
+                self._diagnostic_append(
+                    "observation",
+                    {
+                        "phase": "close_interruption",
+                        "result": "stopped_for_capture",
+                        "actuator_state": "closing",
+                        "rawpart_path": selection.candidate.prim_path,
+                    },
+                )
+            self._attempt_capture(
+                actuator_state, runtime_available, candidates, decision=selection
+            )
+            return True
+
+        self._record_capture_decision(candidates, selection)
+        if (
+            selection.decision is CaptureDecision.NO_CAPTURE
+            and actuator_state == "closing"
+        ):
+            # The object may enter the Capture Volume on a later physics tick.
+            # Keep the transaction armed and do not publish a terminal result.
+            self.state = GraspState.SEEKING
+            self.object_detected = False
+            self.resistance = False
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": "capture_search",
+                    "result": "no_candidate_yet",
+                    "actuator_state": actuator_state,
+                    "close_completed": False,
+                },
+            )
+            return False
+
+        LOGGER.warning("Gripper could not capture an object: %s", reason)
+        self._capture_transaction_armed = False
+        self._capture_transition_failed = True
+        transitioned = self._mark_unknown(reason)
+        self._diagnostic_outcome(
+            reason,
+            capture_decision=selection.decision,
+            capture_result="rejected",
+            transition_reason=reason if transitioned else None,
+        )
+        return True
+
+    @staticmethod
+    def _capture_rejection_reason(result):
+        if result.decision is CaptureDecision.AMBIGUOUS:
+            return "ambiguous"
+        if result.decision is CaptureDecision.INVALID_CONFIG:
+            return "invalid_config"
+        if result.decision is CaptureDecision.UNKNOWN_RUNTIME:
+            return "unknown_runtime"
+        for assessment in result.assessments:
+            if assessment.rejection_reason:
+                return assessment.rejection_reason
+        return "no_capture"
 
     def _detach_owned_joint(self):
         if not self.joint_owner.has_owned_joint():
@@ -785,84 +1202,168 @@ class GraspManager:
         except Exception:
             return False
 
-    def _record_released_if_runtime_fresh(self):
-        runtime_available, _ = self.candidate_source.query()
-        if not runtime_available or self.joint_owner.has_owned_joint():
-            self._mark_unknown()
+    def _record_released_if_open(self):
+        """Confirm physical OPEN and joint absence without a Capture query."""
+        pending = self._pending_release_command
+        target_width_mm = pending[1] if pending is not None else 85.0
+        measured_width_mm = None
+        result = "runtime_error"
+        attempted = False
+        gripper_state = None
+        error_type = None
+        try:
+            gripper_state = self.gripper.state.value
+            result = "open_incomplete"
+            if gripper_state != "holding":
+                return False
+            result = "actuator_width_unavailable"
+            measured_width_mm = float(self.gripper.get_width())
+            if not math.isfinite(measured_width_mm):
+                return False
+            result = "open_target_not_reached"
+            if measured_width_mm < target_width_mm - 0.1:
+                return False
+            result = "joint_state_unavailable"
+            owned = self.joint_owner.has_owned_joint()
+            if owned is not True and owned is not False:
+                return False
+            if owned:
+                if pending is None or not self.joint_owner.owned_joint_valid():
+                    return False
+                attempted = True
+                result = "joint_remove_failed"
+                if not self.joint_owner.remove_owned():
+                    return False
+                result = "joint_state_unavailable"
+                remaining = self.joint_owner.has_owned_joint()
+                if remaining is not False:
+                    if remaining is True:
+                        result = "joint_remove_failed"
+                    return False
+            result = "released"
+            return True
+        except Exception as error:
+            error_type = type(error).__name__
             return False
-        self.state = GraspState.SEEKING
-        self.resistance = False
-        self.object_detected = False
-        self._record(HoldingState.RELEASED)
-        return True
+        finally:
+            # A pending OPEN is not a terminal UNKNOWN observation. Motion waits
+            # for a new sequence and treats a new UNKNOWN as a terminal failure.
+            pending = self._pending_release_command
+            if pending is None or gripper_state != "opening":
+                if pending is not None:
+                    generation, _ = pending
+                    self.note_gripper_command_applied()
+                    self._release_detach_event = {
+                        "generation": generation,
+                        "attempted": attempted,
+                        "actuator_state": gripper_state,
+                        "target_width_mm": target_width_mm,
+                        "measured_width_mm": measured_width_mm,
+                        "result": (
+                            ("detached" if attempted else "already_absent")
+                            if result == "released"
+                            else result
+                        ),
+                        **({"error_type": error_type} if error_type else {}),
+                    }
+                    self._capture_transition_failed = result != "released"
+                if result == "released":
+                    self.state = GraspState.SEEKING
+                    self.resistance = False
+                    self.object_detected = False
+                    self._record(HoldingState.RELEASED, "release_confirmed")
+                else:
+                    self._mark_unknown("release_not_confirmed_" + result)
 
     def update(self, dt):
         del dt
-
         if not self.ready:
             self._capture_transaction_armed = False
-            self._mark_unknown()
+            self._mark_unknown("runtime_unavailable")
             return self.state
 
         gripper_state = getattr(self.gripper.state, "value", "")
-        if self._capture_transition_failed and gripper_state != "opening":
+        if self._pending_release_command is not None:
             self._capture_transaction_armed = False
-            return self.state
-        if gripper_state == "opening":
-            self._capture_transaction_armed = False
-            self._capture_transition_failed = False
-            runtime_available, _ = self.candidate_source.query()
-            if not runtime_available:
-                self._mark_unknown()
-                return self.state
-            if not self._detach_owned_joint():
-                self._mark_unknown()
-                return self.state
-            self._record_released_if_runtime_fresh()
+            self._record_released_if_open()
             return self.state
 
-        if self.joint_owner.has_owned_joint():
+        if self._capture_transition_failed:
             self._capture_transaction_armed = False
-            if not self.joint_owner.owned_joint_valid():
-                self._mark_unknown()
-            else:
-                self.state = GraspState.GRASPED
-                self.object_detected = True
-                self.resistance = True
-                self._record(HoldingState.HELD)
             return self.state
 
-        if gripper_state == "closing" and self._capture_transaction_armed:
-            runtime_available, candidates = self.candidate_source.query()
-            return self._attempt_capture(gripper_state, runtime_available, candidates)
-
-        if gripper_state == "closing":
-            self.state = GraspState.SEEKING
-            self.object_detected = False
-            self.resistance = False
-            self._record(HoldingState.UNKNOWN)
-            return self.state
-
-        if gripper_state == "holding" and self._capture_transaction_armed:
-            runtime_available, candidates = self.candidate_source.query()
-            result_state = self._attempt_capture(
-                gripper_state, runtime_available, candidates
-            )
-            self._capture_transaction_armed = False
-            if not self.joint_owner.has_owned_joint():
-                self._capture_transition_failed = True
+        try:
+            if self.joint_owner.has_owned_joint():
                 self._capture_transaction_armed = False
-            return result_state
+                if not self.joint_owner.owned_joint_valid():
+                    self._mark_unknown("attachment_ownership_invalid")
+                else:
+                    self.state = GraspState.GRASPED
+                    self.object_detected = True
+                    self.resistance = True
+                    self._record(HoldingState.HELD, "attachment_owned")
+                return self.state
+        except Exception:
+            self._mark_unknown("attachment_state_unavailable")
+            return self.state
+
+        if (
+            self._holding.state is HoldingState.RELEASED
+            and not self._capture_transaction_armed
+        ):
+            # RELEASED is a completed observation. Rechecking an idle gripper
+            # against the open target on every physics tick can downgrade it
+            # when measured width jitters just below the tolerance. First
+            # verify that no owned attachment remains or has become invalid.
+            return self.state
+
+        if self._capture_transaction_armed and gripper_state in ("closing", "holding"):
+            try:
+                measured_width = self.gripper.get_width()
+            except Exception:
+                measured_width = None
+            self._diagnostic_append(
+                "observation",
+                {
+                    "phase": (
+                        "close_completion"
+                        if gripper_state == "holding"
+                        else "close_progress"
+                    ),
+                    "close_requested": True,
+                    "close_completed": gripper_state == "holding",
+                    "command_generation": self._close_command_generation,
+                    "actuator_state": gripper_state,
+                    "measured_width_mm": measured_width,
+                },
+            )
+            self._evaluate_capture_transaction(gripper_state)
+            return self.state
+
+        if self._capture_transaction_armed:
+            self._capture_transaction_armed = False
+            self._capture_transition_failed = True
+            reason = "close_failed"
+            self._diagnostic_append(
+                "decision",
+                {
+                    "phase": "close_completion",
+                    "close_requested": True,
+                    "close_completed": False,
+                    "actuator_state": gripper_state or "unknown",
+                    "reason": reason,
+                },
+            )
+            transitioned = self._mark_unknown(reason)
+            self._diagnostic_outcome(
+                reason,
+                capture_result="not_attempted",
+                transition_reason=reason if transitioned else None,
+            )
+            return self.state
 
         if gripper_state != "closing":
-            self.state = GraspState.SEEKING
-            self.object_detected = False
-            self.resistance = False
-            runtime_available, _ = self.candidate_source.query()
-            if runtime_available:
-                self._record(HoldingState.RELEASED)
-            else:
-                self._record(HoldingState.UNKNOWN)
+            self._record_released_if_open()
             return self.state
 
         return self.state
@@ -872,16 +1373,21 @@ class GraspManager:
         if not self.ready:
             self._mark_unknown()
             return
+        self._pending_release_command = (None, 85.0)
         if open_gripper:
-            self.gripper.open(duration=duration)
-        runtime_available, _ = self.candidate_source.query()
-        if not runtime_available:
-            self._mark_unknown()
-            return
-        if not self._detach_owned_joint():
-            self._mark_unknown()
-            return
-        self._record_released_if_runtime_fresh()
+            try:
+                self.gripper.open(duration=duration)
+            except Exception:
+                self._pending_release_command = None
+                self._release_detach_event = {
+                    "generation": None,
+                    "attempted": False,
+                    "result": "runtime_error",
+                }
+                self._capture_transition_failed = True
+                self._mark_unknown()
+                return
+        self.update(0.0)
 
     @property
     def is_grasped(self):

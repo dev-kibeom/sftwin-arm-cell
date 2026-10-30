@@ -111,3 +111,45 @@ def test_stop_keeps_runtime_session_until_after_play_rerun():
 
     assert session.shutdown_calls == 1
     assert namespace["runtime_session"] is None
+
+
+def test_stop_resets_gripper_attachment_before_validation_fixture_removal():
+    events = []
+
+    class Prim:
+        def __init__(self, valid):
+            self.valid = valid
+
+        def IsValid(self):
+            return self.valid
+
+    class Stage:
+        def __init__(self):
+            self.fixture_exists = True
+
+        def GetPrimAtPath(self, _path):
+            return Prim(self.fixture_exists)
+
+    class Runtime:
+        _owned_path = "/World/SFTwin/ValidationFixture/Cube"
+        stage = Stage()
+
+        def _is_owned(self, _prim):
+            return True
+
+        def delete_prim(self, _path):
+            events.append("fixture")
+            self.stage.fixture_exists = False
+            return True
+
+    class Session:
+        def reset_for_simulation_stop(self):
+            events.append("attachment")
+            return True
+
+    owner = ValidationSessionOwner(_EventStream(), stopped_event_type="STOP")
+    owner.register_session(Session())
+    owner.register_validation(Runtime(), {})
+
+    assert owner.teardown() is True
+    assert events == ["attachment", "fixture"]

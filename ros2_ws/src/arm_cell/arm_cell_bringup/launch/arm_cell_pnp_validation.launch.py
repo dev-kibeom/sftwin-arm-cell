@@ -7,21 +7,42 @@ Humble terminal after this composition is live.  This launch file does not
 claim to spawn simulator material or register it by itself.
 """
 
+import importlib.util
 from pathlib import Path
 import math
 
 from ament_index_python.packages import get_package_share_directory
+
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     OpaqueFunction,
+    SetEnvironmentVariable,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
+
+
+def _load_console_output_format():
+    helper_path = (
+        Path(get_package_share_directory("arm_cell_moveit_config"))
+        / "launch/console_output_format.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "arm_cell_console_output_format", helper_path
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load console formatter from {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.ConsoleOutputFormat("{line}")
+
+
+CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
 
 
 def profile_parameters(config, section):
@@ -32,16 +53,14 @@ def profile_parameters(config, section):
     return {key: value for key, value in parameters.items() if value != []}
 
 
-def validate_approach_entry_tolerances(config):
-    """Require finite, positive motion acceptance tolerances in the profile."""
+def validate_motion_completion_tolerances(config):
+    """Require finite, positive Cartesian orientation and tracking tolerances."""
     motion = config.get("motion")
     if not isinstance(motion, dict):
         raise RuntimeError("validation profile is missing the motion section")
     for key in (
-        "approach_entry_position_tolerance_m",
-        "place_approach_entry_position_tolerance_m",
-        "approach_entry_orientation_tolerance_rad",
-        "place_tracking_tolerance_rad",
+        "cartesian_tcp_orientation_tolerance_rad",
+        "trajectory_goal_tolerance_rad",
     ):
         value = motion.get(key)
         if (
@@ -58,7 +77,7 @@ def validate_approach_entry_tolerances(config):
 def compose(context):
     profile_path = Path(LaunchConfiguration("profile").perform(context))
     config = yaml.safe_load(profile_path.read_text()) or {}
-    validate_approach_entry_tolerances(config)
+    validate_motion_completion_tolerances(config)
     share = Path(get_package_share_directory("arm_cell_bringup"))
     home_config = (
         yaml.safe_load((share / "config/home_joint_positions.yaml").read_text()) or {}
@@ -95,6 +114,7 @@ def compose(context):
             executable="external_state_mock_node",
             name="external_state_mock",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[profile_parameters(config, "vda")],
         ),
         Node(
@@ -102,6 +122,7 @@ def compose(context):
             executable="safety_node",
             name="safety_node",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[profile_parameters(config, "safety")],
         ),
         Node(
@@ -109,6 +130,7 @@ def compose(context):
             executable=validation["fixed_vision"]["executable"],
             name="fixed_detect_target_node",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[
                 {
                     "use_sim_time": config.get("use_sim_time", True),
@@ -117,10 +139,17 @@ def compose(context):
             ],
         ),
         Node(
-            package="arm_cell_motion_moveit2",
-            executable="motion_node",
+            package="arm_cell_task_execution",
+            executable="task_execution_node",
             name="motion_node",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
+            ros_arguments=[
+                "--log-level",
+                "info",
+                "--log-level",
+                "move_group_interface:=warn",
+            ],
             parameters=[
                 {
                     **profile_parameters(config, "motion"),
@@ -132,10 +161,11 @@ def compose(context):
             ],
         ),
         Node(
-            package="arm_cell_bt",
+            package="arm_cell_orchestration",
             executable="orchestration_node",
             name="orchestration_node",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[
                 {
                     **profile_parameters(config, "orchestration"),
@@ -153,6 +183,7 @@ def compose(context):
             executable="pnp_planning_scene_runtime.py",
             name="pnp_planning_scene_runtime",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[
                 {
                     "use_sim_time": config.get("use_sim_time", True),
@@ -199,6 +230,11 @@ def generate_launch_description():
     share = Path(get_package_share_directory("arm_cell_bringup"))
     return LaunchDescription(
         [
+            SetEnvironmentVariable(
+                "RCUTILS_CONSOLE_OUTPUT_FORMAT",
+                "[{severity}] [{name}] {message}",
+            ),
+            SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument(
                 "profile",
                 default_value=str(share / "config/pnp_validation_profile.yaml"),

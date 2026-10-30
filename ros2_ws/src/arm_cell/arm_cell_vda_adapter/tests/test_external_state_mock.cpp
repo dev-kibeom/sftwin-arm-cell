@@ -47,6 +47,29 @@ TEST(ExternalStateMock, CommunicationLossSuppressesAllPeriodicPublication)
   EXPECT_FALSE(states.publish);
 }
 
+TEST(ExternalStateMock, SafetySignalLossSuppressesOnlySafetyHardware)
+{
+  ExternalStateMock mock;
+  ASSERT_TRUE(mock.set_fault(Fault::kSafetySignalLoss, true));
+
+  const auto states = mock.snapshot(rclcpp::Time(10, 0));
+
+  EXPECT_TRUE(states.publish);
+  EXPECT_TRUE(states.amr.valid);
+  EXPECT_TRUE(states.packml.valid);
+  EXPECT_FALSE(states.publish_safety_hardware);
+}
+
+TEST(ExternalStateMock, SafetySignalLossAndCommunicationLossAreMutuallyExclusive)
+{
+  ExternalStateMock mock;
+  ASSERT_TRUE(mock.set_fault(Fault::kSafetySignalLoss, true));
+
+  EXPECT_FALSE(mock.set_fault(Fault::kCommunicationLoss, true));
+  EXPECT_TRUE(mock.set_fault(Fault::kSafetySignalLoss, false));
+  EXPECT_TRUE(mock.set_fault(Fault::kCommunicationLoss, true));
+}
+
 TEST(ExternalStateMock, RestoringCommunicationRequestsImmediateFreshPublication)
 {
   ExternalStateMock mock;
@@ -100,19 +123,21 @@ TEST(ExternalStateMock, PackmlAbortUsesCanonicalSubset)
   EXPECT_TRUE(states.packml.valid);
 }
 
-TEST(ExternalStateMock, ClearingUndockDoesNotSynthesizeRedock)
+TEST(ExternalStateMock, ClearingUndockRestoresInitialMockState)
 {
   ExternalStateMock mock;
   mock.set_fault(Fault::kPrematureUndock, true);
   ASSERT_EQ(
     mock.snapshot(rclcpp::Time(10, 0)).amr.docking_state,
     AMRDockingState::AMR_DOCKING_UNDOCKED);
+  mock.set_fault(Fault::kEStop, true);
 
   mock.set_fault(Fault::kPrematureUndock, false);
   const auto states = mock.snapshot(rclcpp::Time(11, 0));
 
-  EXPECT_EQ(states.amr.docking_state, AMRDockingState::AMR_DOCKING_UNDOCKED);
-  EXPECT_TRUE(states.amr.driving);
+  EXPECT_EQ(states.amr.docking_state, AMRDockingState::AMR_DOCKING_DOCKED);
+  EXPECT_FALSE(states.amr.driving);
+  EXPECT_TRUE(states.hardware.e_stop_active);
 }
 
 }  // namespace arm_cell_vda_adapter

@@ -53,5 +53,7 @@ def test_roles_sequence_existing_build_and_runtime_steps(tmp_path, monkeypatch):
             assert "ROS_DOMAIN_ID" not in os.environ
             assert "SFTWIN_PNP_PROFILE" not in os.environ
             assert "SFTWIN_RUNTIME_MODE" not in os.environ
-        if role == "after_play":
+        if role in ("after_play", "after_play_headless"):
             assert os.environ["SFTWIN_RUNTIME_MODE"] == "production"
+
+    assert workflow.ROLES["after_play_headless"] == ("bootstrap_gripper.py",)

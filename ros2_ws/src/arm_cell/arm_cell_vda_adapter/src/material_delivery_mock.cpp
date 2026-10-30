@@ -25,54 +25,61 @@ bool MaterialDeliveryMock::same_id(const DeliveryId & left, const DeliveryId & r
   return left.uuid == right.uuid;
 }
 
-bool MaterialDeliveryMock::request(
-  const DeliveryId & delivery_id, Clock::time_point receipt_time)
+bool MaterialDeliveryMock::consume_accepted_trigger(
+  const AcceptedTrigger & trigger, Clock::time_point receipt_time)
 {
-  if (!valid_id(delivery_id) || active_delivery_ ||
+  const auto & delivery_id = trigger.delivery_id;
+  if (!trigger.valid || !valid_id(delivery_id) || trigger.quantity == 0 ||
+    trigger.material_type.empty() ||
     std::any_of(
       seen_deliveries_.begin(), seen_deliveries_.end(),
       [&delivery_id](const auto & seen) {return same_id(seen, delivery_id);}))
   {
     return false;
   }
-  active_delivery_ = delivery_id;
+  active_deliveries_.push_back({delivery_id, HandoffState::HANDOFF_ARRIVED, receipt_time});
   seen_deliveries_.push_back(delivery_id);
-  phase_ = HandoffState::HANDOFF_ARRIVED;
-  phase_started_ = receipt_time;
   return true;
 }
 
 void MaterialDeliveryMock::fail_active()
 {
-  if (active_delivery_ && phase_ != HandoffState::HANDOFF_DEPARTED) {
-    phase_ = HandoffState::HANDOFF_FAILED;
+  for (auto & delivery : active_deliveries_) {
+    if (delivery.phase != HandoffState::HANDOFF_DEPARTED) {
+      delivery.phase = HandoffState::HANDOFF_FAILED;
+    }
   }
 }
 
-std::optional<MaterialDeliveryMock::HandoffState> MaterialDeliveryMock::snapshot(
+std::vector<MaterialDeliveryMock::HandoffState> MaterialDeliveryMock::snapshot_all(
   Clock::time_point now, const builtin_interfaces::msg::Time & stamp)
 {
-  if (!active_delivery_) {
-    return std::nullopt;
-  }
-  if (phase_ != HandoffState::HANDOFF_FAILED &&
-    phase_ != HandoffState::HANDOFF_DEPARTED && now - phase_started_ >= phase_period_)
-  {
-    ++phase_;
-    phase_started_ = now;
-  }
+  std::vector<HandoffState> output;
+  output.reserve(active_deliveries_.size());
+  for (auto & delivery : active_deliveries_) {
+    if (delivery.phase != HandoffState::HANDOFF_FAILED &&
+      delivery.phase != HandoffState::HANDOFF_DEPARTED &&
+      now - delivery.phase_started >= phase_period_)
+    {
+      ++delivery.phase;
+      delivery.phase_started = now;
+    }
 
-  HandoffState message;
-  message.header.stamp = stamp;
-  message.delivery_id = *active_delivery_;
-  message.phase = phase_;
-  message.valid = phase_ != HandoffState::HANDOFF_FAILED;
-  if (phase_ == HandoffState::HANDOFF_FAILED ||
-    phase_ == HandoffState::HANDOFF_DEPARTED)
-  {
-    active_delivery_.reset();
+    HandoffState message;
+    message.header.stamp = stamp;
+    message.delivery_id = delivery.delivery_id;
+    message.phase = delivery.phase;
+    message.valid = delivery.phase != HandoffState::HANDOFF_FAILED;
+    output.push_back(std::move(message));
   }
-  return message;
+  active_deliveries_.erase(
+    std::remove_if(
+      active_deliveries_.begin(), active_deliveries_.end(), [](const auto & delivery) {
+        return delivery.phase == HandoffState::HANDOFF_FAILED ||
+               delivery.phase == HandoffState::HANDOFF_DEPARTED;
+      }),
+    active_deliveries_.end());
+  return output;
 }
 
 }  // namespace arm_cell_vda_adapter

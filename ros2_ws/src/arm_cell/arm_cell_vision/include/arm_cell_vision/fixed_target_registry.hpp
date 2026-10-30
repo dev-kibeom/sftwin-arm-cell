@@ -16,7 +16,7 @@ struct FixedTargetRegistration
   std::string target_id;
   std::string run_id;
   geometry_msgs::msg::PoseStamped pose;
-  bool has_target_yaw = false;
+  uint8_t orientation_symmetry_order = 0;
   int64_t ttl_ns = 30'000'000'000LL;
 };
 
@@ -47,7 +47,8 @@ public:
 
 private:
   bool expired(int64_t now_ns) const;
-  static bool finite_pose(const geometry_msgs::msg::PoseStamped & pose);
+  static bool finite_pose(
+    const geometry_msgs::msg::PoseStamped & pose, uint8_t orientation_symmetry_order);
 
   std::string configured_target_id_;
   SteadyNow steady_now_;

@@ -405,8 +405,8 @@
       "display_name": "AMR Tray",
       "geometry": {
         "dimensions_m": [
-          0.66,
-          0.46,
+          0.6336,
+          0.4416,
           0.045
         ],
         "type": "box"
@@ -430,18 +430,18 @@
       "display_name": "AMR Tray LeftRail",
       "geometry": {
         "dimensions_m": [
-          0.025,
-          0.46,
-          0.07
+          0.02,
+          0.4416,
+          0.08
         ],
         "type": "box"
       },
       "id": "amr_tray_rail_left",
       "pose": {
         "position_m": [
-          -0.125,
+          -0.112,
           -0.85,
-          0.675
+          0.68
         ],
         "quaternion_xyzw": [
           0.0,
@@ -455,18 +455,18 @@
       "display_name": "AMR Tray RightRail",
       "geometry": {
         "dimensions_m": [
-          0.025,
-          0.46,
-          0.07
+          0.02,
+          0.4416,
+          0.08
         ],
         "type": "box"
       },
       "id": "amr_tray_rail_right",
       "pose": {
         "position_m": [
-          0.525,
+          0.512,
           -0.85,
-          0.675
+          0.68
         ],
         "quaternion_xyzw": [
           0.0,
@@ -480,9 +480,9 @@
       "display_name": "AMR Tray FrontRail",
       "geometry": {
         "dimensions_m": [
-          0.66,
-          0.025,
-          0.07
+          0.6336,
+          0.02,
+          0.08
         ],
         "type": "box"
       },
@@ -490,8 +490,8 @@
       "pose": {
         "position_m": [
           0.2,
-          -1.075,
-          0.675
+          -1.066,
+          0.68
         ],
         "quaternion_xyzw": [
           0.0,
@@ -505,9 +505,9 @@
       "display_name": "AMR Tray RearRail",
       "geometry": {
         "dimensions_m": [
-          0.66,
-          0.025,
-          0.07
+          0.6336,
+          0.02,
+          0.08
         ],
         "type": "box"
       },
@@ -515,8 +515,8 @@
       "pose": {
         "position_m": [
           0.2,
-          -0.625,
-          0.675
+          -0.634,
+          0.68
         ],
         "quaternion_xyzw": [
           0.0,
@@ -527,46 +527,21 @@
       }
     },
     {
-      "display_name": "AMR RawSlot support",
+      "display_name": "AMR Tray Front Marker Post",
       "geometry": {
         "dimensions_m": [
-          0.24,
-          0.28,
-          0.008
+          0.008,
+          0.008,
+          0.0525
         ],
         "type": "box"
       },
-      "id": "amr_raw_slot_support",
+      "id": "amr_tray_marker_post",
       "pose": {
         "position_m": [
-          0.03,
-          -0.85,
-          0.666
-        ],
-        "quaternion_xyzw": [
-          0.0,
-          0.0,
-          0.0,
-          1.0
-        ]
-      }
-    },
-    {
-      "display_name": "AMR FinishedSlot support",
-      "geometry": {
-        "dimensions_m": [
-          0.24,
-          0.28,
-          0.008
-        ],
-        "type": "box"
-      },
-      "id": "amr_finished_slot_support",
-      "pose": {
-        "position_m": [
-          0.37,
-          -0.85,
-          0.666
+          0.2,
+          -1.066,
+          0.74625
         ],
         "quaternion_xyzw": [
           0.0,
@@ -579,7 +554,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "cb30b1101671807f2fa38e760c30bd338481ea3920cf039f1b2a0f91c082ea50",
-    "selection_sha256": "43afa857dbd96023d586a3ee2405f68730000e5e17da4460c19312a9e9edd0d7"
+    "canonical_manifest_sha256": "deac66b2c60e664c3eb0683feb1f6c8ace5804d4d4a59f451c2688ff31927ee5",
+    "selection_sha256": "696375d019af91df658ff0cf006d73fc63c89f88d0f79bc8dfb34b479966dc07"
   }
 }

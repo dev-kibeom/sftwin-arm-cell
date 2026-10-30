@@ -14,6 +14,7 @@
 
 namespace arm_cell_vision
 {
+
 namespace
 {
 
@@ -31,6 +32,7 @@ DetectionResult result(uint8_t code, const char * detail)
 {
   DetectionResult output;
   output.result_code = code;
+  output.failure_cause = detail;
   output.diagnostic_detail = detail;
   return output;
 }
@@ -234,7 +236,7 @@ DetectionResult DetectTargetProcessor::process(const DetectionInput & input) con
   output.target_pose.pose.orientation.y = object_rotation.y();
   output.target_pose.pose.orientation.z = object_rotation.z();
   output.target_pose.pose.orientation.w = object_rotation.w();
-  output.has_target_yaw = true;
+  output.orientation_symmetry_order = 1;
   output.diagnostic_detail = "target detected";
   return output;
 }

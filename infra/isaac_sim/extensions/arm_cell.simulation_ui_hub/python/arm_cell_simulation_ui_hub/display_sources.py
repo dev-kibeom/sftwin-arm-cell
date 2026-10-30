@@ -88,6 +88,7 @@ class AlignedDepthHeatmapDisplaySource:
     NEAR_COLOR = (*COLOR_STOPS[0], 255)
     FAR_COLOR = (*COLOR_STOPS[-1], 255)
     INVALID_COLOR = (255, 0, 255, 255)
+    ALLOW_ZERO = False
 
     def __init__(self) -> None:
         self._color_lut: Any | None = None
@@ -133,7 +134,10 @@ class AlignedDepthHeatmapDisplaySource:
 
         depth = self._depth_view(message)
         valid = np.empty(depth.shape, dtype=bool)
-        np.greater(depth, 0.0, out=valid)
+        if self.ALLOW_ZERO:
+            np.greater_equal(depth, self.MIN_DEPTH_METERS, out=valid)
+        else:
+            np.greater(depth, 0.0, out=valid)
         finite = np.isfinite(depth)
         np.logical_and(valid, finite, out=valid)
         normalized = np.zeros(depth.shape, dtype=np.float32)
@@ -149,3 +153,12 @@ class AlignedDepthHeatmapDisplaySource:
         rgba = self._get_color_lut()[normalized.astype(np.uint8)]
         rgba[~valid] = self.INVALID_COLOR
         return DisplayFrame(self.source_id, rgba, image_identity(message), received_at)
+
+
+class TrayAlignedDepthDisplaySource(AlignedDepthHeatmapDisplaySource):
+    """Render top-down Tray Z in meters, including valid support-plane zero."""
+
+    source_id = "tray"
+    MIN_DEPTH_METERS = -0.02
+    MAX_DEPTH_METERS = 0.18
+    ALLOW_ZERO = True

@@ -13,6 +13,8 @@ from graph_builder.graph_contract import (
     ENABLE_GRIPPER_COMMAND_SUBSCRIBER,
     GRAPH_PATH,
     GRIPPER_COMMAND_TOPIC,
+    GRIPPER_CLOSE_TOPIC,
+    GRIPPER_CAPTURE_REFERENCE_TOPIC,
     GRIPPER_STATUS_TOPIC,
     JOINT_COMMAND_TOPIC,
     JOINT_STATE_TOPIC,
@@ -106,6 +108,13 @@ def graph_declaration(sdf_path, *, enable_arm_command_subscriber=None):
         create_nodes.append(
             ("SubscribeGripperCommand", "isaacsim.ros2.bridge.ROS2Subscriber")
         )
+        create_nodes.append(
+            ("SubscribeGripperCaptureReference", "isaacsim.ros2.bridge.ROS2Subscriber")
+        )
+        create_nodes.append(
+            ("SubscribeGripperClose", "isaacsim.ros2.bridge.ROS2Subscriber")
+        )
+        create_nodes.append(("GripperCloseGeneration", "omni.graph.action.Counter"))
         create_nodes.append(("GripperCommandGeneration", "omni.graph.action.Counter"))
         set_values.extend(
             [
@@ -113,6 +122,20 @@ def graph_declaration(sdf_path, *, enable_arm_command_subscriber=None):
                 ("SubscribeGripperCommand.inputs:messagePackage", "std_msgs"),
                 ("SubscribeGripperCommand.inputs:messageSubfolder", "msg"),
                 ("SubscribeGripperCommand.inputs:messageName", "Float64"),
+                (
+                    "SubscribeGripperCaptureReference.inputs:topicName",
+                    GRIPPER_CAPTURE_REFERENCE_TOPIC,
+                ),
+                ("SubscribeGripperCaptureReference.inputs:messagePackage", "std_msgs"),
+                ("SubscribeGripperCaptureReference.inputs:messageSubfolder", "msg"),
+                (
+                    "SubscribeGripperCaptureReference.inputs:messageName",
+                    "String",
+                ),
+                ("SubscribeGripperClose.inputs:topicName", GRIPPER_CLOSE_TOPIC),
+                ("SubscribeGripperClose.inputs:messagePackage", "std_msgs"),
+                ("SubscribeGripperClose.inputs:messageSubfolder", "msg"),
+                ("SubscribeGripperClose.inputs:messageName", "String"),
             ]
         )
         connect.extend(
@@ -124,6 +147,20 @@ def graph_declaration(sdf_path, *, enable_arm_command_subscriber=None):
                 (
                     "ROS2Context.outputs:context",
                     "SubscribeGripperCommand.inputs:context",
+                ),
+                (
+                    "OnPlaybackTick.outputs:tick",
+                    "SubscribeGripperCaptureReference.inputs:execIn",
+                ),
+                (
+                    "ROS2Context.outputs:context",
+                    "SubscribeGripperCaptureReference.inputs:context",
+                ),
+                ("OnPlaybackTick.outputs:tick", "SubscribeGripperClose.inputs:execIn"),
+                ("ROS2Context.outputs:context", "SubscribeGripperClose.inputs:context"),
+                (
+                    "SubscribeGripperClose.outputs:execOut",
+                    "GripperCloseGeneration.inputs:execIn",
                 ),
                 (
                     "SubscribeGripperCommand.outputs:execOut",
@@ -336,7 +373,8 @@ def _report_summary(report, enable_arm_command_subscriber=None):
         report(">>> [INFO]    Camera      : DISABLED")
     if ENABLE_GRIPPER_COMMAND_SUBSCRIBER:
         report(
-            f">>> [SUCCESS] Gripper cmd : {GRIPPER_COMMAND_TOPIC} [std_msgs/Float64, mm]"
+            f">>> [SUCCESS] Gripper width / close : {GRIPPER_COMMAND_TOPIC} [std_msgs/Float64] / "
+            f"{GRIPPER_CLOSE_TOPIC} [std_msgs/String]"
         )
     else:
         report(">>> [INFO]    Gripper cmd : DISABLED")

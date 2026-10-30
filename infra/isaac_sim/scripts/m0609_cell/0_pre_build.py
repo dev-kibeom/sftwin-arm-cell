@@ -2,12 +2,12 @@
 
 import importlib
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Set this only for a deliberate local override; otherwise configure
 # SFTWIN_PROJECT_ROOT in the Isaac process.
-PROJECT_ROOT = None
+PROJECT_ROOT = "~/sftwin_project"
 root_value = PROJECT_ROOT or os.environ.get("SFTWIN_PROJECT_ROOT")
 if not root_value:
     raise RuntimeError(

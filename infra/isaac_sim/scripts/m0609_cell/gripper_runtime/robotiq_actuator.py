@@ -1,6 +1,8 @@
 import logging
 from enum import Enum
 
+from gripper_runtime.grasp_qualification import ROBOTIQ_2F_85_MODEL_ID
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -25,6 +27,8 @@ class Robotiq2F85Actuator:
       0.0 = fully open
       1.0 = fully closed
     """
+
+    MODEL_ID = ROBOTIQ_2F_85_MODEL_ID
 
     JOINT_SIGNS = {
         "gripper_robotiq_85_left_knuckle_joint": +1.0,
@@ -96,10 +100,7 @@ class Robotiq2F85Actuator:
             )
 
         if self.verbose:
-            LOGGER.debug(
-                "Robotiq USD joints discovered paths=%s",
-                {name: str(self.joints[name].GetPath()) for name in self.JOINT_SIGNS},
-            )
+            LOGGER.debug("Robotiq gripper joints discovered")
 
     def _infer_robot_root_path(self):
         roots = set()
@@ -211,14 +212,7 @@ class Robotiq2F85Actuator:
 
         if self.verbose:
             runtime_path = self.dc.get_articulation_path(self.articulation)
-            LOGGER.debug(
-                "Robotiq actuator ready robot_root=%s lookup_path=%s "
-                "runtime_path=%s dof_count=%d",
-                self.robot_root_path,
-                self.articulation_base_path,
-                runtime_path,
-                dof_count,
-            )
+            LOGGER.debug("Robotiq actuator ready for gripper commands")
 
     @staticmethod
     def _clamp01(value):
@@ -299,13 +293,6 @@ class Robotiq2F85Actuator:
         self._apply_position(q)
         self.state = GripperState.HOLDING
 
-        if self.verbose:
-            LOGGER.debug(
-                "Robotiq position set q=%.3f width_mm=%.3f",
-                self._commanded_q,
-                self.position_to_width(self._commanded_q),
-            )
-
     def get_position(self):
         """Read logical q from the left knuckle DOF."""
         import numpy as np
@@ -335,6 +322,11 @@ class Robotiq2F85Actuator:
         self._motion_target_q = None
         self._motion_duration = 0.0
         self._motion_elapsed = 0.0
+
+    def cancel_motion(self):
+        """Discard the local trajectory without querying or writing physics."""
+        self._cancel_motion()
+        self.state = GripperState.IDLE
 
     def move_to(self, q, duration=None):
         """
@@ -372,18 +364,6 @@ class Robotiq2F85Actuator:
         else:
             self.state = GripperState.OPENING
 
-        if self.verbose:
-            LOGGER.debug(
-                "Robotiq motion started start_q=%.3f target_q=%.3f "
-                "start_width_mm=%.3f target_width_mm=%.3f duration_s=%.3f state=%s",
-                start_q,
-                q,
-                self.position_to_width(start_q),
-                self.position_to_width(q),
-                duration,
-                self.state.value,
-            )
-
     def update(self, dt):
         """
         Advance the active motion by one physics tick.
@@ -412,11 +392,7 @@ class Robotiq2F85Actuator:
             self.state = GripperState.HOLDING
 
             if self.verbose:
-                LOGGER.debug(
-                    "Robotiq motion completed target_q=%.3f target_width_mm=%.3f",
-                    target_q,
-                    self.position_to_width(target_q),
-                )
+                LOGGER.debug("Robotiq gripper motion completed")
 
             return False
 
@@ -426,8 +402,7 @@ class Robotiq2F85Actuator:
         """
         Stop an active interpolated motion at its current position.
 
-        GraspManager will later use this when virtual resistance/contact is
-        detected during CLOSING.
+        GraspManager may use this for an explicit external stop request.
         """
         q = self.get_position()
         self._cancel_motion()
@@ -435,11 +410,7 @@ class Robotiq2F85Actuator:
         self.state = GripperState.HOLDING
 
         if self.verbose:
-            LOGGER.debug(
-                "Robotiq motion stopped q=%.3f observed_width_mm=%.3f",
-                q,
-                self.position_to_width(q),
-            )
+            LOGGER.debug("Robotiq gripper motion stopped")
 
         return q
 

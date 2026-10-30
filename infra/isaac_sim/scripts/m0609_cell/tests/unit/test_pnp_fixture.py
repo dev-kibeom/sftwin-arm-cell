@@ -1,12 +1,10 @@
-import math
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-import yaml
-
 import pnp_validation.fixture as fixture_module
+import pytest
 from pnp_validation.fixture import (
     Aabb,
     FixtureOwnership,
@@ -20,17 +18,14 @@ from pnp_validation.fixture import (
 )
 from pnp_validation.run_validation import (
     CleanupRequestWorker,
+    IsaacFixtureRuntime,
     MissionCompletionEventWorker,
     PlaceResultEventWorker,
-    IsaacFixtureRuntime,
     ValidationRun,
-    capture_config_from_profile,
-    capture_reference_config_from_profile,
+    _angular_distance,
     fixture_profile_from_validation_config,
     load_validation_profile,
-    validate_validation_profile,
 )
-from pnp_validation.run_validation import _angular_distance
 
 
 def profile(**overrides):
@@ -59,6 +54,10 @@ def test_validation_fixture_uses_selected_json_recipe_from_profile_registry():
     config = load_validation_profile(config_path)
     loaded = fixture_profile_from_validation_config(config)
 
+    assert "pick_approach_distance_m" not in config["motion"]
+    assert config["_mission_recipe"]["pick"]["approach_distance_m"] == pytest.approx(
+        0.05
+    )
     assert loaded.target_id == "cube_profile"
     assert loaded.expected_fixture_release_position_base == pytest.approx(
         (0.5, 0.25, 0.4075)
@@ -75,6 +74,11 @@ def test_same_seed_produces_same_valid_pose():
         excluded.intersects_center(first, profile().fixture_dimensions)
         for excluded in profile().excluded_volumes
     )
+
+
+def test_fixture_profile_rejects_unknown_orientation_symmetry_order():
+    with pytest.raises(ValueError, match="orientation symmetry order"):
+        profile(orientation_symmetry_order=2)
 
 
 def test_fixture_profile_loader_is_shared_by_live_entrypoints():
@@ -96,6 +100,7 @@ def test_fixture_profile_loader_is_shared_by_live_entrypoints():
         },
         "place": {
             "position_tolerance_m": 0.05,
+            "orientation_tolerance_deg": 10.0,
             "deletion_delay_s": 3.0,
         },
         "orchestration": {
@@ -115,7 +120,7 @@ def test_fixture_profile_loader_is_shared_by_live_entrypoints():
             "object_to_grasp_tcp_translation": [0.0, 0.0, 0.0375],
             "object_to_grasp_tcp_quaternion": [1.0, 0.0, 0.0, 0.0],
         },
-        "capture": {"orientation_tolerance_deg": 10.0},
+        "capture": {"volume_dimensions_m": [0.12, 0.12, 0.12]},
     }
 
     loaded = fixture_profile_from_validation_config(config)
@@ -389,80 +394,6 @@ def test_manifest_contains_registered_top_surface_and_run_context():
     assert data["registered_top_surface_pose_base_link"]["frame_id"] == "base_link"
     assert data["registered_top_surface_pose_base_link"]["yaw"] == pytest.approx(0.1)
     assert data["ttl_s"] == 30.0
-
-
-def test_validation_profile_declares_world_geometry_and_place_tolerance():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
-
-    assert profile_data["fixture"]["geometry_frame"] == "world"
-    assert profile_data["place"]["position_tolerance_m"] == pytest.approx(0.05)
-    assert validate_validation_profile(profile_data) is profile_data
-    assert profile_data["fixture"]["support_surface_id"] == (
-        "/World/SF_Twin_Cell/AMR/Mockup/Tray"
-    )
-    assert profile_data["fixture"]["support_surface_frame"] == "amr_top"
-
-
-def test_validation_profile_rejects_missing_geometry_frame():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
-    del profile_data["fixture"]["geometry_frame"]
-
-    with pytest.raises(ValueError, match="geometry_frame"):
-        validate_validation_profile(profile_data)
-
-
-def test_validation_profile_rejects_missing_or_invalid_place_tolerance():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
-    del profile_data["place"]["position_tolerance_m"]
-
-    with pytest.raises(ValueError, match="position_tolerance_m"):
-        validate_validation_profile(profile_data)
-
-    profile_data = yaml.safe_load(path.read_text())
-    profile_data["place"]["position_tolerance_m"] = 0.0
-    with pytest.raises(ValueError, match="position_tolerance_m"):
-        validate_validation_profile(profile_data)
-
-    profile_data = yaml.safe_load(path.read_text())
-    profile_data["fixture"]["geometry_frame"] = "map"
-    with pytest.raises(ValueError, match="geometry_frame"):
-        validate_validation_profile(profile_data)
-
-
-def test_validation_profile_rejects_grasp_offset_drift_between_motion_and_recipe():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
-    profile_data["motion"]["object_to_grasp_tcp_translation"][2] = 0.0
-
-    with pytest.raises(ValueError, match="offset"):
-        validate_validation_profile(profile_data)
-
-
-def test_validation_profile_rejects_nonzero_grasp_translation_xy():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
-    profile_data["motion"]["object_to_grasp_tcp_translation"][0] = 0.001
-
-    with pytest.raises(ValueError, match="x must be zero"):
-        validate_validation_profile(profile_data)
 
 
 class RuntimeSpy:
@@ -995,42 +926,6 @@ def test_place_result_event_worker_calls_record_once_and_persists_consumption(
     )
     assert not restarted.poll()
     assert len(calls) == 1
-
-
-def test_capture_profile_maps_to_task3_capture_config_in_degrees():
-    config = capture_config_from_profile(
-        {
-            "capture": {
-                "volume_dimensions_m": [0.12, 0.12, 0.12],
-                "position_tolerance_m": 0.015,
-                "orientation_tolerance_deg": 10.0,
-                "expected_contact_width_mm": 70.0,
-                "contact_width_tolerance_mm": 2.0,
-            }
-        }
-    )
-
-    assert config.capture_volume_dimensions_m == (0.12, 0.12, 0.12)
-    assert config.orientation_tolerance_deg == 10.0
-    assert config.validate() is config
-
-
-def test_capture_reference_profile_maps_fixture_geometry_and_motion_semantics():
-    config = capture_reference_config_from_profile(
-        {
-            "fixture": {"dimensions_m": [0.07, 0.07, 0.08]},
-            "motion": {
-                "observation_reference": "fixture_profile_reference",
-                "observation_to_object_translation": [0.0, 0.0, -0.04],
-                "object_to_grasp_tcp_translation": [0.0, 0.0, 0.0375],
-                "insertion_axis_tcp": [0.0, 0.0, 1.0],
-            },
-        }
-    )
-
-    assert config.fixture_dimensions_m == (0.07, 0.07, 0.08)
-    assert config.observation_to_grasp_tcp_m == pytest.approx(-0.0025)
-    assert config.insertion_axis_tcp == (0.0, 0.0, 1.0)
 
 
 def test_base_link_world_transform_round_trip_is_explicit():

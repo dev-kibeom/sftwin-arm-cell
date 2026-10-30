@@ -32,6 +32,13 @@ def test_graph_declaration_preserves_required_nodes_and_ros_contracts():
     assert values["SubscribeJointState.inputs:topicName"] == JOINT_COMMAND_TOPIC
     assert nodes["PublishGripperStatus"] == "isaacsim.ros2.bridge.ROS2Publisher"
     assert nodes["GripperCommandGeneration"] == "omni.graph.action.Counter"
+    assert (
+        nodes["SubscribeGripperCaptureReference"]
+        == "isaacsim.ros2.bridge.ROS2Subscriber"
+    )
+    assert values["SubscribeGripperCaptureReference.inputs:messageName"] == "String"
+    assert nodes["SubscribeGripperClose"] == "isaacsim.ros2.bridge.ROS2Subscriber"
+    assert values["SubscribeGripperClose.inputs:messageName"] == "String"
     assert values["PublishGripperStatus.inputs:topicName"] == GRIPPER_STATUS_TOPIC
     assert values["PublishGripperStatus.inputs:messageName"] == "String"
     assert (

@@ -3,9 +3,10 @@ project(arm_cell_bringup)
 find_package(ament_cmake REQUIRED)
 find_package(arm_cell_interfaces REQUIRED)
 find_package(arm_cell_safety REQUIRED)
-find_package(arm_cell_motion_moveit2 REQUIRED)
-find_package(arm_cell_bt REQUIRED)
-find_package(arm_cell_integration REQUIRED)
+find_package(arm_cell_motion REQUIRED)
+find_package(arm_cell_task_execution REQUIRED)
+find_package(arm_cell_orchestration REQUIRED)
+find_package(arm_cell_gateway REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -40,16 +41,19 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_m09_combined_launch tests/test_m09_combined_launch.py)
   add_launch_test(tests/test_m09_material_retry_launch.py TIMEOUT 40)
   add_launch_test(tests/test_production_material_flow_launch.py TIMEOUT 40)
+  add_launch_test(tests/test_external_multi_delivery_orchestration_launch.py TIMEOUT 40)
 
   ament_add_gtest(test_full_cell_synthetic_cpp tests/test_full_cell_synthetic.cpp)
   target_link_libraries(test_full_cell_synthetic_cpp
     arm_cell_safety::arm_cell_safety_core
-    arm_cell_motion_moveit2::arm_cell_motion_moveit2_core
-    arm_cell_bt::arm_cell_orchestration_core
+    arm_cell_motion::arm_cell_motion_core
+    arm_cell_task_execution::arm_cell_task_execution_core
+    arm_cell_orchestration::arm_cell_orchestration_core
     yaml-cpp
   )
   ament_target_dependencies(test_full_cell_synthetic_cpp
     arm_cell_interfaces
+    arm_cell_task_execution
     moveit_ros_planning_interface
     rclcpp
     sensor_msgs

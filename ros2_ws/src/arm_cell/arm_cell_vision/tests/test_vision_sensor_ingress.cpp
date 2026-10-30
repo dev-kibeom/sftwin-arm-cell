@@ -20,6 +20,12 @@ SynchronizedObservationCandidate candidate(int64_t stamp, int64_t receipt)
     sample(stamp, receipt), sample(stamp, receipt), sample(stamp, receipt), stamp};
 }
 
+SynchronizedObservationCandidate depth_only_candidate(int64_t stamp, int64_t receipt)
+{
+  return SynchronizedObservationCandidate{
+    {}, sample(stamp, receipt), sample(stamp, receipt), stamp};
+}
+
 SensorIngressPolicy make_policy(std::optional<int64_t> max_age = std::nullopt)
 {
   return SensorIngressPolicy({kTimeout, max_age});
@@ -38,6 +44,17 @@ TEST(VisionSensorIngress, AcceptsFreshPostRequestCandidateImmediately)
   const auto result = ingress.evaluate(candidate(kFlush + 1, 20), 20);
   ASSERT_TRUE(result.observation);
   EXPECT_EQ(result.status, IngressStatus::kObservationReady);
+  EXPECT_EQ(result.observation->stamp_ns(), kFlush + 1);
+}
+
+TEST(VisionSensorIngress, AcceptsFreshDepthObservationWithoutRgb)
+{
+  auto ingress = make_policy();
+  begin(ingress);
+
+  const auto result = ingress.evaluate(depth_only_candidate(kFlush + 1, 20), 20);
+  ASSERT_EQ(result.status, IngressStatus::kObservationReady);
+  ASSERT_TRUE(result.observation);
   EXPECT_EQ(result.observation->stamp_ns(), kFlush + 1);
 }
 
@@ -119,13 +136,13 @@ TEST(VisionSensorIngress, ExplicitLifecycleResetAllowsNewEpoch)
         23), 23).status, IngressStatus::kObservationReady);
 }
 
-TEST(VisionSensorIngress, WatermarkIsStrictAndFreshPostRequestPairIsReady)
+TEST(VisionSensorIngress, WatermarkIsStrictForFreshPostRequestDepth)
 {
   auto ingress = make_policy();
   begin(ingress);
-  EXPECT_EQ(ingress.evaluate(candidate(kFlush, 20), 20).status, IngressStatus::kStaleObservation);
+  EXPECT_EQ(ingress.evaluate(depth_only_candidate(kFlush, 20), 20).status, IngressStatus::kStaleObservation);
   EXPECT_EQ(
-    ingress.evaluate(candidate(kFlush + 1, 21), 21).status,
+    ingress.evaluate(depth_only_candidate(kFlush + 1, 21), 21).status,
     IngressStatus::kObservationReady);
 }
 
@@ -207,18 +224,17 @@ TEST(VisionSensorIngress, ReceiptFreshnessHasNoDefaultAndUsesExplicitConfigurati
     IngressStatus::kReceiptStaleObservation);
 }
 
-TEST(VisionSensorIngress, PreservesBoundedSkewMetadataAndRejectsMalformedMetadata)
+TEST(VisionSensorIngress, DoesNotRequireRgbAndRejectsMalformedDepthMetadata)
 {
   auto ingress = make_policy();
   begin(ingress);
   const auto stamp = kFlush + 1;
-  auto bounded_skew = candidate(stamp, 20);
-  bounded_skew.depth.stamp_ns = stamp + 1;
-  EXPECT_EQ(ingress.evaluate(bounded_skew, 20).status, IngressStatus::kObservationReady);
+  EXPECT_EQ(ingress.evaluate(depth_only_candidate(stamp, 20), 20).status,
+    IngressStatus::kObservationReady);
 
   begin(ingress, stamp, 21);
   auto malformed = candidate(stamp + 1, 22);
-  malformed.rgb.stamp_ns.reset();
+  malformed.depth.stamp_ns.reset();
   EXPECT_EQ(ingress.evaluate(malformed, 21).status, IngressStatus::kMalformedObservation);
 }
 

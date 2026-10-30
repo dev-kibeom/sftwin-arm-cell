@@ -12,19 +12,20 @@ def build_amr(context):
     create_cylinder = context.create_cylinder
     set_custom_data = context.set_custom_data
     set_vec3_attribute = context.set_vec3_attribute
-    dynamic_box = context.dynamic_box
     mat_frame = context.materials["mat_frame"]
     mat_steel_dark = context.materials["mat_steel_dark"]
     mat_vision = context.materials["mat_vision"]
-    mat_raw = context.materials["mat_raw"]
-    mat_finished = context.materials["mat_finished"]
     mat_white = context.materials["mat_white"]
     mat_black = context.materials["mat_black"]
     # -----------------------------------------------------------------------------
     # 5. AMR dock + direct robot pickup tray
     # -----------------------------------------------------------------------------
-    amr_x, amr_y = 0.20, -0.85
-    amr_tray_z = 0.64
+    amr_center = context.static_geometry["amr_base"]["pose"]["position_m"]
+    tray_geometry = context.static_geometry["amr_tray"]
+    tray_center = tray_geometry["pose"]["position_m"]
+    tray_dimensions = tray_geometry["geometry"]["dimensions_m"]
+    amr_x, amr_y = amr_center[:2]
+    amr_tray_z = tray_center[2]
 
     static_box(
         "amr_base",
@@ -72,44 +73,25 @@ def build_amr(context):
             mat_frame,
         )
 
-    raw_slot_x = amr_x - 0.17
-    done_slot_x = amr_x + 0.17
-    slot_y = amr_y
-
+    # The tray itself is the material receiving surface and Vision support frame.
+    # The FrontRail carries a narrow post and an upward-facing marker outside the
+    # rail-bounded material region.
+    fiducial_support_origin = (
+        tray_center[0],
+        tray_center[1],
+        amr_tray_z + tray_dimensions[2] / 2,
+    )
     static_box(
-        "amr_raw_slot_support",
-        f"{CELL_ROOT}/AMR/Mockup/TraySlots/RawSlot",
-        "raw_slot",
-        COLORS["raw"],
-        mat_raw,
+        "amr_tray_marker_post",
+        f"{CELL_ROOT}/AMR/Mockup/TrayMarkerPost",
+        "tray_marker_post",
+        COLORS["frame"],
+        mat_frame,
     )
     author_support_fiducial(
         context,
         context.rawpart_profile,
-        (raw_slot_x, slot_y, amr_tray_z + 0.030),
-    )
-
-    rawpart_dimensions = context.rawpart_profile["dimensions_m"]
-    raw_slot_top_z = amr_tray_z + 0.030
-    dynamic_box(
-        f"{CELL_ROOT}/AMR/Mockup/RawPart",
-        "raw_part",
-        [
-            raw_slot_x,
-            slot_y,
-            raw_slot_top_z + float(rawpart_dimensions[2]) / 2.0,
-        ],
-        rawpart_dimensions,
-        COLORS["raw"],
-        material=mat_raw,
-    )
-
-    static_box(
-        "amr_finished_slot_support",
-        f"{CELL_ROOT}/AMR/Mockup/TraySlots/FinishedSlot",
-        "finished_slot",
-        COLORS["finished"],
-        mat_finished,
+        fiducial_support_origin,
     )
 
     for i, (dx, dy) in enumerate(
@@ -153,18 +135,13 @@ def build_amr(context):
         stage, f"{CELL_ROOT}/AMR/Mockup", "sf_twin:dock_pose", [amr_x, amr_y, 0.0]
     )
     set_custom_data(
-        stage, f"{CELL_ROOT}/AMR/Mockup/Tray", "sf_twin:role", "direct_pick_tray"
-    )
-    set_custom_data(
         stage,
-        f"{CELL_ROOT}/AMR/Mockup/TraySlots/FinishedSlot",
+        f"{CELL_ROOT}/AMR/Mockup/Tray",
         "sf_twin:role",
-        "finished_part_return_slot",
+        "material_receiver_and_direct_pick_tray",
     )
-
     context.amr_x = amr_x
     context.amr_y = amr_y
     context.amr_tray_z = amr_tray_z
-    context.raw_slot_x = raw_slot_x
-    context.done_slot_x = done_slot_x
-    context.slot_y = slot_y
+    context.tray_x = tray_center[0]
+    context.tray_y = tray_center[1]

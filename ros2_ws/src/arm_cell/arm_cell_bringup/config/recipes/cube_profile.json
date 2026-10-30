@@ -4,7 +4,14 @@
   "target_id": "cube_profile",
   "grasp": {
     "width_mm": 70.0,
-    "yaw_rad": 0.0
+    "yaw_rad": 0.0,
+    "unobserved_yaw_policy": "allowed"
+  },
+  "pick": {
+    "approach_axis": "tcp_insertion_axis",
+    "approach_distance_m": 0.05,
+    "grasp_position_tolerance_m": 0.01,
+    "grasp_orientation_tolerance_rad": 0.08726646259971647
   },
   "place": {
     "orientation_constraint": "fixed",

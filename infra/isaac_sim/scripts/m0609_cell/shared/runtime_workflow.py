@@ -10,6 +10,7 @@ ROLES = {
     "pre_build": ("build_robot_usd.py",),
     "before_play": ("setup_scene.py", "snapshot_camera.py", "build_actiongraph.py"),
     "after_play": ("bootstrap_gripper.py", "enable_simulation_ui_hub.py"),
+    "after_play_headless": ("bootstrap_gripper.py",),
 }
 
 
@@ -23,14 +24,12 @@ def run_role(role, namespace):
     module_root = module_root_from_project_root(root_value)
     steps_root = module_root / "runtime_steps"
     namespace["SFTWIN_RUNTIME_ROLE"] = role
-    if role == "after_play":
+    if role in ("after_play", "after_play_headless"):
         os.environ["SFTWIN_RUNTIME_MODE"] = "production"
     for filename in ROLES[role]:
         step = steps_root / filename
         if not step.is_file():
             raise FileNotFoundError(f"ARM Cell runtime step is missing: {step}")
-        print(f">>> ARM Cell runtime: {role} -> {filename}")
         namespace["__file__"] = str(step)
         source = compile(step.read_text(encoding="utf-8"), str(step), "exec")
         exec(source, namespace)
-    print(f">>> ARM Cell runtime role complete: {role}")

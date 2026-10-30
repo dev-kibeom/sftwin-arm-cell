@@ -256,6 +256,18 @@ def test_standalone_cli_remains_strict_about_unknown_arguments():
     assert error.value.code == 2
 
 
+def test_script_editor_reference_prims_default_to_empty_for_dynamic_material_scene():
+    assert camera.script_editor_reference_prims({}) == []
+    assert camera.script_editor_reference_prims(
+        {"SFTWIN_CAMERA_REFERENCE_PRIMS": "/World/Delivered/RawPart_0000"}
+    ) == ["/World/Delivered/RawPart_0000"]
+
+
+def test_empty_reference_prim_list_does_not_fall_back_to_removed_mockup_prim():
+    assert camera.selected_reference_prim_paths([]) == []
+    assert camera.selected_reference_prim_paths(None) == [camera.DEFAULT_REFERENCE_PRIM]
+
+
 def test_script_editor_output_precedence_is_environment_then_wrapper_then_library_default():
     project_root = str(Path(__file__).resolve().parents[6])
     script_path = "/tmp/carb/script_1789055439.py"

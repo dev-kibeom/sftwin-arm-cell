@@ -21,16 +21,20 @@ vda:
   degraded_publish_period_ms: 300
 
 material_handoff:
-  transfer_duration_ms: 100
+  # Both adapters consume the same External Handoff Trigger contract.
+  # The selected provider's Transfer Completion evidence gates readiness.
   source_freshness_timeout_ms: 500
+  delivery_deadline_ms: 120000
 
 safety:
   freshness_timeout_ms: 500
   source_timestamp_max_age_ms: 2000
-  degraded_freshness_threshold_ms: 180
-  degraded_freshness_inputs: [AMR, PACKML]
-  degraded_velocity_scale: 0.5
-  degraded_acceleration_scale: 0.5
+
+material_definitions:
+  RawPart:
+    material_id: RawPart
+    shape: box
+    nominal_dimensions_m: [0.07, 0.07, 0.08]
 
 vision:
   sync_slop_ms: 10.0
@@ -43,53 +47,158 @@ vision:
   rgb_topic: /camera/color/image_raw
   depth_topic: /camera/aligned_depth_to_color/image_raw
   camera_info_topic: /camera/color/camera_info
+  calibration_file: config/calibration/arm_cell_camera_20261014T102524.894Z.yaml
+  tray_aligned_depth_resolution_m: 0.002
+  scene_stability:
+    stable_observation_count: 5
+  observation:
+    maximum_frame_age_ms: 1000.0
+  # Diagnostic-only style for snapshot.png. RGB hex values are converted to
+  # OpenCV BGR by the renderer; all dimensions below are pixels.
+  snapshot_style:
+    candidate:
+      color_rgb: "#FF0000"
+      line_width_px: 3
+    regions:
+      unresolved_color_rgb: "#FFA500"
+      target_color_rgb: "#00FF00"
+      support_color_rgb: "#00B4FF"
+      line_width_px: 2
+    disturbance:
+      inclined_color_rgb: "#FF00FF"
+      elevated_color_rgb: "#00FFFF"
+      other_color_rgb: "#FFFFFF"
+    measurement:
+      color_rgb: "#FF0000"
+      marker_size_px: 24
+      line_width_px: 3
+    annotation:
+      show_text: true
+      text_scale: 1.0
+      primary_color_rgb: "#FFDC00"
+      detail_color_rgb: "#FFFFFF"
   detector_profiles:
     RawPart:
       target_id: RawPart
+      material_id: RawPart
+      # Initial Cuboid observation/ranking settings; representative RGB-D tuning
+      # remains required before operational use. These are not Motion grasp policy.
+      cuboid:
+        grid_resolution_m: 0.0025
+        height_tolerance_m: 0.003
+        line_residual_limit_px: 1.25
+        minimum_line_support: 0.8
+        finger_contact_width_m: 0.02
+        finger_height_m: 0.03
+        clearance_probe_m: 0.06
+        contact_z_fraction: 0.5
       observation_reference: visible_top_surface_centroid
-      shape: box
-      dimensions_m: [0.07, 0.07, 0.08]
       dimension_tolerance_m: [0.01, 0.01, 0.01]
+      # Keep detection inside the fixed Tray rails while covering the material area.
       workspace_roi_m:
-        x: [-0.12, 0.12]
-        y: [-0.14, 0.14]
-        z: [0.01, 0.12]
+        x: [-0.3000, 0.3000]
+        y: [-0.2000, 0.2000]
+        z: [0.01, 1.00]
+      # Wider tray display bounds for observability and Tray Aligned Depth.
+      tray_roi_m:
+        x: [-0.324, 0.324]
+        y: [-0.228, 0.228]
       support_contact_tolerance_m: 0.01
       top_surface_geometry_tolerance_m: 0.01
-      support_region_dimensions_m: [0.24, 0.28]
+      minimum_observation_coverage: 0.55
+      support_region_dimensions_m: [0.6336, 0.4416]
       fiducial:
         dictionary: DICT_4X4_50
         marker_id: 0
         size_m: 0.08
-        # Derived from the live 80 mm tag pose (1.07596 m) and synchronized
-        # support depth (1.0648 m) on the composed Isaac render product.
-        pose_translation_scale: 0.9896
-        support_frame: RawSlot
+        # Re-derived from the current scene graph: the exact Camera_Sensor and
+        # Tray fiducial transforms, projected with the configured pinhole K,
+        # give an OpenCV PnP translation scale of 1.0011 for this 80 mm marker.
+        pose_translation_scale: 1.0011
+        support_frame: Tray
         marker_in_support:
-          # Keep the support tag in the D455 color frame while clear of the
-          # centered 70 mm RawPart footprint.
-          position_m: [-0.040, -0.090, 0.0002]
+          # The tag sits above the FrontRail midpoint, outside the tray's
+          # material receiving region, with its +Z face toward the overhead camera.
+          position_m: [0.0, -0.249, 0.1101]
           rpy_rad: [0.0, 0.0, 0.0]
 
 motion:
+  # Task Execution snapshots these choices when each PICK or PLACE task starts.
+  pick_strategy: PLANNED
+  place_strategy: PLANNED
   backend_mode: isaac
-  # Initial MoveIt path-search budget; this is not a Motion action or
-  # trajectory completion deadline.
+  # Startup-only full-pose PICK IK. The MoveIt arm group remains 6D KDL for PLACE and
+  # Cartesian waypoints. KDL may be selected by changing solver and omitting
+  # solve_type; unsupported solver options fail during Motion initialization.
+  pick_ik_solver: trac_ik_kinematics_plugin/TRAC_IKKinematicsPlugin
+  pick_ik_solve_type: Distance
+  # Each Grasp and Approach 6D IK call has its own timeout (0, 30] seconds.
+  pick_grasp_ik_timeout_s: 1.0
+  pick_approach_ik_timeout_s: 1.0
+  # Shared monotonic budget (0, 600] seconds, from candidate generation through executable Approach plan selection.
+  pick_search_budget_s: 100.0
+  # Retained for non-PICK/general IK paths.
+  pick_ik_timeout_s: 1.0
+  # Withdrawal tilt from the RawPart support outward normal, degrees [0, 180].
+  pick_max_withdrawal_tilt_deg: 70.0
+  # Ordering of the already selected Grasp Pose Candidates (startup only).
+  pick_grasp_pose_order_policy: distance_then_tilt
+  grasp_occupancy_mode: FINGER_CLEARANCE  # NONE | FULL_COLLISION | FINGER_CLEARANCE
+  # Metres in (0, 1]; demonstration approximations, not measured gripper dimensions.
+  finger_clearance_radius_m: 0.010
+  finger_contact_span_m: 0.020
+  finger_clearance_depth_m: 0.025
+  # Relative reach from the reference TCP to each face half-length, [0, 1).
+  pick_position_range_half_length_fraction: 0.5
+  # Maximum offset in the negative object top-normal direction, metres.
+  pick_max_downward_position_offset_m: 0.005
+  # Position offset resolution on each face tangent [1, 20]; 1 keeps only the center.
+  pick_position_offset_samples_per_tangent_axis: 3
+  # Rotation samples around each eligible Closing Axis [1, 72].
+  pick_orientation_samples_per_closing_axis: 8
+  # Upper bound on the selected Grasp Pose Candidates [3, 1000].
+  pick_grasp_pose_candidate_limit: 48
+  # Actual IK solver seed attempts for one Grasp Pose Candidate.
+  pick_ik_seed_attempts_per_grasp_pose: 2
+  # PLACE's current deterministic FREE/BOUNDED generator yields at most 13 poses.
+  place_max_pose_candidates: 13
+  # Existing PICK/PLACE per-candidate path-search budget across repeated
+  # Approach requests. PICK also shares pick_search_budget_s across candidates.
+  # Neither value is a Motion action or trajectory completion deadline.
   planning_time_s: 15.0
+  # Applied around PICK and PLACE approach plan() calls only. MoveIt attempts
+  # share the configured planning time budget for each request.
+  planning_num_attempts: 3
+  pick_approach_global_max_requests: 3
+  pick_final_cartesian_max_requests: 1
+  pick_final_global_fallback_max_requests: 3
+  place_approach_global_max_requests: 3
+  place_final_cartesian_max_requests: 1
+  place_final_global_fallback_max_requests: 3
+  # Startup-only MoveIt planner selection. Select RRTstarkConfigDefault to use
+  # RRT* path-length optimization; RRTConnect remains the default.
+  planning_planner_id: RRTConnect
   planning_velocity_scaling_factor: 0.1
   planning_acceleration_scaling_factor: 0.1
+  # Initial disturbance experiment: short planar sweep around an unresolved
+  # observation point, using one fifth of the configured Motion speed scale.
+  disturbance_push_distance_m: 0.02
+  disturbance_approach_clearance_m: 0.01
+  disturbance_speed_fraction: 0.2
   # W06 seed enables the validated time-parameterized trajectory execution
   # path; final acceleration calibration remains in M11-W01.
   planning_max_acceleration_rad_s2: 5.0
   place_candidate_planning_time_s: 15.0
   place_total_planning_time_s: 60.0
+  # Motion-owned joint targets (radians, flattened in arm_joint_names order).
+  # Fixed tray return target, in arm_joint_names order (radians).
+  place_tray_return_joint_positions: [-1.5707963267948966, 0.17453292519943295, 1.7453292519943295, 0.0, 0.0, 1.5707963267948966]
   # W06 production allowance for fresh gripper HELD feedback; timing hardening
   # remains a later calibration responsibility.
   holding_confirmation_timeout_ms: 2000
   motion_progress_stall_timeout_s: 60.0
-  approach_entry_orientation_tolerance_rad: 0.08726646259971647
-  place_approach_entry_position_tolerance_m: 0.012
-  place_tracking_tolerance_rad: 0.01
+  cartesian_tcp_orientation_tolerance_rad: 0.08726646259971647
+  trajectory_goal_tolerance_rad: 0.03
   arm_joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
   retract_joint_positions: [0.0, -0.5, 1.0, -1.3, -1.0, 0.0]
   # RawPart's profile defines its observation as the visible top-surface
@@ -101,40 +210,39 @@ motion:
   # The URDF grasp TCP has +Z along the tool; rotate it 180 degrees about X
   # so TCP +Z is the world-up approach direction's opposite, into the part.
   object_to_grasp_tcp_quaternion: [1.0, 0.0, 0.0, 0.0]
-  # Bounded target roll/pitch search around the nominal top-down orientation.
-  target_roll_tolerance_rad: 0.034906585
-  target_pitch_tolerance_rad: 0.034906585
-  target_roll_sample_step_rad: 0.034906585
-  target_pitch_sample_step_rad: 0.034906585
   insertion_axis_tcp: [0.0, 0.0, 1.0]
-  # PICK-only clearance seed: 150 mm from object center leaves about 110 mm
-  # between the nominal top-down TCP and the 80 mm RawPart top surface.
-  pick_approach_distance_m: 0.15
-  pick_retract_distance_m: 0.05
-  # W06 production seed includes bounded Isaac approach-entry residual margin;
-  # final calibration remains in M11-W01.
-  approach_entry_position_tolerance_m: 0.012
+  pick_retract_distance_m: 0.1
+  # Tray clearance boundary in base_link Y. Positive Y points toward the arm.
+  place_waypoint_clearance_y_boundary_m: -0.926
+  place_waypoint_clearance_direction: POSITIVE_Y
+  place_waypoint_clearance_y_margin_m: 0.05
+  place_waypoint_approach_distance_m: 0.015
+  place_waypoint_approach_direction_object: [0.0, 0.0, 1.0]
+  # Generated explicitly by the Motion service; runtime only loads this file.
+  place_waypoint_trajectory_file: .local_artifacts/trajectories/place_waypoint_home_to_place.json
+  # Fixed PLACE area from the current RawPart operating recipe; WAYPOINT uses
+  # this stable area without depending on the picked object's grasp relation.
+  # Values are object xyz followed by quaternion xyzw in base_link.
+  place_waypoint_target_pose_xyzw: [0.50, 0.25, 0.3675, 0.7071067811865476, 0.0, 0.0, 0.7071067811865476]
   enable_test_backend_controls: false
 
 orchestration:
   mission_target_id: RawPart
-  # Default deadline pending production timing measurement; each DetectTarget
-  # request carries its own Vision acquisition + processing deadline.
-  vision_request_timeout_ms: 500
+  safety_state_freshness_timeout_ms: 1000
+  # One request-scoped budget for complete Vision Material Acquisition.
+  vision_request_timeout_ms: 30000
   recipe_directory: recipes
 
 # Initial capture-local grasp realization for the production Isaac gripper
-# runtime. These tolerances support the W06 demo path; motion/timing tuning is
-# owned by M11-W01.
+# runtime. Capture uses only the TCP-local RawPart center volume below.
 gripper_capture:
   volume_dimensions_m: [0.12, 0.12, 0.12]
-  position_tolerance_m: 0.015
-  orientation_tolerance_deg: 12.0
-  contact_width_tolerance_mm: 2.0
 
 simulation:
   planning_profile: isaac_planning.yaml
   static_scene: true
+  external_handoff_material_type: RawPart
+  external_handoff_default_quantity: 1
   # Initial W06 production value from bounded joint_2-only live tuning.
   # Scales the imported Isaac angular-drive stiffness; all other drive
   # parameters remain owned by the imported robot configuration.

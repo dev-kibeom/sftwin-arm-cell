@@ -43,8 +43,12 @@ FixedTargetReceipt FixedTargetRegistry::register_target(
   if (registration.pose.header.frame_id != "base_link") {
     return {false, 0, receipt_time_ns, "pose must be expressed in base_link"};
   }
-  if (!finite_pose(registration.pose)) {
-    return {false, 0, receipt_time_ns, "pose contains non-finite values"};
+  if (registration.orientation_symmetry_order != 0 &&
+    registration.orientation_symmetry_order != 1 && registration.orientation_symmetry_order != 4) {
+    return {false, 0, receipt_time_ns, "orientation_symmetry_order must be 0, 1, or 4"};
+  }
+  if (!finite_pose(registration.pose, registration.orientation_symmetry_order)) {
+    return {false, 0, receipt_time_ns, "pose contains invalid values for its orientation order"};
   }
   if (registration.ttl_ns <= 0 || registration.ttl_ns > kMaxTtlNs) {
     return {false, 0, receipt_time_ns, "ttl must be in (0, 60s]"};
@@ -56,7 +60,7 @@ FixedTargetReceipt FixedTargetRegistry::register_target(
 
   FixedTargetRecord next;
   static_cast<FixedTargetRegistration &>(next) = registration;
-  normalize_orientation(next.pose);
+  if (next.orientation_symmetry_order != 0) {normalize_orientation(next.pose);}
   next.receipt_time_ns = receipt_time_ns;
   next.receipt_sequence = next_receipt_sequence_++;
   record_ = std::move(next);
@@ -81,15 +85,17 @@ bool FixedTargetRegistry::expired(int64_t now_ns) const
          now_ns - record_->receipt_time_ns >= record_->ttl_ns;
 }
 
-bool FixedTargetRegistry::finite_pose(const geometry_msgs::msg::PoseStamped & pose)
+bool FixedTargetRegistry::finite_pose(
+  const geometry_msgs::msg::PoseStamped & pose, uint8_t orientation_symmetry_order)
 {
   const auto & p = pose.pose.position;
   const auto & q = pose.pose.orientation;
   const auto finite = [](double value) {return std::isfinite(value);};
   const auto norm = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
   return finite(p.x) && finite(p.y) && finite(p.z) &&
+         (orientation_symmetry_order == 0 ||
          finite(q.x) && finite(q.y) && finite(q.z) && finite(q.w) &&
-         std::isfinite(norm) && norm > 1e-12;
+         std::isfinite(norm) && norm > 1e-12);
 }
 
 }  // namespace arm_cell_vision

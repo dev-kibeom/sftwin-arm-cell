@@ -87,11 +87,16 @@ def test_vision_node_owns_node_while_spinning():
     profile = yaml.safe_load(profile_path.read_text())
     with tempfile.TemporaryDirectory(prefix="wu13-vision-profile-") as temp_dir:
         params_path = Path(temp_dir) / "vision-parameters.yaml"
+        vision_parameters = dict(profile["vision"])
+        vision_parameters["calibration_file"] = str(
+            (package_root / vision_parameters["calibration_file"]).resolve()
+        )
+        vision_parameters["material_definitions"] = profile["material_definitions"]
         params_path.write_text(
             yaml.safe_dump(
                 {
                     "vision_ros_ingress": {
-                        "ros__parameters": profile["vision"],
+                        "ros__parameters": vision_parameters,
                     }
                 }
             )
@@ -112,9 +117,36 @@ def test_orchestration_node_owns_node_while_spinning():
             environment,
         )
 
-    _assert_stays_visible(
-        "arm_cell_bt",
-        "orchestration_node",
-        "/orchestration_node",
-        execute_cycle_action,
+    package_root = Path(__file__).parents[1]
+    profile = yaml.safe_load(
+        (package_root / "config/operational_profile.yaml").read_text()
     )
+    with tempfile.TemporaryDirectory(prefix="wu13-orchestration-profile-") as temp_dir:
+        params_path = Path(temp_dir) / "orchestration-parameters.yaml"
+        params_path.write_text(
+            yaml.safe_dump(
+                {
+                    "orchestration_node": {
+                        "ros__parameters": {
+                            "mission_target_id": profile["orchestration"][
+                                "mission_target_id"
+                            ],
+                            "recipe_directory": str(
+                                (
+                                    package_root
+                                    / "config"
+                                    / profile["orchestration"]["recipe_directory"]
+                                ).resolve()
+                            ),
+                        }
+                    }
+                }
+            )
+        )
+        _assert_stays_visible(
+            "arm_cell_orchestration",
+            "orchestration_node",
+            "/orchestration_node",
+            execute_cycle_action,
+            ros_arguments=("--ros-args", "--params-file", str(params_path)),
+        )

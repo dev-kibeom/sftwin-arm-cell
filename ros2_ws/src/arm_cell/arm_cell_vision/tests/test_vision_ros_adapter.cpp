@@ -1,5 +1,7 @@
 #include <chrono>
+#include <condition_variable>
 #include <fstream>
+#include <future>
 #include <memory>
 #include <limits>
 #include <sstream>
@@ -7,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <rclcpp/rclcpp.hpp>
+#include <rcutils/logging.h>
 #include <rosgraph_msgs/msg/clock.hpp>
 
 #include "arm_cell_vision/clock_epoch_observer.hpp"
@@ -70,12 +73,13 @@ protected:
   }
 
   std::shared_ptr<VisionRosIngress> make_ingress(
-    double slop_ms, double reusable_pair_max_age_ms = 200.0)
+    double slop_ms, double reusable_pair_max_age_ms = 200.0, bool capture_details = false)
   {
     rclcpp::NodeOptions options;
     options.parameter_overrides({
       rclcpp::Parameter("sync_slop_ms", slop_ms),
-      rclcpp::Parameter("reusable_pair_max_age_ms", reusable_pair_max_age_ms)});
+      rclcpp::Parameter("reusable_pair_max_age_ms", reusable_pair_max_age_ms),
+      rclcpp::Parameter("diagnostics.capture_enabled", capture_details)});
     return std::make_shared<VisionRosIngress>(options);
   }
 
@@ -85,8 +89,7 @@ protected:
   {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (!predicate() && std::chrono::steady_clock::now() < deadline) {
-      executor.spin_some();
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      executor.spin_once(std::chrono::milliseconds(5));
     }
     ASSERT_TRUE(predicate());
   }
@@ -97,8 +100,7 @@ protected:
   {
     const auto deadline = std::chrono::steady_clock::now() + duration;
     while (std::chrono::steady_clock::now() < deadline) {
-      executor.spin_some();
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      executor.spin_once(std::chrono::milliseconds(5));
     }
   }
 };
@@ -117,6 +119,22 @@ TEST(VisionRosAdapter, PreservesIndividualStampsAndUsesRgbAsCanonicalStamp)
   EXPECT_EQ(candidate.rgb.receipt_monotonic_ns, 11);
   EXPECT_EQ(candidate.depth.receipt_monotonic_ns, 12);
   EXPECT_EQ(candidate.camera_info.receipt_monotonic_ns, 13);
+}
+
+TEST_F(VisionRosIngressTest, RequestCaptureDoesNotRequireDebugLogging)
+{
+  ASSERT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO),
+    RCUTILS_RET_OK);
+  auto ingress = make_ingress(10.0, 200.0, true);
+  ingress->begin_acquisition(0);
+
+  const auto diagnostics = ingress->finish_request_diagnostics();
+
+  EXPECT_TRUE(diagnostics.detailed_capture_enabled);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_UNSET),
+    RCUTILS_RET_OK);
 }
 
 TEST(VisionRosAdapter, M1cFixtureNominalFieldsReachPolicyWithoutRewriting)
@@ -234,7 +252,6 @@ TEST_F(VisionRosIngressTest, CameraInfoIsCachedIndependentlyOfRgbDepthTimestamp)
   executor.add_node(ingress);
   executor.add_node(publisher);
   spin_until(executor, [&] {return info->get_subscription_count() >= 1;});
-
   info->publish(camera_info(1));
   spin_until(executor, [&] {return ingress->has_cached_calibration();});
   ASSERT_EQ(ingress->begin_acquisition(0).status, IngressStatus::kWaiting);
@@ -244,8 +261,127 @@ TEST_F(VisionRosIngressTest, CameraInfoIsCachedIndependentlyOfRgbDepthTimestamp)
   spin_until(executor, [&] {return ingress->last_result().has_value();});
 
   ASSERT_EQ(ingress->last_result()->status, IngressStatus::kObservationReady);
-  EXPECT_EQ(ingress->last_result()->observation->stamp_ns(), ns(10));
+  EXPECT_EQ(ingress->last_result()->observation->stamp_ns(), ns(10, 500'000));
   EXPECT_EQ(ingress->calibration_cache_generation(), 1U);
+
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, FreshDepthWithoutRgbIsAnObservation)
+{
+  auto ingress = make_ingress(1.0, 200.0, true);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_depth_only_publisher");
+  auto depth = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/aligned_depth_to_color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto info = publisher->create_publisher<sensor_msgs::msg::CameraInfo>(
+    "/camera/color/camera_info", rclcpp::QoS(10).reliable().durability_volatile());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return info->get_subscription_count() >= 1;});
+  ingress->set_observation_observer([&](const VisionObservation & observation) {
+      (void)ingress->evaluate_depth_source_stamp_freshness(observation, ns(1));
+    });
+
+  info->publish(camera_info(1));
+  spin_until(executor, [&] {return ingress->has_cached_calibration();});
+  ASSERT_EQ(ingress->begin_acquisition(0, steady_now_ns()).status, IngressStatus::kWaiting);
+  depth->publish(image(10, 500'000));
+  spin_until(executor, [&] {return ingress->last_result().has_value();});
+
+  ASSERT_EQ(ingress->last_result()->status, IngressStatus::kObservationReady);
+  ASSERT_TRUE(ingress->latest_observation());
+  EXPECT_EQ(ingress->latest_observation()->depth.header.stamp.nanosec, 500'000U);
+  EXPECT_EQ(ingress->latest_observation()->rgb.width, 0U);
+  EXPECT_EQ(ingress->acceptance_snapshot().synchronized_callback_count, 0U);
+  const auto diagnostics = ingress->finish_request_diagnostics();
+  EXPECT_EQ(diagnostics.depth_source_stamp_freshness_evaluated, 1U);
+  ASSERT_EQ(diagnostics.depth_source_freshness_details.size(), 1U);
+  EXPECT_EQ(diagnostics.depth_source_freshness_details.front().depth_source_stamp_ns,
+    ns(10, 500'000));
+
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, SnapshotUsesLatestSpatiallyCompatibleRgbWithoutTimestampGate)
+{
+  auto ingress = make_ingress(10.0);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_snapshot_latest_rgb_publisher");
+  auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return rgb->get_subscription_count() >= 1;});
+
+  auto camera = camera_info(1);
+  camera.width = 2;
+  camera.height = 2;
+  camera.header.frame_id = "camera_color_optical_frame";
+  auto depth = image(10);
+  depth.width = 2;
+  depth.height = 2;
+  depth.header.frame_id = "camera_color_optical_frame";
+  depth.encoding = "32FC1";
+  depth.step = 8;
+  depth.data.resize(16);
+
+  const auto candidate = [](int32_t sec, uint32_t nanosec, uint8_t pixel) {
+      auto value = image(sec, nanosec);
+      value.width = 2;
+      value.height = 2;
+      value.header.frame_id = "camera_color_optical_frame";
+      value.encoding = "rgb8";
+      value.step = 6;
+      value.data.assign(12, pixel);
+      return value;
+    };
+  EXPECT_EQ(ingress->latest_snapshot_rgb(depth, camera).status, "not_received");
+
+  const auto publish_rgb = [&](const sensor_msgs::msg::Image & message) {
+      const auto count = ingress->acceptance_snapshot().rgb_message_count;
+      rgb->publish(message);
+      spin_until(executor, [&] {
+          return ingress->acceptance_snapshot().rgb_message_count > count;
+        });
+    };
+  publish_rgb(candidate(30, 0, 7));
+  publish_rgb(candidate(40, 0, 8));
+  auto selected = ingress->latest_snapshot_rgb(depth, camera);
+  ASSERT_TRUE(selected.image);
+  EXPECT_EQ(selected.status, "available");
+  EXPECT_EQ(selected.image->header.stamp.sec, 40);
+  EXPECT_EQ(selected.image->data.front(), 8);
+  EXPECT_GT(ns(selected.image->header.stamp.sec, selected.image->header.stamp.nanosec) -
+    ns(depth.header.stamp.sec, depth.header.stamp.nanosec), 100'000'000LL);
+
+  auto wrong_camera = candidate(41, 0, 9);
+  wrong_camera.header.frame_id = "another_camera";
+  publish_rgb(wrong_camera);
+  selected = ingress->latest_snapshot_rgb(depth, camera);
+  EXPECT_FALSE(selected.image);
+  EXPECT_EQ(selected.status, "frame_mismatch");
+
+  auto bad_encoding = candidate(42, 0, 10);
+  bad_encoding.encoding = "bgr8";
+  publish_rgb(bad_encoding);
+  selected = ingress->latest_snapshot_rgb(depth, camera);
+  EXPECT_FALSE(selected.image);
+  EXPECT_EQ(selected.status, "encoding_unsupported");
+
+  auto short_buffer = candidate(43, 0, 11);
+  short_buffer.data.resize(1);
+  publish_rgb(short_buffer);
+  selected = ingress->latest_snapshot_rgb(depth, camera);
+  EXPECT_FALSE(selected.image);
+  EXPECT_EQ(selected.status, "buffer_too_short");
+
+  depth.width = 3;
+  selected = ingress->latest_snapshot_rgb(depth, camera);
+  EXPECT_FALSE(selected.image);
+  EXPECT_EQ(selected.status, "depth_camera_info_mismatch");
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);
@@ -523,6 +659,7 @@ TEST_F(VisionRosIngressTest, ClockRollbackInvalidatesWithoutAnySynchronizedObser
   }
   ASSERT_TRUE(ingress->last_result().has_value());
   EXPECT_EQ(ingress->last_result()->status, IngressStatus::kTimeRollback);
+  EXPECT_EQ(ingress->acceptance_snapshot().clock_epoch, 1U);
 
   rosgraph_msgs::msg::Clock later;
   later.clock.sec = 103;
@@ -549,17 +686,18 @@ TEST_F(VisionRosIngressTest, ExactAndStrictlyInsideSlopSynchronize)
   executor.add_node(publisher);
   spin_for(executor, std::chrono::milliseconds(100));
 
+  info->publish(camera_info(1, 500'000));
+  spin_until(executor, [&] {return ingress->has_cached_calibration();});
   ASSERT_EQ(ingress->begin_acquisition(0).status, IngressStatus::kWaiting);
   rgb->publish(image(1));
   depth->publish(image(1, 500'000));
-  info->publish(camera_info(1, 500'000));
   rgb->publish(image(2));
   spin_until(executor, [&] {return !ingress->synchronized_callback_rgb_stamps().empty();});
   ASSERT_EQ(ingress->synchronized_callback_rgb_stamps().front(), ns(1));
   ASSERT_TRUE(ingress->last_result().has_value());
   ASSERT_EQ(ingress->last_result()->status, IngressStatus::kObservationReady);
   ASSERT_TRUE(ingress->last_result()->observation);
-  EXPECT_EQ(ingress->last_result()->observation->stamp_ns(), ns(1));
+  EXPECT_EQ(ingress->last_result()->observation->stamp_ns(), ns(1, 500'000));
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);
@@ -657,7 +795,8 @@ TEST_F(VisionRosIngressTest, CrossStreamInterleavingProducesT1WithoutRollback)
 
 TEST_F(VisionRosIngressTest, RequestDiagnosticsSeparateLatestSamplesFromActualPairsAndReset)
 {
-  auto ingress = make_ingress(0.0);
+  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG);
+  auto ingress = make_ingress(0.0, 200.0, true);
   auto publisher = std::make_shared<rclcpp::Node>("vision_ingress_request_diagnostics_publisher");
   auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
     "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
@@ -696,23 +835,39 @@ TEST_F(VisionRosIngressTest, RequestDiagnosticsSeparateLatestSamplesFromActualPa
   EXPECT_EQ(diagnostics.sync_callbacks, 2U);
   EXPECT_EQ(diagnostics.policy_evaluations, 2U);
   EXPECT_EQ(diagnostics.observation_ready, 1U);
-  EXPECT_EQ(diagnostics.pre_request_pair_candidates, 1U);
   EXPECT_EQ(diagnostics.watermark_rejected_pairs, 0U);
   EXPECT_EQ(diagnostics.latest_stamp_delta_ns, 0);
   EXPECT_EQ(diagnostics.minimum_cross_stream_delta_ns, 0);
   EXPECT_EQ(diagnostics.latest_pair_rgb_stamp_ns, ns(101));
   EXPECT_EQ(diagnostics.latest_pair_depth_stamp_ns, ns(101));
   EXPECT_EQ(diagnostics.latest_pair_delta_ns, 0);
+  rgb->publish(image(102));
+  spin_until(executor, [&] {return ingress->acceptance_snapshot().rgb_message_count == 3;});
+  const auto ingress_snapshot = ingress->acceptance_snapshot();
+  EXPECT_EQ(ingress_snapshot.rgb_message_count, 3U);
+  EXPECT_EQ(ingress_snapshot.depth_message_count, 2U);
+  EXPECT_EQ(ingress_snapshot.synchronized_callback_count, 2U);
+  // The pair stamps remain bound to the last synchronized callback even when
+  // the latest independently received RGB sample has moved ahead.
+  EXPECT_EQ(ingress_snapshot.latest_rgb_stamp_ns, ns(101));
+  EXPECT_EQ(ingress_snapshot.latest_depth_stamp_ns, ns(101));
+  EXPECT_EQ(ingress_snapshot.latest_rgb_received_stamp_ns, ns(102));
+  ASSERT_TRUE(ingress_snapshot.last_synchronized_receipt_monotonic_ns);
+  EXPECT_GE(steady_now_ns(), *ingress_snapshot.last_synchronized_receipt_monotonic_ns);
+  ASSERT_TRUE(ingress_snapshot.latest_oldest_receipt_age_ns);
+  EXPECT_GE(*ingress_snapshot.latest_oldest_receipt_age_ns, 0);
   ASSERT_EQ(diagnostics.pair_details.size(), 2U);
   EXPECT_TRUE(diagnostics.pair_details[0].pre_request_sample);
-  EXPECT_EQ(diagnostics.pair_details[0].status, IngressStatus::kStaleObservation);
-  EXPECT_TRUE(diagnostics.pair_details[0].policy_evaluated.value());
+  EXPECT_EQ(diagnostics.pair_details[0].status, IngressStatus::kWaiting);
+  EXPECT_EQ(diagnostics.pair_details[0].rgb_frame_id, "camera_color_optical_frame");
+  EXPECT_EQ(diagnostics.pair_details[0].depth_frame_id, "camera_color_optical_frame");
+  EXPECT_FALSE(diagnostics.pair_details[0].policy_evaluated.value());
   EXPECT_FALSE(diagnostics.pair_details[0].observation_ready.value());
   EXPECT_FALSE(diagnostics.pair_details[1].pre_request_sample);
   EXPECT_TRUE(diagnostics.pair_details[1].watermark_passed);
-  EXPECT_EQ(diagnostics.pair_details[1].status, IngressStatus::kObservationReady);
-  EXPECT_TRUE(diagnostics.pair_details[1].policy_evaluated.value());
-  EXPECT_TRUE(diagnostics.pair_details[1].observation_ready.value());
+  EXPECT_EQ(diagnostics.pair_details[1].status, IngressStatus::kWaiting);
+  EXPECT_FALSE(diagnostics.pair_details[1].policy_evaluated.value());
+  EXPECT_FALSE(diagnostics.pair_details[1].observation_ready.value());
   ASSERT_EQ(diagnostics.sample_details.size(), 3U);
   EXPECT_TRUE(diagnostics.sample_details[0].receipt_monotonic_ns > request_start);
   EXPECT_EQ(diagnostics.sample_details[0].frame_id, "camera_color_optical_frame");
@@ -733,6 +888,258 @@ TEST_F(VisionRosIngressTest, RequestDiagnosticsSeparateLatestSamplesFromActualPa
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);
+  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO);
+}
+
+TEST_F(VisionRosIngressTest, DetailedCapturePreservesSignedPairFreshnessEvidence)
+{
+  auto ingress = make_ingress(10.0, 200.0, true);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_pair_freshness_publisher");
+  auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto depth = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/aligned_depth_to_color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto info = publisher->create_publisher<sensor_msgs::msg::CameraInfo>(
+    "/camera/color/camera_info", rclcpp::QoS(10).reliable().durability_volatile());
+  auto clock = publisher->create_publisher<rosgraph_msgs::msg::Clock>(
+    "/clock", rclcpp::ClockQoS());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return rgb->get_subscription_count() >= 1;});
+
+  std::vector<VisionIngressPairFreshnessDiagnostic> evaluations;
+  ingress->set_synchronized_observer([&](const VisionObservation & observation) {
+      evaluations.push_back(ingress->evaluate_pair_source_stamp_freshness(
+          observation, ns(1)));
+    });
+  rosgraph_msgs::msg::Clock clock_message;
+  clock_message.clock.sec = 100;
+  clock->publish(clock_message);
+  spin_until(executor, [&] {return ingress->acceptance_snapshot().clock_sample_count == 1;});
+  info->publish(camera_info(100));
+  spin_until(executor, [&] {return ingress->has_cached_calibration();});
+  ASSERT_EQ(ingress->begin_acquisition(0, steady_now_ns()).status, IngressStatus::kWaiting);
+
+  const auto publish_pair = [&](int32_t sec, uint32_t nanosec, uint64_t expected_count) {
+      rgb->publish(image(sec, nanosec));
+      depth->publish(image(sec, nanosec));
+      spin_until(executor, [&] {
+        return ingress->acceptance_snapshot().synchronized_callback_count >= expected_count;
+      });
+    };
+  publish_pair(98, 900'000'000U, 1U);
+  publish_pair(100, 500'000'000U, 2U);
+  publish_pair(101, 100'000'000U, 3U);
+
+  ASSERT_EQ(evaluations.size(), 3U);
+  EXPECT_FALSE(evaluations[0].accepted);
+  EXPECT_EQ(evaluations[0].rgb_source_minus_clock_ns, -1'100'000'000LL);
+  EXPECT_EQ(evaluations[0].depth_source_minus_clock_ns, -1'100'000'000LL);
+  EXPECT_EQ(evaluations[0].reason, "rgb_source_clock_delta_exceeded");
+  ASSERT_TRUE(evaluations[0].clock_receipt_age_ns.has_value());
+  EXPECT_EQ(
+    *evaluations[0].clock_receipt_age_ns,
+    evaluations[0].evaluation_steady_ns - *evaluations[0].clock_received_steady_ns);
+  EXPECT_TRUE(evaluations[1].accepted);
+  EXPECT_EQ(evaluations[1].rgb_source_minus_clock_ns, 500'000'000LL);
+  EXPECT_FALSE(evaluations[2].accepted);
+  EXPECT_EQ(evaluations[2].rgb_source_minus_clock_ns, 1'100'000'000LL);
+  EXPECT_EQ(evaluations[2].depth_source_minus_clock_ns, 1'100'000'000LL);
+  EXPECT_EQ(evaluations[2].reason, "rgb_source_clock_delta_exceeded");
+
+  const auto diagnostics = ingress->finish_request_diagnostics();
+  ASSERT_EQ(diagnostics.pair_details.size(), 3U);
+  ASSERT_TRUE(diagnostics.pair_details[0].freshness_evaluation.has_value());
+  EXPECT_EQ(
+    diagnostics.pair_details[0].freshness_evaluation->rgb_source_minus_clock_ns,
+    -1'100'000'000LL);
+  EXPECT_EQ(
+    diagnostics.pair_details[0].freshness_evaluation->maximum_absolute_delta_ns,
+    1'000'000'000LL);
+  EXPECT_FALSE(diagnostics.pair_details[0].freshness_evaluation->accepted);
+  EXPECT_EQ(diagnostics.source_stamp_freshness_evaluated, 3U);
+  EXPECT_EQ(diagnostics.source_stamp_freshness_accepted, 1U);
+  EXPECT_EQ(diagnostics.source_stamp_freshness_rejected, 2U);
+  EXPECT_EQ(diagnostics.source_stamp_freshness_clock_delta_rejected, 2U);
+
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, MissingClockIsReportedWithoutInventingTimeValues)
+{
+  auto ingress = make_ingress(10.0, 200.0, true);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_clock_relation_publisher");
+  auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto depth = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/aligned_depth_to_color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto info = publisher->create_publisher<sensor_msgs::msg::CameraInfo>(
+    "/camera/color/camera_info", rclcpp::QoS(10).reliable().durability_volatile());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return rgb->get_subscription_count() >= 1;});
+  std::optional<VisionIngressPairFreshnessDiagnostic> no_clock;
+  ingress->set_synchronized_observer([&](const VisionObservation & observation) {
+      no_clock = ingress->evaluate_pair_source_stamp_freshness(observation, ns(1));
+    });
+  info->publish(camera_info(5));
+  spin_until(executor, [&] {return ingress->has_cached_calibration();});
+  ASSERT_EQ(ingress->begin_acquisition(0, steady_now_ns()).status, IngressStatus::kWaiting);
+  rgb->publish(image(5));
+  depth->publish(image(5));
+  spin_until(executor, [&] {return no_clock.has_value();});
+  ASSERT_TRUE(no_clock->accepted);
+  EXPECT_FALSE(no_clock->evaluation_clock_ns.has_value());
+  EXPECT_FALSE(no_clock->rgb_source_minus_clock_ns.has_value());
+  EXPECT_FALSE(no_clock->clock_receipt_age_ns.has_value());
+  EXPECT_EQ(no_clock->clock_sample_relation, VisionClockSampleRelation::kNotReceived);
+  EXPECT_EQ(no_clock->reason, "clock_not_received_gate_not_applied");
+  const auto no_clock_diagnostics = ingress->finish_request_diagnostics();
+  ASSERT_EQ(no_clock_diagnostics.pair_details.size(), 1U);
+  ASSERT_TRUE(no_clock_diagnostics.pair_details.front().freshness_evaluation.has_value());
+  EXPECT_EQ(no_clock_diagnostics.source_stamp_freshness_clock_unavailable, 1U);
+
+  ingress->begin_acquisition(0, steady_now_ns());
+  auto clock = publisher->create_publisher<rosgraph_msgs::msg::Clock>(
+    "/clock", rclcpp::ClockQoS());
+  spin_until(executor, [&] {return clock->get_subscription_count() >= 1;});
+  const auto publish_clock = [&](int32_t sec, uint64_t count) {
+      rosgraph_msgs::msg::Clock message;
+      message.clock.sec = sec;
+      clock->publish(message);
+      spin_until(executor, [&] {return ingress->acceptance_snapshot().clock_sample_count >= count;});
+    };
+  publish_clock(0, 1U);
+  auto first_sample = ingress->evaluate_pair_source_stamp_freshness(
+    VisionObservation{image(0), image(0), camera_info(0), 1, 2}, ns(1));
+  EXPECT_EQ(first_sample.clock_sample_relation, VisionClockSampleRelation::kFirstSample);
+  ASSERT_TRUE(first_sample.evaluation_clock_ns.has_value());
+  EXPECT_EQ(*first_sample.evaluation_clock_ns, 0);
+  publish_clock(10, 2U);
+  const auto advanced_sample = ingress->evaluate_pair_source_stamp_freshness(
+    VisionObservation{image(10), image(10), camera_info(10), 1, 2}, ns(1));
+  EXPECT_EQ(advanced_sample.clock_sample_relation, VisionClockSampleRelation::kAdvanced);
+  publish_clock(10, 3U);
+  auto unchanged_sample = ingress->evaluate_pair_source_stamp_freshness(
+    VisionObservation{image(10), image(10), camera_info(10), 1, 2}, ns(1));
+  EXPECT_EQ(unchanged_sample.clock_sample_relation, VisionClockSampleRelation::kUnchanged);
+  publish_clock(9, 4U);
+  const auto rollback_sample = ingress->evaluate_pair_source_stamp_freshness(
+    VisionObservation{image(9), image(9), camera_info(9), 1, 2}, ns(1));
+  EXPECT_EQ(rollback_sample.clock_sample_relation, VisionClockSampleRelation::kBackward);
+  EXPECT_TRUE(rollback_sample.clock_rollback_observed);
+  EXPECT_EQ(rollback_sample.clock_epoch, 1U);
+
+  const auto diagnostics = ingress->finish_request_diagnostics();
+  EXPECT_EQ(diagnostics.pair_details.size(), 0U);
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, DiagnosticsOffDoesNotRetainFreshnessEvidence)
+{
+  auto ingress = make_ingress(10.0, 200.0, false);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_freshness_capture_off_publisher");
+  auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto depth = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/aligned_depth_to_color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto info = publisher->create_publisher<sensor_msgs::msg::CameraInfo>(
+    "/camera/color/camera_info", rclcpp::QoS(10).reliable().durability_volatile());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return rgb->get_subscription_count() >= 1;});
+  ingress->set_observation_observer([&](const VisionObservation & observation) {
+      ingress->evaluate_pair_source_stamp_freshness(observation, ns(1));
+    });
+  info->publish(camera_info(5));
+  spin_until(executor, [&] {return ingress->has_cached_calibration();});
+  ASSERT_EQ(ingress->begin_acquisition(0, steady_now_ns()).status, IngressStatus::kWaiting);
+  rgb->publish(image(5));
+  depth->publish(image(5));
+  spin_until(executor, [&] {
+    return ingress->acceptance_snapshot().policy_delivery_count == 1U;
+  });
+  const auto diagnostics = ingress->finish_request_diagnostics();
+  EXPECT_FALSE(diagnostics.detailed_capture_enabled);
+  EXPECT_TRUE(diagnostics.pair_details.empty());
+  EXPECT_EQ(diagnostics.source_stamp_freshness_evaluated, 0U);
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, DetailedFreshnessExamplesStayBoundedAndAggregateRejects)
+{
+  auto ingress = make_ingress(0.0, 200.0, true);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_freshness_bound_publisher");
+  auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto depth = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/aligned_depth_to_color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  auto info = publisher->create_publisher<sensor_msgs::msg::CameraInfo>(
+    "/camera/color/camera_info", rclcpp::QoS(10).reliable().durability_volatile());
+  auto clock = publisher->create_publisher<rosgraph_msgs::msg::Clock>(
+    "/clock", rclcpp::ClockQoS());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return rgb->get_subscription_count() >= 1;});
+  ingress->set_observation_observer([&](const VisionObservation & observation) {
+      ingress->evaluate_pair_source_stamp_freshness(observation, ns(1));
+    });
+  rosgraph_msgs::msg::Clock clock_message;
+  clock_message.clock.sec = 100;
+  clock->publish(clock_message);
+  spin_until(executor, [&] {return ingress->acceptance_snapshot().clock_sample_count == 1;});
+  info->publish(camera_info(100));
+  spin_until(executor, [&] {return ingress->has_cached_calibration();});
+  ASSERT_EQ(ingress->begin_acquisition(0, steady_now_ns()).status, IngressStatus::kWaiting);
+
+  for (int32_t index = 1; index <= 40; ++index) {
+    rgb->publish(image(98, static_cast<uint32_t>(index)));
+    depth->publish(image(98, static_cast<uint32_t>(index)));
+    spin_until(executor, [&] {
+      return ingress->acceptance_snapshot().policy_delivery_count >=
+        static_cast<uint64_t>(index);
+    });
+  }
+
+  const auto diagnostics = ingress->finish_request_diagnostics();
+  EXPECT_EQ(diagnostics.source_stamp_freshness_rejected, 40U);
+  EXPECT_EQ(diagnostics.source_stamp_freshness_clock_delta_rejected, 40U);
+  EXPECT_EQ(diagnostics.pair_details.size(), 32U);
+  EXPECT_EQ(diagnostics.pair_detail_dropped, 8U);
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, DetailedCaptureDropsOversizedFrameIdentityWithinTheBound)
+{
+  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG);
+  auto ingress = make_ingress(1.0, 200.0, true);
+  auto publisher = std::make_shared<rclcpp::Node>("vision_ingress_long_frame_id_publisher");
+  auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
+    "/camera/color/image_raw", rclcpp::QoS(10).reliable().durability_volatile());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(ingress);
+  executor.add_node(publisher);
+  spin_until(executor, [&] {return rgb->get_subscription_count() >= 1;});
+  ASSERT_EQ(ingress->begin_acquisition(0, steady_now_ns()).status, IngressStatus::kWaiting);
+  auto message = image(1);
+  message.header.frame_id = std::string(129, 'f');
+  rgb->publish(message);
+  spin_until(executor, [&] {return ingress->acceptance_snapshot().rgb_message_count == 1;});
+  const auto details = ingress->finish_request_diagnostics();
+  EXPECT_TRUE(details.sample_details.empty());
+  EXPECT_EQ(details.sample_detail_dropped, 1U);
+  EXPECT_EQ(details.rgb_received, 1U);
+  executor.remove_node(publisher);
+  executor.remove_node(ingress);
+  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO);
 }
 
 TEST_F(VisionRosIngressTest, FreshPreRequestPairIsReusedAsNewDetectionInput)
@@ -752,7 +1159,11 @@ TEST_F(VisionRosIngressTest, FreshPreRequestPairIsReusedAsNewDetectionInput)
 
   info->publish(camera_info(10));
   spin_until(executor, [&] {return ingress->has_cached_calibration();});
-  rgb->publish(image(10));
+  auto color = image(10);
+  color.encoding = "rgb8";
+  color.step = color.width * 3;
+  color.data.assign(static_cast<size_t>(color.step) * color.height, 20);
+  rgb->publish(color);
   depth->publish(image(10));
   spin_until(executor, [&] {
     return ingress->acceptance_snapshot().synchronized_callback_count == 1;
@@ -761,8 +1172,8 @@ TEST_F(VisionRosIngressTest, FreshPreRequestPairIsReusedAsNewDetectionInput)
   ASSERT_EQ(ingress->begin_acquisition(ns(10), steady_now_ns()).status, IngressStatus::kWaiting);
   const auto observation = ingress->latest_observation();
   ASSERT_TRUE(observation);
-  EXPECT_EQ(observation->rgb.header.stamp.sec, 10);
-  EXPECT_EQ(observation->rgb.header.frame_id, "camera_color_optical_frame");
+  EXPECT_EQ(observation->rgb_presentation_status, "deferred_to_snapshot");
+  EXPECT_EQ(observation->rgb.width, 0U);
   EXPECT_EQ(observation->depth.header.stamp.sec, 10);
   EXPECT_TRUE(ingress->acceptance_snapshot().cached_pair_reused);
   const auto diagnostics = ingress->finish_request_diagnostics();
@@ -807,6 +1218,19 @@ TEST_F(VisionRosIngressTest, CachedPairOlderThanConfiguredFreshnessWindowIsNotRe
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);
+}
+
+TEST_F(VisionRosIngressTest, DepthFreshnessCauseRemainsAvailableWithoutDetailedCapture)
+{
+  auto ingress = make_ingress(10.0, 200.0, false);
+  VisionObservation observation;
+  observation.depth = image(5);
+  const auto evaluation = ingress->evaluate_depth_source_stamp_freshness(observation, ns(1));
+  EXPECT_TRUE(evaluation.accepted);
+  EXPECT_EQ(evaluation.reason, "clock_not_received_gate_not_applied");
+  const auto diagnostics = ingress->finish_request_diagnostics();
+  EXPECT_TRUE(diagnostics.depth_source_freshness_details.empty());
+  EXPECT_EQ(diagnostics.depth_source_stamp_freshness_evaluated, 0U);
 }
 
 }  // namespace

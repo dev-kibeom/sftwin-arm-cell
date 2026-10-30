@@ -131,10 +131,9 @@ def apply_integration_metadata(context):
     set_custom_data = context.set_custom_data
     set_vec3_attribute = context.set_vec3_attribute
     amr_x, amr_y = context.amr_x, context.amr_y
-    raw_slot_x, done_slot_x, slot_y, amr_tray_z = (
-        context.raw_slot_x,
-        context.done_slot_x,
-        context.slot_y,
+    tray_x, tray_y, amr_tray_z = (
+        context.tray_x,
+        context.tray_y,
         context.amr_tray_z,
     )
     cnc_x, cnc_y = context.cnc_x, context.cnc_y
@@ -146,7 +145,7 @@ def apply_integration_metadata(context):
         f"{CELL_ROOT}/m0609": "manipulator",
         f"{CELL_ROOT}/Vision/Camera_Sensor": "vision_sensor",
         f"{CELL_ROOT}/AMR/Mockup": "mobile_robot_placeholder",
-        f"{CELL_ROOT}/AMR/Mockup/Tray": "robot_pick_surface",
+        f"{CELL_ROOT}/AMR/Mockup/Tray": "material_receiver_and_robot_pick_surface",
         f"{CELL_ROOT}/CNC/WorkArea/Fixture": "cnc_fixture",
         f"{CELL_ROOT}/Safety/AMRInterface": "logistics_safety_interface",
     }
@@ -176,17 +175,11 @@ def apply_integration_metadata(context):
         stage,
         CELL_ROOT,
         "sf_twin:nominal_raw_pick_pose",
-        [raw_slot_x, slot_y, amr_tray_z + 0.12],
+        [tray_x, tray_y, amr_tray_z + 0.12],
     )
     set_vec3_attribute(
         stage,
         CELL_ROOT,
         "sf_twin:nominal_cnc_place_pose",
         [cnc_x - 0.08, cnc_y - 0.49, 0.88],
-    )
-    set_vec3_attribute(
-        stage,
-        CELL_ROOT,
-        "sf_twin:nominal_finished_place_pose",
-        [done_slot_x, slot_y, amr_tray_z + 0.10],
     )

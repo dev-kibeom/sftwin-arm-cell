@@ -102,21 +102,46 @@
       }
     },
     {
+      "display_name": "CameraRig PostRight",
+      "geometry": {
+        "dimensions_m": [
+          0.055,
+          0.055,
+          1.9
+        ],
+        "type": "box"
+      },
+      "id": "camera_rig_post_right",
+      "pose": {
+        "position_m": [
+          0.96,
+          -0.35,
+          0.95
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
       "display_name": "AMR Tray LeftRail",
       "geometry": {
         "dimensions_m": [
-          0.025,
-          0.46,
-          0.07
+          0.02,
+          0.4416,
+          0.08
         ],
         "type": "box"
       },
       "id": "amr_tray_rail_left",
       "pose": {
         "position_m": [
-          -0.125,
+          -0.112,
           -0.85,
-          0.675
+          0.68
         ],
         "quaternion_xyzw": [
           0.0,
@@ -130,18 +155,18 @@
       "display_name": "AMR Tray RightRail",
       "geometry": {
         "dimensions_m": [
-          0.025,
-          0.46,
-          0.07
+          0.02,
+          0.4416,
+          0.08
         ],
         "type": "box"
       },
       "id": "amr_tray_rail_right",
       "pose": {
         "position_m": [
-          0.525,
+          0.512,
           -0.85,
-          0.675
+          0.68
         ],
         "quaternion_xyzw": [
           0.0,
@@ -155,9 +180,9 @@
       "display_name": "AMR Tray RearRail",
       "geometry": {
         "dimensions_m": [
-          0.66,
-          0.025,
-          0.07
+          0.6336,
+          0.02,
+          0.08
         ],
         "type": "box"
       },
@@ -165,8 +190,33 @@
       "pose": {
         "position_m": [
           0.2,
-          -0.625,
-          0.675
+          -0.634,
+          0.68
+        ],
+        "quaternion_xyzw": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      }
+    },
+    {
+      "display_name": "AMR Tray Front Marker Post",
+      "geometry": {
+        "dimensions_m": [
+          0.008,
+          0.008,
+          0.0525
+        ],
+        "type": "box"
+      },
+      "id": "amr_tray_marker_post",
+      "pose": {
+        "position_m": [
+          0.2,
+          -1.066,
+          0.74625
         ],
         "quaternion_xyzw": [
           0.0,
@@ -179,7 +229,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "cb30b1101671807f2fa38e760c30bd338481ea3920cf039f1b2a0f91c082ea50",
-    "selection_sha256": "d3bbb13c0d91d9e7e402124d166ef18e99e9c8fa21f6ecdbac4fb8dbe9c99d73"
+    "canonical_manifest_sha256": "deac66b2c60e664c3eb0683feb1f6c8ace5804d4d4a59f451c2688ff31927ee5",
+    "selection_sha256": "f002a8be8ac8c954c5a6783a0f4b47bfb46d3b7cabd5286c890943819e16c347"
   }
 }
