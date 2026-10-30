@@ -53,7 +53,7 @@ motion:
     - gripper_robotiq_85_right_finger_tip_link
   enable_test_backend_controls: false
   calibration_profile_reference: config/isaac_planning.yaml
-  tolerance_profile_reference: docs/design/arm-cell/components/simulation/fds-deterministic-pnp-fixture.md#calibration-boundary
+  tolerance_profile_reference: docs/design/components/simulation/fds-deterministic-pnp-fixture.md#calibration-boundary
 
 orchestration:
   mission_target_id: cube_profile
