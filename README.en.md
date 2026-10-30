@@ -4,7 +4,7 @@
 
 A simulator-backed ROS 2 workcell for developing and evaluating a Doosan M0609 robot with a Robotiq 2F-85 gripper. The project brings perception, motion planning, task orchestration, software safety supervision, material handoff, and an operator UI together around shared ROS interfaces.
 
-The current official release is v0.2.0; v0.3.0 has not been formally published and remains a release candidate. The candidate makes the boundaries between mission flow, one pick-and-place task, and individual robot movements more explicit. It is an engineering and simulation project; it is not a validated production or safety-rated robot cell.
+The current official release is v0.3.0. It makes the boundaries between mission flow, one pick-and-place task, and individual robot movements more explicit. It is an engineering and simulation project; it is not a validated production or safety-rated robot cell.
 
 ## Project Overview
 
@@ -132,7 +132,7 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 
 ## Documentation
 
-- [v0.3.0 release notes (candidate)](docs/releases/v0.3.0.en.md) / [한국어](docs/releases/v0.3.0.ko.md)
+- [v0.3.0 release notes](docs/releases/v0.3.0.en.md) / [한국어](docs/releases/v0.3.0.ko.md)
 
 - [ARM Cell demo definition](docs/product/arm-cell/definition.md)
 - [System architecture](docs/design/arm-cell/architecture/) and [ARM Cell component designs](docs/design/arm-cell/components/)
@@ -147,9 +147,9 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 
 The public source contains the Vision, Motion, Orchestration, Safety, Material Integration, VDA mock, and UI Hub implementations described above. Their presence in source does not mean the complete final demonstration has passed live acceptance.
 
-- **Build and Docker runtime plugin:** The v0.3.0 candidate Docker image build succeeded and compiled the 12-package `arm_cell_bringup` build closure. PR #12 installed TRAC-IK 2.0.1 in `/opt/trac_ik` and verified MoveIt pluginlib loading, ARM Cell IK plugin initialization, and `solve_type=Distance`. The probe does not calculate an IK solution for a target pose, and it does not validate the full Motion Launch or Isaac Sim PnP. Earlier Public PR #2 and v0.2.0 export build results are separate historical baselines. The full-checkout ROS test failures remain as recorded in the release notes; successful compilation and plugin initialization do not resolve them.
+- **Build and Docker runtime plugin:** The v0.3.0 Docker image build succeeded and compiled the 12-package `arm_cell_bringup` build closure. PR #12 installed TRAC-IK 2.0.1 in `/opt/trac_ik` and verified MoveIt pluginlib loading, ARM Cell IK plugin initialization, and `solve_type=Distance`. The probe does not calculate an IK solution for a target pose, and it does not validate the full Motion Launch or Isaac Sim PnP. Earlier Public PR #2 and v0.2.0 export build results are separate historical baselines. The full-checkout ROS test failures remain as recorded in the release notes; successful compilation and plugin initialization do not resolve them.
 - **Planning evidence:** Historical Milestone 1A robot-only planning and Milestone 1B bounded static-scene acceptance are documented in the [acceptance reports](docs/reports/acceptance/). The reports preserve their evidence limits: exact historical commit/tag identifiers are unavailable, and Milestone 1B does not establish general reachability or full-cell collision coverage.
-- **Live runtime:** This v0.3.0 candidate Docker verification did not include the full Motion Launch, target-pose IK solution, Isaac Sim connection or live run, or PnP. Separate historical Private live reports record robot-only planning and a limited static-scene check, but they do not establish full mission acceptance and have limited baseline-revision traceability. Use the Isaac guide for the supported profile in a configured environment.
+- **Live runtime:** The v0.3.0 Docker verification did not include the full Motion Launch, target-pose IK solution, Isaac Sim connection or live run, or PnP. Separate historical Private live reports record robot-only planning and a limited static-scene check, but they do not establish full mission acceptance and have limited baseline-revision traceability. Use the Isaac guide for the supported profile in a configured environment.
 - **RGB-D known issue:** Vision can intermittently fail to acquire a usable RGB-D pair before detector processing starts. Distinct depth-reception gaps and missing synchronization callbacks are recorded; a common cause and resolution remain unconfirmed. See the [open acquisition issue record](docs/record/arm-cell/engineering-story/vision-rgbd-intermittent-acquisition-failure.md).
 - **E-Stop recovery evidence:** A separate Private-environment clean live record from 2026-10-30 shows reset, SafetyRecovery, and GO_HOME succeeding, after which the Mission resumed PnP. A later approach ended with `BACKEND_UNAVAILABLE`, so the complete Mission did not succeed. This is separate from the Public Docker verification, supports only that execution condition, and does not establish a general success rate.
 - **Simulation and safety boundary:** The VDA/external-state adapter is a mock subset; it is not full VDA 5050 or AMR navigation. Software Safety is not safety-rated E-stop/STO hardware and is not a substitute for it. Isaac Sim is the supported development environment; physical robot operation is not validated here.

@@ -8,7 +8,7 @@ This guide builds the current ARM Cell ROS 2 workspace with the repository's Doc
 - Docker BuildKit support for the `--progress=plain` option.
 - An internet connection from the Docker build environment for Ubuntu packages, ROS dependencies, and rosdep data.
 
-ROS 2 and Isaac Sim do not need to be installed on the host for this image build. At this writing, v0.2.0 is the latest official release; the recorded v0.3.0 build is candidate verification, not a published release. No v0.3.0 tag or GitHub Release has been published. The candidate build completed in the recorded Docker environment; other Docker host setups were not separately validated.
+ROS 2 and Isaac Sim do not need to be installed on the host for this image build. The recorded v0.3.0 build completed in the documented Docker environment; other Docker host setups were not separately validated.
 
 ## Build
 
