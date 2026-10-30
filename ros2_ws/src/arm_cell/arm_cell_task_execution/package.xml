@@ -13,7 +13,7 @@
   <depend>arm_cell_motion</depend>
   <depend>behaviortree_cpp_v3</depend>
   <depend>geometry_msgs</depend>
-  <depend>nlohmann-json-dev</depend>
+  <depend>nlohmann_json</depend>
   <depend>rclcpp</depend>
   <depend>rcl_interfaces</depend>
   <depend>rclcpp_action</depend>
