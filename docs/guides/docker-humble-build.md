@@ -20,7 +20,7 @@ cd sftwin-arm-cell
 docker build --progress=plain -t sftwin-arm-cell:humble .
 ```
 
-The Dockerfile installs build tools and compile dependencies with `rosdep`, explicitly skips the unavailable Humble TRAC-IK runtime plugin, then runs:
+The Dockerfile installs build tools and compile dependencies with `rosdep`. It explicitly installs `nlohmann-json3-dev` because Humble rosdep has no definition for the `nlohmann_json` key, and skips that key plus the unavailable TRAC-IK runtime plugin. It then runs:
 
 ```bash
 colcon build --packages-up-to arm_cell_bringup
