@@ -3,13 +3,13 @@
 - **Document ID:** `GUIDE-ARM-CELL-ISAAC-SIM`
 - **Document Type:** `Guide`
 - **Scope:** `ARM Cell / Isaac Sim development planning and RGB-D verification`
-- **Version:** `1.0.0`
+- **Version:** `1.1.0`
 - **Status:** `Active`
-- **Owner:** `ARM Cell Integration`
+- **Owner:** `ARM Cell Simulation Runtime` (Isaac Simulation and ROS Bringup)
 - **Applicable Environment:** `Ubuntu / ROS 2 Humble / Isaac Sim 5.1`
-- **Related Design:** `ADR 0001`, `ADR 0002`, `ADR 0003`,
-  `docs/interfaces/arm-cell/icd-sim-state-time-tf.md`,
-  `docs/interfaces/arm-cell/icd-sim-rgbd.md`
+- **Related Design:** `Architecture Record 0001`, `Architecture Record 0002`, `Architecture Record 0003`,
+  `docs/design/arm-cell/interfaces/icd-sim-state-time-tf.md`,
+  `docs/design/arm-cell/interfaces/icd-sim-rgbd.md`
 
 ## 1. Purpose
 
@@ -17,7 +17,7 @@ This Guide describes the repeatable operator procedure for building, starting, r
 verifying the supported ARM Cell Isaac Sim development profiles.
 
 It does not define model/state/TF/time/static-scene/RGB-D contract semantics. Refer to the
-related ADR/design documents for those contracts. Historical PASS results belong in Acceptance
+related Architecture Records/design documents for those contracts. Historical PASS results belong in Acceptance
 Reports, not in this Guide.
 
 This Guide is the operator procedure for Isaac runtime setup and operation.
@@ -83,6 +83,23 @@ the role entrypoints. Leave `PROJECT_ROOT = None` unless a deliberate local over
 `1_before_play.py` validates that configured root, configures the Script Editor module path and
 ROS domain, and selects production runtime mode. The diagnostic PnP profile is not required.
 
+For optional component capture in the independently started Isaac UI, set the same component
+selection in that process before running `1_before_play.py`, for example:
+
+```bash
+export SFTWIN_DIAGNOSTICS=motion
+```
+
+The accepted values are `none` (default), `all`, or a comma-separated list of `motion`, `vision`,
+`safety`, and `orchestration`. The Script Editor validates the selection and its Gripper Capture
+Diagnostic Record/PhysX Observer are created when `motion` is selected. `clock` and `gripper` are
+not independent selection values. ROS Launch settings do not reach a separate already-running
+Isaac UI process; set `SFTWIN_DIAGNOSTICS=motion` in the Isaac process before running
+`1_before_play.py`. The ROS launch summary explicitly reports this producer as process-local and
+does not claim the UI runtime was activated.
+The component paths and producer behavior are documented in
+[ARM Cell Observability Records ICD](../design/arm-cell/interfaces/icd-observability-records.md).
+
 ### 3.4 Construct the Isaac ARM Cell baseline
 
 After the ROS workspace build is complete, run the role-based entrypoints in Isaac Script
@@ -111,17 +128,71 @@ Script Editor process.
 
 ### 3.4.1 Live development iteration
 
-- After ROS/C++ code changes, rebuild the ROS workspace and restart the production ROS launch.
+- After ROS Python/C++ code or launch/configuration changes, stop the existing Bringup,
+  rebuild the affected packages, and source the updated overlay. Keep Isaac Kit open and
+  use Timeline Stop to reset the old experiment while retaining the Stage unless
+  Stage content itself changed. Start a fresh Bringup and verify its ROS endpoints. Then
+  Play and prepare the post-Play runtime as required by the existing Script Editor/ROS
+  Bridge initialization order; verify fresh simulation readiness/state before publishing
+  a new Delivery or running Retry Detection. The new ROS process starts with fresh Delivery accounting, Mission state,
+  Retry budget, and pending readiness; none is restored from the prior process. Stop-only
+  reset while retaining Bringup is also supported for another experiment in the same ROS
+  session. Neither path exits Kit or implies physical Safety Stop/Gripper release.
+
 - For idle-mutable Motion tuning, use `ros2 param set`; accepted updates apply to the next
   Motion action without restarting ROS. Updates are rejected while a goal is pending or active.
-- Rerun `2_after_play.py` to rebuild the gripper runtime after runtime-module edits; restart Isaac
-  Kit to load edits to an already-enabled extension.
-- After scene or ActionGraph changes, stop simulation and run `1_before_play.py` again, then press
-  Play and run `2_after_play.py`.
-- A normal Stop followed by Play keeps the current Isaac Kit runtime alive. After an Isaac Kit
-  restart or stage/ActionGraph rebuild, use a fresh sequence: `1_before_play.py` → Play →
-  `2_after_play.py`, then start or restart `ros2 launch arm_cell_bringup arm_cell.launch.py` as
-  needed.
+- After Isaac Python runtime edits, rerun the existing runtime entrypoint in the Script Editor.
+  Reload the edited module before replacing its runtime instance, and use the existing teardown
+  path to remove its prior callbacks, ROS node, graph bindings, and robot/camera handles before
+  rebuilding. `1_before_play.py` and `2_after_play.py` must be repeatable in the same Kit process;
+  a repeated run leaves exactly one active runtime instance. The current gripper bootstrap raises
+  an explicit error if the rebuilt runtime still lacks its required `feedback_generation` contract;
+  Resolve the runtime incompatibility or use a Kit API/tool reload procedure only when that
+  specific API requires a process restart; ordinary module and Extension edits use in-process
+  reload.
+- For Hub Extension Python edits, disable the extension first (the existing Script Editor
+  entrypoint leaves an already-enabled extension instance untouched), then re-enable it, or use the
+  documented Kit Extension reload operation for the installed Kit version. Verify that the prior
+  callbacks and ROS resources are released before the new instance starts.
+- For Stage or ActionGraph edits, keep Kit open, stop Timeline if the edited stage configuration
+  requires a stopped simulation, clean up the affected authored/runtime objects, and rerun the
+  relevant `1_before_play.py` and/or `2_after_play.py` entrypoint. Play again without restarting
+  Kit. Isaac Python edits do not require ROS rebuild or Bringup restart. A fresh Bringup
+  session uses Stop→Play to start a clean experiment; ordinary Isaac Python/Extension
+  reload does not.
+- After an actual Isaac Kit process restart, reconstruct with `1_before_play.py` → Play →
+  `2_after_play.py`, then start Bringup. A stage/ActionGraph rebuild performed in the open Kit
+  process does not by itself require restarting the ROS profile.
+
+These are the intended procedures for repeated in-process tests. Stop reset and repeatable-runtime contracts require runtime realization and live verification before they can be treated as currently available behavior. This guide change does
+not claim that implementation or live acceptance has already passed.
+
+The Stop→Play procedure preserves the Kit process. Simulation reset on Timeline Stop ends the prior experiment and restores the
+Isaac-owned robot, simulated Gripper attachment, generated material, validation
+fixtures, and temporary simulation fault state. It does not invoke Safety
+StopMotion, reset a Safety latch, command physical hardware, or require a
+physical release/recovery procedure. Valid configuration, Recipe, Calibration,
+Snapshots, logs, and diagnostic history remain available. Pause→Play resumes
+the same experiment; Stop→Play prepares a new one. The Hub does not gate Isaac's
+Timeline controls. A short ROS admission fence protects against old handoff or
+Mission state while owner reset and cancellation are being reconciled; if reset
+fails, the owner diagnostic remains visible and ROS admission stays isolated
+until a later Timeline lifecycle callback completes it. The simulation reset,
+repeatable Publish Trigger, and development-only Retry Detection behavior are
+design contracts in
+the [Operator UI Hub FDS](../design/arm-cell/components/ui-hub/fds.md),
+[Mission Cycle FDS](../design/arm-cell/components/orchestration/fds-mission-cycle.md),
+and [ExecuteCycle ICD](../design/arm-cell/interfaces/icd-orchestration-execute-cycle.md).
+Retry Detection is a new
+Vision-only `/vision/detect_target` request with a 30-second timeout; it does
+not supply material or start/resume a Mission. Publish Trigger creates a new
+Delivery ID and adds its quantity; Orchestration uses the next sequential
+ExecuteCycle to process aggregate outstanding supplied work. Isaac's standard Timeline UI
+remains the only Play/Pause/Stop control surface. Use the full reconstruction
+procedure in Section 3.9 only when a Kit API or tool specifically requires a
+fresh process, or when the Stage/ROS profile cannot be reconstructed through
+the in-process lifecycle above; record that concrete constraint. It is not the
+normal edit/retest path.
 
 `operational_profile.yaml` remains the startup default and reproducible source. ROS parameters
 are per-run overrides. The current Motion parameter classes are:
@@ -162,13 +233,16 @@ the ROS terminal, as described by the existing PnP validation procedure.
 
 Expected observations:
 
-- ROS advertises `/integration/request_material`,
+- ROS advertises `/external/handoff_trigger`,
   `/integration/material_readiness`, `/orchestration/execute_cycle`, and
   `/vision/detect_target` from their owning components;
-- the Isaac Hub shows current owner-published AMR, handoff, readiness, Safety,
-  Motion, and Orchestration feedback;
-- requesting material in the Hub reports only the Integration response first;
-  handoff/readiness and mission progress appear from owner feeds;
+- the Isaac Hub provides camera/Vision views and request controls; inspect
+  owner ROS interfaces and diagnostics for AMR, supply, Safety, Motion, and
+  Orchestration outcomes;
+- Publish Trigger sends the selected material type, quantity, and optional
+  random seed as an External Handoff Trigger; the Hub reports local
+  publication while Gateway acceptance, readiness, and mission progress
+  remain available through owner interfaces and diagnostic records;
 - the fixed target is consumed by the existing Vision seam and the mission
   reports its canonical terminal result.
 
@@ -189,13 +263,36 @@ assets with `0_pre_build.py` only when they need updating. For a normal live run
    ros2 launch arm_cell_bringup arm_cell.launch.py
    ```
 
+   Select optional component diagnostics when needed:
+
+   ```bash
+   ros2 launch arm_cell_bringup arm_cell_operational.launch.py \
+     log_level:=info diagnostics:=motion,vision
+   ```
+
+   The launch reports selected areas and effective ROS-side producers separately, along with the
+   artifact root. When `diagnostics` is omitted, `log_level:=debug` selects `all` for ROS
+   Bringup-managed diagnostic producers; other log levels select `none`. An explicit
+   `diagnostics` value takes precedence, so `log_level:=debug diagnostics:=none` enables DEBUG
+   logs without optional capture. `diagnostics` selects optional structured capture and does not
+   change logger levels; actual logging level and capture control remain independent. Explicit
+   `diagnostics:=motion` enables
+   Motion Clock/Watchdog and MotionProfileTrace capture; `diagnostics:=vision` adds bounded RGB-D
+   detail to the existing Snapshot. Set `SFTWIN_DIAGNOSTICS=motion` separately in Isaac UI to
+   enable Gripper Capture/PhysX observation. Isaac Gripper diagnostics remain process-local; ROS
+   Bringup does not pass its log level or diagnostics selection to the Isaac UI.
+   `diagnostics:=safety` and `diagnostics:=orchestration` write bounded event JSONL under
+   `.local_artifacts/observability/safety/` and `.local_artifacts/observability/orchestration/`.
+   `log_level:=debug diagnostics:=none` enables human-readable DEBUG logs while optional capture
+   remains off. Pick Execution Record remains required with diagnostics off.
+
 The launch uses `config/operational_profile.yaml`, preserves the established production
 composition and includes `isaac_planning.launch.py`. A deployment profile can be selected with
-`profile:=/absolute/path/to/profile.yaml`. The Simulation UI Hub is the production mission and
-fault control surface after this launch; it routes requests to canonical owners.
+`profile:=/absolute/path/to/profile.yaml`. The Simulation UI Hub is the demo/development trigger
+and fault control surface after this launch; Publish Trigger models an external supplier.
 
 Expected ROS observables include production `/vision/detect_target`,
-`/integration/request_material`, `/integration/material_readiness`, Safety,
+`/external/handoff_trigger`, `/integration/material_readiness`, Safety,
 Motion, and Orchestration owner endpoints. Confirm that the Hub subscribes to
 the current owner-published producer topics. This runtime setup does not itself
 establish production live acceptance. Production mission, Hub nominal PnP, Safety fault, and
@@ -257,21 +354,56 @@ Expected observable:
 
 ### 3.9 Reset or replace the Isaac stage
 
-Before Stop/reset/stage replacement:
+For a new experiment while keeping Kit open:
 
-1. stop the complete ROS launch with `Ctrl-C`;
-2. reset/reopen/rebuild the Isaac graph as required;
-3. press Play;
-4. rerun `2_after_play.py` after Play when gripper runtime behavior is needed;
-5. relaunch the complete ROS profile.
+1. Stop the complete old ROS Bringup with `Ctrl-C`; verify its nodes/endpoints
+   have disappeared. This ends its process-local Mission, child Actions,
+   readiness, retry budget, and workload accounting.
+2. Issue Isaac Timeline Stop. Check owner reset diagnostics: robot and
+   simulated attachment/actuator state reset; generated material, validation
+   fixtures, pending supply, and injected simulation stimuli are cleared.
+   Resolve any failed reset before starting another experiment.
+3. Rebuild and source the ROS overlay as in §3.1 when code changes require it.
+   Reopen/rebuild Stage or graph using the existing setup roles only when
+   those authored assets changed; ordinary reset keeps Kit and Stage open.
+4. Start the selected Bringup manually using its entrypoint above and verify
+   its ROS endpoints. Then issue Timeline Play, wait for the required physics
+   initialization, and run `2_after_play.py` for runtime preparation. Respect
+   the existing Script Editor/ROS Bridge initialization dependencies.
+5. Verify fresh post-Play clock, measured state, TF, camera and owner readiness
+   before publishing a new Delivery. Confirm distinct ROS process/request
+   identities and empty new-process Delivery/readiness/workload accounting.
 
-If reset occurs while ROS is still running and backward time/state is observed, restart the
-**entire** ROS launch rather than only the adapter.
+Expected observables and acceptance remain owned by the
+[Simulation Session FDS](../design/arm-cell/components/simulation/fds-sim-session.md)
+and [demo definition](../product/arm-cell/acceptance.md).
+Calibration, Recipe, valid configuration, logs, and Snapshots remain available;
+old residual workload does not enter the new experiment's executable quantity.
+Timeline Stop does not issue Safety StopMotion, E-stop, Safety reset, or a
+physical Gripper release. Bringup replacement transfers no Safety latch/cause
+memory; new Safety evaluates fresh inputs under its existing contract.
+Pause→Play remains the same experiment. Keeping the same Bringup through
+Stop→Play does not establish new-experiment isolation.
 
-Expected observable after restart:
+If backward time/state is observed while ROS is still running, stop and
+restart the **entire** ROS launch using this reset sequence, rather than
+restarting only the adapter or rewriting timestamps.
 
-- canonical state publication resumes from the new simulator session;
-- ROS consumers use the current simulation epoch.
+### 3.9.1 Reload runtime Python or the Hub Extension
+
+Keep Kit and the active Stage open. For runtime Python changes, tear down the
+existing owned runtime, reload the changed module, then rerun its existing
+role entrypoint. For Hub Extension changes, disable/re-enable the Extension.
+Neither operation alone rebuilds Stage or clears material. Use §3.9 separately
+when an authored Stage/ActionGraph change requires Timeline Stop and a new
+experiment.
+
+Verify that the changed module revision is active and that prior callbacks,
+ROS nodes, subscriptions, and runtime objects have been released, leaving
+exactly one active resource set. Kit and ROS Bringup remain running. Record a
+specific documented exception if a Kit-only API cannot support reload; do not
+silently claim the reload scenario passed. Extension stimulus cleanup remains
+owned by the [UI Hub FDS](../design/arm-cell/components/ui-hub/fds.md).
 
 ### 3.10 Run component checks
 
@@ -598,11 +730,29 @@ scale/shear/reflection into an apparently valid rigid pose.
 
 ## 7. References
 
-- `docs/adr/0001-arm-cell-model-state-and-time.md`
-- `docs/adr/0002-arm-cell-static-planning-scene.md`
-- `docs/adr/0003-arm-cell-rgbd-sensor-contract.md`
-- `docs/interfaces/arm-cell/icd-sim-state-time-tf.md`
-- `docs/interfaces/arm-cell/icd-sim-rgbd.md`
-- `docs/components/arm-cell/motion/cds-static-scene.md`
+- `docs/record/arm-cell/architecture-decision/model-state-and-time.md`
+- `docs/record/arm-cell/architecture-decision/static-planning-scene.md`
+- `docs/record/arm-cell/architecture-decision/rgbd-sensor-contract.md`
+- `docs/design/arm-cell/interfaces/icd-sim-state-time-tf.md`
+- `docs/design/arm-cell/interfaces/icd-sim-rgbd.md`
+- `docs/design/arm-cell/components/motion/cds.md`
 - `docs/reports/acceptance/arm-cell-milestone-1a.md`
 - `docs/reports/acceptance/arm-cell-milestone-1b-static-scene.md`
+
+### PLACE WAYPOINT 접근 경로 생성과 적용
+
+운영 profile과 Planning Runtime을 준비한 뒤 다음 명령으로 고정 HOME→PLACE
+접근 경로를 명시적으로 생성한다.
+
+```bash
+ros2 service call /motion/generate_place_waypoint_trajectory std_srvs/srv/Trigger '{}'
+```
+
+출력은 운영 profile의 `motion.place_waypoint_trajectory_file`에 저장된다.
+기존 파일이 있으면 생성은 실패하며 덮어쓰지 않는다. 새 후보를 만들 때는
+별도 profile 복사본의 해당 값을 다른 파일 경로로 지정하여 Runtime을 시작한다.
+생성 결과와 진단을 확인한 운영자는 기존 운영 파일을 별도로 보관한 뒤 새 파일을
+운영 경로로 명시적으로 복사하거나, 운영 profile이 새 파일을 참조하도록 변경한다.
+적용 후 Motion Runtime을 재시작한다. Runtime은 시작 시 파일을 한 번 로드하므로
+실행 중 파일 교체는 현재 캐시에 영향을 주지 않는다. 실제 PnP 실행은 저장된
+경로를 재사용하며 파일 누락 시 자동 생성하지 않는다.
