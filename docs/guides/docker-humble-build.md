@@ -20,7 +20,7 @@ cd sftwin-arm-cell
 docker build --progress=plain -t sftwin-arm-cell:humble .
 ```
 
-The Dockerfile installs build tools and compile dependencies with `rosdep`. It explicitly installs `nlohmann-json3-dev` because Humble rosdep has no definition for the `nlohmann_json` key, and skips that key plus the unavailable TRAC-IK runtime plugin. It then runs:
+The Dockerfile installs build tools and dependencies with `rosdep`. It explicitly installs `nlohmann-json3-dev` because Humble rosdep has no definition for the `nlohmann_json` key. Humble's configured apt repositories do not publish `trac_ik_kinematics_plugin`, so the Dockerfile fetches the upstream TRACLabs ROS 2 source at pinned revision `210f767d1d4e89ab30aa0a951aaa62716b4ec7a7` (TRAC-IK 2.0.1), builds `trac_ik_lib` and `trac_ik_kinematics_plugin`, and installs them in `/opt/trac_ik`. The workspace rosdep step skips the `trac_ik_kinematics_plugin` key because that package is supplied by this source overlay. This overlay build is separate from the ARM Cell build, which remains:
 
 ```bash
 colcon build --packages-up-to arm_cell_bringup
@@ -28,11 +28,24 @@ colcon build --packages-up-to arm_cell_bringup
 
 ## Confirm success
 
-A successful build exits with status 0 and BuildKit reports the resulting image as `sftwin-arm-cell:humble`. The build log also reports the `colcon` package summary; the v0.3.0 candidate verification completed 12 packages through `arm_cell_bringup`.
+A successful build exits with status 0 and BuildKit reports the resulting image as `sftwin-arm-cell:humble`. The build log reports the ARM Cell `colcon` summary; the Docker verification completed 12 packages through `arm_cell_bringup`. The separate upstream overlay build compiles two TRAC-IK packages.
+
+## Verify TRAC-IK at runtime
+
+Check that ROS can find the package, then run the MoveIt plugin load and initialization probe against the installed ARM Cell robot model:
+
+```bash
+docker run --rm \
+  -v "$PWD/infra/docker/verify-trac-ik-plugin.sh:/tmp/verify-trac-ik-plugin.sh:ro" \
+  sftwin-arm-cell:humble \
+  bash -lc 'source /workspace/ros2_ws/install/setup.bash && ros2 pkg prefix trac_ik_kinematics_plugin && /tmp/verify-trac-ik-plugin.sh'
+```
+
+The script checks the installed shared library and plugin description, creates the plugin through MoveIt's `pluginlib::ClassLoader`, and calls `initialize()` with the ARM Cell URDF/SRDF, the `arm` group, `base_link`, `sf_grasp_tcp`, and `solve_type=Distance`. This tests plugin loading and IK initialization; it does not request or validate an IK solution for a target pose.
 
 ## Scope of this check
 
-This verifies image construction and compilation of the ROS workspace through `arm_cell_bringup`. It does not run the resulting ROS applications, connect to ROS middleware, or launch Isaac Sim. The image skips the TRAC-IK runtime plugin because no Humble binary package is available in the configured repositories. Although `arm_cell_moveit_config/config/kinematics.yaml` selects KDL, the default `arm_cell_bringup/config/operational_profile.yaml` selects TRAC-IK for PICK and Motion loads that plugin during runtime initialization. Therefore this compile image cannot run the default operational PICK flow. A runtime image or host must install a compatible `trac_ik_kinematics_plugin` before using that profile; changing the profile to KDL changes solver behavior and is not done here. This candidate has not validated a TRAC-IK runtime installation. For Isaac Sim setup and live operation, see the [ARM Cell Isaac Sim guide](arm-cell-isaac-sim.md).
+The Docker verification completed image construction, all 12 ARM Cell packages, TRAC-IK package installation, and MoveIt plugin loading and initialization. It also attempted the MoveIt `planning_only.launch.py`; that launch did not remain running because its execution configuration has no `moveit_controller_manager` parameter. The successful plugin initialization probe is independent of that launch limitation. No ROS operational launch, IK target solution, simulator connection, Isaac Sim live run, or PnP success was validated. The checked-in `kinematics.yaml` remains KDL for the general MoveIt group, while the default operational profile selects TRAC-IK for PICK and Motion initializes that plugin separately. For Isaac Sim setup and live operation, see the [ARM Cell Isaac Sim guide](arm-cell-isaac-sim.md).
 
 ## Common environment issues
 
