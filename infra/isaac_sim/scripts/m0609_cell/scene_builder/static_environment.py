@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 
-STATIC_MANIFEST_RELATIVE_PATH = Path("config/arm_cell/m0609_static_environment.json")
+STATIC_MANIFEST_RELATIVE_PATH = Path("config/m0609_static_environment.json")
 REQUIRED_STATIC_OBJECT_IDS = {
     "factory_floor",
     "pedestal",

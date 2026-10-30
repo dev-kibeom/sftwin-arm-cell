@@ -38,12 +38,12 @@ def test_installed_model_matches_baseline():
 
 
 def test_isaac_entry_point_preserves_model():
-    repository = Path(__file__).resolve().parents[5]
+    repository = Path(__file__).resolve().parents[4]
     entry = (
         repository / "infra/isaac_sim/assets/urdf/assemblies/m0609_robotiq_2f85.xacro"
     )
     model = ET.fromstring(subprocess.check_output(["xacro", str(entry)]))
-    mesh_root = repository / "ros2_ws/src/arm_cell/arm_cell_description/meshes"
+    mesh_root = repository / "ros2_ws/src/arm_cell_description/meshes"
     expected = json.loads((Path(__file__).parent / "baseline_model.json").read_text())
     for mesh in model.findall(".//mesh"):
         resource = Path(mesh.get("filename"))

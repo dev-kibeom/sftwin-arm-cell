@@ -126,11 +126,11 @@ def test_gripper_bootstrap_replaces_session_and_reloads_split_packages(
         "runtime_steps",
     ):
         shutil.copytree(CELL_ROOT / package, cell_root / package)
-    config_root = project_root / "ros2_ws/src/arm_cell/arm_cell_bringup/config"
+    config_root = project_root / "ros2_ws/src/arm_cell_bringup/config"
     config_root.mkdir(parents=True)
     shutil.copy2(
         PROJECT_ROOT
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml",
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml",
         config_root / "pnp_validation_profile.yaml",
     )
     profile = config_root / "pnp_validation_profile.yaml"
@@ -139,7 +139,7 @@ def test_gripper_bootstrap_replaces_session_and_reloads_split_packages(
     recipe_directory = config_root / profile_data["orchestration"]["recipe_directory"]
     source_recipe_directory = (
         PROJECT_ROOT
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config"
+        / "ros2_ws/src/arm_cell_bringup/config"
         / profile_data["orchestration"]["recipe_directory"]
     )
     shutil.copytree(source_recipe_directory, recipe_directory)

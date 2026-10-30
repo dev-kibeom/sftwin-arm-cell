@@ -445,7 +445,7 @@ def test_installed_launch_resolves_checkout_artifacts_from_any_working_directory
 ):
     module = _load_launch_module()
     checkout = tmp_path / "checkout"
-    (checkout / "ros2_ws/src/arm_cell").mkdir(parents=True)
+    (checkout / "ros2_ws/src").mkdir(parents=True)
     (checkout / "infra/isaac_sim/scripts/m0609_cell").mkdir(parents=True)
     installed_launch = (
         checkout

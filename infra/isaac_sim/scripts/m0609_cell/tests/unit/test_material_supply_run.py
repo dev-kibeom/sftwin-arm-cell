@@ -29,7 +29,7 @@ def test_operational_profile_has_no_post_spawn_supply_delay():
     repository = Path(__file__).resolve().parents[6]
     profile_path = (
         repository
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
     )
     profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
 

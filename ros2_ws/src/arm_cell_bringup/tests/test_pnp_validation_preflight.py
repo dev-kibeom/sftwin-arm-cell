@@ -9,7 +9,7 @@ import pytest
 
 PACKAGE_ROOT = Path(__file__).parents[1]
 SCRIPT = PACKAGE_ROOT / "scripts/pnp_validation_preflight.py"
-REPO_ROOT = PACKAGE_ROOT.parents[3]
+REPO_ROOT = PACKAGE_ROOT.parents[2]
 
 
 def _module():

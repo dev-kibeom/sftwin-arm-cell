@@ -458,7 +458,7 @@ It accepts any branch or worktree; the checkout must be clean, and its ROS overl
 process must resolve to that same checkout.
 
 ```bash
-python3 ros2_ws/src/arm_cell/arm_cell_bringup/scripts/pnp_validation_preflight.py \
+python3 ros2_ws/src/arm_cell_bringup/scripts/pnp_validation_preflight.py \
   --repo-root "$PWD"
 ```
 
@@ -472,7 +472,7 @@ After the ROS validation composition is running, check live discovery before ope
 validation runner:
 
 ```bash
-python3 ros2_ws/src/arm_cell/arm_cell_bringup/scripts/pnp_validation_preflight.py \
+python3 ros2_ws/src/arm_cell_bringup/scripts/pnp_validation_preflight.py \
   --repo-root "$PWD" \
   --live
 ```

@@ -22,7 +22,7 @@ def test_explicit_project_root_is_validated_without_discovery():
 def test_public_layout_root_does_not_require_private_agents_file(tmp_path):
     public_root = tmp_path / "public-arm-cell"
     (public_root / setup.CELL_RELATIVE_PATH / "shared").mkdir(parents=True)
-    (public_root / "ros2_ws/src/arm_cell").mkdir(parents=True)
+    (public_root / "ros2_ws/src").mkdir(parents=True)
 
     assert setup.validate_project_root(public_root) == public_root.resolve()
 

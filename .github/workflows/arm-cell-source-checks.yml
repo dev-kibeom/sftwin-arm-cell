@@ -18,7 +18,7 @@ jobs:
           from pathlib import Path
           import xml.etree.ElementTree as ET
 
-          paths = list(Path('ros2_ws/src/arm_cell').glob('*/package.xml'))
+          paths = list(Path('ros2_ws/src').glob('*/package.xml'))
           paths.append(Path('ros2_ws/src/interfaces/arm_cell_interfaces/package.xml'))
           missing = [str(path) for path in paths
                      if ET.parse(path).getroot().findtext('license') != 'MIT']

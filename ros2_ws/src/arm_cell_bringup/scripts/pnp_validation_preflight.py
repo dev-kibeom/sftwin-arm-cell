@@ -58,18 +58,18 @@ def validate_repository(root, *, environ=None):
     required_files = (
         "infra/isaac_sim/scripts/m0609_cell/shared/environment_setup.py",
         "infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py",
-        "ros2_ws/src/arm_cell/arm_cell_bringup/launch/arm_cell_pnp_validation.launch.py",
-        "ros2_ws/src/arm_cell/arm_cell_bringup/scripts/register_pnp_fixture.py",
-        "ros2_ws/src/arm_cell/arm_cell_bringup/scripts/pnp_validation_preflight.py",
-        "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml",
+        "ros2_ws/src/arm_cell_bringup/launch/arm_cell_pnp_validation.launch.py",
+        "ros2_ws/src/arm_cell_bringup/scripts/register_pnp_fixture.py",
+        "ros2_ws/src/arm_cell_bringup/scripts/pnp_validation_preflight.py",
+        "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml",
     )
     for relative in required_files:
         _require((root / relative).is_file(), f"required file is missing: {relative}")
 
     scripts = (
-        root / "ros2_ws/src/arm_cell/arm_cell_bringup/scripts/register_pnp_fixture.py",
+        root / "ros2_ws/src/arm_cell_bringup/scripts/register_pnp_fixture.py",
         root
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/scripts/pnp_validation_preflight.py",
+        / "ros2_ws/src/arm_cell_bringup/scripts/pnp_validation_preflight.py",
     )
     for script in scripts:
         mode = stat.S_IMODE(script.stat().st_mode)
@@ -83,7 +83,7 @@ def validate_repository(root, *, environ=None):
         environment.get(
             "SFTWIN_PNP_PROFILE",
             root
-            / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml",
+            / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml",
         )
     ).expanduser()
     if not profile_path.is_absolute():

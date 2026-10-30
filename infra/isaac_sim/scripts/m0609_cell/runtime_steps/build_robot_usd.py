@@ -46,7 +46,7 @@ def resolve_project_root():
         raise RuntimeError("SFTWIN_PROJECT_ROOT is required for asset preparation")
     root = Path(configured_root).expanduser().resolve()
     module_root_from_project_root(root)
-    if not (root / "ros2_ws/src/arm_cell").is_dir():
+    if not (root / "ros2_ws/src").is_dir():
         raise RuntimeError(
             f"SFTWIN_PROJECT_ROOT is not a validated SFTwin repository: {root}"
         )

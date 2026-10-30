@@ -65,7 +65,7 @@ def test_rawpart_profile_fails_closed_when_marker_relation_is_incomplete(tmp_pat
     support_dimensions = load_rawpart_profile(REPOSITORY)["support_region_dimensions_m"]
     config_path = (
         tmp_path
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
     )
     config_path.parent.mkdir(parents=True)
     config_path.write_text(
@@ -104,7 +104,7 @@ def test_rawpart_profile_fails_closed_when_marker_relation_is_incomplete(tmp_pat
 
 def _write_deployment(tmp_path, *, marker_y=None):
     profile_path = Path(
-        "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+        "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
     )
     config = yaml.safe_load((REPOSITORY / profile_path).read_text())
     rawpart = config["vision"]["detector_profiles"]["RawPart"]
@@ -126,7 +126,7 @@ def test_tray_sized_detection_roi_loads_without_supply_config(tmp_path, marker_y
 def test_deployed_detection_roi_matches_canonical_tray_plate():
     scene_path = (
         REPOSITORY
-        / "ros2_ws/src/arm_cell/arm_cell_moveit_config/config/m0609_static_scene.json"
+        / "ros2_ws/src/arm_cell_moveit_config/config/m0609_static_scene.json"
     )
     objects = json.loads(scene_path.read_text())["objects"]
     tray = next(obj for obj in objects if obj["id"] == "amr_tray")

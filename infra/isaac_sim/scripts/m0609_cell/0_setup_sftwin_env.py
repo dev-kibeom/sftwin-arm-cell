@@ -22,7 +22,7 @@ def validate_project_root(project_root):
     if (
         not root.is_dir()
         or not (root / CELL_RELATIVE_PATH / "shared").is_dir()
-        or not (root / "ros2_ws/src/arm_cell").is_dir()
+        or not (root / "ros2_ws/src").is_dir()
     ):
         raise RuntimeError(f"project root is not a validated SFTwin repository: {root}")
     return root.resolve()

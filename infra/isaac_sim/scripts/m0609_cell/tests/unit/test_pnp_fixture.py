@@ -48,7 +48,7 @@ def test_validation_fixture_uses_selected_json_recipe_from_profile_registry():
     project_root = Path(__file__).resolve().parents[6]
     config_path = (
         project_root
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
     )
 
     config = load_validation_profile(config_path)

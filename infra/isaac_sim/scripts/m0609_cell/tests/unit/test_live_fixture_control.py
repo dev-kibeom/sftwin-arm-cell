@@ -40,7 +40,7 @@ class FakeStage:
 def canonical_tray_geometry():
     root = Path(__file__).resolve().parents[6]
     manifest = json.loads(
-        (root / "config/arm_cell/m0609_static_environment.json").read_text()
+        (root / "config/m0609_static_environment.json").read_text()
     )
     return {item["id"]: item for item in manifest["objects"]}["amr_tray"]
 

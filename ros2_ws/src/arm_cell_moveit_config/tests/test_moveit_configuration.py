@@ -121,9 +121,9 @@ def test_validation_profile_selects_time_parameterization_and_acceleration_limit
 def test_static_scene_artifact_matches_canonical_manifest():
     share = Path(get_package_share_directory("arm_cell_moveit_config"))
     repo_manifest = next(
-        parent / "config/arm_cell/m0609_static_environment.json"
+        parent / "config/m0609_static_environment.json"
         for parent in [Path.cwd(), *Path(__file__).resolve().parents]
-        if (parent / "config/arm_cell/m0609_static_environment.json").is_file()
+        if (parent / "config/m0609_static_environment.json").is_file()
     )
     manifest = json.loads(repo_manifest.read_text())
     selection = json.loads(
@@ -158,9 +158,9 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
         (share / "config/m0609_pnp_static_scene_selection.json").read_text()
     )
     repo_manifest = next(
-        parent / "config/arm_cell/m0609_static_environment.json"
+        parent / "config/m0609_static_environment.json"
         for parent in [Path.cwd(), *Path(__file__).resolve().parents]
-        if (parent / "config/arm_cell/m0609_static_environment.json").is_file()
+        if (parent / "config/m0609_static_environment.json").is_file()
     )
     manifest = json.loads(repo_manifest.read_text())
     by_id = load_generator().validate(manifest, selection)
@@ -228,7 +228,7 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
 
 
 def test_camera_drop_bracket_uses_isaac_builder_source_expression():
-    repo_root = Path(__file__).resolve().parents[5]
+    repo_root = Path(__file__).resolve().parents[4]
     amr_builder = (
         repo_root / "infra/isaac_sim/scripts/m0609_cell/scene_builder/amr.py"
     ).read_text()
@@ -241,7 +241,7 @@ def test_camera_drop_bracket_uses_isaac_builder_source_expression():
 
     expected_y = float(amr.group(2).strip()) + float(camera.group(1).strip())
     manifest = json.loads(
-        (repo_root / "config/arm_cell/m0609_static_environment.json").read_text()
+        (repo_root / "config/m0609_static_environment.json").read_text()
     )
     bracket = next(
         obj for obj in manifest["objects"] if obj["id"] == "camera_drop_bracket"
@@ -250,7 +250,7 @@ def test_camera_drop_bracket_uses_isaac_builder_source_expression():
 
 
 def load_isaac_manifest_resolver():
-    repo_root = Path(__file__).resolve().parents[5]
+    repo_root = Path(__file__).resolve().parents[4]
     source = (
         repo_root
         / "infra/isaac_sim/scripts/m0609_cell/scene_builder/static_environment.py"
@@ -289,7 +289,7 @@ def test_isaac_builder_resolves_manifest_from_repository_source_path():
             script_path=repo_root
             / "infra/isaac_sim/scripts/m0609_cell/runtime_steps/setup_scene.py"
         )
-        == repo_root / "config/arm_cell/m0609_static_environment.json"
+        == repo_root / "config/m0609_static_environment.json"
     )
 
 
@@ -303,7 +303,7 @@ def test_isaac_builder_script_editor_path_requires_and_accepts_explicit_root(
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(repo_root))
     assert (
         resolver["canonical_manifest_path"](script_path=temporary_script)
-        == repo_root / "config/arm_cell/m0609_static_environment.json"
+        == repo_root / "config/m0609_static_environment.json"
     )
 
 
