@@ -30,7 +30,7 @@ Caller의 논리 `target_id`는 사전 설정된 Vision 소유 Profile을 선택
 
 Production Pipeline은 Vision이 선택 파일에서 로드한 Calibration과 호환 CameraInfo·Depth를 관측한다. 정상 검출에서 RGB는 선택 사항이며 동기화된 RGB는 명시적 Fiducial Calibration에서만 필요하다. 검출 후 공간적으로 호환되는 최신 RGB를 Snapshot Annotation에 사용할 수 있다. Simulator Prim Identity·정확한 World Coordinate·Simulator Metadata·API를 Production Perception Input으로 사용해서는 안 된다. RGB Appearance·Learned Detector는 선택 사항으로 이 정식 Profile의 필수 조건이 아니다. Environment 선행 조건은 [Simulation Environment Semantics](../simulation-environment-semantics.md)가 소유한다.
 
-Collision Planning에서는 [Motion CDS의 정적 RawPart Domain](../motion/cds.md#32-static-rawpart-handling-domain)이 취급 대상 자재 외에 별도 미식별 객체가 없다고 가정한다. 이 가정은 Vision의 관측·Qualification을 바꾸지 않는다. Vision은 관측된 후보의 Geometry와 미해결 Hypothesis를 각자의 반환·진단 경계에 보존한다. Vision은 Planning Occupancy를 생성하거나 Collision Constraint를 선택하지 않으며, Motion은 미해결 영역을 PICK 점유맵에 포함하지 않는다. Vision은 Planning 실패 뒤 Geometry/Stability Validation을 완화하거나 실시간 장애물 회피를 보장하지 않는다.
+Collision Planning에서는 [Motion CDS의 정적 RawPart Domain](../motion/cds.md#정적-구조와-경계)이 취급 대상 자재 외에 별도 미식별 객체가 없다고 가정한다. 이 가정은 Vision의 관측·Qualification을 바꾸지 않는다. Vision은 관측된 후보의 Geometry와 미해결 Hypothesis를 각자의 반환·진단 경계에 보존한다. Vision은 Planning Occupancy를 생성하거나 Collision Constraint를 선택하지 않으며, Motion은 미해결 영역을 PICK 점유맵에 포함하지 않는다. Vision은 Planning 실패 뒤 Geometry/Stability Validation을 완화하거나 실시간 장애물 회피를 보장하지 않는다.
 
 ### 1.1 Recipe Algorithm 선택과 운영 설정
 

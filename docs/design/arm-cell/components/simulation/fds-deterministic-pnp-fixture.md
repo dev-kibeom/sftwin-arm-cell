@@ -188,6 +188,8 @@ Timeline Stop은 **정상 Release와 독립된 Simulation Reset 경계**다. Fix
 
 PLACE 성공 후 기존 Mission 흐름은 GO_HOME을 실행해야 한다. 성공에는 Validation Profile의 Home 관절 허용치 안에 들어온 **측정 Robot State**와 Fresh `RELEASED`가 필요하다. Mission Result만으로 성공을 확정하지 않는다.
 
+<a id="calibration-boundary"></a>
+
 ## 8. Calibration 경계
 
 WU-14가 설정할 수 있는 것은 Simulator Validation Profile의 Object Reference→Grasp TCP Transform, Approach/Retract 값, Home Tolerance, Capture Volume 및 Snap Tolerance뿐이다. 모든 값은 명시적으로 Run Manifest에 추적되어야 하며 0/Default Fallback은 수락하지 않는다. 이 Fixture의 증거를 Production Camera·Robot·Tool·AMR·Physical Gripper Calibration으로 승격해서는 안 된다.
