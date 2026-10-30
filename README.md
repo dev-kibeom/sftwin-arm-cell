@@ -151,8 +151,10 @@ docker build --progress=plain -t sftwin-arm-cell:humble .
 - [v0.3.0 릴리즈 노트](docs/releases/v0.3.0.ko.md) / [English](docs/releases/v0.3.0.en.md)
 
 - [ARM Cell 데모 정의](docs/product/arm-cell/definition.md)
+- [최종 라이브 인수 계약](docs/product/arm-cell/acceptance.md)
 - [시스템 아키텍처](docs/design/arm-cell/architecture/), [ARM Cell 컴포넌트 설계](docs/design/arm-cell/components/)
 - [ROS 및 simulator 인터페이스 계약](docs/design/arm-cell/interfaces/)
+- [알고리즘 설계](docs/design/arm-cell/algorithms/)
 - [아키텍처 결정 기록(ADR)](docs/record/arm-cell/architecture-decision/)
 - [Engineering Stories](docs/record/arm-cell/engineering-story/)
 - [기술 기록](docs/record/arm-cell/)

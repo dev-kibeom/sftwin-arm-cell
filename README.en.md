@@ -139,8 +139,10 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 - [v0.3.0 release notes](docs/releases/v0.3.0.en.md) / [한국어](docs/releases/v0.3.0.ko.md)
 
 - [ARM Cell demo definition](docs/product/arm-cell/definition.md)
+- [Final live acceptance contract](docs/product/arm-cell/acceptance.md)
 - [System architecture](docs/design/arm-cell/architecture/) and [ARM Cell component designs](docs/design/arm-cell/components/)
 - [ROS and simulator interface contracts](docs/design/arm-cell/interfaces/)
+- [Algorithm procedures](docs/design/arm-cell/algorithms/)
 - [Architecture Decision Records (ADRs)](docs/record/arm-cell/architecture-decision/)
 - [Engineering Stories](docs/record/arm-cell/engineering-story/)
 - [Technical records](docs/record/arm-cell/)
