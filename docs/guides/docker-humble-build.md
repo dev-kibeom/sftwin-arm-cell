@@ -8,7 +8,7 @@ This guide builds the current ARM Cell ROS 2 workspace with the repository's Doc
 - Docker BuildKit support for the `--progress=plain` option.
 - An internet connection from the Docker build environment for Ubuntu packages, ROS dependencies, and rosdep data.
 
-ROS 2 and Isaac Sim do not need to be installed on the host for this image build. The public PR #2 build completed on its recorded environment; other Docker host setups were not separately validated.
+ROS 2 and Isaac Sim do not need to be installed on the host for this image build. The v0.3.0 release-candidate build completed in the recorded Docker environment; other Docker host setups were not separately validated.
 
 ## Build
 
@@ -28,11 +28,11 @@ colcon build --packages-up-to arm_cell_bringup
 
 ## Confirm success
 
-A successful build exits with status 0 and BuildKit reports the resulting image as `sftwin-arm-cell:humble`. The build log also reports the `colcon` package summary; the PR #2 verification completed 11 packages.
+A successful build exits with status 0 and BuildKit reports the resulting image as `sftwin-arm-cell:humble`. The build log also reports the `colcon` package summary; the v0.3.0 candidate verification completed 12 packages through `arm_cell_bringup`.
 
 ## Scope of this check
 
-This verifies image construction and compilation of the ROS workspace through `arm_cell_bringup`. It does not run the resulting ROS applications, connect to ROS middleware, or launch Isaac Sim. The build image skips the TRAC-IK runtime plugin because no Humble binary package is available in the configured repositories. A runtime environment using the default IK profile must provide `trac_ik_kinematics_plugin` separately. For Isaac Sim setup and live operation, see the [ARM Cell Isaac Sim guide](arm-cell-isaac-sim.md).
+This verifies image construction and compilation of the ROS workspace through `arm_cell_bringup`. It does not run the resulting ROS applications, connect to ROS middleware, or launch Isaac Sim. The image skips the TRAC-IK runtime plugin because no Humble binary package is available in the configured repositories. Although `arm_cell_moveit_config/config/kinematics.yaml` selects KDL, the default `arm_cell_bringup/config/operational_profile.yaml` selects TRAC-IK for PICK and Motion loads that plugin during runtime initialization. Therefore this compile image cannot run the default operational PICK flow. A runtime image or host must install a compatible `trac_ik_kinematics_plugin` before using that profile; changing the profile to KDL changes solver behavior and is not done here. This candidate has not validated a TRAC-IK runtime installation. For Isaac Sim setup and live operation, see the [ARM Cell Isaac Sim guide](arm-cell-isaac-sim.md).
 
 ## Common environment issues
 
