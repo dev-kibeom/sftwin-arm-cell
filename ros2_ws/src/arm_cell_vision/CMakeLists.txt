@@ -117,7 +117,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_vision_ros_adapter tests/test_vision_ros_adapter.cpp)
   target_link_libraries(test_vision_ros_adapter vision_ros_ingress)
   ament_target_dependencies(test_vision_ros_adapter rclcpp sensor_msgs)
-  set(M1C_FIXTURE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../..")
+  set(M1C_FIXTURE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../..")
   string(CONCAT M1C_FIXTURE_MANIFEST
     "${M1C_FIXTURE_ROOT}/infra/isaac_sim/scripts/m0609_cell/tests/fixtures/"
     "isaac_rgbd_m1c_verified_config_v2/manifest.json")

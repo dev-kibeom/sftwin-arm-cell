@@ -153,11 +153,11 @@ def project_artifacts_directory():
     for candidate in candidates:
         candidate = candidate.resolve()
         for root in (candidate, *candidate.parents):
-            if (root / "ros2_ws/src/arm_cell").is_dir() and (
+            if (root / "ros2_ws/src").is_dir() and (
                 root / "infra/isaac_sim/scripts/m0609_cell"
             ).is_dir():
                 return str(root / ".local_artifacts")
-            if (root / "src/arm_cell").is_dir() and (
+            if (root / "src").is_dir() and (
                 root.parent / "infra/isaac_sim/scripts/m0609_cell"
             ).is_dir():
                 return str(root.parent / ".local_artifacts")

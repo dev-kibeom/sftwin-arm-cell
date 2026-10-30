@@ -1441,7 +1441,7 @@ def test_production_profile_uses_requested_capture_limits():
     repository_root = Path(__file__).resolve().parents[6]
     profile_path = (
         repository_root
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
     )
     profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
     recipe = load_production_mission_recipe(profile, profile_path)

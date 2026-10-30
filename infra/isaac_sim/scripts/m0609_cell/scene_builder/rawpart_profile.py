@@ -8,7 +8,7 @@ import yaml
 
 
 PROFILE_RELATIVE_PATH = Path(
-    "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+    "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
 )
 
 

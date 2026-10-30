@@ -19,7 +19,7 @@ E-Stop 뒤 HOLD 및 GO_HOME 위치 명령을 보냈지만 관절이 기대한 �
 | 수정 후 라이브 성공 | 2026-10-30 07:57 세션 `d0fd2a6f-d2d1-47c4-9889-7b8afdaa9cef`; 동일 revision `dd696…`, clean | E-Stop → reset → Recovery GO_HOME 성공(6.003 s); Mission 1/1 처리 후 `MISSION_EXIT_QUANTITY_REACHED` |
 | 최신 clean 복구 확인 | 2026-10-30 13:42 세션 `fc425b71-eeab-4c08-8671-fbe0d65510a1`; revision `e0e9bcc805fd190b1ddbfdfb041b99fb98ba648d`, clean | `EMERGENCY_STOPPED` → `RECOVERY_REQUIRED` → reset 적용 → `SAFE`; Orchestration `SafetyRecovery` 성공; Recovery GO_HOME `aaa53db9a017f3e5125474e9d667eba5` 성공(5.643 s). Mission은 Detection을 다시 수행하고 PnP를 재개했으나, 이후 `approach:TASK_RESULT_BACKEND_UNAVAILABLE`로 종료(요청 3건, 처리 0건) |
 
-PR #745는 위치 명령의 `publish_joint_target_locked`에서 velocity를 생략하는 경우 관절 수만큼 0을 채우고, HOME 재전송과 Safety Hold에도 0 velocity를 명시하도록 수정했다. 위 최신 라이브 revision `e0e9bcc…`은 PR #745 merge commit `32b56df9fd0cb8a28b00ea75a70e72b4698f653c`의 후손이며, 해당 수정 코드가 실제 실행 revision에 포함된 것을 확인했다. 수정 위치는 `ros2_ws/src/arm_cell/arm_cell_motion/src/isaac_ros_motion_transport.cpp`다.
+PR #745는 위치 명령의 `publish_joint_target_locked`에서 velocity를 생략하는 경우 관절 수만큼 0을 채우고, HOME 재전송과 Safety Hold에도 0 velocity를 명시하도록 수정했다. 위 최신 라이브 revision `e0e9bcc…`은 PR #745 merge commit `32b56df9fd0cb8a28b00ea75a70e72b4698f653c`의 후손이며, 해당 수정 코드가 실제 실행 revision에 포함된 것을 확인했다. 수정 위치는 `ros2_ws/src/arm_cell_motion/src/isaac_ros_motion_transport.cpp`다.
 
 ## 해결 확인과 별개 Backend 실패의 구분
 

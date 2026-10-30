@@ -326,7 +326,7 @@ def run_current_stage():
     validation_environment = configure_validation_environment()
     planning_path = (
         project_root
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/isaac_planning.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/isaac_planning.yaml"
     )
     planning = yaml.safe_load(planning_path.read_text())
 

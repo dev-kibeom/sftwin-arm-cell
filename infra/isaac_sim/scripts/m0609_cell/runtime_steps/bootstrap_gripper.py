@@ -101,7 +101,7 @@ else:
 
     operational_profile_path = (
         project_root
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
     )
     with operational_profile_path.open("r", encoding="utf-8") as profile_file:
         operational_profile = yaml.safe_load(profile_file)

@@ -100,7 +100,7 @@ class SimulationUIHubExtension(_ExtensionBase):
 
             profile_path = (
                 Path(project_root).expanduser().resolve()
-                / "ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml"
+                / "ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml"
             )
             profile = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
             simulation_profile = profile.get("simulation", {})

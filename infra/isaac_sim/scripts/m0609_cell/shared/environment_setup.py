@@ -7,7 +7,7 @@ import sys
 
 CELL_RELATIVE_PATH = Path("infra/isaac_sim/scripts/m0609_cell")
 VALIDATION_PROFILE_RELATIVE_PATH = Path(
-    "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+    "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
 )
 DEFAULT_ROS_DOMAIN_ID = "0"
 DIAGNOSTIC_COMPONENTS = frozenset({"motion", "vision", "safety", "orchestration"})
@@ -50,7 +50,7 @@ def validate_project_root(project_root):
     if (
         not root.is_dir()
         or not (root / CELL_RELATIVE_PATH / "shared").is_dir()
-        or not (root / "ros2_ws/src/arm_cell").is_dir()
+        or not (root / "ros2_ws/src").is_dir()
     ):
         raise RuntimeError(f"project root is not a validated SFTwin repository: {root}")
     return root.resolve()

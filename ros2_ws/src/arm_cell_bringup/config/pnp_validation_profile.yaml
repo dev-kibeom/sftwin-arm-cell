@@ -63,7 +63,7 @@ orchestration:
 
 validation:
   runtime_runner_entrypoint: infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py
-  registration_helper_entrypoint: ros2_ws/src/arm_cell/arm_cell_bringup/scripts/register_pnp_fixture.py
+  registration_helper_entrypoint: ros2_ws/src/arm_cell_bringup/scripts/register_pnp_fixture.py
   registration_handoff_schema: wu14-pnp-registration/v2
   registration_ttl_s: 30.0
   registration_ttl_max_s: 60.0

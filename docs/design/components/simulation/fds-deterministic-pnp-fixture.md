@@ -139,7 +139,7 @@ RawPart에서는 Object의 유한하고 비퇴화·직교인 Box Frame을 검증
 
 World Vertical이나 Top-down Approach는 Production·Validation 어디에서도 Capture의 필수 조건이 아니다. 검증 Recipe는 Top-down을 선택할 수 있지만 Capture는 **실제 Motion이 선택한 Pose**를 확인하며 Top Normal Approach를 별도 조건으로 추가하지 않는다. Profile별 Orientation Tolerance는 Production Demo **40°**, Validation **10°**로 유지한다. 임의 Orientation Error를 허용한다는 뜻이 아니다.
 
-Production Capture 제한은 [`operational_profile.yaml`](../../../../ros2_ws/src/arm_cell/arm_cell_bringup/config/operational_profile.yaml)의 `gripper_capture`, Validation 제한은 [`pnp_validation_profile.yaml`](../../../../ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml)의 `capture`를 따른다. 둘 다 선택 TCP Pose·Closing Axis 계약을 적용하면서 개별 허용치와 Contact Width/Tolerance를 유지한다.
+Production Capture 제한은 [`operational_profile.yaml`](../../../../ros2_ws/src/arm_cell_bringup/config/operational_profile.yaml)의 `gripper_capture`, Validation 제한은 [`pnp_validation_profile.yaml`](../../../../ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml)의 `capture`를 따른다. 둘 다 선택 TCP Pose·Closing Axis 계약을 적용하면서 개별 허용치와 Contact Width/Tolerance를 유지한다.
 
 기존 정사각형 Validation Fixture의 예상 Contact Width **70mm**는 Motion이 관측 Rectangle Span 및 선택 Closing Axis에서 계산한다. 일반 Rectangle PICK에서도 Closing Axis와 평행한 관측 변이 예상 접촉 폭이며 Axis 부호 반전은 값을 바꾸지 않는다. Isaac Capture는 이 Geometry 기반 예상값과 실제 Gripper Opening을 설정된 접촉 폭 허용치로 비교하고, Close 명령 폭을 사용하지 않는다.
 

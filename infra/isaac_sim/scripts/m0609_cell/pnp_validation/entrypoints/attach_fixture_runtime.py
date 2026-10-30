@@ -28,7 +28,7 @@ def attach():
     project_root = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
     planning_path = (
         project_root
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/isaac_planning.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/isaac_planning.yaml"
     )
     planning = yaml.safe_load(planning_path.read_text())
     runtime = run_validation.IsaacFixtureRuntime(

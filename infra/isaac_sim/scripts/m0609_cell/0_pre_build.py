@@ -17,7 +17,7 @@ root = Path(root_value).expanduser().resolve()
 module_root = root / "infra/isaac_sim/scripts/m0609_cell"
 if (
     not (module_root / "shared").is_dir()
-    or not (root / "ros2_ws/src/arm_cell").is_dir()
+    or not (root / "ros2_ws/src").is_dir()
 ):
     raise RuntimeError(f"project root is not a validated SFTwin repository: {root}")
 os.environ["SFTWIN_PROJECT_ROOT"] = str(root)

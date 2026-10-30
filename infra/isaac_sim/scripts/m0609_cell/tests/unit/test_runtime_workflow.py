@@ -27,7 +27,7 @@ def test_roles_sequence_existing_build_and_runtime_steps(tmp_path, monkeypatch):
     module_root = project_root / "infra/isaac_sim/scripts/m0609_cell"
     steps = module_root / "runtime_steps"
     steps.mkdir(parents=True)
-    (project_root / "ros2_ws/src/arm_cell").mkdir(parents=True)
+    (project_root / "ros2_ws/src").mkdir(parents=True)
     workflow.module_root_from_project_root = lambda _root: module_root
     monkeypatch.setattr(
         script_editor_bootstrap,

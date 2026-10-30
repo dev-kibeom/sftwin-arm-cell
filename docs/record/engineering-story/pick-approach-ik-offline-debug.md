@@ -47,4 +47,4 @@ An IK failure should be reported as a solver result for a specific target, orien
 - Live execution records: `local-artifact://arm_cell_pick_execution/aea3bf63c6c7eb1692ae301652a18fe0.json` (first attempt) and `local-artifact://arm_cell_pick_execution/eefc4bd9e48d637948e7cffe10ee1a81.json` (failed second attempt). The local artifacts are not included in the Public repository.
 - Associated Vision acquisition identifiers: `0d3318f4-434c265d-b13d8b3e-acq-1` and `5b6527de-83b7-a823-250dee87-acq-2`; the latter's snapshot was inspected during diagnosis.
 - ROS runtime logs for the two attempts correspond to 05:35 and 05:44 KST on 2026-10-13; the local logs are not included in the Public repository.
-- Offline planning setup: `ros2_ws/src/arm_cell/arm_cell_bringup/config/isaac_planning.yaml` and `ros2_ws/src/arm_cell/arm_cell_moveit_config/config/m0609_pnp_static_scene.json`.
+- Offline planning setup: `ros2_ws/src/arm_cell_bringup/config/isaac_planning.yaml` and `ros2_ws/src/arm_cell_moveit_config/config/m0609_pnp_static_scene.json`.

@@ -33,7 +33,7 @@ def test_validation_profile_loader_rejects_missing_or_invalid_recipe_approach(
 ):
     config_directory = (
         Path(__file__).resolve().parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config"
+        / "ros2_ws/src/arm_cell_bringup/config"
     )
     profile_data = yaml.safe_load(
         (config_directory / "pnp_validation_profile.yaml").read_text()
@@ -61,7 +61,7 @@ def test_validation_profile_loader_rejects_missing_or_invalid_recipe_approach(
 def test_validation_profile_declares_world_geometry_and_place_tolerance():
     path = (
         Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
     )
     profile_data = yaml.safe_load(path.read_text())
 
@@ -77,7 +77,7 @@ def test_validation_profile_declares_world_geometry_and_place_tolerance():
 def test_validation_profile_rejects_missing_geometry_frame():
     path = (
         Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
     )
     profile_data = yaml.safe_load(path.read_text())
     del profile_data["fixture"]["geometry_frame"]
@@ -89,7 +89,7 @@ def test_validation_profile_rejects_missing_geometry_frame():
 def test_validation_profile_rejects_missing_or_invalid_place_tolerance():
     path = (
         Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
     )
     profile_data = yaml.safe_load(path.read_text())
     del profile_data["place"]["position_tolerance_m"]
@@ -111,7 +111,7 @@ def test_validation_profile_rejects_missing_or_invalid_place_tolerance():
 def test_validation_profile_rejects_grasp_offset_drift_between_motion_and_recipe():
     path = (
         Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
     )
     profile_data = yaml.safe_load(path.read_text())
     profile_data["motion"]["object_to_grasp_tcp_translation"][2] = 0.0
@@ -123,7 +123,7 @@ def test_validation_profile_rejects_grasp_offset_drift_between_motion_and_recipe
 def test_validation_profile_rejects_nonzero_grasp_translation_xy():
     path = (
         Path(__file__).parents[6]
-        / "ros2_ws/src/arm_cell/arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "ros2_ws/src/arm_cell_bringup/config/pnp_validation_profile.yaml"
     )
     profile_data = yaml.safe_load(path.read_text())
     profile_data["motion"]["object_to_grasp_tcp_translation"][0] = 0.001

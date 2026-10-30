@@ -12,7 +12,7 @@ def project_root(script_path, environ=None):
     module_root = discover_module_root(script_path, environ)
     for candidate in (module_root, *module_root.parents):
         if (candidate / "infra/isaac_sim/scripts/m0609_cell").is_dir() and (
-            candidate / "ros2_ws/src/arm_cell"
+            candidate / "ros2_ws/src"
         ).is_dir():
             return candidate
     raise RuntimeError(

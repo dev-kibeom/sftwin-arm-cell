@@ -17,7 +17,7 @@ from scene_builder.reachability import (
 
 def _canonical_tray_support_origin(project_root):
     manifest = json.loads(
-        (project_root / "config/arm_cell/m0609_static_environment.json").read_text()
+        (project_root / "config/m0609_static_environment.json").read_text()
     )
     objects = {item["id"]: item for item in manifest["objects"]}
     tray = objects["amr_tray"]
@@ -180,7 +180,7 @@ def test_amr_scene_uses_tray_and_front_rail_marker(monkeypatch):
 def test_tray_marker_post_joins_front_rail_to_marker_underside():
     project_root = Path(__file__).resolve().parents[6]
     manifest = json.loads(
-        (project_root / "config/arm_cell/m0609_static_environment.json").read_text()
+        (project_root / "config/m0609_static_environment.json").read_text()
     )
     objects = {item["id"]: item for item in manifest["objects"]}
     front_rail = objects["amr_tray_rail_front"]
