@@ -3,17 +3,22 @@
 namespace arm_cell_vda_adapter
 {
 
-void ExternalStateMock::set_fault(Fault fault, bool active)
+bool ExternalStateMock::set_fault(Fault fault, bool active)
 {
+  if (active && fault == Fault::kCommunicationLoss && safety_signal_loss_) {
+    return false;
+  }
+  if (active && fault == Fault::kSafetySignalLoss && communication_loss_) {
+    return false;
+  }
   switch (fault) {
     case Fault::kEStop:
       e_stop_ = active;
       break;
     case Fault::kPrematureUndock:
-      if (active) {
-        amr_docking_state_ = AMRDockingState::AMR_DOCKING_UNDOCKED;
-        amr_driving_ = true;
-      }
+      amr_docking_state_ = active ?
+        AMRDockingState::AMR_DOCKING_UNDOCKED : AMRDockingState::AMR_DOCKING_DOCKED;
+      amr_driving_ = active;
       break;
     case Fault::kPackmlAbort:
       packml_abort_ = active;
@@ -27,15 +32,20 @@ void ExternalStateMock::set_fault(Fault fault, bool active)
     case Fault::kCommunicationDegradation:
       communication_degradation_ = active;
       break;
+    case Fault::kSafetySignalLoss:
+      safety_signal_loss_ = active;
+      break;
     case Fault::kMaterialHandoffFailure:
       break;
   }
+  return true;
 }
 
 ExternalStateSnapshot ExternalStateMock::snapshot(const rclcpp::Time & stamp) const
 {
   ExternalStateSnapshot result;
   result.publish = !communication_loss_;
+  result.publish_safety_hardware = !safety_signal_loss_;
   result.communication_degraded = communication_degradation_;
 
   result.amr.header.stamp = stamp;

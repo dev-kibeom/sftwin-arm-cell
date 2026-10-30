@@ -1,0 +1,34 @@
+<root>
+  <BehaviorTree ID="DisturbanceExecution">
+    <Sequence name="DisturbanceExecution">
+      <PrepareDisturbanceSearch/>
+      <SearchCandidates name="DisturbanceCandidateSearch">
+        <SelectDisturbanceCandidate/>
+        <RetryWhileAllowed name="DisturbanceDirectionSearch">
+          <Sequence name="PlanThenExecuteDisturbanceDirection">
+            <SelectDisturbanceDirection/>
+            <PrepareDisturbanceRoute/>
+            <SubTree ID="PlanDisturbanceRoute"/>
+            <SubTree ID="ExecuteDisturbanceRoute"/>
+          </Sequence>
+          <AdvanceDisturbanceDirection/>
+        </RetryWhileAllowed>
+        <AdvanceDisturbanceCandidate/>
+      </SearchCandidates>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="PlanDisturbanceRoute">
+    <Sequence name="PlanDisturbanceRoute">
+      <PlanDisturbanceApproach/>
+      <PlanDisturbancePush/>
+      <PlanDisturbanceRetract/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="ExecuteDisturbanceRoute">
+    <Sequence name="ExecuteDisturbanceRoute">
+      <ExecuteDisturbanceApproach/>
+      <ExecuteDisturbancePush/>
+      <ExecuteDisturbanceRetract/>
+    </Sequence>
+  </BehaviorTree>
+</root>

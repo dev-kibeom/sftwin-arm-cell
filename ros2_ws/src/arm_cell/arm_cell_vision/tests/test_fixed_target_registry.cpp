@@ -19,7 +19,7 @@ arm_cell_vision::FixedTargetRegistration valid_registration()
   registration.pose.pose.position.y = -0.1;
   registration.pose.pose.position.z = 0.35;
   registration.pose.pose.orientation.w = 1.0;
-  registration.has_target_yaw = true;
+  registration.orientation_symmetry_order = 1;
   registration.ttl_ns = 30'000'000'000LL;
   return registration;
 }
@@ -50,7 +50,7 @@ TEST(FixedTargetRegistry, AcceptsValidRegistrationAndConsumesItOnce)
   const auto result = registry.consume("cube_profile", now + 1);
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->run_id, "run-1");
-  EXPECT_TRUE(result->has_target_yaw);
+  EXPECT_EQ(result->orientation_symmetry_order, 1U);
   EXPECT_FALSE(registry.consume("cube_profile", now + 2).has_value());
 }
 
@@ -70,6 +70,24 @@ TEST(FixedTargetRegistry, RejectsWrongFrameNonFiniteAndZeroNormOrientation)
   auto zero_orientation = valid_registration();
   zero_orientation.pose.pose.orientation.w = 0.0;
   EXPECT_FALSE(registry.register_target(zero_orientation).accepted);
+}
+
+TEST(FixedTargetRegistry, OrderZeroPreservesInvalidQuaternionWhileObservableOrdersRequireOne)
+{
+  int64_t now = 100;
+  auto unobservable_registry = make_registry(&now);
+  auto unobservable = valid_registration();
+  unobservable.orientation_symmetry_order = 0;
+  unobservable.pose.pose.orientation = geometry_msgs::msg::Quaternion{};
+  unobservable.pose.pose.orientation.w = 0.0;
+  EXPECT_TRUE(unobservable_registry.register_target(unobservable).accepted);
+
+  auto invalid_observable = valid_registration();
+  invalid_observable.orientation_symmetry_order = 4;
+  invalid_observable.pose.pose.orientation = geometry_msgs::msg::Quaternion{};
+  invalid_observable.pose.pose.orientation.w = 0.0;
+  auto observable_registry = make_registry(&now);
+  EXPECT_FALSE(observable_registry.register_target(invalid_observable).accepted);
 }
 
 TEST(FixedTargetRegistry, RejectsUnknownTargetAndInvalidTtl)

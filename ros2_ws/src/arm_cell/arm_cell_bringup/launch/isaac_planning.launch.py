@@ -1,8 +1,10 @@
 """Compose ROS processes for the externally started Isaac simulation."""
 
+import importlib.util
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
+
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -10,6 +12,7 @@ from launch.actions import (
     IncludeLaunchDescription,
     OpaqueFunction,
     RegisterEventHandler,
+    SetEnvironmentVariable,
 )
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
@@ -20,14 +23,65 @@ import xacro
 import yaml
 
 
-def node_ros_arguments():
-    """Keep planning-side helper processes at the framework-safe default."""
-    return ["--log-level", "info"]
+def _load_console_output_format():
+    helper_path = (
+        Path(get_package_share_directory("arm_cell_moveit_config"))
+        / "launch/console_output_format.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "arm_cell_console_output_format", helper_path
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load console formatter from {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.ConsoleOutputFormat("{line}")
+
+
+CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
+
+
+# Keep the spdlog process sink at DEBUG without enabling framework chatter.
+DEBUG_FRAMEWORK_LOGGERS = (
+    "rcl",
+    "rclcpp",
+    "rcl_action",
+    "rclcpp_action",
+    "rmw",
+    "rmw_fastrtps_cpp",
+    "move_group",
+    "moveit",
+    "moveit_ros",
+    "moveit_core",
+    "pluginlib",
+    "kdl_parser",
+    "kinematics_plugin_loader",
+    "robot_state_publisher",
+    "moveit_robot_model",
+    "moveit_kinematics_base",
+    "moveit_constraint_samplers",
+)
+MOVEIT_RAW_LOG_LEVELS = (
+    "ompl:=fatal",
+    "moveit_kinematic_constraints.kinematic_constraints:=warn",
+    "moveit_collision_detection_fcl.collision_common:=warn",
+)
+
+
+def node_ros_arguments(log_level="info"):
+    """Keep console and file levels aligned while filtering framework chatter."""
+    arguments = ["--log-level", log_level]
+    if log_level == "debug":
+        for logger_name in DEBUG_FRAMEWORK_LOGGERS:
+            arguments.extend(["--log-level", f"{logger_name}:=warn"])
+    for logger_setting in MOVEIT_RAW_LOG_LEVELS:
+        arguments.extend(["--log-level", logger_setting])
+    return arguments
 
 
 def compose(context):
-    # Debug selection belongs to explicitly owned production diagnostics.
-    ros_arguments = node_ros_arguments()
+    selected_log_level = LaunchConfiguration("log_level").perform(context)
+    ros_arguments = node_ros_arguments(selected_log_level)
     config = yaml.safe_load(
         Path(LaunchConfiguration("profile").perform(context)).read_text()
     )
@@ -48,6 +102,7 @@ def compose(context):
         package="arm_cell_moveit_config",
         executable="load_static_scene.py",
         output="screen",
+        output_format=CONSOLE_OUTPUT_FORMAT,
         ros_arguments=ros_arguments,
         parameters=[
             {
@@ -71,6 +126,7 @@ def compose(context):
             package="arm_cell_sim_adapter",
             executable="joint_state_adapter",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=ros_arguments,
             parameters=[model],
             remappings=[
@@ -82,15 +138,20 @@ def compose(context):
             package="robot_state_publisher",
             executable="robot_state_publisher",
             output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[model],
+            ros_arguments=ros_arguments,
             remappings=[("joint_states", config["joint_states"])],
         ),
         Node(
             package="tf2_ros",
             executable="static_transform_publisher",
             name="world_to_base",
+            output="screen",
+            output_format=CONSOLE_OUTPUT_FORMAT,
             arguments=arguments,
             parameters=[{"use_sim_time": True}],
+            ros_arguments=ros_arguments,
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -100,6 +161,7 @@ def compose(context):
                 "use_rviz": LaunchConfiguration("use_rviz"),
                 "joint_states": config["joint_states"],
                 "planning_profile": LaunchConfiguration("planning_profile", default=""),
+                "log_level": LaunchConfiguration("log_level"),
             }.items(),
         ),
     ]
@@ -129,6 +191,11 @@ def generate_launch_description():
     share = Path(get_package_share_directory("arm_cell_bringup"))
     return LaunchDescription(
         [
+            SetEnvironmentVariable(
+                "RCUTILS_CONSOLE_OUTPUT_FORMAT",
+                "[{severity}] [{name}] {message}",
+            ),
+            SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument("static_scene", default_value="false"),
             DeclareLaunchArgument("log_level", default_value="info"),

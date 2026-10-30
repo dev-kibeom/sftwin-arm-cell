@@ -8,7 +8,12 @@ import launch_testing
 import launch_testing.actions
 from launch_ros.actions import Node
 import rclpy
-from arm_cell_interfaces.msg import MotionCapability, MotionStatus, SafetyState
+from arm_cell_interfaces.msg import (
+    MotionCapability,
+    MotionStatus,
+    SafetyHardwareState,
+    SafetyState,
+)
 from std_srvs.srv import SetBool
 
 
@@ -32,10 +37,6 @@ def generate_test_description():
                         {
                             "use_sim_time": False,
                             "freshness_timeout_ms": 500,
-                            "degraded_freshness_threshold_ms": 180,
-                            "degraded_freshness_inputs": ["AMR", "PACKML"],
-                            "degraded_velocity_scale": 0.5,
-                            "degraded_acceleration_scale": 0.6,
                         }
                     ],
                 ),
@@ -53,8 +54,21 @@ class TestDegradedFaultScenarios(unittest.TestCase):
             "degraded_fault_scenarios_test", use_global_arguments=False
         )
         self.states = []
+        self.hardware_samples = []
         self.node.create_subscription(
             SafetyState, "/safety/state", self.states.append, 10
+        )
+        self.node.create_subscription(
+            SafetyHardwareState,
+            "/safety/hardware_state",
+            lambda message: self.hardware_samples.append(
+                (
+                    time.monotonic(),
+                    message.header.stamp.sec * 1_000_000_000
+                    + message.header.stamp.nanosec,
+                )
+            ),
+            10,
         )
         self.motion_publisher = self.node.create_publisher(
             MotionStatus, "/motion/state", 10
@@ -92,32 +106,48 @@ class TestDegradedFaultScenarios(unittest.TestCase):
         self.spin_until(future.done)
         self.assertTrue(future.result().success)
 
-    def test_degradation_restricts_then_restores_and_loss_fails_closed(self):
+    def test_delay_does_not_restrict_and_required_input_loss_fails_closed(self):
         self.spin_until(
             lambda: self.states
             and self.states[-1].required_inputs_fresh
             and self.states[-1].motion_capability.value
             == MotionCapability.MOTION_NORMAL
+            and len(self.hardware_samples) >= 2
         )
         normal = self.states[-1]
         self.assertTrue(normal.motion_envelope_valid)
         self.assertAlmostEqual(normal.max_velocity_scale, 1.0)
         self.assertAlmostEqual(normal.max_acceleration_scale, 1.0)
 
+        previous_hardware_receipt = self.hardware_samples[-1][0]
         self.set_fault(self.degradation_client, True)
         self.spin_until(
-            lambda: self.states
-            and self.states[-1].required_inputs_fresh
-            and self.states[-1].motion_envelope_valid
-            and self.states[-1].max_velocity_scale == 0.5,
+            lambda: self.hardware_samples
+            and self.hardware_samples[-1][0] > previous_hardware_receipt,
             timeout=2.0,
         )
-        degraded = self.states[-1]
-        self.assertEqual(degraded.safety_state, SafetyState.SAFETY_STATE_SAFE)
-        self.assertEqual(
-            degraded.motion_capability.value, MotionCapability.MOTION_NORMAL
+        self.assertGreaterEqual(
+            self.hardware_samples[-1][0] - previous_hardware_receipt, 0.2
         )
-        self.assertAlmostEqual(degraded.max_acceleration_scale, 0.6)
+        delayed_hardware_stamp = self.hardware_samples[-1][1]
+        state_count = len(self.states)
+        self.spin_until(
+            lambda: len(self.states) > state_count
+            and self.states[-1].header.stamp.sec * 1_000_000_000
+            + self.states[-1].header.stamp.nanosec
+            >= delayed_hardware_stamp
+            and self.states[-1].required_inputs_fresh,
+            timeout=1.0,
+        )
+        delayed = self.states[-1]
+        self.assertTrue(delayed.required_inputs_fresh)
+        self.assertEqual(delayed.safety_state, SafetyState.SAFETY_STATE_SAFE)
+        self.assertEqual(
+            delayed.motion_capability.value, MotionCapability.MOTION_NORMAL
+        )
+        self.assertTrue(delayed.motion_envelope_valid)
+        self.assertAlmostEqual(delayed.max_acceleration_scale, 1.0)
+        self.assertEqual(delayed.active_causes.value, 0)
 
         self.set_fault(self.degradation_client, False)
         self.spin_until(

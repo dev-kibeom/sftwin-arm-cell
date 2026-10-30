@@ -1,6 +1,10 @@
 #include "arm_cell_vision/detect_target_service.hpp"
+#include "arm_cell_vision/vision_detector_snapshot.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <atomic>
+#include <cmath>
 #include <exception>
 #include <iomanip>
 #include <limits>
@@ -12,7 +16,26 @@ namespace arm_cell_vision
 namespace
 {
 
+std::atomic<uint64_t> next_acquisition_generation{1};
+
 using ResultCode = arm_cell_interfaces::msg::DetectTargetResultCode;
+
+const char * result_code_name(uint8_t code)
+{
+  switch (code) {
+    case ResultCode::DETECT_RESULT_SUCCESS: return "DETECT_RESULT_SUCCESS";
+    case ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND: return "DETECT_RESULT_OBJECT_NOT_FOUND";
+    case ResultCode::DETECT_RESULT_TIMEOUT: return "DETECT_RESULT_TIMEOUT";
+    case ResultCode::DETECT_RESULT_SENSOR_ERROR: return "DETECT_RESULT_SENSOR_ERROR";
+    case ResultCode::DETECT_RESULT_TF_ERROR: return "DETECT_RESULT_TF_ERROR";
+    case ResultCode::DETECT_RESULT_GEOMETRY_ERROR: return "DETECT_RESULT_GEOMETRY_ERROR";
+    case ResultCode::DETECT_RESULT_INVALID_RESULT: return "DETECT_RESULT_INVALID_RESULT";
+    case ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET:
+      return "DETECT_RESULT_TEMPORARY_INVALID_TARGET";
+    case ResultCode::DETECT_RESULT_BUSY: return "DETECT_RESULT_BUSY";
+    default: return "UNKNOWN";
+  }
+}
 
 int64_t duration_ns(const builtin_interfaces::msg::Duration & duration)
 {
@@ -30,12 +53,14 @@ int64_t duration_ns(const builtin_interfaces::msg::Duration & duration)
 void copy_result(const DetectionResult & source, DetectTargetService::Response & target)
 {
   target.result_code.value = source.result_code;
-  target.target_pose = source.target_pose;
-  target.has_target_pose = source.has_target_pose;
-  target.has_target_yaw = source.has_target_yaw;
-  target.estimated_height_m = source.estimated_height_m;
-  target.has_estimated_height = source.has_estimated_height;
   target.diagnostic_detail = source.diagnostic_detail;
+  target.scene_generation = source.scene_generation;
+  if (source.result_code == ResultCode::DETECT_RESULT_SUCCESS ||
+    source.result_code == ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET ||
+    source.result_code == ResultCode::DETECT_RESULT_GEOMETRY_ERROR)
+  {
+    target.disturbance_candidates = source.disturbance_candidates;
+  }
 }
 
 const char * ingress_status_name(IngressStatus status)
@@ -58,134 +83,13 @@ const char * ingress_status_name(IngressStatus status)
   return "unknown_ingress_status";
 }
 
-std::string optional_ms(const std::optional<int64_t> & value)
-{
-  if (!value) {
-    return "unavailable";
-  }
-  std::ostringstream output;
-  output << std::fixed << std::setprecision(3) <<
-    static_cast<double>(*value) / 1'000'000.0;
-  return output.str();
-}
-
-std::string optional_stamp(const std::optional<int64_t> & value)
-{
-  return value ? std::to_string(*value) : "unavailable";
-}
-
-std::string optional_status(const std::optional<IngressStatus> & value)
-{
-  return value ? ingress_status_name(*value) : "none";
-}
-
-void log_rgbd_request_summary(
-  const rclcpp::Logger & logger, const VisionIngressRequestDiagnostics & snapshot)
-{
-  const auto period = [](const std::optional<int64_t> & mean,
-      const std::optional<int64_t> & latest) {
-      return "mean=" + optional_ms(mean) + ",latest=" + optional_ms(latest);
-    };
-  const auto rgb_stamp_period = period(
-    snapshot.rgb_stamp_period_mean_ns, snapshot.rgb_stamp_period_latest_ns);
-  const auto rgb_receipt_period = period(
-    snapshot.rgb_receipt_period_mean_ns, snapshot.rgb_receipt_period_latest_ns);
-  const auto depth_stamp_period = period(
-    snapshot.depth_stamp_period_mean_ns, snapshot.depth_stamp_period_latest_ns);
-  const auto depth_receipt_period = period(
-    snapshot.depth_receipt_period_mean_ns, snapshot.depth_receipt_period_latest_ns);
-  const auto latest_pair_rgb_stamp = optional_stamp(snapshot.latest_pair_rgb_stamp_ns);
-  const auto latest_pair_depth_stamp = optional_stamp(snapshot.latest_pair_depth_stamp_ns);
-  const auto latest_delta = optional_ms(snapshot.latest_stamp_delta_ns);
-  const auto minimum_delta = optional_ms(snapshot.minimum_cross_stream_delta_ns);
-  const auto minimum_rgb_stamp = optional_stamp(snapshot.minimum_cross_rgb_stamp_ns);
-  const auto minimum_depth_stamp = optional_stamp(snapshot.minimum_cross_depth_stamp_ns);
-  const auto actual_pair_delta = optional_ms(snapshot.latest_pair_delta_ns);
-  const auto last_status = optional_status(snapshot.last_status);
-  const auto cached_pair_status = optional_status(snapshot.cached_pair_status);
-  const bool ingress_observed = snapshot.rgb_received > 0 || snapshot.depth_received > 0;
-  RCLCPP_INFO(
-    logger,
-    "RGB-D sync summary: request=%llu start_monotonic_ns=%lld watermark_ns=%lld "
-    "ingress_during_request=%s rgb_received=%llu depth_received=%llu "
-    "rgb_stamp_period_ms{%s} rgb_receipt_period_ms{%s} "
-    "depth_stamp_period_ms{%s} depth_receipt_period_ms{%s} "
-    "latest_received_rgb_depth_delta_ms=%s minimum_cross_stream_delta_ms=%s "
-    "minimum_cross_rgb_stamp_ns=%s minimum_cross_depth_stamp_ns=%s "
-    "sync_callbacks=%llu "
-    "latest_pair_rgb_stamp_ns=%s latest_pair_depth_stamp_ns=%s actual_pair_delta_ms=%s "
-    "pre_request_pair_candidates=%llu cached_pair_available=%s cached_pair_reused=%s "
-    "cached_pair_status=%s unknown_pair_receipts=%llu "
-    "watermark_rejected_pairs=%llu policy_evaluations=%llu observation_ready=%llu last_status=%s "
-    "processing_started=%s source_capture_identity=unavailable "
-    "sample_detail_dropped=%llu pair_detail_dropped=%llu",
-    static_cast<unsigned long long>(snapshot.request_id),
-    static_cast<long long>(snapshot.request_start_monotonic_ns),
-    static_cast<long long>(snapshot.request_watermark_stamp_ns),
-    ingress_observed ? "true" : "false",
-    static_cast<unsigned long long>(snapshot.rgb_received),
-    static_cast<unsigned long long>(snapshot.depth_received), rgb_stamp_period.c_str(),
-    rgb_receipt_period.c_str(), depth_stamp_period.c_str(), depth_receipt_period.c_str(),
-    latest_delta.c_str(), minimum_delta.c_str(), minimum_rgb_stamp.c_str(),
-    minimum_depth_stamp.c_str(),
-    static_cast<unsigned long long>(snapshot.sync_callbacks), latest_pair_rgb_stamp.c_str(),
-    latest_pair_depth_stamp.c_str(), actual_pair_delta.c_str(),
-    static_cast<unsigned long long>(snapshot.pre_request_pair_candidates),
-    snapshot.cached_pair_available ? "true" : "false",
-    snapshot.cached_pair_reused ? "true" : "false",
-    cached_pair_status.c_str(),
-    static_cast<unsigned long long>(snapshot.unknown_pair_receipt_count),
-    static_cast<unsigned long long>(snapshot.watermark_rejected_pairs),
-    static_cast<unsigned long long>(snapshot.policy_evaluations),
-    static_cast<unsigned long long>(snapshot.observation_ready), last_status.c_str(),
-    snapshot.processing_started ? "true" : "false",
-    static_cast<unsigned long long>(snapshot.sample_detail_dropped),
-    static_cast<unsigned long long>(snapshot.pair_detail_dropped));
-
-  for (const auto & sample : snapshot.sample_details) {
-    const auto elapsed_ms = static_cast<double>(
-      sample.receipt_monotonic_ns - snapshot.request_start_monotonic_ns) / 1'000'000.0;
-    RCLCPP_DEBUG(
-      logger,
-      "RGB-D sync sample: request=%llu stream=%s frame_id=%s stamp_ns=%lld "
-      "receipt_monotonic_ns=%lld "
-      "request_elapsed_ms=%.3f",
-      static_cast<unsigned long long>(snapshot.request_id), sample.stream.c_str(),
-      sample.frame_id.c_str(),
-      static_cast<long long>(sample.stamp_ns),
-      static_cast<long long>(sample.receipt_monotonic_ns), elapsed_ms);
-  }
-  for (const auto & pair : snapshot.pair_details) {
-    const auto status = optional_status(pair.status);
-    const auto evaluated = pair.policy_evaluated ? (*pair.policy_evaluated ? "true" : "false") :
-      "unavailable";
-    const auto observation_ready = pair.observation_ready ?
-      (*pair.observation_ready ? "true" : "false") : "unavailable";
-    RCLCPP_DEBUG(
-      logger,
-      "RGB-D sync pair: request=%llu pair=%llu rgb_stamp_ns=%lld depth_stamp_ns=%lld "
-      "rgb_receipt_monotonic_ns=%lld depth_receipt_monotonic_ns=%lld delta_ms=%.3f "
-      "pre_request_sample=%s watermark_passed=%s policy_evaluated=%s "
-      "observation_ready=%s status=%s",
-      static_cast<unsigned long long>(snapshot.request_id),
-      static_cast<unsigned long long>(pair.sequence),
-      static_cast<long long>(pair.rgb_stamp_ns), static_cast<long long>(pair.depth_stamp_ns),
-      static_cast<long long>(pair.rgb_receipt_monotonic_ns),
-      static_cast<long long>(pair.depth_receipt_monotonic_ns),
-      static_cast<double>(pair.delta_ns) / 1'000'000.0,
-      pair.pre_request_sample ? "true" : "false", pair.watermark_passed ? "true" : "false",
-      evaluated, observation_ready, status.c_str());
-  }
-}
-
 struct RgbdRequestSummaryGuard
 {
   VisionRosIngress & ingress;
-  rclcpp::Logger logger;
 
   ~RgbdRequestSummaryGuard()
   {
-    log_rgbd_request_summary(logger, ingress.finish_request_diagnostics());
+    (void)ingress.finish_request_diagnostics();
   }
 };
 
@@ -206,14 +110,7 @@ std::string sensor_timing_detail(
   detail << "latest_age_ms{rgb=" << age_ms(snapshot.latest_rgb_received_monotonic_ns)
          << ",depth=" << age_ms(snapshot.latest_depth_received_monotonic_ns)
          << ",camera_info=" << age_ms(snapshot.latest_camera_info_received_monotonic_ns)
-         << "}; latest_received_rgb_depth_delta_ms=";
-  if (snapshot.latest_rgb_depth_delta_ns) {
-    detail << std::fixed << std::setprecision(3) <<
-      static_cast<double>(*snapshot.latest_rgb_depth_delta_ns) / 1'000'000.0;
-  } else {
-    detail << "unavailable";
-  }
-  detail << "; last_ingress_status=" <<
+         << "}; last_ingress_status=" <<
     (status_observed_during_request && snapshot.last_status ?
   ingress_status_name(*snapshot.last_status) : "none_during_request");
   return detail.str();
@@ -224,68 +121,71 @@ std::string timeout_detail(
   const VisionIngressAcceptanceSnapshot & request_start,
   int64_t now_ns)
 {
-  const bool rgb_ever = snapshot.rgb_message_count > 0;
-  const bool depth_ever = snapshot.depth_message_count > 0;
   const bool rgb_during_request = snapshot.rgb_message_count > request_start.rgb_message_count;
-  const bool depth_during_request = snapshot.depth_message_count >
-    request_start.depth_message_count;
-  const bool new_pair_during_request =
-    snapshot.synchronized_callback_count > request_start.synchronized_callback_count;
+  const bool depth_ever = snapshot.depth_message_count > 0;
+  const bool depth_during_request = snapshot.depth_message_count > request_start.depth_message_count;
   std::string reason;
-  if (!rgb_ever) {
-    reason = "no RGB observed";
-  } else if (!rgb_during_request) {
-    reason = "no RGB received during request; pre-request samples are not fresh evidence";
-  } else if (!depth_ever) {
+  if (!depth_ever) {
     reason = "no depth observed";
   } else if (!depth_during_request) {
     reason = "no depth received during request; pre-request samples are not fresh evidence";
   } else if (!snapshot.calibration_cache_valid) {
     reason = "CameraInfo unavailable/invalid";
-  } else if (!new_pair_during_request) {
-    reason = "RGB/depth observed but no pair within sync tolerance";
   } else if (snapshot.policy_delivery_count > request_start.policy_delivery_count &&
     snapshot.last_status &&
     (*snapshot.last_status == IngressStatus::kStaleObservation ||
     *snapshot.last_status == IngressStatus::kReceiptStaleObservation))
   {
-    reason = "synchronized observation exists but is stale";
+    reason = "depth observation exists but is stale";
   } else if (snapshot.policy_delivery_count > request_start.policy_delivery_count &&
     snapshot.last_status &&
     *snapshot.last_status == IngressStatus::kIncompatibleMetadata)
   {
-    reason = "observation rejected by geometry/calibration compatibility";
-  } else if (snapshot.last_pair_observation_monotonic_ns &&
-    (!request_start.last_pair_observation_monotonic_ns ||
-    *snapshot.last_pair_observation_monotonic_ns >
-    *request_start.last_pair_observation_monotonic_ns))
+    reason = "depth observation rejected by geometry/calibration compatibility";
+  } else if (snapshot.last_depth_observation_monotonic_ns &&
+    (!request_start.last_depth_observation_monotonic_ns ||
+    *snapshot.last_depth_observation_monotonic_ns >
+    *request_start.last_depth_observation_monotonic_ns))
   {
-    reason = "synchronized observation exists but was rejected or unavailable";
+    reason = "depth observation exists but was rejected or unavailable";
   } else {
-    reason = "no usable synchronized observation";
+    reason = "no usable depth observation";
   }
   std::ostringstream detail;
-  detail << "no valid observation before timeout: " << reason
+  detail << "acquisition deadline expired: " << reason
          << "; observed{rgb=" << (rgb_during_request ? "received" : "no_rgb")
          << ",depth=" << (depth_during_request ? "received" : "no_depth")
          << ",camera_info=" <<
     (snapshot.calibration_cache_valid ? "valid" : "unavailable_or_invalid")
-         << "}; " << sensor_timing_detail(snapshot, now_ns, new_pair_during_request)
-         << "; processing_elapsed_ms=not_started";
+         << "}; " << sensor_timing_detail(snapshot, now_ns,
+    snapshot.policy_delivery_count > request_start.policy_delivery_count);
   return detail.str();
 }
 
 }  // namespace
 
+std::string make_acquisition_id(const std::string & vision_run_id, uint64_t generation)
+{
+  return vision_run_id + "-acq-" + std::to_string(generation);
+}
+
 DetectTargetService::DetectTargetService(
   VisionRosIngress & ingress,
-  DetectTargetProcessor processor,
   SteadyNow steady_now,
-  TransformLookup transform_lookup,
-  std::vector<DetectorProfile> detector_profiles)
-: ingress_(ingress), processor_(std::move(processor)), steady_now_(std::move(steady_now)),
-  transform_lookup_(std::move(transform_lookup)),
-  detector_profiles_(std::move(detector_profiles))
+  AcquisitionBegin acquisition_begin,
+  AcquisitionEnd acquisition_end,
+  AcquisitionResultLookup acquisition_result_lookup,
+  AcquisitionDiagnosticLookup acquisition_diagnostic_lookup,
+  AcquisitionTerminal acquisition_terminal,
+  std::string vision_run_id,
+  SupportNormalLookup support_normal_lookup)
+: ingress_(ingress), steady_now_(std::move(steady_now)),
+  acquisition_begin_(std::move(acquisition_begin)), acquisition_end_(std::move(acquisition_end)),
+  acquisition_result_lookup_(std::move(acquisition_result_lookup)),
+  acquisition_diagnostic_lookup_(std::move(acquisition_diagnostic_lookup)),
+  acquisition_terminal_(std::move(acquisition_terminal)),
+  support_normal_lookup_(std::move(support_normal_lookup)),
+  vision_run_id_(vision_run_id.empty() ? make_vision_run_id() : std::move(vision_run_id))
 {
 }
 
@@ -298,8 +198,8 @@ DetectTargetService::advertise(rclcpp::Node & node)
       "/vision/diagnostics", rclcpp::QoS(1).reliable().transient_local());
   } catch (const std::exception & error) {
     RCLCPP_WARN(
-      logger_, "vision diagnostic output unavailable; DetectTarget remains available: %s",
-      error.what());
+        logger_, "vision diagnostic output unavailable; DetectTarget remains available: %s",
+        error.what());
   }
   if (diagnostic_publisher_) {
     arm_cell_interfaces::msg::VisionDiagnostic initial;
@@ -323,13 +223,58 @@ DetectTargetService::advertise(rclcpp::Node & node)
       std::shared_ptr<arm_cell_interfaces::srv::DetectTarget::Response> response) {
       handle(*request, *response);
     }, rmw_qos_profile_services_default, callback_group_);
+  bool use_sim_time = false;
+  node.get_parameter_or("use_sim_time", use_sim_time, false);
+  if (use_sim_time) {
+    mislocalize_service_ = node.create_service<std_srvs::srv::SetBool>(
+      "/vision/test_scenario/mislocalize_next",
+      [this](
+        const std::shared_ptr<rmw_request_id_t>,
+        const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+        std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
+        std::lock_guard<std::mutex> lock(scenario_mutex_);
+        if (request->data && mislocalize_armed_) {
+          response->success = false;
+          response->message = "a Vision mislocalization is already pending";
+          return;
+        }
+        if (request->data) {
+          mislocalize_after_generation_ = next_acquisition_generation.load();
+          mislocalize_armed_ = true;
+          response->message = "next eligible successful Acquisition armed";
+        } else {
+          mislocalize_armed_ = false;
+          response->message = "pending Vision mislocalization cleared";
+        }
+        response->success = true;
+      }, rmw_qos_profile_services_default, callback_group_);
+  }
   return service_server_;
+}
+
+void DetectTargetService::set_mislocalize_next(bool active)
+{
+  std::lock_guard<std::mutex> lock(scenario_mutex_);
+  if (active) {
+    if (mislocalize_armed_) {return;}
+    mislocalize_after_generation_ = next_acquisition_generation.load();
+    mislocalize_armed_ = true;
+  } else {
+    mislocalize_armed_ = false;
+  }
+}
+
+bool DetectTargetService::mislocalize_pending() const
+{
+  std::lock_guard<std::mutex> lock(scenario_mutex_);
+  return mislocalize_armed_;
 }
 
 void DetectTargetService::handle(const Request & request, Response & response)
 {
+  const auto request_start = steady_now_();
   bool diagnostic_warning_logged = false;
-  const auto publish_diagnostic = [this, &request, &diagnostic_warning_logged](
+  const auto publish_diagnostic = [this, &request, &response, &diagnostic_warning_logged](
     const DetectionResult & detection, uint8_t state,
     const std_msgs::msg::Header & source_header,
     const std::string & diagnostic_detail = {}) {
@@ -341,73 +286,77 @@ void DetectTargetService::handle(const Request & request, Response & response)
       diagnostic.target_id = request.target_id;
       diagnostic.source_rgb_header = source_header;
       diagnostic.diagnostic_detail = diagnostic_detail;
-      diagnostic.result_code = detection.result_code;
-      diagnostic.valid = detection.result_code ==
+      diagnostic.result_code = state == arm_cell_interfaces::msg::VisionDiagnostic::IDLE ?
+        response.result_code.value : detection.result_code;
+      diagnostic.valid = diagnostic.result_code ==
         arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
-      diagnostic.centroid_pixel_valid = detection.centroid_pixel_valid;
-      diagnostic.centroid_pixel_x = detection.centroid_pixel_x;
-      diagnostic.centroid_pixel_y = detection.centroid_pixel_y;
-      diagnostic.object_region_valid = detection.object_region_valid;
-      diagnostic.object_region_x = detection.object_region_x;
-      diagnostic.object_region_y = detection.object_region_y;
-      diagnostic.object_region_width = detection.object_region_width;
-      diagnostic.object_region_height = detection.object_region_height;
       diagnostic.support_region_valid = detection.support_region_valid;
       diagnostic.support_region = detection.support_region;
-      diagnostic.yaw_available = detection.has_target_yaw;
       try {
         diagnostic_publisher_->publish(diagnostic);
-      } catch (const std::exception &) {
+      } catch (const std::exception & error) {
         if (!diagnostic_warning_logged) {
           diagnostic_warning_logged = true;
           RCLCPP_WARN(
-            logger_, "vision diagnostic publication failed; DetectTarget result is unaffected");
+            logger_, "Vision diagnostic publication failed; DetectTarget result is unaffected cause=%s",
+            error.what());
         }
       }
     };
   DetectionResult empty_diagnostic;
   empty_diagnostic.result_code = ResultCode::DETECT_RESULT_INVALID_RESULT;
   const std_msgs::msg::Header empty_header;
-  publish_diagnostic(
-    empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::DETECTING,
-    empty_header);
-  const auto log_result = [&]() {
+  const auto log_result = [&](const std::string & failure_cause) {
       const auto code = response.result_code.value;
       if (code == ResultCode::DETECT_RESULT_SUCCESS) {
-        RCLCPP_INFO(
-          logger_, "target detection succeeded target_id=%s",
-          request.target_id.c_str());
+        RCLCPP_DEBUG(logger_, "Vision found a target observation");
       } else if (code == ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND) {
-        RCLCPP_INFO(
-          logger_, "target detection found no available target target_id=%s diagnostic=%s",
-          request.target_id.c_str(), response.diagnostic_detail.c_str());
+        RCLCPP_DEBUG(logger_,
+                     "Vision found no target matching the requested profile");
       } else if (code == ResultCode::DETECT_RESULT_TIMEOUT) {
         RCLCPP_WARN(
-          logger_, "target detection unavailable target_id=%s result_code=%u diagnostic=%s",
-          request.target_id.c_str(), code, response.diagnostic_detail.c_str());
+            logger_,
+            "Vision acquisition did not finish before its deadline result=%s cause=%s "
+            "target=%s algorithm=%s",
+            result_code_name(code), failure_cause.c_str(), request.target_id.c_str(),
+            request.algorithm.c_str());
       } else if (code == ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET) {
         RCLCPP_WARN(
-          logger_,
-          "target detection temporarily unavailable target_id=%s result_code=%u diagnostic=%s",
-          request.target_id.c_str(), code, response.diagnostic_detail.c_str());
+            logger_,
+            "Vision could not use the current target observation result=%s cause=%s",
+            result_code_name(code), failure_cause.c_str());
+      } else if (code == ResultCode::DETECT_RESULT_BUSY) {
+        RCLCPP_DEBUG(
+          logger_, "Vision request could not start result=%s cause=%s",
+          result_code_name(code), failure_cause.c_str());
       } else {
         RCLCPP_ERROR(
-          logger_, "target detection failed target_id=%s result_code=%u diagnostic=%s",
-          request.target_id.c_str(), code, response.diagnostic_detail.c_str());
+            logger_,
+            "Vision could not fulfill the detection request result=%s cause=%s",
+            result_code_name(code), failure_cause.c_str());
       }
     };
+  if (request.algorithm != "cuboid_top_face") {
+    response.result_code.value = ResultCode::DETECT_RESULT_INVALID_RESULT;
+    response.diagnostic_detail = "unsupported DetectTarget.algorithm: '" + request.algorithm + "'";
+    log_result("unsupported DetectTarget.algorithm");
+    return;
+  }
   const auto timeout_ns = duration_ns(request.timeout);
   if (timeout_ns < 0) {
     response.result_code.value = ResultCode::DETECT_RESULT_INVALID_RESULT;
     response.diagnostic_detail = "timeout must be a non-negative duration";
-    publish_diagnostic(
-      empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
-      empty_header);
-    log_result();
+    log_result("timeout must be a non-negative duration");
     return;
   }
-  const auto request_start = steady_now_();
-  const RgbdRequestSummaryGuard summary_guard{ingress_, logger_};
+  std::unique_lock<std::mutex> acquisition_lock(acquisition_mutex_, std::try_to_lock);
+  if (!acquisition_lock.owns_lock()) {
+    response.result_code.value = ResultCode::DETECT_RESULT_BUSY;
+    response.acquisition_id.clear();
+    response.diagnostic_detail = "request contention: another DetectTarget acquisition is active";
+    log_result("another DetectTarget acquisition is active");
+    return;
+  }
   const auto append_vision_elapsed = [&]() {
       std::ostringstream timing;
       timing << "vision_total_elapsed_ms=" << std::fixed << std::setprecision(1)
@@ -419,8 +368,90 @@ void DetectTargetService::handle(const Request & request, Response & response)
     };
   const auto request_deadline = timeout_ns > std::numeric_limits<int64_t>::max() - request_start ?
     std::numeric_limits<int64_t>::max() : request_start + timeout_ns;
+  const RgbdRequestSummaryGuard summary_guard{ingress_};
   const auto snapshot = ingress_.acceptance_snapshot();
   const auto watermark = snapshot.latest_canonical_stamp_ns.value_or(0);
+  const auto acquisition_generation = next_acquisition_generation.fetch_add(1);
+  const auto acquisition_begin_result = acquisition_begin_ ? acquisition_begin_(
+    request.target_id, acquisition_generation, request_start, watermark, request.algorithm) :
+    ResultCode::DETECT_RESULT_SUCCESS;
+  if (acquisition_begin_result != ResultCode::DETECT_RESULT_SUCCESS) {
+    response.result_code.value = acquisition_begin_result;
+    response.acquisition_id.clear();
+    response.diagnostic_detail = acquisition_begin_result == ResultCode::DETECT_RESULT_BUSY ?
+      "request contention: another Vision acquisition is active" :
+      acquisition_begin_result == ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET ?
+      "support calibration is not READY; DetectTarget request was not acquired" :
+      "requested detector profile is unavailable";
+    append_vision_elapsed();
+    if (acquisition_begin_result != ResultCode::DETECT_RESULT_BUSY) {
+      empty_diagnostic.result_code = response.result_code.value;
+      publish_diagnostic(
+        empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE, empty_header,
+        response.diagnostic_detail);
+    }
+    log_result(acquisition_begin_result == ResultCode::DETECT_RESULT_BUSY ?
+      "another Vision acquisition is active" :
+      acquisition_begin_result == ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET ?
+      "support Calibration is not READY" : "requested detector profile is unavailable");
+    return;
+  }
+  response.acquisition_id = make_acquisition_id(vision_run_id_, acquisition_generation);
+  publish_diagnostic(
+    empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::DETECTING,
+    empty_header);
+  struct AcquisitionEndGuard
+  {
+    VisionRosIngress & ingress;
+    AcquisitionEnd end;
+    ~AcquisitionEndGuard()
+    {
+      if (end) {end();}
+      ingress.end_acquisition();
+    }
+  } acquisition_end_guard{ingress_, acquisition_end_};
+  int64_t terminal_decision_ns = 0;
+  SharedAcquisitionResult acquisition_result;
+  struct AcquisitionTerminalGuard
+  {
+    const std::string & target_id;
+    uint64_t generation;
+    const Response & response;
+    const SharedAcquisitionResult & acquisition_result;
+    AcquisitionTerminal terminal;
+    rclcpp::Logger logger;
+    VisionRosIngress & ingress;
+    int64_t request_deadline_ns;
+    int64_t request_timeout_ns;
+    int64_t sync_slop_ns;
+    const int64_t & decision_ns;
+    SteadyNow steady_now;
+    ~AcquisitionTerminalGuard() noexcept
+    {
+      try {
+        if (terminal) {
+          const auto terminal_time = decision_ns == 0 ? steady_now() : decision_ns;
+          VisionRequestDiagnosticRecord record;
+          record.ingress = ingress.finish_request_diagnostics();
+          record.clock = ingress.acceptance_snapshot();
+          record.deadline_monotonic_ns = request_deadline_ns;
+          record.decision_monotonic_ns = terminal_time;
+          record.timeout_ns = request_timeout_ns;
+          record.sync_slop_ns = sync_slop_ns;
+          record.result_code = response.result_code.value;
+          terminal(target_id, generation, response, acquisition_result, record);
+        }
+      } catch (const std::exception & error) {
+        RCLCPP_WARN(logger,
+          "vision terminal snapshot callback failed cause=%s", error.what());
+      } catch (...) {
+        RCLCPP_WARN(logger,
+          "vision terminal snapshot callback failed cause=unknown_exception");
+      }
+    }
+  } terminal_guard{request.target_id, acquisition_generation, response, acquisition_result,
+    acquisition_terminal_, logger_, ingress_, request_deadline, timeout_ns,
+    ingress_.sync_slop_ns(), terminal_decision_ns, steady_now_};
   const auto begin = ingress_.begin_acquisition(watermark, request_start, timeout_ns);
   if (begin.status != IngressStatus::kWaiting) {
     response.result_code.value = ResultCode::DETECT_RESULT_SENSOR_ERROR;
@@ -430,144 +461,160 @@ void DetectTargetService::handle(const Request & request, Response & response)
     publish_diagnostic(
       empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
       empty_header);
-    log_result();
+    log_result("unable to begin Vision acquisition");
     return;
   }
 
-  while (steady_now_() < request_deadline) {
-    const auto observation = ingress_.latest_observation();
-    if (observation) {
-      const auto observation_snapshot = ingress_.acceptance_snapshot();
-      const auto acquisition_wait_ms = observation_snapshot.cached_pair_reused ?
-        std::optional<double>(0.0) :
-        observation_snapshot.last_pair_observation_monotonic_ns &&
-        *observation_snapshot.last_pair_observation_monotonic_ns >= request_start ?
-        std::optional<double>(
-        static_cast<double>(
-          *observation_snapshot.last_pair_observation_monotonic_ns - request_start) /
-        1'000'000.0) : std::nullopt;
-      const auto append_acquisition_wait = [&]() {
-          if (!acquisition_wait_ms) {
-            return;
+  while (true) {
+    const auto deadline_check_ns = steady_now_();
+    if (deadline_check_ns >= request_deadline) {
+      terminal_decision_ns = deadline_check_ns;
+      break;
+    }
+    const auto retained = acquisition_result_lookup_ ?
+      acquisition_result_lookup_(request.target_id, acquisition_generation) :
+      SharedAcquisitionResult{};
+    const auto * detection = retained ? &retained->detection : nullptr;
+    const auto qualification_check_ns = steady_now_();
+    if (retained && detection && qualification_check_ns < request_deadline &&
+      retained->generation == acquisition_generation &&
+      retained->target_id == request.target_id &&
+      detection->scene_generation == acquisition_generation &&
+      detection->result_code != ResultCode::DETECT_RESULT_INVALID_RESULT)
+    {
+      acquisition_result = retained;
+      terminal_decision_ns = qualification_check_ns;
+      copy_result(*detection, response);
+      for (size_t i = 0; i < response.disturbance_candidates.size(); ++i) {
+        response.disturbance_candidates[i].candidate_id = "disturbance-" +
+          std::to_string(i + 1);
+      }
+      if (!response.disturbance_candidates.empty()) {
+        using Disturbance = arm_cell_interfaces::msg::DisturbanceCandidate;
+        const auto count_category = [&](uint8_t category) {
+            return std::count_if(
+              response.disturbance_candidates.begin(), response.disturbance_candidates.end(),
+              [category](const auto & candidate) {return candidate.category == category;});
+          };
+        std::ostringstream disturbance_summary;
+        disturbance_summary << "; disturbance_candidates=" <<
+          response.disturbance_candidates.size() << "{inclined_surface=" <<
+          count_category(Disturbance::CATEGORY_INCLINED_SURFACE) <<
+          ",elevated_unresolved=" <<
+          count_category(Disturbance::CATEGORY_ELEVATED_UNRESOLVED) <<
+          ",other_unresolved=" <<
+          count_category(Disturbance::CATEGORY_OTHER_UNRESOLVED) << "}";
+        response.diagnostic_detail += disturbance_summary.str();
+      }
+      auto failure_cause = detection->failure_cause;
+      if (response.result_code.value == ResultCode::DETECT_RESULT_SUCCESS) {
+        const auto & candidates = detection->ordered_candidates;
+        response.material_candidates.clear();
+        response.material_candidates.reserve(candidates.size());
+        uint32_t candidate_sequence = 1;
+        for (size_t i = 0; i < candidates.size(); ++i) {
+          const auto & source = candidates[i];
+          arm_cell_interfaces::msg::PickCandidate value;
+          value.acquisition_id = response.acquisition_id;
+          value.candidate_id = "candidate-" + std::to_string(candidate_sequence++);
+          value.target_pose = source.target_pose;
+          value.top_height_tolerance_m =
+            detection->algorithm == "cuboid_top_face" && detection->applied_profile ?
+            detection->applied_profile->cuboid.height_tolerance_m : 0.0;
+          value.orientation_symmetry_order = source.orientation_symmetry_order;
+          value.estimated_height_m = source.estimated_height_m;
+          value.has_estimated_height = source.has_estimated_height;
+          value.has_observed_rectangle = source.has_observed_rectangle;
+          value.rectangle_long_side_m = source.rectangle_long_side_m;
+          value.rectangle_short_side_m = source.rectangle_short_side_m;
+          if (source.confidence_grade == "HIGH" || source.confidence_grade == "MEDIUM")
+          {
+            response.material_candidates.push_back(std::move(value));
           }
-          std::ostringstream timing;
-          timing << "acquisition_wait_ms=" << std::fixed << std::setprecision(1)
-                 << *acquisition_wait_ms;
-          if (!response.diagnostic_detail.empty()) {
-            response.diagnostic_detail += "; ";
-          }
-          response.diagnostic_detail += timing.str();
-        };
-      const auto transform = transform_lookup_(observation->depth.header.frame_id, 0);
-      if (!transform) {
-        response.result_code.value = ResultCode::DETECT_RESULT_TF_ERROR;
-        response.diagnostic_detail = "camera optical to base_link transform unavailable";
-        append_acquisition_wait();
-        append_vision_elapsed();
-        empty_diagnostic.result_code = response.result_code.value;
-        publish_diagnostic(
-          empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
-          observation->rgb.header);
-        log_result();
-        return;
-      }
-      if (steady_now_() >= request_deadline) {
-        response.result_code.value = ResultCode::DETECT_RESULT_TIMEOUT;
-        const auto timeout_snapshot = ingress_.acceptance_snapshot();
-        response.diagnostic_detail = "processing deadline expired before detector start; " +
-          sensor_timing_detail(timeout_snapshot, steady_now_(), true) +
-          "; processing_elapsed_ms=not_started";
-        append_acquisition_wait();
-        append_vision_elapsed();
-        empty_diagnostic.result_code = response.result_code.value;
-        publish_diagnostic(
-          empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
-          observation->rgb.header, response.diagnostic_detail);
-        log_result();
-        return;
-      }
-      publish_diagnostic(
-        empty_diagnostic,
-        arm_cell_interfaces::msg::VisionDiagnostic::DETECTING,
-        observation->rgb.header);
-      ingress_.mark_detector_processing_started();
-      const auto processing_start = steady_now_();
-      const auto result = processor_.process(
-        {observation->rgb, observation->depth, observation->camera_info, *transform},
-        request.target_id, detector_profiles_);
-      const auto processing_elapsed_ms =
-        static_cast<double>(steady_now_() - processing_start) / 1'000'000.0;
-      auto diagnostic_result = result;
-      diagnostic_result.source_rgb_header = observation->rgb.header;
-      if (steady_now_() >= request_deadline) {
-        response.result_code.value = ResultCode::DETECT_RESULT_TIMEOUT;
-        const auto processing_snapshot = ingress_.acceptance_snapshot();
-        std::ostringstream detail;
-        detail << "processing started but request deadline expired; processing_elapsed_ms="
-               << std::fixed << std::setprecision(1) << processing_elapsed_ms << "; "
-               << sensor_timing_detail(processing_snapshot, steady_now_(), true);
-        response.diagnostic_detail = detail.str();
-        diagnostic_result.result_code = response.result_code.value;
-        diagnostic_result.has_target_pose = false;
-        diagnostic_result.has_target_yaw = false;
-        diagnostic_result.diagnostic_detail = response.diagnostic_detail;
-      } else {
-        copy_result(result, response);
-      }
-      if (steady_now_() < request_deadline) {
-        std::ostringstream timing;
-        timing << "processing_elapsed_ms=" << std::fixed << std::setprecision(1)
-               << processing_elapsed_ms;
-        if (!response.diagnostic_detail.empty()) {
-          response.diagnostic_detail += "; ";
         }
-        response.diagnostic_detail += timing.str();
+        if (response.material_candidates.empty()) {
+          response.result_code.value = ResultCode::DETECT_RESULT_GEOMETRY_ERROR;
+          response.diagnostic_detail += "; no_high_or_medium_candidate_after_classification";
+        }
       }
-      append_acquisition_wait();
+      if (response.result_code.value == ResultCode::DETECT_RESULT_SUCCESS &&
+        !response.material_candidates.empty())
+      {
+        std::lock_guard<std::mutex> lock(scenario_mutex_);
+        if (mislocalize_armed_ && acquisition_generation >= mislocalize_after_generation_) {
+          const auto support_normal = support_normal_lookup_ ?
+            support_normal_lookup_(detection->source_rgb_header.frame_id) :
+            std::optional<geometry_msgs::msg::Vector3>{};
+          if (support_normal) {
+            const double norm = std::sqrt(
+              support_normal->x * support_normal->x +
+              support_normal->y * support_normal->y +
+              support_normal->z * support_normal->z);
+            if (std::isfinite(norm) && norm > 1.0e-6) {
+              const auto dx = support_normal->x / norm * 0.1;
+              const auto dy = support_normal->y / norm * 0.1;
+              const auto dz = support_normal->z / norm * 0.1;
+              std::ostringstream scenario_detail;
+              scenario_detail << std::fixed << std::setprecision(6)
+                << "mislocalization_applied=true; offset_base_m=("
+                << dx << ',' << dy << ',' << dz << "); acquisition_id="
+                << response.acquisition_id;
+              for (auto & candidate : response.material_candidates) {
+                const auto original = candidate.target_pose.pose.position;
+                candidate.target_pose.pose.position.x += dx;
+                candidate.target_pose.pose.position.y += dy;
+                candidate.target_pose.pose.position.z += dz;
+                const auto & returned = candidate.target_pose.pose.position;
+                scenario_detail << "; candidate_id=" << candidate.candidate_id <<
+                  "; original_base_xyz=(" << original.x << ',' << original.y << ',' << original.z <<
+                  "); returned_base_xyz=(" << returned.x << ',' << returned.y << ',' << returned.z << ')';
+              }
+              response.diagnostic_detail += "; " + scenario_detail.str();
+              mislocalize_armed_ = false;
+            } else {
+              response.diagnostic_detail +=
+                "; mislocalization_pending=true; support normal is invalid";
+            }
+          } else {
+            response.diagnostic_detail +=
+              "; mislocalization_pending=true; calibrated support normal unavailable";
+          }
+        }
+      }
       append_vision_elapsed();
       publish_diagnostic(
-        diagnostic_result,
-        arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
-        observation->rgb.header, response.diagnostic_detail);
-      log_result();
+        *detection, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
+        detection->source_rgb_header, response.diagnostic_detail);
+      log_result(failure_cause);
       return;
     }
     const auto current = ingress_.last_result();
-    if (current && current->status == IngressStatus::kObservationReady) {
-      response.result_code.value = ResultCode::DETECT_RESULT_SENSOR_ERROR;
-      response.diagnostic_detail = "observation payload unavailable";
-      append_vision_elapsed();
-      empty_diagnostic.result_code = response.result_code.value;
-      publish_diagnostic(
-        empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
-        empty_header);
-      log_result();
-      return;
-    }
     if (current && current->status == IngressStatus::kRequestTimeout) {
-      response.result_code.value = ResultCode::DETECT_RESULT_TIMEOUT;
-      const auto timeout_snapshot = ingress_.acceptance_snapshot();
-      response.diagnostic_detail = timeout_detail(timeout_snapshot, snapshot, steady_now_());
-      append_vision_elapsed();
-      empty_diagnostic.result_code = response.result_code.value;
-      publish_diagnostic(
-        empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
-        empty_header, response.diagnostic_detail);
-      log_result();
-      return;
+      terminal_decision_ns = steady_now_();
+      break;
     }
     ingress_.check_deadline();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
+
+  if (terminal_decision_ns == 0) {terminal_decision_ns = steady_now_();}
   response.result_code.value = ResultCode::DETECT_RESULT_TIMEOUT;
   const auto timeout_snapshot = ingress_.acceptance_snapshot();
-  response.diagnostic_detail = timeout_detail(timeout_snapshot, snapshot, steady_now_());
+  response.diagnostic_detail = timeout_detail(timeout_snapshot, snapshot, terminal_decision_ns);
+  AcquisitionDiagnosticSummary acquisition_summary;
+  if (acquisition_diagnostic_lookup_) {
+    acquisition_summary = acquisition_diagnostic_lookup_();
+    if (!acquisition_summary.detail.empty()) {
+      response.diagnostic_detail = acquisition_summary.detail + "; " + response.diagnostic_detail;
+    }
+  }
   append_vision_elapsed();
   empty_diagnostic.result_code = response.result_code.value;
   publish_diagnostic(
     empty_diagnostic, arm_cell_interfaces::msg::VisionDiagnostic::IDLE,
     empty_header, response.diagnostic_detail);
-  log_result();
+  log_result(acquisition_summary.failure_cause.empty() ?
+    "Acquisition deadline expired" : acquisition_summary.failure_cause);
 }
 
 }  // namespace arm_cell_vision

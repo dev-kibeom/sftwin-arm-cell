@@ -72,10 +72,6 @@ def build_environment(context):
         stage, "VisionNavy", COLORS["vision"], roughness=0.42
     )
     mat_kraft = create_preview_material(stage, "Kraft", COLORS["kraft"], roughness=0.75)
-    mat_raw = create_preview_material(stage, "RawSlot", COLORS["raw"], roughness=0.62)
-    mat_finished = create_preview_material(
-        stage, "FinishedSlot", COLORS["finished"], roughness=0.45
-    )
     mat_acrylic = create_preview_material(
         stage, "SmokeAcrylic", COLORS["acrylic"], roughness=0.12, opacity=0.30
     )

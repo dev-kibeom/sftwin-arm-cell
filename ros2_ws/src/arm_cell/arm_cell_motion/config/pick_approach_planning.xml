@@ -1,0 +1,23 @@
+<root BTCPP_format="3" main_tree_to_execute="PlanPickApproach">
+  <BehaviorTree ID="PlanPickApproach">
+    <SearchPoseSeed>
+      <Sequence name="AttemptPoseSeed">
+        <PrepareAttempt/>
+        <PrepareSeed/>
+        <SetGraspScenePolicy/>
+        <SolveGraspIK/>
+        <ValidateGraspKinematics/>
+        <ValidateGraspContact/>
+        <ValidateGraspCollision/>
+        <SetApproachScenePolicy/>
+        <SolveApproachIK/>
+        <ValidateApproachState/>
+        <RegisterValidCandidate/>
+        <SetPathScenePolicy/>
+        <PlanApproachPath/>
+        <FinalizeTrajectory/>
+        <RecordAttemptOutcome/>
+      </Sequence>
+    </SearchPoseSeed>
+  </BehaviorTree>
+</root>

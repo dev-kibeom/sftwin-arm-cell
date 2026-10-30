@@ -1,0 +1,6 @@
+#pragma once
+
+namespace arm_cell_motion
+{
+inline constexpr char kPickApproachPlanningTreeXml[] = R"bt(@PICK_APPROACH_TREE_XML@)bt";
+}  // namespace arm_cell_motion

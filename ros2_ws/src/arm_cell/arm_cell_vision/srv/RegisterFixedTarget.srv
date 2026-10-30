@@ -1,7 +1,7 @@
 string target_id
 string run_id
 geometry_msgs/PoseStamped pose
-bool has_target_yaw
+uint8 orientation_symmetry_order
 builtin_interfaces/Duration ttl
 ---
 bool accepted

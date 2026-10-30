@@ -47,8 +47,6 @@ COLORS = {
     "safety": np.array([0.78, 0.56, 0.08]),
     "vision": np.array([0.025, 0.065, 0.13]),
     "kraft": np.array([0.52, 0.36, 0.20]),
-    "raw": np.array([0.42, 0.30, 0.18]),
-    "finished": np.array([0.18, 0.34, 0.46]),
     "red": np.array([0.65, 0.03, 0.03]),
     "amber": np.array([0.85, 0.35, 0.03]),
     "green": np.array([0.03, 0.55, 0.10]),
@@ -92,6 +90,7 @@ class SceneBuildContext:
     create_sphere: object
     static_box: object
     add_reference_to_stage: object
+    static_geometry: dict
 
 
 def build_camera_rig(context, get_assets_root_path):
@@ -172,10 +171,6 @@ def run_scene_build(
     script_path,
 ):
     """Build the complete scene in the original cleanup and authoring order."""
-    print("\n" + "=" * 76)
-    print(
-        ">>> [SF-Twin Builder v4.2] Reachability-tuned Direct AMR-to-CNC build started"
-    )
     enable_extension("isaacsim.asset.importer.urdf")
     enable_extension("isaacsim.ros2.bridge")
     world = world_cls.instance()
@@ -214,6 +209,7 @@ def run_scene_build(
         create_sphere,
         author_static_manifest_box,
         add_reference_to_stage,
+        static_geometry,
     )
     project_root = (
         os.environ.get("SFTWIN_PROJECT_ROOT") or Path(__file__).resolve().parents[5]
@@ -230,10 +226,7 @@ def run_scene_build(
     build_status_hardware(context)
     apply_integration_metadata(context)
     run_reachability_check(context)
-    print(">>> [SF-Twin Builder v4.2] Scene build complete")
     print(
-        ">>> Process: AMR -> D455 pose check -> M0609 direct pick -> CNC -> AMR return"
+        "ARM Cell simulation scene is ready for material transfer and robot operation."
     )
-    print(">>> Camera gantry drop bracket height optimized (0.04m, clear of sensor).")
-    print("=" * 76 + "\n")
     return context

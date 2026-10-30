@@ -29,8 +29,7 @@ REQUIRED_STATIC_OBJECT_IDS = {
     "amr_tray_rail_right",
     "amr_tray_rail_front",
     "amr_tray_rail_rear",
-    "amr_raw_slot_support",
-    "amr_finished_slot_support",
+    "amr_tray_marker_post",
 }
 
 

@@ -1,0 +1,17 @@
+# ROS Goal UUID is the execution identity. The supplied acquisition and
+# scene_generation identify the unchanged Vision observation and candidate set.
+string acquisition_id
+uint64 scene_generation
+arm_cell_interfaces/DisturbanceCandidate[] disturbance_candidates
+---
+# COMPLETED maps to SUCCEEDED, CANCELED to CANCELED, and FAILED or
+# SAFETY_PREEMPTED to ABORTED per the Orchestration–Task Execution ICD.
+# failure_reason is NONE unless outcome is FAILED.
+arm_cell_interfaces/DisturbanceOutcome outcome
+arm_cell_interfaces/DisturbanceFailureReason failure_reason
+arm_cell_interfaces/SafetyCauseSet safety_cause
+# Existing software-stop evidence; this does not prove physical standstill.
+bool backend_inactivity_confirmed
+string diagnostic_detail
+---
+arm_cell_interfaces/DisturbancePhase phase

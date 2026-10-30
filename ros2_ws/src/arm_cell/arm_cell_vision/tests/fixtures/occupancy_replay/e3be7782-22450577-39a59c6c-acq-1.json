@@ -1,0 +1,1944 @@
+{
+  "schema_version": 1,
+  "record_type": "vision_diagnostic",
+  "acquisition_id": "e3be7782-22450577-39a59c6c-acq-1",
+  "live_test_session_id": "04fe63bb-7c9e-48ac-82de-646887ee5b42",
+  "association_status": "associated",
+  "strategy": "cuboid_top_face",
+  "target_id": "RawPart",
+  "observation": {
+    "rgb": {
+      "stamp": {
+        "sec": 39,
+        "nanosec": 616668732
+      },
+      "frame_id": "camera_color_optical_frame"
+    },
+    "depth": {
+      "stamp": {
+        "sec": 39,
+        "nanosec": 616668732
+      },
+      "frame_id": "camera_color_optical_frame"
+    },
+    "camera_info_frame_id": "camera_color_optical_frame",
+    "camera_intrinsics_k": [
+      1465.99853515625,
+      0,
+      640,
+      0,
+      1465.99853515625,
+      360,
+      0,
+      0,
+      1
+    ],
+    "camera_distortion_d": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "optical_to_base": {
+      "parent_frame": "base_link",
+      "child_frame": "camera_color_optical_frame",
+      "translation_m": [
+        0.05000000000000002,
+        -0.6914999999999999,
+        1.0550000000000002
+      ],
+      "rotation_xyzw": [
+        0.7071067811865477,
+        -0.7071067811865474,
+        2.7755575615628914e-16,
+        -2.887134043201063e-16
+      ]
+    }
+  },
+  "terminal_result": {
+    "result_code": 0,
+    "result_name": "DETECT_RESULT_SUCCESS",
+    "processing_stage": "target_pose_estimation",
+    "last_observation_stage": "target_pose_estimation",
+    "diagnostic_detail": "cuboid_top_face; candidate_local_eligibility; vision_total_elapsed_ms=21208.8"
+  },
+  "acquisition_selection": {
+    "status": "available",
+    "reason": "",
+    "has_target_pose": true,
+    "target_pose": {
+      "frame_id": "base_link",
+      "position_m": [
+        -0.06471648524348736,
+        -0.7781256084965222,
+        0.05252262302318257
+      ],
+      "orientation_xyzw": [
+        0.013899154259982586,
+        -0.0012132184558566001,
+        0.08582184857176096,
+        0.9962128045350358
+      ]
+    },
+    "orientation_symmetry_order": 2,
+    "scene_generation": 1,
+    "has_estimated_height": true,
+    "estimated_height_m": 0.07000000029802322,
+    "has_observed_rectangle": true,
+    "rectangle_dimensions_m": [
+      0.08118250221014023,
+      0.0716361254453659
+    ]
+  },
+  "single_observation": {
+    "algorithm": "cuboid_top_face",
+    "processing_stage": "target_pose_estimation",
+    "result_code": 0,
+    "result_name": "DETECT_RESULT_SUCCESS",
+    "diagnostic_detail": "cuboid_top_face; candidate_local_eligibility",
+    "has_target_pose": true,
+    "ordered_candidate_count": 1,
+    "has_non_target_occupancy": true,
+    "non_target_occupancy_count": 16,
+    "unresolved_pixels": 7647,
+    "unresolved_regions_pixels": [],
+    "target_pose": {
+      "frame_id": "base_link",
+      "position_m": [
+        -0.0647164852435,
+        -0.778125608497,
+        0.0525226230232
+      ],
+      "orientation_xyzw": [
+        0.01389915426,
+        -0.00121321845586,
+        0.0858218485718,
+        0.996212804535
+      ]
+    },
+    "candidate_summary": {
+      "workspace_xyz_points": 0,
+      "candidate_count": 1,
+      "profile_match_count": 1,
+      "candidate_generation": "candidate_local_eligibility",
+      "selected_candidate": "245",
+      "absence_confirmation_available": false,
+      "absence_confirmed": false,
+      "partition_status": "candidate_local_eligibility",
+      "rejected_by_reason": {},
+      "candidates": [
+        {
+          "candidate_id": 245,
+          "profile_match": true,
+          "rejection_reason": "",
+          "priority": 1,
+          "position_m": [
+            -0.115046926394,
+            -0.0772296479462,
+            0.0731999379192
+          ],
+          "measured_dimensions_m": [
+            0.0811825016215,
+            0.0716361237165,
+            0
+          ],
+          "expected_dimensions_m": [
+            0.08,
+            0.07,
+            0.07
+          ],
+          "dimension_tolerance_m": [
+            0,
+            0,
+            0
+          ],
+          "orientation_symmetry_order": 2,
+          "observed_yaw_valid": true,
+          "observed_yaw_rad": 0.171863,
+          "inlier_fraction": 0,
+          "coverage": 0.990415335463,
+          "edge_support": 1,
+          "max_normalized_residual": 0,
+          "selection_residual": 0,
+          "greedy_rank": 1,
+          "fitted_outline_pixels": [
+            [
+              827.37487793,
+              576.752502441
+            ],
+            [
+              807.425598145,
+              461.451019287
+            ],
+            [
+              706.631347656,
+              479.205444336
+            ],
+            [
+              726.657714844,
+              594.721923828
+            ]
+          ],
+          "contributes_to_stability": true
+        }
+      ]
+    }
+  },
+  "applied_profile": {
+    "profile_id": "RawPart",
+    "selection_source": "acquisition_target_id",
+    "algorithm": "cuboid_top_face",
+    "material_id": "RawPart",
+    "shape": "box",
+    "dimensions_m": [
+      0.07,
+      0.07,
+      0.08
+    ],
+    "dimension_tolerance_m": [
+      0.01,
+      0.01,
+      0.01
+    ],
+    "workspace_roi_min_m": [
+      -0.3,
+      -0.2,
+      0.01
+    ],
+    "workspace_roi_max_m": [
+      0.3,
+      0.2,
+      0.12
+    ],
+    "tray_roi_min_m": [
+      -0.33,
+      -0.23
+    ],
+    "tray_roi_max_m": [
+      0.33,
+      0.23
+    ],
+    "support_contact_tolerance_m": 0.01,
+    "top_surface_geometry_tolerance_m": 0.01,
+    "minimum_observation_coverage": 0.55,
+    "cuboid": {
+      "grid_resolution_m": 0.0025,
+      "height_tolerance_m": 0.003,
+      "area_overlap_min": 0.95,
+      "line_residual_limit_px": 1.25,
+      "minimum_line_support": 0.8,
+      "finger_contact_width_m": 0.02,
+      "finger_height_m": 0.03,
+      "clearance_probe_m": 0.06,
+      "contact_z_fraction": 0.5
+    }
+  },
+  "profile_selection_status": "selected_for_representative_observation",
+  "support_calibration": {
+    "ready": true,
+    "accepted_observations": 0,
+    "required_observations": 0,
+    "median_depth_residual_m": 0,
+    "tray_from_camera": {
+      "parent_frame": "Tray",
+      "child_frame": "camera_color_optical_frame",
+      "translation_m": [
+        -0.00029781733487215927,
+        0.0373315392091878,
+        1.0728664501881702
+      ],
+      "rotation_xyzw": [
+        -0.7070347508796854,
+        0.7070411605135424,
+        -0.009854350837706456,
+        -0.009876748337981326
+      ]
+    }
+  },
+  "replay_evidence": {
+    "status": "saved",
+    "reason": "",
+    "grid_status": "saved",
+    "grid_format": "float64_little_endian_row_major_nan_invalid",
+    "grid_path": "e3be7782-22450577-39a59c6c-acq-1.height_grid.f64le",
+    "image_boundary_mask_status": "saved",
+    "image_boundary_mask_path": "e3be7782-22450577-39a59c6c-acq-1.image_boundary.u8",
+    "rows": 161,
+    "columns": 241,
+    "resolution_m": 0.0025,
+    "origin_xy_m": [
+      -0.3,
+      -0.2
+    ],
+    "frame_id": "Tray",
+    "validity_encoding": "finite_cells_valid_nan_invalid"
+  },
+  "cuboid_stages": [
+    {
+      "stage": "height_grid_and_workspace",
+      "status": "computed",
+      "reason": "",
+      "count_unit": "cell",
+      "input_count": 38801,
+      "output_count": 31887,
+      "rejected_count": 6914,
+      "auxiliary_counts": {
+        "above_support_cells": 8598,
+        "workspace_roi_cells": 6263
+      }
+    },
+    {
+      "stage": "height_patch_formation",
+      "status": "computed",
+      "reason": "height_levels_formed",
+      "count_unit": "multiple_explicit_units",
+      "input_count": null,
+      "output_count": null,
+      "rejected_count": null,
+      "auxiliary_counts": {
+        "formed_height_patches": 38,
+        "workspace_roi_cells": 6263
+      }
+    },
+    {
+      "stage": "contour_and_line_fitting",
+      "status": "computed",
+      "reason": "fitted_lines_available",
+      "count_unit": "contour",
+      "input_count": 268,
+      "output_count": 44,
+      "rejected_count": 224,
+      "fitted_edge_count": 145,
+      "fitted_edge_count_unit": "fitted_edge",
+      "edge_fit_attempt_count": 561,
+      "edge_fit_attempt_count_unit": "polygon_edge_fit_attempt",
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 10,
+        "too_few_contour_points": 214
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 306,
+        "insufficient_interior_points": 110
+      }
+    },
+    {
+      "stage": "cuboid_hypothesis_generation",
+      "status": "computed",
+      "reason": "hypotheses_generated",
+      "count_unit": "multiple_explicit_units",
+      "input_count": null,
+      "output_count": null,
+      "rejected_count": null,
+      "candidate_evaluation_attempt_count": 328,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 302,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_after_deduplication_count": 2,
+      "generated_after_deduplication_count_unit": "candidate",
+      "deduplicated_count": 13,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {
+        "equivalent_top_across_height_patches": 1,
+        "overlapping_duplicate": 8,
+        "same_quantized_placement": 4
+      },
+      "rejection_reason_count_unit": "rejection_event",
+      "rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 164,
+        "insufficient_contour_line_support": 17,
+        "line_span_below_minimum": 87,
+        "modeled_bottom_below_support": 43,
+        "no_center_placement_on_fitted_edge": 8
+      }
+    },
+    {
+      "stage": "dimension_and_geometry_validation",
+      "status": "computed",
+      "reason": "hypotheses_validated",
+      "count_unit": "multiple_explicit_units",
+      "input_count": null,
+      "output_count": null,
+      "rejected_count": null,
+      "candidate_evaluation_attempt_count": 328,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "rejected_candidate_evaluation_count": 314,
+      "rejected_candidate_evaluation_count_unit": "candidate_evaluation",
+      "generated_before_deduplication_count": 14,
+      "generated_before_deduplication_count_unit": "candidate",
+      "deduplicated_count": 13,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {
+        "equivalent_top_across_height_patches": 1,
+        "overlapping_duplicate": 8,
+        "same_quantized_placement": 4
+      },
+      "rejection_reason_count_unit": "rejection_event",
+      "rejected_by_reason": {
+        "ambiguous_top_surface_height": 191,
+        "image_or_workspace_boundary_clipped": 12,
+        "inclined_surface": 101,
+        "workspace_roi_exceeded": 10
+      }
+    },
+    {
+      "stage": "candidate_local_eligibility",
+      "status": "computed",
+      "reason": "individually_eligible_candidates_retained_across_all_heights",
+      "count_unit": "candidate",
+      "input_count": 2,
+      "output_count": 1,
+      "rejected_count": 1
+    },
+    {
+      "stage": "candidate_ranking_and_selection",
+      "status": "computed",
+      "reason": "ranked_by_clearance_area_boundary_height_residual_then_geometry",
+      "count_unit": "candidate",
+      "input_count": 1,
+      "output_count": 1,
+      "rejected_count": null,
+      "ranked_candidate_count": 1,
+      "ranked_candidate_count_unit": "candidate",
+      "selected_rank": 1
+    }
+  ],
+  "cuboid_height_patches": [
+    {
+      "height_m": 0.12,
+      "cell_count": 162,
+      "contour_count": 3,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 5,
+      "edge_fit_attempt_count": 26,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 1
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 11,
+        "insufficient_interior_points": 10
+      },
+      "candidate_evaluation_attempt_count": 12,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 11,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 5,
+        "line_span_below_minimum": 6
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 7,
+        "inclined_surface": 5
+      }
+    },
+    {
+      "height_m": 0.117,
+      "cell_count": 164,
+      "contour_count": 3,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 6,
+      "edge_fit_attempt_count": 29,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 1
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 16,
+        "insufficient_interior_points": 7
+      },
+      "candidate_evaluation_attempt_count": 8,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 18,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 14,
+        "line_span_below_minimum": 4
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 5,
+        "inclined_surface": 3
+      }
+    },
+    {
+      "height_m": 0.114,
+      "cell_count": 167,
+      "contour_count": 3,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 5,
+      "edge_fit_attempt_count": 27,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 1
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 15,
+        "insufficient_interior_points": 7
+      },
+      "candidate_evaluation_attempt_count": 12,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 13,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 9,
+        "line_span_below_minimum": 4
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 7,
+        "inclined_surface": 5
+      }
+    },
+    {
+      "height_m": 0.111,
+      "cell_count": 164,
+      "contour_count": 4,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 4,
+      "edge_fit_attempt_count": 26,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 2
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 11,
+        "insufficient_interior_points": 11
+      },
+      "candidate_evaluation_attempt_count": 12,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 9,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 3,
+        "line_span_below_minimum": 4,
+        "no_center_placement_on_fitted_edge": 2
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 6,
+        "inclined_surface": 6
+      }
+    },
+    {
+      "height_m": 0.108,
+      "cell_count": 170,
+      "contour_count": 4,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 5,
+      "edge_fit_attempt_count": 32,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 2
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 20,
+        "insufficient_interior_points": 7
+      },
+      "candidate_evaluation_attempt_count": 8,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 16,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 14,
+        "line_span_below_minimum": 2
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 4,
+        "inclined_surface": 4
+      }
+    },
+    {
+      "height_m": 0.105,
+      "cell_count": 162,
+      "contour_count": 4,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 3,
+      "edge_fit_attempt_count": 23,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 2
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 11,
+        "insufficient_interior_points": 9
+      },
+      "candidate_evaluation_attempt_count": 24,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 6,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 6
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 12,
+        "inclined_surface": 12
+      }
+    },
+    {
+      "height_m": 0.10200000000000001,
+      "cell_count": 156,
+      "contour_count": 4,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 6,
+      "edge_fit_attempt_count": 24,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 2
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 13,
+        "insufficient_interior_points": 5
+      },
+      "candidate_evaluation_attempt_count": 20,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 13,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 7,
+        "line_span_below_minimum": 6
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 10,
+        "inclined_surface": 10
+      }
+    },
+    {
+      "height_m": 0.099,
+      "cell_count": 144,
+      "contour_count": 5,
+      "contours_with_fitted_edges_count": 1,
+      "fitted_edge_count": 2,
+      "edge_fit_attempt_count": 31,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 2,
+        "too_few_contour_points": 2
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 21,
+        "insufficient_interior_points": 8
+      },
+      "candidate_evaluation_attempt_count": 24,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 2
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 12,
+        "inclined_surface": 12
+      }
+    },
+    {
+      "height_m": 0.096,
+      "cell_count": 137,
+      "contour_count": 5,
+      "contours_with_fitted_edges_count": 1,
+      "fitted_edge_count": 2,
+      "edge_fit_attempt_count": 31,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 2,
+        "too_few_contour_points": 2
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 22,
+        "insufficient_interior_points": 7
+      },
+      "candidate_evaluation_attempt_count": 24,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 2
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 12,
+        "inclined_surface": 12
+      }
+    },
+    {
+      "height_m": 0.093,
+      "cell_count": 134,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 1,
+      "fitted_edge_count": 2,
+      "edge_fit_attempt_count": 23,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 1,
+        "too_few_contour_points": 4
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 15,
+        "insufficient_interior_points": 6
+      },
+      "candidate_evaluation_attempt_count": 24,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 2
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 12,
+        "inclined_surface": 12
+      }
+    },
+    {
+      "height_m": 0.09,
+      "cell_count": 125,
+      "contour_count": 5,
+      "contours_with_fitted_edges_count": 1,
+      "fitted_edge_count": 3,
+      "edge_fit_attempt_count": 26,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 1,
+        "too_few_contour_points": 3
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 18,
+        "insufficient_interior_points": 5
+      },
+      "candidate_evaluation_attempt_count": 12,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 7,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 5,
+        "line_span_below_minimum": 2
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 6,
+        "inclined_surface": 6
+      }
+    },
+    {
+      "height_m": 0.08700000000000001,
+      "cell_count": 443,
+      "contour_count": 7,
+      "contours_with_fitted_edges_count": 3,
+      "fitted_edge_count": 8,
+      "edge_fit_attempt_count": 29,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 4
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 17,
+        "insufficient_interior_points": 4
+      },
+      "candidate_evaluation_attempt_count": 28,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 19,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 12,
+        "line_span_below_minimum": 6,
+        "no_center_placement_on_fitted_edge": 1
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 14,
+        "inclined_surface": 10,
+        "workspace_roi_exceeded": 4
+      }
+    },
+    {
+      "height_m": 0.084,
+      "cell_count": 567,
+      "contour_count": 8,
+      "contours_with_fitted_edges_count": 4,
+      "fitted_edge_count": 15,
+      "edge_fit_attempt_count": 37,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 4
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 18,
+        "insufficient_interior_points": 4
+      },
+      "candidate_evaluation_attempt_count": 8,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 42,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 26,
+        "line_span_below_minimum": 16
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 8
+      }
+    },
+    {
+      "height_m": 0.081,
+      "cell_count": 591,
+      "contour_count": 12,
+      "contours_with_fitted_edges_count": 3,
+      "fitted_edge_count": 11,
+      "edge_fit_attempt_count": 49,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 2,
+        "too_few_contour_points": 7
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 33,
+        "insufficient_interior_points": 5
+      },
+      "candidate_evaluation_attempt_count": 16,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 24,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 8,
+        "line_span_below_minimum": 16
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 4,
+        "image_or_workspace_boundary_clipped": 8,
+        "workspace_roi_exceeded": 4
+      }
+    },
+    {
+      "height_m": 0.078,
+      "cell_count": 417,
+      "contour_count": 11,
+      "contours_with_fitted_edges_count": 3,
+      "fitted_edge_count": 8,
+      "edge_fit_attempt_count": 40,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "no_fitted_edge": 2,
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 27,
+        "insufficient_interior_points": 5
+      },
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 20,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 8,
+        "line_span_below_minimum": 12
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.075,
+      "cell_count": 1127,
+      "contour_count": 13,
+      "contours_with_fitted_edges_count": 3,
+      "fitted_edge_count": 6,
+      "edge_fit_attempt_count": 33,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 10
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 23,
+        "insufficient_interior_points": 4
+      },
+      "candidate_evaluation_attempt_count": 24,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 7,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 1,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 8,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 7,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {
+        "overlapping_duplicate": 4,
+        "same_quantized_placement": 3
+      },
+      "partitioned_candidate_count": 1,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "candidates_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 6,
+        "modeled_bottom_below_support": 1
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 16
+      }
+    },
+    {
+      "height_m": 0.07200000000000001,
+      "cell_count": 3072,
+      "contour_count": 9,
+      "contours_with_fitted_edges_count": 3,
+      "fitted_edge_count": 20,
+      "edge_fit_attempt_count": 27,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 5,
+        "insufficient_interior_points": 2
+      },
+      "candidate_evaluation_attempt_count": 32,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 27,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 1,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 6,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 5,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {
+        "overlapping_duplicate": 4,
+        "same_quantized_placement": 1
+      },
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "candidates_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 19,
+        "line_span_below_minimum": 6,
+        "modeled_bottom_below_support": 1,
+        "no_center_placement_on_fitted_edge": 1
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 26
+      }
+    },
+    {
+      "height_m": 0.069,
+      "cell_count": 3148,
+      "contour_count": 13,
+      "contours_with_fitted_edges_count": 3,
+      "fitted_edge_count": 18,
+      "edge_fit_attempt_count": 20,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 10
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 2
+      },
+      "candidate_evaluation_attempt_count": 40,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 24,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "edge_incompatible_with_modeled_side": 16,
+        "line_span_below_minimum": 3,
+        "modeled_bottom_below_support": 1,
+        "no_center_placement_on_fitted_edge": 4
+      },
+      "geometry_rejected_by_reason": {
+        "ambiguous_top_surface_height": 30,
+        "image_or_workspace_boundary_clipped": 4,
+        "inclined_surface": 4,
+        "workspace_roi_exceeded": 2
+      }
+    },
+    {
+      "height_m": 0.066,
+      "cell_count": 1313,
+      "contour_count": 11,
+      "contours_with_fitted_edges_count": 2,
+      "fitted_edge_count": 9,
+      "edge_fit_attempt_count": 11,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 9
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 1,
+        "insufficient_interior_points": 1
+      },
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.063,
+      "cell_count": 126,
+      "contour_count": 11,
+      "contours_with_fitted_edges_count": 1,
+      "fitted_edge_count": 3,
+      "edge_fit_attempt_count": 13,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 10
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {
+        "approximated_edge_too_short": 7,
+        "insufficient_interior_points": 3
+      },
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.06,
+      "cell_count": 12,
+      "contour_count": 10,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 10
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.057,
+      "cell_count": 9,
+      "contour_count": 7,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 7
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.054,
+      "cell_count": 7,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.051000000000000004,
+      "cell_count": 9,
+      "contour_count": 7,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 7
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.048,
+      "cell_count": 9,
+      "contour_count": 8,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 8
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.045,
+      "cell_count": 6,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.042,
+      "cell_count": 6,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.039,
+      "cell_count": 6,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.036000000000000004,
+      "cell_count": 5,
+      "contour_count": 5,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 5
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.033,
+      "cell_count": 7,
+      "contour_count": 7,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 7
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.03,
+      "cell_count": 6,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.027,
+      "cell_count": 5,
+      "contour_count": 5,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 5
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.024,
+      "cell_count": 7,
+      "contour_count": 7,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 7
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.021,
+      "cell_count": 6,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.018000000000000002,
+      "cell_count": 6,
+      "contour_count": 6,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 6
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.015,
+      "cell_count": 7,
+      "contour_count": 7,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 7
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.012,
+      "cell_count": 9,
+      "contour_count": 9,
+      "contours_with_fitted_edges_count": 0,
+      "fitted_edge_count": 0,
+      "edge_fit_attempt_count": 0,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 9
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "insufficient_contour_line_support": 1,
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    },
+    {
+      "height_m": 0.009000000000000001,
+      "cell_count": 1912,
+      "contour_count": 13,
+      "contours_with_fitted_edges_count": 1,
+      "fitted_edge_count": 4,
+      "edge_fit_attempt_count": 4,
+      "contour_rejected_by_reason_count_unit": "contour",
+      "contour_rejected_by_reason": {
+        "too_few_contour_points": 12
+      },
+      "edge_fit_rejected_by_reason_count_unit": "edge_fit_attempt",
+      "edge_fit_rejected_by_reason": {},
+      "candidate_evaluation_attempt_count": 0,
+      "candidate_evaluation_attempt_count_unit": "candidate_evaluation",
+      "pre_object_rejected_count": 2,
+      "pre_object_rejected_count_unit": "pre_object_rejection_event",
+      "generated_hypothesis_count": 0,
+      "generated_hypothesis_count_unit": "candidate_after_deduplication",
+      "geometry_valid_before_deduplication_count": 0,
+      "geometry_valid_before_deduplication_count_unit": "candidate_before_deduplication",
+      "deduplicated_count": 0,
+      "deduplicated_count_unit": "candidate_removed",
+      "deduplicated_by_reason_count_unit": "candidate_removed",
+      "deduplicated_by_reason": {},
+      "partitioned_candidate_count": 0,
+      "partitioned_candidate_count_unit": "candidate",
+      "partition_status": "candidate_local_eligibility",
+      "partition_reason": "no_candidate_passed_individual_checks",
+      "rejection_reason_count_unit": "rejection_event",
+      "hypothesis_rejected_by_reason": {
+        "modeled_bottom_below_support": 2
+      },
+      "geometry_rejected_by_reason": {}
+    }
+  ],
+  "cuboid_hypotheses": [
+    {
+      "candidate_id": 245,
+      "patch_index": 15,
+      "height_m": 0.075,
+      "center_xy_m": [
+        -0.11502998995230979,
+        -0.07729275158414342
+      ],
+      "yaw_rad": 0.17186280715743418,
+      "dimensions_m": [
+        0.08,
+        0.07,
+        0.07
+      ],
+      "observed_area_ratio": 0.9904153354632588,
+      "boundary_support": 1,
+      "disposition": "ranked_candidate",
+      "reason": "final_rank_1",
+      "deduplicated_to_candidate_id": 0
+    },
+    {
+      "candidate_id": 285,
+      "patch_index": 16,
+      "height_m": 0.07200000000000001,
+      "center_xy_m": [
+        -0.09743274718442166,
+        -0.15027453455081974
+      ],
+      "yaw_rad": 1.748401419756675,
+      "dimensions_m": [
+        0.08,
+        0.07,
+        0.07
+      ],
+      "observed_area_ratio": 0.027139874739039668,
+      "boundary_support": 1,
+      "disposition": "rejected_geometry_validation",
+      "reason": "ambiguous_top_surface_height",
+      "deduplicated_to_candidate_id": 0
+    }
+  ]
+}

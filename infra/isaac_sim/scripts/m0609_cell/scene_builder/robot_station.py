@@ -94,10 +94,11 @@ def build_robot_station(context):
             )
             rx.AddRotateXYZOp().Set(Gf.Vec3f(0.0, 0.0, 0.0))
             robot_prim.SetCustomDataByKey("sf_twin:role", "manipulator")
-            print(">>> [SUCCESS] Doosan M0609 loaded")
     else:
-        print(f">>> [WARN] Robot USD not found: {robot_usd}")
-        print(">>> Run 0_pre_build.py first.")
+        print(
+            "Simulation robot is unavailable because its generated USD is missing. "
+            "Run 0_pre_build.py to build the robot asset."
+        )
 
     context.robot_x = robot_x
     context.robot_y = robot_y

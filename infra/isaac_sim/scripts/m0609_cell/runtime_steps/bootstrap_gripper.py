@@ -1,5 +1,4 @@
 import importlib
-import inspect
 import logging
 import os
 import sys
@@ -26,6 +25,7 @@ sys.modules.pop("shared.script_editor_bootstrap", None)
 importlib.invalidate_caches()
 
 from shared.script_editor_bootstrap import (
+    clear_imported_package,
     clear_package_bytecode,
     module_root_from_project_root,
 )
@@ -62,13 +62,8 @@ if old_owner is not None:
 elif previous_session is not None:
     previous_session.shutdown()
 
-for module_name in list(sys.modules):
-    if module_name == "gripper_runtime" or module_name.startswith("gripper_runtime."):
-        del sys.modules[module_name]
-    elif module_name == "pnp_validation" or module_name.startswith("pnp_validation."):
-        del sys.modules[module_name]
-    elif module_name == "graph_builder" or module_name.startswith("graph_builder."):
-        del sys.modules[module_name]
+for package_name in ("gripper_runtime", "pnp_validation", "graph_builder"):
+    clear_imported_package(package_name)
 
 removed_gripper_bytecode = clear_package_bytecode(Path(SCRIPT_DIR) / "gripper_runtime")
 importlib.invalidate_caches()
@@ -79,7 +74,6 @@ import gripper_runtime.grasp_policy as grasp_policy_module
 import gripper_runtime.robotiq_actuator as gripper_module
 import gripper_runtime.session as session_module
 from graph_builder.graph_contract import GRAPH_PATH
-
 
 capture_config = None
 capture_registry = None
@@ -100,7 +94,6 @@ if validation_profile:
     capture_reference_config = capture_reference_config_from_profile(loaded_profile)
 else:
     import yaml
-
     from gripper_runtime.operational_config import (
         load_production_mission_recipe,
         production_capture_configuration,
@@ -137,7 +130,15 @@ runtime_session = session_module.create_gripper_runtime_session(
     initial_status_sequence=session_module.initial_status_sequence(
         previous_status_sequence
     ),
+    diagnostic_output_directory=(
+        Path(os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"]).parent / "gripper"
+        if os.environ.get("SFTWIN_LIVE_TEST_SESSION_PATH")
+        else project_root / ".local_artifacts/capture_diagnostic_records"
+    ),
 )
+# Both Motion-driven profiles require the selected reference. Direct users of
+# StageCaptureQuery retain the explicit configured legacy-reference behavior.
+runtime_session.grasp_manager.candidate_source.require_motion_reference = True
 from pnp_validation.editor_lifecycle import ValidationSessionOwner
 
 _validation_session_owner = ValidationSessionOwner(
@@ -148,22 +149,7 @@ _validation_session_owner.bind_namespace(globals())
 _validation_session_owner.register_session(runtime_session)
 _validation_session_owner.start()
 globals()["pnp_validation_session_owner"] = _validation_session_owner
-LOGGER.debug(
-    "gripper runtime modules loaded root=%s session_module=%s actuator_module=%s "
-    "factory_signature=%s init_source=%s:%d holding_sequence=%s "
-    "gripper_type=%s.%s feedback_generation_present=%s removed_bytecode=%s",
-    SCRIPT_DIR,
-    session_module.__file__,
-    gripper_module.__file__,
-    inspect.signature(session_module.create_gripper_runtime_session),
-    session_module.GripperRuntimeSession.__init__.__code__.co_filename,
-    session_module.GripperRuntimeSession.__init__.__code__.co_firstlineno,
-    runtime_session._status_sequence,
-    type(runtime_session.gripper).__module__,
-    type(runtime_session.gripper).__name__,
-    hasattr(runtime_session.gripper, "feedback_generation"),
-    removed_gripper_bytecode,
-)
+LOGGER.debug("Gripper runtime modules reloaded for the current simulation session")
 if not hasattr(runtime_session.gripper, "feedback_generation"):
     runtime_session._feedback_generation = 0
     runtime_session.gripper.feedback_generation = 0
@@ -208,8 +194,5 @@ gripper.open()
 
 
 LOGGER.debug(
-    "gripper validation bootstrap complete feedback_generation=%s "
-    "action_graph=%s command_topic=/gripper/command command_type=std_msgs/msg/Float64",
-    runtime_session.gripper.feedback_generation,
-    ACTION_GRAPH_PATH,
+    "Gripper runtime bootstrap complete; command and holding feedback connected"
 )

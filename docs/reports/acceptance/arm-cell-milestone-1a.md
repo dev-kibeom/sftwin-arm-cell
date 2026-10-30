@@ -8,7 +8,7 @@
 - **Report Owner:** `ARM Cell Integration`
 - **Acceptance Date:** `Historical acceptance; exact date not recorded in source documentation`
 - **Baseline:** `Historical Milestone 1A baseline; exact commit/tag not recorded`
-- **Related Design:** `ADR 0001`, `docs/interfaces/arm-cell/icd-sim-state-time-tf.md`
+- **Related Design:** `Architecture Record 0001`, `docs/design/arm-cell/interfaces/icd-sim-state-time-tf.md`
 
 ## 1. Acceptance Scope
 
@@ -42,10 +42,10 @@ CDS/FDS/ICD migration establishes canonical identifiers.
 | Legacy Design Claim | Source Design |
 |---|---|
 | measured state is projected without simulator-only joint leakage | legacy combined interface source; current mapping: `icd-sim-state-time-tf.md` |
-| robot-model TF and fixed base transform have single authorities | ADR 0001; current mapping: `icd-sim-state-time-tf.md` |
-| Isaac is simulation-time authority for the profile | ADR 0001; current mapping: `icd-sim-state-time-tf.md` |
-| backward epoch change requires complete ROS-profile restart | ADR 0001; current mapping: `icd-sim-state-time-tf.md` |
-| profile supports planning without command publication | legacy combined interface source; current mapping: `cds-moveit.md` |
+| robot-model TF and fixed base transform have single authorities | Architecture Record 0001; current mapping: `icd-sim-state-time-tf.md` |
+| Isaac is simulation-time authority for the profile | Architecture Record 0001; current mapping: `icd-sim-state-time-tf.md` |
+| backward epoch change requires complete ROS-profile restart | Architecture Record 0001; current mapping: `icd-sim-state-time-tf.md` |
+| profile supports planning without command publication | legacy combined interface source; current mapping: [Motion CDS](../../design/arm-cell/components/motion/cds.md) |
 
 ## 3. Procedure
 
@@ -163,6 +163,6 @@ change, including:
 
 ## 11. References
 
-- `docs/adr/0001-arm-cell-model-state-and-time.md`
+- `docs/record/arm-cell/architecture-decision/model-state-and-time.md`
 - `docs/guides/arm-cell-isaac-sim.md`
-- `docs/interfaces/arm-cell/icd-sim-state-time-tf.md`
+- `docs/design/arm-cell/interfaces/icd-sim-state-time-tf.md`

@@ -2,22 +2,24 @@
 
 import time
 import unittest
+from pathlib import Path
 
 import launch
 import launch_testing
 import launch_testing.actions
 from launch_ros.actions import Node
 import rclpy
-from action_msgs.msg import GoalStatusArray
-from arm_cell_interfaces.action import ExecuteCycle
-from arm_cell_interfaces.msg import MaterialHandoffState, MaterialReadiness, SafetyState
-from arm_cell_interfaces.srv import RequestMaterialSupply
+from arm_cell_interfaces.msg import (
+    HandoffTrigger,
+    MaterialHandoffState,
+    MaterialReadiness,
+    SafetyState,
+    TransferCompletion,
+)
 from rcl_interfaces.msg import Log
-from rclpy.action import ActionClient
-from unique_identifier_msgs.msg import UUID
 
 
-MISSION_TARGET = "synthetic-production-flow"
+MISSION_TARGET = "RawPart"
 
 
 def generate_test_description():
@@ -32,23 +34,31 @@ def generate_test_description():
                     parameters=[{"material_phase_period_ms": 100}],
                 ),
                 Node(
-                    package="arm_cell_integration",
+                    package="arm_cell_gateway",
                     executable="material_handoff_node",
                     name="material_handoff_node",
                     output="screen",
                     parameters=[
                         {
-                            "transfer_duration_ms": 100,
                             "source_freshness_timeout_ms": 500,
                         }
                     ],
                 ),
                 Node(
-                    package="arm_cell_bt",
+                    package="arm_cell_orchestration",
                     executable="orchestration_node",
                     name="orchestration_node",
                     output="screen",
-                    parameters=[{"mission_target_id": MISSION_TARGET}],
+                    parameters=[
+                        {
+                            "mission_target_id": MISSION_TARGET,
+                            "recipe_directory": str(
+                                Path(__file__).resolve().parents[1]
+                                / "config"
+                                / "recipes"
+                            ),
+                        }
+                    ],
                 ),
                 launch_testing.actions.ReadyToTest(),
             ]
@@ -59,13 +69,17 @@ def generate_test_description():
 
 class TestProductionMaterialFlow(unittest.TestCase):
     def setUp(self):
-        rclpy.init(args=[])
+        self.context = rclpy.context.Context()
+        rclpy.init(args=[], context=self.context)
+        self.executor = rclpy.executors.SingleThreadedExecutor(context=self.context)
         self.node = rclpy.create_node(
-            "production_material_flow_test", use_global_arguments=False
+            "production_material_flow_test",
+            use_global_arguments=False,
+            context=self.context,
         )
+        self.executor.add_node(self.node)
         self.handoffs = []
         self.readiness = []
-        self.status = []
         self.logs = []
         self.node.create_subscription(
             MaterialHandoffState,
@@ -79,28 +93,24 @@ class TestProductionMaterialFlow(unittest.TestCase):
             self.readiness.append,
             10,
         )
-        self.node.create_subscription(
-            GoalStatusArray,
-            "/orchestration/execute_cycle/_action/status",
-            self.status.append,
-            10,
-        )
         self.node.create_subscription(Log, "/rosout", self.logs.append, 10)
         self.safety_publisher = self.node.create_publisher(
             SafetyState, "/safety/state", 10
         )
-        self.request_client = self.node.create_client(
-            RequestMaterialSupply, "/integration/request_material"
+        self.trigger_publisher = self.node.create_publisher(
+            HandoffTrigger, "/external/handoff_trigger", 10
         )
-        self.execute_client = ActionClient(
-            self.node, ExecuteCycle, "/orchestration/execute_cycle"
+        self.completion_publisher = self.node.create_publisher(
+            TransferCompletion, "/material_supply/transfer_completion", 10
         )
         self.safety_timer = self.node.create_timer(0.05, self.publish_safe_state)
 
     def tearDown(self):
         self.safety_timer.cancel()
+        self.executor.remove_node(self.node)
+        self.executor.shutdown()
         self.node.destroy_node()
-        rclpy.shutdown()
+        rclpy.shutdown(context=self.context)
 
     def publish_safe_state(self):
         state = SafetyState()
@@ -117,11 +127,9 @@ class TestProductionMaterialFlow(unittest.TestCase):
         deadline = time.monotonic() + timeout
         while not predicate():
             self.assertLess(time.monotonic(), deadline)
-            rclpy.spin_once(self.node, timeout_sec=0.02)
+            self.executor.spin_once(timeout_sec=0.02)
 
-    def test_request_reaches_one_orchestration_admission_with_same_identity(self):
-        self.spin_until(self.request_client.service_is_ready)
-        self.spin_until(self.execute_client.server_is_ready)
+    def test_trigger_readiness_reaches_orchestration_with_same_identity(self):
         self.spin_until(
             lambda: self.node.count_subscribers("/vda/material_handoff_state") >= 2
         )
@@ -130,14 +138,16 @@ class TestProductionMaterialFlow(unittest.TestCase):
         )
         self.spin_until(lambda: self.node.count_subscribers("/safety/state") >= 1)
 
-        request = RequestMaterialSupply.Request()
-        request.request_id = UUID()
-        request.request_id.uuid[0] = 77
-        response_future = self.request_client.call_async(request)
-        self.spin_until(response_future.done)
-        response = response_future.result()
-        self.assertTrue(response.accepted, response.diagnostic_detail)
-        delivery_id = tuple(response.delivery_id.uuid)
+        trigger = HandoffTrigger()
+        trigger.header.stamp = self.node.get_clock().now().to_msg()
+        trigger.delivery_id.uuid[0] = 77
+        trigger.quantity = 2
+        trigger.material_type = "RawPart"
+        trigger.has_random_seed = True
+        trigger.random_seed = 123
+        trigger.valid = True
+        delivery_id = tuple(trigger.delivery_id.uuid)
+        self.trigger_publisher.publish(trigger)
 
         self.spin_until(
             lambda: any(
@@ -147,6 +157,15 @@ class TestProductionMaterialFlow(unittest.TestCase):
                 for state in self.handoffs
             )
         )
+        completion = TransferCompletion()
+        completion.header.stamp = self.node.get_clock().now().to_msg()
+        completion.delivery_id = trigger.delivery_id
+        completion.material_type = trigger.material_type
+        completion.requested_quantity = trigger.quantity
+        completion.supplied_quantity = trigger.quantity
+        completion.completed = True
+        completion.valid = True
+        self.completion_publisher.publish(completion)
         self.spin_until(
             lambda: any(
                 tuple(state.delivery_id.uuid) == delivery_id
@@ -156,14 +175,10 @@ class TestProductionMaterialFlow(unittest.TestCase):
             )
         )
 
-        delivery_hex = "".join(f"{value:02x}" for value in delivery_id)
-        self.spin_until(
-            lambda: any(len(status.status_list) == 1 for status in self.status)
-        )
         self.spin_until(
             lambda: any(
-                "mission_failure origin=" in record.msg
-                and f"delivery_id={delivery_hex}" in record.msg
+                "material admission wait reason changed "
+                "reason=vision_calibration_status_unavailable" in record.msg
                 for record in self.logs
             )
         )

@@ -14,7 +14,14 @@ import os
 from pathlib import Path
 import tempfile
 
-EXPECTED_SCHEMA = "wu14-pnp-registration/v1"
+EXPECTED_SCHEMA = "wu14-pnp-registration/v2"
+
+
+def _orientation_order(payload: dict) -> int:
+    order = payload.get("orientation_symmetry_order")
+    if type(order) is not int or order not in (0, 1, 4):
+        raise ValueError("orientation symmetry order must be 0, 1, or 4")
+    return order
 
 
 def load_handoff(path: str | Path) -> dict:
@@ -31,6 +38,7 @@ def load_handoff(path: str | Path) -> dict:
         or pose.get("frame_id") != "base_link"
     ):
         raise ValueError("handoff request context is incomplete")
+    _orientation_order(request)
     if float(request["ttl_s"]) <= 0.0 or float(request["ttl_s"]) > 60.0:
         raise ValueError("handoff TTL must be in (0, 60]")
     return data
@@ -51,9 +59,11 @@ def request_from_handoff(data: dict, service_type=None):
     request.pose.pose.position.x = float(pose_data["x"])
     request.pose.pose.position.y = float(pose_data["y"])
     request.pose.pose.position.z = float(pose_data["z"])
-    request.pose.pose.orientation.z = math.sin(float(pose_data["yaw"]) / 2.0)
-    request.pose.pose.orientation.w = math.cos(float(pose_data["yaw"]) / 2.0)
-    request.has_target_yaw = bool(payload["has_target_yaw"])
+    orientation_order = _orientation_order(payload)
+    if orientation_order != 0:
+        request.pose.pose.orientation.z = math.sin(float(pose_data["yaw"]) / 2.0)
+        request.pose.pose.orientation.w = math.cos(float(pose_data["yaw"]) / 2.0)
+    request.orientation_symmetry_order = orientation_order
     ttl_s = float(payload["ttl_s"])
     request.ttl = Duration(sec=int(ttl_s), nanosec=int(round((ttl_s % 1.0) * 1e9)))
     return request
@@ -142,12 +152,7 @@ def register(
         validate_receipt(response)
         apply_fixture_to_planning_scene(node, data, planning_scene_service)
         write_planning_scene_state(data, planning_scene_state)
-        print(
-            "[PnP Diagnostic] REGISTRATION_ACCEPTED "
-            f"run_id={data['run_id']} target_id={data['target_id']} "
-            f"receipt_sequence={response.receipt_sequence} "
-            f"receipt_time_ns={response.receipt_time_ns}"
-        )
+        print("[PnP Diagnostic] REGISTRATION_ACCEPTED")
         return response
     finally:
         node.destroy_node()

@@ -4,7 +4,7 @@
 
 A simulator-backed ROS 2 workcell for developing and evaluating a Doosan M0609 robot with a Robotiq 2F-85 gripper. The project brings perception, motion planning, task orchestration, software safety supervision, material handoff, and an operator UI together around shared ROS interfaces.
 
-The v0.2.0 public source demonstrates how to build a pick-and-place cell whose robot state, simulation time, transforms, camera observations, motion permission, and mission progress have explicit owners. It is an engineering and simulation project; it is not a validated production or safety-rated robot cell.
+The v0.3.0 release candidate demonstrates how to build a pick-and-place cell whose robot state, simulation time, transforms, camera observations, motion permission, and mission progress have explicit owners. It is an engineering and simulation project; it is not a validated production or safety-rated robot cell.
 
 ## Project Overview
 
@@ -16,12 +16,13 @@ The current profile includes a simulated material-delivery path and an Isaac Sim
 
 - Shared Doosan M0609 and Robotiq 2F-85 robot description for ROS planning and Isaac Sim construction.
 - ROS integration for canonical joint state, simulation time, TF, and RGB-D camera input.
-- MoveIt 2 robot-only planning and an explicitly bounded static planning-scene profile.
-- Request-driven RGB-D target detection with detector profiles and source-frame diagnostics.
+- MoveIt 2 robot planning with explicitly scoped planning-scene profiles.
+- A Vision/Motion boundary where Vision reports observed geometry and Motion builds request-specific planning occupancy excluding the selected candidate.
+- Geometry-first RGB-D RawPart detection, partial-observation shape hypotheses, detector profiles, and source-frame diagnostics.
 - PICK, PLACE, GO_HOME, and recovery motion tasks behind backend-neutral ROS interfaces.
-- Mission sequencing with material-readiness and Safety-permission checks.
+- Reusable Behavior Tree task actions plus PICK candidate ordering and occupancy-exclusion heuristics.
 - Software Safety supervision with fail-closed startup, motion capability, and a direct stop path to Motion.
-- Simulated material handoff and an Isaac Sim UI Hub that observes state and routes requests through the owning components.
+- Acquisition-linked diagnostic snapshots and evidence records, simulated material handoff, and an Isaac Sim UI Hub.
 
 ## System Architecture
 
@@ -54,6 +55,10 @@ flowchart LR
 | **Safety** | Evaluates required input freshness and operational conditions, publishes the sole software motion capability, and sends stop requests directly to Motion. It does not replace safety-rated hardware. |
 | **Material Integration** | Connects operator supply requests to the external-state mock and publishes `MATERIAL_READY` only after the simulated handoff completes. Orchestration, not Integration, admits the mission. |
 | **UI Hub** | Runs as an Isaac Sim/Kit extension. It presents camera and component state and sends requests to their owning components; it does not author canonical runtime state. |
+
+## Design Records and Sim-to-Real Direction
+
+The [Engineering Stories](docs/record/arm-cell/engineering-story/) and [architecture/algorithm decision records](docs/record/arm-cell/) cover geometry-first Vision, Vision/Motion occupancy ownership, reusable Motion BT actions, Orchestration and Safety recovery, and the Sim-to-Real boundary. These historical records do not replace current contracts or establish physical-robot support or performance superiority.
 
 ## Technology Stack
 
@@ -102,12 +107,14 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 
 ## Documentation
 
-- [ARM Cell demo definition](docs/product/demos/arm-cell/definition.md)
-- [System architecture](docs/architecture/) and [ARM Cell component designs](docs/components/arm-cell/)
-- [ROS and simulator interface contracts](docs/interfaces/arm-cell/)
-- [Architecture Decision Records (ADRs)](docs/adr/)
-- [Engineering Stories](docs/engineering-stories/arm-cell/)
-- [Technical records](docs/records/arm-cell/)
+- [v0.3.0 release notes (candidate)](docs/releases/v0.3.0.en.md) / [한국어](docs/releases/v0.3.0.ko.md)
+
+- [ARM Cell demo definition](docs/product/arm-cell/definition.md)
+- [System architecture](docs/design/arm-cell/architecture/) and [ARM Cell component designs](docs/design/arm-cell/components/)
+- [ROS and simulator interface contracts](docs/design/arm-cell/interfaces/)
+- [Architecture Decision Records (ADRs)](docs/record/arm-cell/architecture-decision/)
+- [Engineering Stories](docs/record/arm-cell/engineering-story/)
+- [Technical records](docs/record/arm-cell/)
 - [Acceptance reports](docs/reports/acceptance/)
 - [Operator guides](docs/guides/)
 
@@ -115,10 +122,11 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 
 The public source contains the Vision, Motion, Orchestration, Safety, Material Integration, VDA mock, and UI Hub implementations described above. Their presence in source does not mean the complete final demonstration has passed live acceptance.
 
-- **Build:** Public PR #2 recorded a successful Docker image build and a ROS 2 Humble `colcon build` of 11 packages through `arm_cell_bringup`. The public v0.2.0 export also recorded a successful ROS build. These results verify compilation, not a running Isaac Sim session.
+- **Build:** The v0.3.0 candidate Docker build compiled 12 packages through `arm_cell_bringup`. The earlier Public PR #2 and v0.2.0 export build results are historical baselines and are separate from this candidate. These results verify compilation, not a running Isaac Sim session. The ROS test suite still has failures that need resolution before release publication. The Humble Docker compile image does not include the TRAC-IK runtime plugin required by the default operational PICK profile.
 - **Planning evidence:** Historical Milestone 1A robot-only planning and Milestone 1B bounded static-scene acceptance are documented in the [acceptance reports](docs/reports/acceptance/). The reports preserve their evidence limits: exact historical commit/tag identifiers are unavailable, and Milestone 1B does not establish general reachability or full-cell collision coverage.
-- **Live runtime:** The v0.2.0 public export did not verify real-time Isaac Sim execution. Use the Isaac guide to run the supported profile in a configured environment; a build or historical planning result is not full mission acceptance.
-- **RGB-D known issue:** Vision can intermittently fail to acquire a usable RGB-D pair before detector processing starts. The cause is still under investigation. See the [open acquisition issue record](docs/records/arm-cell/vision-rgbd-intermittent-acquisition-failure.md).
+- **Live runtime:** This v0.3.0 candidate work did not run Isaac Sim live. Use the Isaac guide to run the supported profile in a configured environment; a build or historical planning result is not full mission acceptance.
+- **RGB-D known issue:** Vision can intermittently fail to acquire a usable RGB-D pair before detector processing starts. Distinct depth-reception gaps and missing synchronization callbacks are recorded; a common cause and resolution remain unconfirmed. See the [open acquisition issue record](docs/record/arm-cell/engineering-story/vision-rgbd-intermittent-acquisition-failure.md).
+- **E-Stop recovery evidence:** The latest clean live record from 2026-10-30 shows reset, SafetyRecovery, and GO_HOME succeeding, after which the Mission resumed PnP. A later approach ended with `BACKEND_UNAVAILABLE`, so the complete Mission did not succeed. This supports only that execution condition, not a general success rate.
 - **Simulation and safety boundary:** The VDA/external-state adapter is a mock subset; it is not full VDA 5050 or AMR navigation. Software Safety is not safety-rated E-stop/STO hardware and is not a substitute for it. Isaac Sim is the supported development environment; physical robot operation is not validated here.
 
 ## License & Third-Party Attribution

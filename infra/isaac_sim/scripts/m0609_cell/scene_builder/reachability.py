@@ -33,19 +33,15 @@ def report_reach(name, planar_m, spatial_m, report=print):
 def run_reachability_check(context, report=print):
     robot_base_xyz = np.array([context.robot_x, context.robot_y, 0.68], dtype=float)
     raw_pick_xyz = np.array(
-        [context.raw_slot_x, context.slot_y, context.amr_tray_z + 0.12], dtype=float
+        [context.tray_x, context.tray_y, context.amr_tray_z + 0.12], dtype=float
     )
     cnc_place_xyz = np.array(
         [context.cnc_x - 0.08, context.cnc_y - 0.49, 0.88], dtype=float
-    )
-    finished_place_xyz = np.array(
-        [context.done_slot_x, context.slot_y, context.amr_tray_z + 0.10], dtype=float
     )
     report("\n>>> [KINEMATIC CHECK] First-pass task-point distances")
     for label, target in [
         ("Robot -> AMR RAW pick", raw_pick_xyz),
         ("Robot -> CNC place", cnc_place_xyz),
-        ("Robot -> AMR FINISHED place", finished_place_xyz),
     ]:
         report_reach(
             label,

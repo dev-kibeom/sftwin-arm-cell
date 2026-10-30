@@ -1,11 +1,40 @@
 # Goal. The ROS Action Goal UUID is the execution identity.
 MotionTaskType task_type
+arm_cell_interfaces/PickCandidate[] material_candidates
+uint8 ORIENTATION_UNOBSERVABLE=0
+uint8 ORIENTATION_UNIQUE=1
+uint8 ORIENTATION_TWOFOLD=2
+uint8 ORIENTATION_FOURFOLD=4
 geometry_msgs/PoseStamped target_pose
 bool has_target_pose
+uint8 orientation_symmetry_order
+bool has_unobserved_yaw_fallback
+float64 unobserved_yaw_fallback_rad
+string vision_acquisition_id
+# Observation-local candidate selected from a Vision candidate response.
+# Empty for direct/non-Vision PICK callers; omitted when material_candidates is supplied.
+string vision_candidate_id
+# Observation-bound obstacle geometry for this Vision-derived PICK. Empty is
+# valid only when the observation has no non-target occupied/unknown region.
+bool has_non_target_occupancy
+arm_cell_interfaces/CollisionPrimitive[] non_target_occupancy
+# PICK approach translation policy. Motion interprets planning-frame vertical
+# in the configured planning frame and retains the target TCP orientation.
+uint8 PICK_APPROACH_TCP_INSERTION_AXIS=0
+uint8 PICK_APPROACH_PLANNING_FRAME_VERTICAL=1
+uint8 pick_approach_translation_direction
+float64 pick_approach_distance_m
+# Recipe-owned Grasp acceptance envelope for the selected PICK target.
+float64 pick_grasp_position_tolerance_m
+float64 pick_grasp_orientation_tolerance_rad
+# Recipe-owned maximum deviation of the TCP approach axis from nominal.
 float32 estimated_object_height_m
 bool has_estimated_object_height
-float32 grasp_width_mm
-bool has_grasp_width
+bool has_observed_rectangle
+float32 rectangle_long_side_m
+float32 rectangle_short_side_m
+float32 grasp_width_min_mm
+float32 grasp_width_max_mm
 # PLACE process envelope for the Desired Object Pose. Zero permits only the
 # nominal value on that dimension.
 float64 place_position_tolerance_m
@@ -26,7 +55,41 @@ geometry_msgs/Quaternion place_tool_orientation_preference
 # Result. The terminal action state is independent from this canonical result code.
 MotionTaskResultCode result_code
 string diagnostic_detail
+uint8 OBJECT_DISPOSITION_UNCHANGED=0
+uint8 OBJECT_DISPOSITION_HELD=1
+uint8 OBJECT_DISPOSITION_RETURNED=2
+uint8 OBJECT_DISPOSITION_PLACED=3
+uint8 OBJECT_DISPOSITION_UNKNOWN=4
+uint8 object_disposition
+bool pick_grasp_insertion_started
+string[] attempted_candidate_ids
+string selected_candidate_id
+uint8 PICK_FAILURE_STAGE_NONE=0
+uint8 PICK_FAILURE_STAGE_VALIDATION=1
+uint8 PICK_FAILURE_STAGE_GRASP_IK_FK=2
+uint8 PICK_FAILURE_STAGE_GRASP_CONTACT_VALIDATION=3
+uint8 PICK_FAILURE_STAGE_APPROACH_IK_FK=4
+uint8 PICK_FAILURE_STAGE_APPROACH_PLANNING=5
+uint8 PICK_FAILURE_STAGE_APPROACH_EXECUTION=6
+uint8 PICK_FAILURE_STAGE_GRASP_CARTESIAN_PLANNING=7
+uint8 PICK_FAILURE_STAGE_GRASP_INSERTION_EXECUTION=8
+uint8 PICK_FAILURE_STAGE_GRIPPER_CONFIRMATION=9
+uint8 PICK_FAILURE_STAGE_RETRACT=10
+uint8 PICK_FAILURE_STAGE_SCENE_INTEGRITY=11
+uint8 PICK_FAILURE_STAGE_BACKEND=12
+uint8 PICK_FAILURE_STAGE_SAFETY=13
+uint8 PICK_FAILURE_STAGE_CANCELLATION=14
+uint8 PICK_FAILURE_STAGE_UNKNOWN=15
+uint8 pick_failure_stage
 ---
 # Feedback.
 MotionTaskPhase phase
+# Human-readable description; consumers use the typed release fields below.
 string diagnostic_detail
+# PLACE release failure observed before this OPEN attempt.
+uint8 RELEASE_FAILURE_NONE=0
+uint8 RELEASE_FAILURE_CONFIRMATION_TIMEOUT=1
+# Zero means this feedback is not a PLACE release attempt event.
+uint8 release_attempt
+uint8 release_retry_budget
+uint8 release_last_failure

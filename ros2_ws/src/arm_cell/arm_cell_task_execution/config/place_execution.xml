@@ -1,0 +1,52 @@
+<root>
+  <BehaviorTree ID="PlaceExecution">
+    <Sequence name="PlaceExecution">
+      <ValidatePlaceGoal/>
+      <RecoverOnFailure name="PlaceApproachAndRecovery">
+        <Sequence name="PlanAndExecutePlaceApproach">
+          <Fallback name="PlaceWaypointPreparation">
+            <Sequence name="PreparePlaceWaypoint">
+              <IsPlaceWaypointStrategy/>
+              <PreparePlaceWaypointClearance/>
+              <Fallback name="ClearanceIfRequired">
+                <PlaceWaypointClearanceNotNeeded/>
+                <Sequence name="PlanAndExecutePlaceWaypointClearance">
+                  <PlanPlaceWaypointClearance/>
+                  <ExecutePlaceWaypointClearance/>
+                </Sequence>
+              </Fallback>
+              <ExecutePlaceWaypointHome/>
+            </Sequence>
+            <IsPlacePlannedStrategy/>
+          </Fallback>
+          <PlanPlaceApproach/>
+          <ExecutePlaceApproach/>
+        </Sequence>
+        <SubTree ID="PlaceApproachFailureRecovery"/>
+      </RecoverOnFailure>
+      <RecoverOnFailure name="PlaceInsertionAndRecovery">
+        <RetryWhileAllowed name="PlacePlanningCandidates">
+          <Sequence name="PlanAndExecutePlaceInsertion">
+            <PlanPlaceInsertion/>
+            <ExecutePlaceInsertion/>
+          </Sequence>
+          <AdvancePlacePlanningCandidate/>
+        </RetryWhileAllowed>
+        <SubTree ID="PlaceHeldObjectRecovery"/>
+      </RecoverOnFailure>
+      <BeginPlaceReleaseRetries/>
+      <RecoverOnFailure name="PlaceReleaseConfirmation">
+        <RetryWhileAllowed name="PlaceReleaseRetries">
+          <Sequence name="OpenAndConfirmPlaceRelease">
+            <ExecutePlaceReleaseAttempt/>
+            <PlaceReleaseConfirmed/>
+          </Sequence>
+          <ContinuePlaceReleaseRetries/>
+        </RetryWhileAllowed>
+        <FinalizePlaceRelease/>
+      </RecoverOnFailure>
+      <ReleasePlacedObject/>
+      <SubTree ID="PlaceRetreatRecovery"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

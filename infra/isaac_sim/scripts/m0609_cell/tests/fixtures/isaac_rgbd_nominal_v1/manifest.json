@@ -3,7 +3,7 @@
   "fixture_id": "isaac_rgbd_nominal_v1",
   "status": "PARTIALLY VERIFIED",
   "source_capture": {
-    "uri": "local-artifact://ros2_bags/arm-cell-m1c-rgbd-runtime-2026-09-11",
+    "availability": "not-retained",
     "db3_sha256": "d86133ffcf00a3d4801ab7bbc50e3db7d9f912e5087025cd1e1be8f4a136044f",
     "source_mutated": false
   },

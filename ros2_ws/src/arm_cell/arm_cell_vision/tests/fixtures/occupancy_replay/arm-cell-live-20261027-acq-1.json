@@ -1,0 +1,152 @@
+{
+  "vision_run_id": "f3ed6977-b8eb0f9d-ca09a153",
+  "acquisition_id": "f3ed6977-b8eb0f9d-ca09a153-acq-1",
+  "live_test_session_id": "97ad72f5-2b4c-4204-8ecf-6b1461ac8f7b",
+  "association_status": "associated",
+  "observation": {
+    "rgb_available": true,
+    "rgb_presentation_status": "available",
+    "rgb": {
+      "stamp": {
+        "sec": 54,
+        "nanosec": 566669512
+      },
+      "frame_id": "camera_color_optical_frame"
+    },
+    "depth": {
+      "stamp": {
+        "sec": 54,
+        "nanosec": 650002850
+      },
+      "frame_id": "camera_color_optical_frame"
+    },
+    "camera_info_frame_id": "camera_color_optical_frame",
+    "camera_intrinsics_k": [
+      1465.99853515625,
+      0,
+      640,
+      0,
+      1465.99853515625,
+      360,
+      0,
+      0,
+      1
+    ],
+    "camera_distortion_d": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "optical_to_base": {
+      "parent_frame": "base_link",
+      "child_frame": "camera_color_optical_frame",
+      "translation_m": [
+        0.05000000000000002,
+        -0.6914999999999999,
+        1.0550000000000002
+      ],
+      "rotation_xyzw": [
+        0.7071067811865477,
+        -0.7071067811865474,
+        2.7755575615628914e-16,
+        -2.887134043201063e-16
+      ]
+    }
+  },
+  "applied_profile": {
+    "profile_id": "RawPart",
+    "selection_source": "acquisition_target_id",
+    "algorithm": "cuboid_top_face",
+    "material_id": "RawPart",
+    "shape": "box",
+    "dimensions_m": [
+      0.07,
+      0.07,
+      0.08
+    ],
+    "dimension_tolerance_m": [
+      0.01,
+      0.01,
+      0.01
+    ],
+    "workspace_roi_min_m": [
+      -0.24,
+      -0.16,
+      0.01
+    ],
+    "workspace_roi_max_m": [
+      0.24,
+      0.16,
+      1
+    ],
+    "tray_roi_min_m": [
+      -0.324,
+      -0.228
+    ],
+    "tray_roi_max_m": [
+      0.324,
+      0.228
+    ],
+    "support_contact_tolerance_m": 0.01,
+    "top_surface_geometry_tolerance_m": 0.01,
+    "minimum_observation_coverage": 0.55,
+    "cuboid": {
+      "grid_resolution_m": 0.0025,
+      "height_tolerance_m": 0.003,
+      "line_residual_limit_px": 1.25,
+      "minimum_line_support": 0.8
+    }
+  },
+  "support_calibration": {
+    "ready": true,
+    "accepted_observations": 0,
+    "required_observations": 0,
+    "median_depth_residual_m": 0,
+    "tray_from_camera": {
+      "parent_frame": "Tray",
+      "child_frame": "camera_color_optical_frame",
+      "translation_m": [
+        -0.00029781733487215927,
+        0.0373315392091878,
+        1.0728664501881702
+      ],
+      "rotation_xyzw": [
+        -0.7070347508796854,
+        0.7070411605135424,
+        -0.009854350837706456,
+        -0.009876748337981326
+      ]
+    }
+  },
+  "replay_evidence": {
+    "status": "saved",
+    "reason": "",
+    "grid_status": "saved",
+    "grid_format": "float64_little_endian_row_major_nan_invalid",
+    "grid_path": "f3ed6977-b8eb0f9d-ca09a153-acq-1.height_grid.f64le",
+    "image_boundary_mask_status": "saved",
+    "image_boundary_mask_path": "f3ed6977-b8eb0f9d-ca09a153-acq-1.image_boundary.u8",
+    "rows": 129,
+    "columns": 193,
+    "resolution_m": 0.0025,
+    "origin_xy_m": [
+      -0.24,
+      -0.16
+    ],
+    "frame_id": "Tray",
+    "validity_encoding": "finite_cells_valid_nan_invalid"
+  },
+  "source_record": "local-artifact://diagnostic_records/20261027/181117/vision/f3ed6977-b8eb0f9d-ca09a153-acq-1.json",
+  "source_record_sha256": "2708f19509ab483e4ccc4cd9d901024cf77384f6a4a0688f2cb8be6bdd06b7ab",
+  "baseline": {
+    "commit": "319dfb9e7",
+    "disturbance_candidate_count": 194,
+    "category_counts": {
+      "INCLINED_SURFACE": 3,
+      "ELEVATED_UNRESOLVED": 184,
+      "OTHER_UNRESOLVED": 7
+    }
+  }
+}

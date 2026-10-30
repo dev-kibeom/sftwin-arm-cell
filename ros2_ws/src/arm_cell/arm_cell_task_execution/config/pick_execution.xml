@@ -1,0 +1,28 @@
+<root>
+  <BehaviorTree ID="PickExecution">
+    <Sequence name="PickExecution">
+      <PreparePickCandidate/>
+      <OpenAndConfirmPickRelease/>
+      <RetryWhileAllowed name="PickPlanningCandidates">
+        <Sequence name="ExecutePickCandidatePlan">
+          <PlanPickApproach/>
+          <ExecutePickApproach/>
+          <PlanPickGraspInsertion/>
+          <ExecutePickGraspInsertion/>
+        </Sequence>
+        <AdvancePickPlanningCandidate/>
+      </RetryWhileAllowed>
+      <CloseAndConfirmPickGrasp/>
+      <RunAndFinalize name="PickRetractAndRecord">
+        <RecoverOnFailure name="PickRetractFailureHandling">
+          <Sequence name="PlanAndExecutePickRetract">
+            <PlanPickRetract/>
+            <ExecutePickRetract/>
+          </Sequence>
+          <SubTree ID="PickRetractFailureRecovery"/>
+        </RecoverOnFailure>
+        <FinalizePickRetract/>
+      </RunAndFinalize>
+    </Sequence>
+  </BehaviorTree>
+</root>

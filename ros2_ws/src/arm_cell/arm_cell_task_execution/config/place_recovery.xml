@@ -1,0 +1,57 @@
+<root>
+  <BehaviorTree ID="PlaceApproachFailureRecovery">
+    <Sequence name="PlaceApproachFailureRecovery">
+      <PlaceApproachRecoveryEligible/>
+      <ObservePlaceApproachRecoveryHolding/>
+      <Fallback name="PlaceApproachReturn">
+        <PlaceApproachRecoveryComplete/>
+        <Sequence name="OpenHeldObjectAtFailedApproach">
+          <PlaceApproachReturnOpenRequired/>
+          <OpenPlaceApproachReturn/>
+          <ConfirmPlaceApproachReturn/>
+        </Sequence>
+      </Fallback>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="PlaceHeldObjectRecovery">
+    <Sequence name="PlaceHeldObjectRecovery">
+      <PrepareHeldPlaceFailureRecovery/>
+      <Fallback name="ReturnHeldObjectWhenRequired">
+        <Sequence name="ReturnHeldObject">
+          <PlaceReturnRecoveryNeeded/>
+          <ReturnHeldPlaceHome/>
+          <ReturnHeldToTray/>
+          <FinalizeHeldPlaceReturn/>
+        </Sequence>
+        <PlaceReturnNotNeeded/>
+      </Fallback>
+    </Sequence>
+  </BehaviorTree>
+
+  <BehaviorTree ID="PlaceRetreatRecovery">
+    <Sequence name="PlaceRetreatRecovery">
+      <RecoverOnFailure name="PlaceRetreatFailureRecovery">
+        <Fallback name="InitialOrRetriedPlaceRetreat">
+          <Sequence name="PlanAndExecutePlaceRetreat">
+            <PlanPlaceRetreat/>
+            <RetractPlacedObject/>
+          </Sequence>
+          <Sequence name="PlaceRetreatRetrySequence">
+            <AdvancePlaceRetreatRecovery/>
+            <RetryWhileAllowed name="PlaceRetreatRetries">
+              <Sequence name="PlanAndExecutePlaceRetreatRetry">
+                <PreparePlaceRetreatRetry/>
+                <PlanPlaceRetreatRetry/>
+                <ExecutePlaceRetreatRetry/>
+              </Sequence>
+              <AdvancePlaceRetreatRecovery/>
+            </RetryWhileAllowed>
+          </Sequence>
+        </Fallback>
+        <FinalizePlaceRetreat/>
+      </RecoverOnFailure>
+      <FinalizePlaceRetreat/>
+    </Sequence>
+  </BehaviorTree>
+</root>

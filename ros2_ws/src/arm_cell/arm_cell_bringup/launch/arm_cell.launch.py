@@ -14,6 +14,7 @@ def generate_launch_description():
     profile = LaunchConfiguration("profile")
     log_level = LaunchConfiguration("log_level")
     action_logger_level = LaunchConfiguration("action_logger_level")
+    diagnostics = LaunchConfiguration("diagnostics")
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -32,6 +33,15 @@ def generate_launch_description():
                 description="ROS log level for internal rclcpp_action loggers",
             ),
             DeclareLaunchArgument(
+                "diagnostics",
+                default_value="__log_level_default__",
+                description=(
+                    "Optional component diagnostics: none, all, or a comma-separated "
+                    "list of motion,vision,safety,orchestration; when omitted, debug "
+                    "selects all ROS Bringup producers and other log levels select none"
+                ),
+            ),
+            DeclareLaunchArgument(
                 "ros_domain_id",
                 default_value=EnvironmentVariable("ROS_DOMAIN_ID", default_value="0"),
             ),
@@ -44,6 +54,7 @@ def generate_launch_description():
                     "include_simulation": "true",
                     "log_level": log_level,
                     "action_logger_level": action_logger_level,
+                    "diagnostics": diagnostics,
                     "ros_domain_id": LaunchConfiguration("ros_domain_id"),
                 }.items(),
             ),

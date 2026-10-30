@@ -1,5 +1,6 @@
 import logging
 import math
+import json
 
 from graph_builder.graph_contract import GRAPH_PATH
 
@@ -56,22 +57,25 @@ class SimGripperAdapter:
 
         self._data_attribute = None
         self._generation_attribute = None
+        self._close_generation_attribute = None
         self._status_attribute = None
+        self._capture_reference_attribute = None
+        self._close_id_attribute = None
+        self._applied_capture_reference_id = None
+        self._last_capture_reference_packet = None
         self._last_command_width_mm = None
         self._last_command_generation = None
+        self._last_close_generation = None
         self._last_command_is_closing = None
 
         self._resolve_attribute()
         self._resolve_generation_attribute()
+        self._resolve_close_generation_attribute()
         self._resolve_status_attribute()
+        self._resolve_capture_reference_attribute()
 
         if self.verbose:
-            LOGGER.debug(
-                "simulation gripper adapter ready graph=%s node=%s input=%s",
-                self.graph_path,
-                self.subscriber_node,
-                self._attribute_path(),
-            )
+            LOGGER.debug("Simulation gripper command adapter ready")
 
     # ------------------------------------------------------------------
     # OmniGraph access
@@ -108,6 +112,90 @@ class SimGripperAdapter:
             return False
         self._status_attribute = attr
         return True
+
+    def _resolve_capture_reference_attribute(self):
+        path = f"{self.graph_path}/SubscribeGripperCaptureReference.outputs:data"
+        attr = self._controller.attribute(path)
+        if attr is None or not attr.is_valid():
+            self._capture_reference_attribute = None
+            return False
+        self._capture_reference_attribute = attr
+        return True
+
+    def read_capture_reference(self):
+        if self._capture_reference_attribute is None:
+            if not self._resolve_capture_reference_attribute():
+                return None
+        try:
+            raw = self._controller.get(self._capture_reference_attribute)
+            packet = json.loads(raw)
+        except Exception:
+            self._capture_reference_attribute = None
+            return None
+        if not isinstance(packet, dict) or not isinstance(
+            packet.get("motion_goal_uuid"), str
+        ):
+            self._applied_capture_reference_id = None
+            return None
+        if packet.get("invalidate") is True:
+            signature = (packet["motion_goal_uuid"], True)
+            if signature == self._last_capture_reference_packet:
+                return None
+            self._last_capture_reference_packet = signature
+            if packet["motion_goal_uuid"] == self._applied_capture_reference_id:
+                self._applied_capture_reference_id = None
+            return packet
+        try:
+            values = tuple(
+                float(value)
+                for value in (
+                    *packet["position"],
+                    *packet["orientation_xyzw"],
+                    packet["expected_contact_width_mm"],
+                    packet["orientation_symmetry_order"],
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
+        if len(values) != 9 or not all(math.isfinite(value) for value in values):
+            return None
+        if values[7] <= 0.0 or values[8] not in (0.0, 1.0, 2.0, 4.0):
+            self._applied_capture_reference_id = None
+            return None
+        signature = (
+            packet["motion_goal_uuid"],
+            False,
+            packet.get("frame_id"),
+            values,
+        )
+        if signature == self._last_capture_reference_packet:
+            return None
+        self._last_capture_reference_packet = signature
+        return {
+            "motion_goal_uuid": packet["motion_goal_uuid"],
+            "frame_id": packet.get("frame_id"),
+            "values": values,
+        }
+
+    def _read_close_execution_id(self):
+        if self._close_id_attribute is None:
+            attr = self._controller.attribute(
+                f"{self.graph_path}/SubscribeGripperClose.outputs:data"
+            )
+            if attr is None or not attr.is_valid():
+                return None
+            self._close_id_attribute = attr
+        try:
+            return str(self._controller.get(self._close_id_attribute) or "")
+        except Exception:
+            self._close_id_attribute = None
+            return None
+
+    def read_close_execution_id(self):
+        return self._read_close_execution_id()
+
+    def mark_capture_reference_applied(self, execution_id):
+        self._applied_capture_reference_id = execution_id
 
     def _resolve_generation_attribute(self):
         path = f"{self.graph_path}/GripperCommandGeneration.outputs:count"
@@ -158,12 +246,34 @@ class SimGripperAdapter:
             return None
         return generation if generation >= 0 else None
 
+    def _resolve_close_generation_attribute(self):
+        path = f"{self.graph_path}/GripperCloseGeneration.outputs:count"
+        attr = self._controller.attribute(path)
+        if attr is None or not attr.is_valid():
+            self._close_generation_attribute = None
+            return False
+        self._close_generation_attribute = attr
+        return True
+
+    def _read_close_generation(self):
+        if self._close_generation_attribute is None:
+            if not self._resolve_close_generation_attribute():
+                return None
+        try:
+            value = self._controller.get(self._close_generation_attribute)
+            generation = int(value)
+        except Exception:
+            self._close_generation_attribute = None
+            return None
+        return generation if generation >= 0 else None
+
     def prime_command_generation(self):
         """Treat the retained graph value as a baseline, not a new command."""
         generation = self._read_command_generation()
         if generation is None:
             return False
         self._last_command_generation = generation
+        self._last_close_generation = self._read_close_generation()
         return True
 
     # ------------------------------------------------------------------
@@ -185,12 +295,30 @@ class SimGripperAdapter:
             True  if a new command was applied.
             False otherwise.
         """
+        close_generation = self._read_close_generation()
+        if (
+            close_generation is not None
+            and self._last_close_generation is not None
+            and close_generation != self._last_close_generation
+        ):
+            close_execution_id = self._read_close_execution_id()
+            if close_execution_id is None or (
+                close_execution_id != (self._applied_capture_reference_id or "")
+            ):
+                self._last_close_generation = close_generation
+                self._last_command_is_closing = False
+                return False
+            self.gripper.close(duration=self.move_duration)
+            self._last_close_generation = close_generation
+            self._last_command_width_mm = None
+            self._last_command_is_closing = True
+            return True
+
         requested_width = self._read_width_mm()
 
         if requested_width is None:
             return False
 
-        width_mm = self._clamp_width(requested_width)
         generation = self._read_command_generation()
 
         # The Counter is driven by ROS2Subscriber.outputs:execOut, which fires
@@ -201,13 +329,11 @@ class SimGripperAdapter:
         if generation == self._last_command_generation:
             return False
 
+        width_mm = self._clamp_width(requested_width)
         if width_mm != requested_width:
             LOGGER.warning(
-                "gripper command width clamped generation=%d requested_width_mm=%.3f "
-                "applied_width_mm=%.3f",
+                "Gripper command clamped because requested width is outside the supported range generation=%d",
                 generation,
-                requested_width,
-                width_mm,
             )
 
         get_width = getattr(self.gripper, "get_width", None)
@@ -231,14 +357,6 @@ class SimGripperAdapter:
         self._last_command_generation = generation
         self._last_command_is_closing = command_is_closing
 
-        if self.verbose:
-            LOGGER.debug(
-                "gripper command applied generation=%d width_mm=%.3f closing=%s",
-                generation,
-                width_mm,
-                command_is_closing is True,
-            )
-
         return True
 
     def publish_status(
@@ -250,6 +368,7 @@ class SimGripperAdapter:
         released,
         width_mm,
         sequence,
+        capture_reference_id="",
     ):
         """Publish simulator-owned grasp/attachment state through the ActionGraph."""
         if self._status_attribute is None and not self._resolve_status_attribute():
@@ -261,6 +380,7 @@ class SimGripperAdapter:
             f"released={int(bool(released))};"
             f"width_mm={float(width_mm):.3f};"
             f"seq={int(sequence)}"
+            f";capture_reference_id={capture_reference_id or ''}"
         )
         self._controller.set(self._status_attribute, payload)
         return True

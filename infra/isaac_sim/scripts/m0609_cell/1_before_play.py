@@ -4,11 +4,13 @@ import importlib
 import importlib.util
 import os
 from pathlib import Path
-import sys
 
 # Configure SFTWIN_PROJECT_ROOT in the Isaac process, or set this only for a
 # deliberate local override.
 PROJECT_ROOT = None
+# Choose this live test's optional detailed diagnostics here. Use the existing
+# SFTWIN_DIAGNOSTICS values: none, all, or a comma-separated component list.
+DIAGNOSTICS_SELECTION = "all"
 root_value = PROJECT_ROOT or os.environ.get("SFTWIN_PROJECT_ROOT")
 if not root_value:
     raise RuntimeError(
@@ -21,6 +23,9 @@ if spec is None or spec.loader is None:
     raise RuntimeError(f"cannot load live environment setup from {setup_path}")
 setup = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(setup)
+# Before Playing is the sole owner of the Isaac live-test selection. The shared
+# setup helper validates and canonicalizes the existing selection syntax.
+os.environ["SFTWIN_DIAGNOSTICS"] = DIAGNOSTICS_SELECTION
 setup.configure_live_environment(root)
 os.environ["SFTWIN_RUNTIME_MODE"] = "production"
 

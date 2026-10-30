@@ -40,6 +40,11 @@ MISSION_COMPLETION_SCHEMA_VERSION = "wu14-pnp-mission-completion/v1"
 class PlanningSceneRuntimeError(RuntimeError):
     """Raised when a validation PlanningScene transition cannot be applied."""
 
+    def __init__(self, message, *, log_cause=None):
+        super().__init__(message)
+        # Logging identity excludes request context without changing error text.
+        self.log_cause = log_cause
+
 
 SERVICE_CALL_TIMEOUT_SEC = 2.0
 
@@ -55,50 +60,57 @@ def call_service_with_bounded_wait(
     client, request, operation, context, logger, timeout_sec=SERVICE_CALL_TIMEOUT_SEC
 ):
     """Call a ROS service and wait without spinning the caller's executor."""
-    started_at = time.monotonic()
-    logger.info(f"service request start {context}")
     try:
         available = client.wait_for_service(timeout_sec=timeout_sec)
     except Exception as error:
-        logger.error(f"service exception {context} error={error}")
         raise PlanningSceneRuntimeError(
-            f"{operation} service exception ({context}): {error}"
+            f"{operation} service exception ({context}): {error}",
+            log_cause=(
+                operation,
+                "service_exception",
+                type(error).__name__,
+                str(error),
+            ),
         ) from error
     if not available:
-        logger.error(
-            f"service unavailable {context} timeout_sec={timeout_sec:.1f} "
-            f"duration_s={time.monotonic() - started_at:.6f}"
+        raise PlanningSceneRuntimeError(
+            f"{operation} service unavailable ({context})",
+            log_cause=(operation, "service_unavailable"),
         )
-        raise PlanningSceneRuntimeError(f"{operation} service unavailable ({context})")
     try:
         future = client.call_async(request)
     except Exception as error:
-        logger.error(f"service exception {context} error={error}")
         raise PlanningSceneRuntimeError(
-            f"{operation} service exception ({context}): {error}"
+            f"{operation} service exception ({context}): {error}",
+            log_cause=(
+                operation,
+                "service_exception",
+                type(error).__name__,
+                str(error),
+            ),
         ) from error
     if not wait_for_service_future(future, timeout_sec):
-        logger.error(
-            f"service response timeout {context} timeout_sec={timeout_sec:.1f} "
-            f"duration_s={time.monotonic() - started_at:.6f}"
-        )
         raise PlanningSceneRuntimeError(
-            f"{operation} service response timeout ({context})"
+            f"{operation} service response timeout ({context})",
+            log_cause=(operation, "service_response_timeout"),
         )
     try:
         response = future.result()
     except Exception as error:
-        logger.error(f"service exception {context} error={error}")
         raise PlanningSceneRuntimeError(
-            f"{operation} service exception ({context}): {error}"
+            f"{operation} service exception ({context}): {error}",
+            log_cause=(
+                operation,
+                "service_exception",
+                type(error).__name__,
+                str(error),
+            ),
         ) from error
     if response is None:
-        logger.error(f"empty service response {context}")
-        raise PlanningSceneRuntimeError(f"{operation} empty response ({context})")
-    logger.info(
-        f"service request complete {context} "
-        f"duration_s={time.monotonic() - started_at:.6f}"
-    )
+        raise PlanningSceneRuntimeError(
+            f"{operation} empty response ({context})",
+            log_cause=(operation, "empty_service_response"),
+        )
     return response
 
 
@@ -419,9 +431,9 @@ class PlanningSceneRuntimeBridge:
         self.cleanup_authorization = None
         self.logger = logger
 
-    def _log(self, message):
+    def _log(self, message, level="debug"):
         if self.logger is not None:
-            self.logger.info(message)
+            getattr(self.logger, level)(message)
         else:
             print(message)
 
@@ -449,21 +461,20 @@ class PlanningSceneRuntimeBridge:
             return
         previous_state = self._last_scene_state or "UNKNOWN"
         self._last_scene_state = state
-        sequence_value = "-" if sequence is None else str(sequence)
         self._log(
             "fixture scene transition: "
-            f"id={self.collision.id} run_id={self.handoff.get('run_id', '-')} "
             f"{previous_state} -> {state} "
             f"world_present={world is not None} "
             f"attached_present={attached is not None} "
-            f"timestamp={time.time():.6f} source={source} status_seq={sequence_value}"
+            f"source={source}",
+            level="info",
         )
         if state == FixtureSceneState.INCONSISTENT and not self._scene_fault_latched:
             self._scene_fault_latched = True
             self._log(
                 "fixture scene fault latched: "
-                f"id={self.collision.id} run_id={self.handoff.get('run_id', '-')} "
-                "state=INCONSISTENT; automatic repair disabled"
+                "state=INCONSISTENT; automatic repair disabled",
+                level="error",
             )
 
     def log_suppressed_fault_events(self):
@@ -471,7 +482,6 @@ class PlanningSceneRuntimeBridge:
             return
         self._log(
             "fixture scene fault suppressed events: "
-            f"id={self.collision.id} run_id={self.handoff.get('run_id', '-')} "
             f"suppressed_count={self._fault_suppressed_count}"
         )
         self._fault_suppressed_reported_count = self._fault_suppressed_count
@@ -573,11 +583,13 @@ class PlanningSceneRuntimeBridge:
                 )
             request = make_attach_diff(self.collision, expected)
             apply_error = None
+            apply_log_cause = None
             try:
                 if not bool(apply(request)):
                     apply_error = "response success=false"
             except PlanningSceneRuntimeError as error:
                 apply_error = str(error)
+                apply_log_cause = error.log_cause
             except Exception as error:
                 apply_error = f"service exception: {error}"
             try:
@@ -607,11 +619,21 @@ class PlanningSceneRuntimeBridge:
                     self._validate_world(world_after)
                     raise PlanningSceneRuntimeError(
                         f"fixture attach failed: {apply_error or 'scene remained WORLD'}; "
-                        "post-failure scene=WORLD"
+                        "post-failure scene=WORLD",
+                        log_cause=(
+                            "fixture_attach",
+                            apply_log_cause or apply_error,
+                            "WORLD",
+                        ),
                     )
                 raise PlanningSceneRuntimeError(
                     f"fixture attach failed: {apply_error or 'scene did not converge'}; "
-                    f"post-failure scene={state_after}"
+                    f"post-failure scene={state_after}",
+                    log_cause=(
+                        "fixture_attach",
+                        apply_log_cause or apply_error,
+                        state_after,
+                    ),
                 )
             except PlanningSceneRuntimeError:
                 if self.lifecycle.state is LifecycleState.CAPTURING:
@@ -681,11 +703,13 @@ class PlanningSceneRuntimeBridge:
                 self.attached, make_fixture_collision_object(self.handoff)
             )
             apply_error = None
+            apply_log_cause = None
             try:
                 if not apply(request):
                     apply_error = "response success=false"
             except PlanningSceneRuntimeError as error:
                 apply_error = str(error)
+                apply_log_cause = error.log_cause
             except Exception as error:
                 apply_error = f"service exception: {error}"
             state_after, world_after, attached_after = self._observe(
@@ -694,7 +718,12 @@ class PlanningSceneRuntimeBridge:
             if state_after != FixtureSceneState.WORLD:
                 raise PlanningSceneRuntimeError(
                     f"fixture world restore failed: {apply_error or 'scene did not converge'}; "
-                    f"post-release scene={state_after}"
+                    f"post-release scene={state_after}",
+                    log_cause=(
+                        "fixture_world_restore",
+                        apply_log_cause or apply_error,
+                        state_after,
+                    ),
                 )
             self._validate_world(world_after)
             try:
@@ -764,21 +793,25 @@ class PlanningSceneRuntimeBridge:
         try:
             request = make_fixture_remove_diff(self.collision.id)
             apply_error = None
+            apply_log_cause = None
             try:
                 if not apply(request):
                     apply_error = "response success=false"
             except PlanningSceneRuntimeError as error:
                 apply_error = str(error)
+                apply_log_cause = error.log_cause
             except Exception as error:
                 apply_error = f"service exception: {error}"
             state, world, attached = self._observe(observe, "CLEANUP")
             if state != FixtureSceneState.ABSENT:
                 raise PlanningSceneRuntimeError(
                     f"fixture remove failed: {apply_error or 'scene did not converge'}; "
-                    f"final scene={state}"
+                    f"final scene={state}",
+                    log_cause=("fixture_remove", apply_log_cause or apply_error, state),
                 )
             self._log(
-                f"fixture cleanup convergence: id={self.collision.id} scene=ABSENT"
+                f"fixture cleanup convergence: id={self.collision.id} scene=ABSENT",
+                level="info",
             )
             if apply_error:
                 self._log(
@@ -903,8 +936,6 @@ class PlanningSceneRuntimeNode:
                 self.bridge = None
                 self._service_callback_group = ReentrantCallbackGroup()
                 self._lifecycle_callback_group = MutuallyExclusiveCallbackGroup()
-                self._service_request_lock = threading.Lock()
-                self._service_request_id = 0
                 self._mission_result_requests = set()
                 self.place_event_producer = None
                 self.mission_completion_producer = None
@@ -957,6 +988,7 @@ class PlanningSceneRuntimeNode:
                     10,
                     callback_group=self._lifecycle_callback_group,
                 )
+                self._log_incidents = {}
                 self.create_timer(0.1, self._poll_state)
                 self.create_timer(0.1, self._poll_place_confirmation)
                 self.create_timer(
@@ -964,6 +996,25 @@ class PlanningSceneRuntimeNode:
                     self._cleanup,
                     callback_group=self._lifecycle_callback_group,
                 )
+
+            def _report_log_incident(self, boundary, error=None):
+                previous = self._log_incidents.get(boundary)
+                if error is None:
+                    if previous is not None:
+                        self.get_logger().info(f"{boundary} recovered")
+                        self._log_incidents.pop(boundary, None)
+                    return
+                cause = (type(error).__name__, str(error))
+                current = error
+                while current is not None:
+                    semantic_cause = getattr(current, "log_cause", None)
+                    if semantic_cause is not None:
+                        cause = semantic_cause
+                        break
+                    current = current.__cause__
+                if previous != cause:
+                    self.get_logger().error(f"{boundary} failed: {error}")
+                    self._log_incidents[boundary] = cause
 
             def _poll_state(self):
                 if not self.state_file.is_file():
@@ -1072,30 +1123,20 @@ class PlanningSceneRuntimeNode:
                 try:
                     confirmation = json.loads(self.place_confirmation_file.read_text())
                 except (OSError, json.JSONDecodeError) as error:
-                    self.get_logger().error(
-                        f"invalid place confirmation ignored: {error}"
-                    )
+                    self._report_log_incident("Place confirmation observation", error)
                     return
+                self._report_log_incident("Place confirmation observation")
                 self.bridge.confirm_place(
                     confirmation,
                     time.time(),
                 )
                 self._place_confirmation_mtime = mtime
 
-            def _next_service_context(self, source, sequence, operation):
-                with self._service_request_lock:
-                    self._service_request_id += 1
-                    request_id = self._service_request_id
-                sequence_value = "-" if sequence is None else str(sequence)
-                return (
-                    f"source={source} seq={sequence_value} "
-                    f"request_id={request_id} service={operation}"
-                )
+            def _next_service_context(self, source, operation):
+                return f"source={source} service={operation}"
 
             def _apply(self, request, source="UNKNOWN", sequence=None):
-                context = self._next_service_context(
-                    source, sequence, "ApplyPlanningScene"
-                )
+                context = self._next_service_context(source, "ApplyPlanningScene")
                 response = call_service_with_bounded_wait(
                     self.apply_client,
                     request,
@@ -1104,18 +1145,17 @@ class PlanningSceneRuntimeNode:
                     self.get_logger(),
                 )
                 if not response.success:
-                    self.get_logger().error(
-                        f"ApplyPlanningScene response success=false ({context})"
+                    self.get_logger().debug(
+                        f"Planning scene mutation rejected by service ({context})"
                     )
                     raise PlanningSceneRuntimeError(
-                        f"ApplyPlanningScene response success=false ({context})"
+                        f"ApplyPlanningScene response success=false ({context})",
+                        log_cause=("ApplyPlanningScene", "service_rejected"),
                     )
                 return True
 
             def _query_fixture_scene(self, source="UNKNOWN", sequence=None):
-                context = self._next_service_context(
-                    source, sequence, "GetPlanningScene"
-                )
+                context = self._next_service_context(source, "GetPlanningScene")
                 request = GetPlanningScene.Request()
                 request.components.components = (
                     PlanningSceneComponents.WORLD_OBJECT_GEOMETRY
@@ -1140,11 +1180,11 @@ class PlanningSceneRuntimeNode:
                 if not self.fixture_delete_ack_file.is_file():
                     return None
                 try:
-                    return json.loads(self.fixture_delete_ack_file.read_text())
+                    ack = json.loads(self.fixture_delete_ack_file.read_text())
+                    self._report_log_incident("Fixture delete acknowledgement")
+                    return ack
                 except (OSError, json.JSONDecodeError) as error:
-                    self.get_logger().error(
-                        f"invalid fixture delete ack ignored: {error}"
-                    )
+                    self._report_log_incident("Fixture delete acknowledgement", error)
                     return None
 
             def _status(self, message):
@@ -1169,10 +1209,9 @@ class PlanningSceneRuntimeNode:
                             self.bridge.collision.primitive_poses[0], transform
                         )
                     except Exception as error:
-                        self.get_logger().error(
-                            f"fixture attach transform failed: {error}"
-                        )
+                        self._report_log_incident("Fixture attachment transform", error)
                         return
+                self._report_log_incident("Fixture attachment transform")
                 try:
                     changed = self.bridge.on_status(
                         message.data,
@@ -1181,6 +1220,7 @@ class PlanningSceneRuntimeNode:
                         time.time(),
                         lambda: self._query_fixture_scene(source, sequence),
                     )
+                    self._report_log_incident("Fixture attachment state")
                     status = parse_gripper_status(message.data)
                     if (
                         changed
@@ -1195,7 +1235,7 @@ class PlanningSceneRuntimeNode:
                             ),
                         )
                 except PlanningSceneRuntimeError as error:
-                    self.get_logger().error(str(error))
+                    self._report_log_incident("Fixture attachment state", error)
 
             def _cleanup(self):
                 if self.bridge is None:
@@ -1208,13 +1248,14 @@ class PlanningSceneRuntimeNode:
                         self._read_delete_ack,
                         lambda: self._query_fixture_scene("CLEANUP"),
                     )
+                    self._report_log_incident("Fixture cleanup")
                     if self.mission_completion_producer is not None:
                         self.mission_completion_producer.observe_scene_absent(
                             time.time(),
                             self.bridge.lifecycle.state is LifecycleState.REMOVED,
                         )
                 except PlanningSceneRuntimeError as error:
-                    self.get_logger().error(str(error))
+                    self._report_log_incident("Fixture cleanup", error)
 
         self.node = _Node()
 

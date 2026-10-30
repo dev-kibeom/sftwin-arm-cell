@@ -2,34 +2,12 @@
 
 #include <cmath>
 #include <string>
-#include <utility>
 
 namespace arm_cell_safety_fsm
 {
 
 namespace
 {
-const char * amr_state_name(uint8_t state)
-{
-  switch (state) {
-    case AMRDockingState::AMR_DOCKING_DOCKED: return "DOCKED";
-    case AMRDockingState::AMR_DOCKING_UNDOCKED: return "UNDOCKED";
-    default: return "UNKNOWN_OR_INVALID";
-  }
-}
-
-const char * packml_state_name(uint8_t state)
-{
-  switch (state) {
-    case PackMLState::PACKML_STATE_IDLE: return "IDLE";
-    case PackMLState::PACKML_STATE_STARTING: return "STARTING";
-    case PackMLState::PACKML_STATE_EXECUTE: return "EXECUTE";
-    case PackMLState::PACKML_STATE_COMPLETE: return "COMPLETE";
-    case PackMLState::PACKML_STATE_ABORTED: return "ABORTED";
-    default: return "UNKNOWN_OR_INVALID";
-  }
-}
-
 const char * motion_state_name(uint8_t state)
 {
   switch (state) {
@@ -42,59 +20,53 @@ const char * motion_state_name(uint8_t state)
     default: return "UNKNOWN_OR_INVALID";
   }
 }
+
+std::string format_input_status(
+  const std::array<SafetyInputDiagnostic, static_cast<std::size_t>(SafetyInput::COUNT)> & inputs)
+{
+  std::string result;
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    if (i != 0) {
+      result += ',';
+    }
+    const auto & diagnostic = inputs[i];
+    result += safety_input_name(static_cast<SafetyInput>(i));
+    result += "{received=";
+    result += diagnostic.received ? "true" : "false";
+    result += ",message_valid=";
+    result += diagnostic.message_valid ? "true" : "false";
+    result += ",source_stamp_plausible=";
+    result += diagnostic.source_timestamp_plausible ? "true" : "false";
+    result += ",reason=";
+    result += safety_input_reason_name(diagnostic.reason);
+    result += '}';
+  }
+  return result;
+}
 }  // namespace
 
-SafetyCore::SafetyCore(
-  std::chrono::milliseconds freshness_timeout,
-  std::chrono::milliseconds degraded_freshness_threshold,
-  float degraded_velocity_scale,
-  float degraded_acceleration_scale,
-  std::vector<SafetyInput> degraded_freshness_inputs)
-: tracker_(freshness_timeout),
-  degraded_freshness_threshold_(degraded_freshness_threshold),
-  degraded_velocity_scale_(degraded_velocity_scale),
-  degraded_acceleration_scale_(degraded_acceleration_scale),
-  degraded_freshness_inputs_(std::move(degraded_freshness_inputs))
+SafetyCore::SafetyCore(std::chrono::milliseconds freshness_timeout)
+: tracker_(freshness_timeout)
 {
-  inputs_.amr.docking_state = AMRDockingState::AMR_DOCKING_UNKNOWN;
-  inputs_.packml.state = PackMLState::PACKML_STATE_UNKNOWN;
   inputs_.motion.execution_state = MotionStatus::MOTION_STATE_UNKNOWN;
-}
-
-void SafetyCore::update_amr(
-  const AMRDockingState & message, Clock::time_point receipt_time,
-  bool source_timestamp_plausible)
-{
-  std::lock_guard<std::mutex> lock(mutex_);
-  inputs_.amr = message;
-  tracker_.record(
-    SafetyInput::AMR, message.valid && is_known_amr_state(message.docking_state),
-    source_timestamp_plausible, receipt_time);
-}
-
-void SafetyCore::update_packml(
-  const PackMLState & message, Clock::time_point receipt_time,
-  bool source_timestamp_plausible)
-{
-  std::lock_guard<std::mutex> lock(mutex_);
-  inputs_.packml = message;
-  tracker_.record(
-    SafetyInput::PACKML, message.valid && is_known_packml_state(message.state),
-    source_timestamp_plausible, receipt_time);
 }
 
 void SafetyCore::update_hardware(
   const SafetyHardwareState & message, Clock::time_point receipt_time,
-  bool source_timestamp_plausible)
+  bool source_timestamp_plausible, std::int64_t source_stamp_ns,
+  std::int64_t source_evaluation_ros_time_ns, std::int64_t source_maximum_age_ns)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   inputs_.hardware = message;
-  tracker_.record(SafetyInput::HARDWARE, message.valid, source_timestamp_plausible, receipt_time);
+  tracker_.record(
+    SafetyInput::HARDWARE, message.valid, source_timestamp_plausible, receipt_time,
+    source_stamp_ns, source_evaluation_ros_time_ns, source_maximum_age_ns);
 }
 
 void SafetyCore::update_motion(
   const MotionStatus & message, Clock::time_point receipt_time,
-  bool source_timestamp_plausible)
+  bool source_timestamp_plausible, std::int64_t source_stamp_ns,
+  std::int64_t source_evaluation_ros_time_ns, std::int64_t source_maximum_age_ns)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   inputs_.motion = message;
@@ -104,13 +76,21 @@ void SafetyCore::update_motion(
     message.backend_inactivity_confirmed);
   tracker_.record(
     SafetyInput::MOTION, is_known_motion_state(message.execution_state) && stop_status_consistent,
-    source_timestamp_plausible, receipt_time);
+    source_timestamp_plausible, receipt_time, source_stamp_ns,
+    source_evaluation_ros_time_ns, source_maximum_age_ns);
 }
 
 SafetyState SafetyCore::evaluate(Clock::time_point now)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   return evaluate_locked(now);
+}
+
+std::array<SafetyInputDiagnostic, static_cast<std::size_t>(SafetyInput::COUNT)>
+SafetyCore::input_diagnostics(Clock::time_point now) const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return tracker_.diagnostics(now);
 }
 
 bool SafetyCore::should_dispatch_stop() const
@@ -127,6 +107,9 @@ bool SafetyCore::should_dispatch_stop() const
     return false;
   }
   if (last_state_.active_causes.value != SafetyCauseSet::NONE) {
+    return true;
+  }
+  if (!last_state_.required_inputs_fresh) {
     return true;
   }
   if (!last_state_.motion_envelope_valid) {
@@ -156,6 +139,12 @@ bool SafetyCore::motion_inactive_locked() const
   if (inputs_.motion.execution_state == MotionStatus::MOTION_STATE_IDLE) {
     return true;
   }
+  // A STOPPING sample with no active control execution or Action ownership
+  // permits an operator to clear the latch. evaluate_locked() continues to
+  // hold capability at NONE until physical stop confirmation arrives.
+  if (inputs_.motion.execution_state == MotionStatus::MOTION_STATE_STOPPING) {
+    return true;
+  }
   return inputs_.motion.execution_state == MotionStatus::MOTION_STATE_STOPPED &&
          inputs_.motion.backend_inactivity_confirmed;
 }
@@ -174,8 +163,6 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
   SafetyState state;
   const bool fresh = tracker_.all_required_fresh(now);
   state.required_inputs_fresh = fresh;
-  const bool degraded = fresh && tracker_.any_in_degraded_band(
-    now, degraded_freshness_threshold_, degraded_freshness_inputs_);
   const bool motion_execution_active =
     inputs_.motion.execution_active || inputs_.motion.has_active_execution ||
     inputs_.motion.execution_state == MotionStatus::MOTION_STATE_EXECUTING ||
@@ -189,64 +176,37 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
     active_causes |= SafetyCauseSet::STO;
   }
   if (!fresh) {
-    bool all_received = true;
-    for (std::size_t i = 0; i < static_cast<std::size_t>(SafetyInput::COUNT); ++i) {
-      all_received = all_received && tracker_.received(static_cast<SafetyInput>(i));
-    }
-    if ((all_received && tracker_.all_received_valid()) ||
-      (motion_execution_active && !all_received))
-    {
-      active_causes |= SafetyCauseSet::COMMUNICATION_LOSS;
-    }
-    if (tracker_.any_received_invalid()) {
-      active_causes |= SafetyCauseSet::REQUIRED_INPUT_INVALID;
-    }
     state.safety_state = SafetyState::SAFETY_STATE_UNKNOWN;
     state.valid = false;
     state.motion_capability.value = MotionCapability::MOTION_NONE;
   } else {
-    if (!inputs_.hardware.e_stop_active && !inputs_.hardware.sto_active) {
-      normal_supervision_established_ = true;
-    }
-    if (
-      inputs_.amr.docking_state == AMRDockingState::AMR_DOCKING_UNDOCKED &&
-      motion_execution_active)
-    {
-      active_causes |= SafetyCauseSet::PREMATURE_UNDOCK;
-    }
-    if (
-      inputs_.packml.state == PackMLState::PACKML_STATE_ABORTED &&
-      motion_execution_active)
-    {
-      active_causes |= SafetyCauseSet::PACKML_ABORT;
-    }
-
     state.valid = true;
     state.safety_state = SafetyState::SAFETY_STATE_SAFE;
-    state.motion_capability.value =
-      inputs_.packml.state == PackMLState::PACKML_STATE_ABORTED ?
-      MotionCapability::MOTION_NONE : MotionCapability::MOTION_NORMAL;
+    state.motion_capability.value = MotionCapability::MOTION_NORMAL;
   }
 
-  const bool startup_input_fault_only = !normal_supervision_established_ &&
-    (active_causes & ~(SafetyCauseSet::COMMUNICATION_LOSS |
-    SafetyCauseSet::REQUIRED_INPUT_INVALID)) == 0;
-  const uint32_t startup_transient_causes = normal_supervision_established_ ?
-    SafetyCauseSet::NONE :
-    active_causes & (SafetyCauseSet::COMMUNICATION_LOSS | SafetyCauseSet::REQUIRED_INPUT_INVALID);
-  const uint32_t causes_to_latch = active_causes & ~startup_transient_causes;
+  const uint32_t causes_to_latch = active_causes;
   latched_causes_ |= causes_to_latch;
   if (causes_to_latch != SafetyCauseSet::NONE && motion_execution_active) {
     recovery_stop_completion_required_ = true;
+  }
+  if (!fresh && motion_execution_active) {
+    recovery_stop_completion_required_ = true;
+  }
+  if (recovery_stop_completion_required_ &&
+    inputs_.motion.execution_state == MotionStatus::MOTION_STATE_STOPPED &&
+    !inputs_.motion.execution_active && !inputs_.motion.has_active_execution &&
+    inputs_.motion.backend_inactivity_confirmed && fresh)
+  {
+    recovery_stop_completion_required_ = false;
   }
   state.active_causes.value = active_causes;
   state.latched_causes.value = latched_causes_;
   const auto selected_causes = active_causes | latched_causes_;
   if (selected_causes & (SafetyCauseSet::E_STOP | SafetyCauseSet::STO)) {
     state.selected_stop_mode.value = StopMode::STOP_MODE_EMERGENCY;
-  } else if (selected_causes & (SafetyCauseSet::COMMUNICATION_LOSS |
-    SafetyCauseSet::REQUIRED_INPUT_INVALID | SafetyCauseSet::COLLISION |
-    SafetyCauseSet::PACKML_ABORT | SafetyCauseSet::OTHER))
+  } else if ((selected_causes & (SafetyCauseSet::COLLISION | SafetyCauseSet::OTHER)) ||
+    (!fresh && motion_execution_active))
   {
     state.selected_stop_mode.value = StopMode::STOP_MODE_IMMEDIATE;
   } else {
@@ -256,7 +216,9 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
   if (active_causes & (SafetyCauseSet::E_STOP | SafetyCauseSet::STO)) {
     state.safety_state = SafetyState::SAFETY_STATE_EMERGENCY_STOPPED;
     state.motion_capability.value = MotionCapability::MOTION_NONE;
-  } else if (active_causes != SafetyCauseSet::NONE && !startup_input_fault_only) {
+  } else if (active_causes != SafetyCauseSet::NONE ||
+    (!fresh && motion_execution_active))
+  {
     state.safety_state = SafetyState::SAFETY_STATE_INTERLOCKED;
     state.motion_capability.value = MotionCapability::MOTION_NONE;
   } else if (latched_causes_ != SafetyCauseSet::NONE) {
@@ -267,6 +229,9 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
       inputs_.motion.backend_inactivity_confirmed)) &&
       is_recovery_eligible(latched_causes_) ?
       MotionCapability::MOTION_RECOVERY_ONLY : MotionCapability::MOTION_NONE;
+  }
+  if (recovery_stop_completion_required_) {
+    state.motion_capability.value = MotionCapability::MOTION_NONE;
   }
   if (inputs_.motion.execution_state == MotionStatus::MOTION_STATE_EMERGENCY_STOPPED) {
     state.safety_state = SafetyState::SAFETY_STATE_EMERGENCY_STOPPED;
@@ -282,16 +247,12 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
     state.motion_capability.value != MotionCapability::MOTION_NONE)
   {
     state.motion_envelope_valid = true;
-    state.max_velocity_scale = degraded ? degraded_velocity_scale_ : 1.0F;
-    state.max_acceleration_scale = degraded ? degraded_acceleration_scale_ : 1.0F;
+    state.max_velocity_scale = 1.0F;
+    state.max_acceleration_scale = 1.0F;
   }
   if (state.motion_capability.value == MotionCapability::MOTION_NONE) {
-    state.diagnostic_detail = std::string("permission_denied amr_state=") +
-      amr_state_name(inputs_.amr.docking_state) +
-      " amr_valid=" + (inputs_.amr.valid ? "true" : "false") +
-      " packml_state=" + packml_state_name(inputs_.packml.state) +
-      " packml_valid=" + (inputs_.packml.valid ? "true" : "false") +
-      " motion_state=" + motion_state_name(inputs_.motion.execution_state) +
+    state.diagnostic_detail = std::string("permission_denied motion_state=") +
+      motion_state_name(inputs_.motion.execution_state) +
       " hardware_valid=" + (inputs_.hardware.valid ? "true" : "false") +
       " e_stop_active=" + (inputs_.hardware.e_stop_active ? "true" : "false") +
       " sto_active=" + (inputs_.hardware.sto_active ? "true" : "false");
@@ -299,6 +260,8 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
       state.diagnostic_detail += " deny_reason=required_inputs_not_fresh";
     } else if (active_causes != SafetyCauseSet::NONE) {
       state.diagnostic_detail += " deny_reason=active_safety_cause";
+    } else if (!fresh) {
+      state.diagnostic_detail += " deny_reason=required_safety_evidence_unavailable";
     } else if (latched_causes_ != SafetyCauseSet::NONE) {
       state.diagnostic_detail += " deny_reason=recovery_not_eligible_or_motion_not_inactive";
     } else if (inputs_.motion.execution_state == MotionStatus::MOTION_STATE_FAULTED) {
@@ -307,25 +270,59 @@ SafetyState SafetyCore::evaluate_locked(Clock::time_point now)
       state.diagnostic_detail += " deny_reason=normal_capability_not_granted";
     }
   }
+  if (!state.diagnostic_detail.empty()) {
+    state.diagnostic_detail += ' ';
+  }
+  state.diagnostic_detail += "required_input_status=[" +
+    format_input_status(tracker_.diagnostics(now)) + ']';
   last_state_ = state;
   has_last_state_ = true;
   return state;
 }
 
-bool SafetyCore::reset(bool operator_clear, Clock::time_point now)
+bool SafetyCore::reset(
+  bool operator_clear, Clock::time_point now, std::string * diagnostic_detail)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   const auto state = evaluate_locked(now);
-  if (
-    !operator_clear || !state.required_inputs_fresh || state.active_causes.value != 0 ||
-    inputs_.hardware.e_stop_active || inputs_.hardware.sto_active ||
-    !motion_inactive_locked() || latched_causes_ == SafetyCauseSet::NONE ||
-    (recovery_stop_completion_required_ &&
-    (inputs_.motion.execution_state != MotionStatus::MOTION_STATE_STOPPED ||
-    !inputs_.motion.backend_inactivity_confirmed)))
-  {
+  if (!operator_clear) {
+    if (diagnostic_detail) {*diagnostic_detail = "operator_acknowledgement_missing";}
     return false;
   }
+  if (!state.required_inputs_fresh) {
+    if (diagnostic_detail) {*diagnostic_detail = "required_inputs_not_fresh";}
+    return false;
+  }
+  if (inputs_.hardware.e_stop_active) {
+    if (diagnostic_detail) {*diagnostic_detail = "e_stop_active";}
+    return false;
+  }
+  if (inputs_.hardware.sto_active) {
+    if (diagnostic_detail) {*diagnostic_detail = "sto_active";}
+    return false;
+  }
+  if (state.active_causes.value != 0) {
+    if (diagnostic_detail) {*diagnostic_detail = "active_safety_causes_remain";}
+    return false;
+  }
+  if (!motion_inactive_locked()) {
+    if (diagnostic_detail) {*diagnostic_detail = "motion_not_inactive";}
+    return false;
+  }
+  if (recovery_stop_completion_required_ &&
+    (inputs_.motion.execution_active || inputs_.motion.has_active_execution ||
+    (inputs_.motion.execution_state != MotionStatus::MOTION_STATE_STOPPING &&
+    (inputs_.motion.execution_state != MotionStatus::MOTION_STATE_STOPPED ||
+    !inputs_.motion.backend_inactivity_confirmed))))
+  {
+    if (diagnostic_detail) {*diagnostic_detail = "stop_completion_not_confirmed";}
+    return false;
+  }
+  if (latched_causes_ == SafetyCauseSet::NONE) {
+    if (diagnostic_detail) {*diagnostic_detail = "no_latched_safety_causes";}
+    return false;
+  }
+  if (diagnostic_detail) {diagnostic_detail->clear();}
   latched_causes_ = SafetyCauseSet::NONE;
   recovery_stop_completion_required_ = false;
   return true;
@@ -334,21 +331,8 @@ bool SafetyCore::reset(bool operator_clear, Clock::time_point now)
 bool SafetyCore::is_recovery_eligible(uint32_t causes)
 {
   constexpr uint32_t allowed =
-    SafetyCauseSet::COMMUNICATION_LOSS | SafetyCauseSet::REQUIRED_INPUT_INVALID |
-    SafetyCauseSet::PREMATURE_UNDOCK |
-    SafetyCauseSet::PACKML_ABORT | SafetyCauseSet::GRIPPER_FAILURE;
+    SafetyCauseSet::GRIPPER_FAILURE;
   return causes != SafetyCauseSet::NONE && (causes & ~allowed) == 0;
-}
-
-bool SafetyCore::is_known_amr_state(uint8_t value)
-{
-  return value == AMRDockingState::AMR_DOCKING_DOCKED ||
-         value == AMRDockingState::AMR_DOCKING_UNDOCKED;
-}
-
-bool SafetyCore::is_known_packml_state(uint8_t value)
-{
-  return value >= PackMLState::PACKML_STATE_IDLE && value <= PackMLState::PACKML_STATE_ABORTED;
 }
 
 bool SafetyCore::is_known_motion_state(uint8_t value)

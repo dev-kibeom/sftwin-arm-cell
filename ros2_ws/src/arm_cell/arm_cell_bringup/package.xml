@@ -10,9 +10,10 @@
   <depend>arm_cell_vision</depend>
   <depend>arm_cell_vda</depend>
   <depend>arm_cell_safety</depend>
-  <depend>arm_cell_motion_moveit2</depend>
-  <depend>arm_cell_bt</depend>
-  <depend>arm_cell_integration</depend>
+  <depend>arm_cell_motion</depend>
+  <depend>arm_cell_task_execution</depend>
+  <depend>arm_cell_orchestration</depend>
+  <depend>arm_cell_gateway</depend>
   <depend>arm_cell_sim_adapter</depend>
   <depend>arm_cell_moveit_config</depend>
   <depend>robot_state_publisher</depend>
@@ -32,8 +33,8 @@
   <test_depend>std_srvs</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>arm_cell_safety</test_depend>
-  <test_depend>arm_cell_motion_moveit2</test_depend>
-  <test_depend>arm_cell_bt</test_depend>
+  <test_depend>arm_cell_motion</test_depend>
+  <test_depend>arm_cell_orchestration</test_depend>
   <test_depend>yaml-cpp</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>

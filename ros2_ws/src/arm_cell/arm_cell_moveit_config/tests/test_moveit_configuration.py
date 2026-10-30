@@ -52,6 +52,10 @@ def test_model_groups_and_limits():
     pipeline = yaml.safe_load((share / "config/ompl_planning.yaml").read_text())
     assert "AddTimeOptimalParameterization" not in pipeline["request_adapters"]
     assert "FixStartStateCollision" not in pipeline["request_adapters"]
+    assert (
+        pipeline["request_adapters"]
+        == "default_planner_request_adapters/ResolveConstraintFrames"
+    )
 
 
 def test_move_group_uses_simulation_time():
@@ -63,7 +67,12 @@ def test_move_group_uses_simulation_time():
     spec.loader.exec_module(module)
     context = LaunchContext()
     context.launch_configurations.update(
-        {"use_rviz": "false", "joint_states": "/joint_states", "planning_profile": ""}
+        {
+            "use_rviz": "false",
+            "joint_states": "/joint_states",
+            "planning_profile": "",
+            "log_level": "info",
+        }
     )
     move_group = next(
         entity
@@ -135,7 +144,7 @@ def test_static_scene_artifact_matches_canonical_manifest():
         artifact["source"]["selection_sha256"]
         == hashlib.sha256(generator.canonical_bytes(selection).encode()).hexdigest()
     )
-    assert len(artifact["objects"]) == 23
+    assert len(artifact["objects"]) == 22
     assert not any(
         "dimensions" in json.dumps(value) or "pose" in json.dumps(value)
         for value in selection.values()
@@ -166,9 +175,11 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
         "cnc_front_left",
         "cnc_front_top",
         "camera_rig_post_left",
+        "camera_rig_post_right",
         "amr_tray_rail_left",
         "amr_tray_rail_right",
         "amr_tray_rail_rear",
+        "amr_tray_marker_post",
     } <= objects.keys()
     assert objects["cnc_front_left"]["geometry"] == {
         "dimensions_m": [0.08, 0.07, 0.66],
@@ -189,10 +200,19 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
         -0.35,
         0.95,
     ]
+    assert objects["camera_rig_post_right"]["geometry"] == {
+        "dimensions_m": [0.055, 0.055, 1.9],
+        "type": "box",
+    }
+    assert objects["camera_rig_post_right"]["pose"]["position_m"] == [
+        0.96,
+        -0.35,
+        0.95,
+    ]
     expected_rails = {
-        "amr_tray_rail_left": ([0.025, 0.46, 0.07], [-0.125, -0.85, 0.675]),
-        "amr_tray_rail_right": ([0.025, 0.46, 0.07], [0.525, -0.85, 0.675]),
-        "amr_tray_rail_rear": ([0.66, 0.025, 0.07], [0.2, -0.625, 0.675]),
+        "amr_tray_rail_left": ([0.02, 0.4416, 0.08], [-0.112, -0.85, 0.68]),
+        "amr_tray_rail_right": ([0.02, 0.4416, 0.08], [0.512, -0.85, 0.68]),
+        "amr_tray_rail_rear": ([0.6336, 0.02, 0.08], [0.2, -0.634, 0.68]),
     }
     for object_id, (dimensions, position) in expected_rails.items():
         assert objects[object_id]["geometry"] == {
@@ -200,6 +220,11 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
             "type": "box",
         }
         assert objects[object_id]["pose"]["position_m"] == position
+    assert not {
+        "amr_raw_slot_support",
+        "amr_raw_slot_marker_guard",
+        "amr_finished_slot_support",
+    }.intersection(objects)
 
 
 def test_camera_drop_bracket_uses_isaac_builder_source_expression():
