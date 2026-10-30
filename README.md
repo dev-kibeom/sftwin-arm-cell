@@ -4,11 +4,11 @@
 
 Doosan M0609 로봇과 Robotiq 2F-85 그리퍼를 대상으로 하는 시뮬레이터 기반 ROS 2 로봇 셀 프로젝트입니다. 비전, 모션 계획, 작업 오케스트레이션, 소프트웨어 안전 감독, 자재 인계, 운영자 UI를 공통 ROS 인터페이스로 연결합니다.
 
-현재 공식 배포 버전은 v0.2.0이며, v0.3.0은 릴리즈 후보입니다. 후보 구현은 로봇 상태, 시뮬레이션 시간, 좌표 변환, 카메라 관측, 모션 허가, 미션 진행 상태의 소유 주체를 명확히 나누어 Pick & Place 셀을 구성합니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
+현재 공식 배포 버전은 v0.2.0이며, v0.3.0은 아직 정식 발행되지 않은 릴리즈 후보입니다. 후보 구현은 미션 흐름, 단일 Pick & Place 작업, 개별 로봇 움직임의 책임 경계를 더 분명히 나누고 있습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
 
 ## 프로젝트 개요
 
-Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공하고 ROS 2는 컴포넌트 통신과 런타임 통합을 담당합니다. MoveIt 2가 로봇 모션을 계획하고 실행합니다. Vision은 관측 결과를 제공하고, Orchestration은 미션 순서를 관리하며, Motion은 로봇 작업을 수행합니다. Safety는 소프트웨어 모션 권한을 판단하고 Integration은 자재 인계 완료와 준비 상태를 관리합니다.
+Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공하고 ROS 2는 컴포넌트 통신과 런타임 통합을 담당합니다. MoveIt 2가 로봇 모션을 계획하고 실행합니다. Vision은 관측 후보와 Geometry를 제공하고, Orchestration은 미션 흐름을 관리하며, Task Execution은 단일 PnP 작업을 수행합니다. Motion은 개별 움직임을 계획·실행하고, Safety는 소프트웨어 모션 권한을 판단하며, Integration은 자재 인계 완료와 준비 상태를 관리합니다.
 
 현재 프로파일에는 시뮬레이션 자재 공급 경로와 Isaac Sim UI Hub가 포함되어 있습니다. 외부 AMR/VDA, PLC, 안전 하드웨어 상태는 mock 어댑터로 표현합니다. AMR 내비게이션과 안전 등급 E-stop/STO 하드웨어는 구현하지 않습니다.
 
@@ -17,7 +17,7 @@ Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공�
 - ROS 계획 및 Isaac Sim 셀 구성에 함께 사용하는 Doosan M0609·Robotiq 2F-85 로봇 설명 모델
 - canonical joint state, 시뮬레이션 시간, TF, RGB-D 카메라 입력을 연결하는 ROS 통합
 - MoveIt 2 기반 로봇 계획과 제한 범위를 명시한 planning scene 프로파일
-- Vision은 관측 Geometry를 제공하고 Motion이 선택된 후보를 제외한 요청별 planning occupancy를 구성하는 책임 분리
+- Vision은 관측 Geometry와 후보를 제공하고 Task Execution은 후보 순서를 정하며 Motion은 선택 후보를 제외한 요청별 planning occupancy를 구성하는 책임 분리
 - Geometry-first RGB-D RawPart 검출과 부분 관측에서의 형상 가설 복원, detector profile 및 source-frame 진단 정보
 - backend-neutral ROS 인터페이스를 통한 PICK, PLACE, GO_HOME 및 복구 모션 작업
 - 재사용 가능한 Behavior Tree Action 기반 작업 실행, PICK 후보 순서 및 Occupancy 제외 휴리스틱
@@ -26,14 +26,24 @@ Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공�
 
 ## 시스템 아키텍처
 
-런타임은 인지, 미션 의사결정, 로봇 실행, 모션 허가를 별도 ROS 컴포넌트로 나눕니다. Isaac Sim은 시뮬레이션 시간, 로봇 상태, 카메라 데이터를 제공합니다. Integration 계층은 이를 공통 ROS 계약에 맞게 연결하고 simulator 전용 그리퍼 동작을 처리합니다.
+런타임은 인지, 미션 의사결정, 단일 작업 실행, 개별 움직임, 모션 허가를 분리합니다. Isaac Sim은 시뮬레이션 시간, 로봇 상태, 카메라 데이터를 제공합니다. Integration 계층은 이를 공통 ROS 계약에 맞게 연결하고 simulator 전용 그리퍼 동작을 처리합니다.
 
 ```mermaid
 flowchart LR
     Isaac[Isaac Sim: 로봇, 시간, RGB-D] --> Integration[시뮬레이터 통합]
     Integration --> Vision[Vision]
-    Vision --> Orchestration[Orchestration]
-    Orchestration --> Motion[Motion / MoveIt 2]
+    Vision -->|관측 후보·Geometry| Orchestration[Orchestration BT<br/>미션 흐름]
+    Orchestration -->|DetectTarget 요청| Vision
+    Orchestration -->|ExecutePnp ROS Action| TaskExecution
+    subgraph TaskRuntime[task_execution_node 프로세스]
+        TaskExecution[Task Execution BT<br/>단일 PnP 논리 계층]
+        MotionActions[재사용 Plan/Execute Leaf Action]
+        Motion[Motion runtime<br/>Planning BT / MoveIt 2]
+        TaskExecution -->|작업별 SubTree 조합| MotionActions
+        MotionActions -->|in-process C++ MotionPort| Motion
+        Motion -->|movement 결과·상태| TaskExecution
+    end
+    TaskExecution -->|PnP terminal 결과| Orchestration
     Motion --> Isaac
     VDA[VDA / 외부 상태 mock] --> Material[Material Integration]
     Hub[Isaac UI Hub] --> Material
@@ -47,14 +57,29 @@ flowchart LR
     Material --> Hub
 ```
 
+다이어그램의 Task Execution BT와 Motion Leaf Action은 단일 PnP의 논리적 실행 계층이며 별도 ROS 노드나 프로세스가 아닙니다. 현재 `task_execution_node` 실행 파일이 PnP Action server와 Motion runtime을 한 프로세스에 조립합니다. Orchestration과의 경계는 ROS Action이고, Task Execution에서 Motion으로 가는 움직임 요청은 in-process C++ `MotionPort`를 사용합니다.
+
 | 컴포넌트 | 책임과 상호작용 |
 |---|---|
 | **Vision** | `DetectTarget` 요청이 오면 최신 RGB-D 관측을 획득하고, 선택한 detector profile로 타깃을 찾아 source-frame 진단 정보와 함께 반환합니다. 모션 허가를 내리지는 않습니다. |
-| **Motion** | MoveIt 2로 PICK, PLACE, GO_HOME 및 관련 작업을 계획·실행합니다. 로봇·도구 기하 보정을 적용하고 Safety의 모션 capability를 준수합니다. |
-| **Orchestration** | Vision에 타깃을 요청하고 Motion에 작업을 제출하며 결과를 추적합니다. 재시도와 허가된 복구를 조정하고, 현재 자재 준비 상태와 Safety 조건이 충족될 때 미션을 시작합니다. |
+| **Orchestration** | 자재 준비와 Safety 조건을 확인해 미션을 시작하고, Vision 관측과 단일 PnP 요청을 조정합니다. 미션 진행·상위 재시도 및 허가된 복구를 소유합니다. |
+| **Task Execution** | 단일 PnP의 후보 순서·전환, PICK/PLACE 단계, 그리퍼·Holding 처리, 작업 내부 복구와 PnP 결과를 소유합니다. BT 논리 계층이며 별도 프로세스가 아닙니다. |
+| **Motion** | 선택된 후보 안에서 Pose/IK/경로 탐색과 movement 실행 가능성을 평가하고 MoveIt 2로 계획·실행합니다. 선택 후보를 제외한 요청별 Planning Occupancy와 개별 movement 결과를 소유하며 Safety capability를 준수합니다. |
 | **Safety** | 필수 입력의 최신성과 운영 조건을 평가해 소프트웨어 모션 capability를 단독으로 발행하고 Motion에 직접 정지 요청을 보냅니다. 안전 등급 하드웨어를 대체하지 않습니다. |
 | **Material Integration** | 운영자 자재 공급 요청을 외부 상태 mock에 전달하고 시뮬레이션 인계가 완료된 뒤에만 `MATERIAL_READY`를 발행합니다. 미션 시작 여부는 Orchestration이 결정합니다. |
 | **UI Hub** | Isaac Sim/Kit 확장으로 동작합니다. 카메라와 컴포넌트 상태를 보여 주고 소유 컴포넌트에 요청을 보냅니다. canonical 런타임 상태를 직접 변경하지 않습니다. |
+
+### v0.3.0 아키텍처 발전
+
+v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니다. v0.3.0의 변화는 BT를 처음 도입한 것이 아니라 PnP 작업 실행 책임을 Motion에서 분리해 계층 경계를 명확히 한 것입니다.
+
+- **미션과 단일 작업의 분리:** 새 `arm_cell_task_execution` 실행 계층이 단일 PnP의 순서와 내부 복구를 소유하고, Orchestration은 미션 수량·재시도·상위 복구를 유지합니다. 구현상 Orchestration은 ROS Action으로 작업을 제출하고, Task Execution과 Motion runtime은 한 프로세스에서 조립됩니다. 미션 정책과 PICK/PLACE 전략을 서로 독립적으로 바꿀 수 있는 구조입니다.
+- **재사용 가능한 움직임 Action:** PICK·PLACE SubTree는 공통 계획·실행 Leaf Action을 조합하고, Motion 내부 Planning BT는 선택된 후보 안에서 Pose/IK/경로 탐색과 해당 탐색 범위의 재시도를 수행합니다. Task Execution은 후보 간 순서와 전환을 소유합니다. 작업 순서를 바꾸거나 실행 전략을 조합하기 쉬워지지만, 정량적인 성능 향상을 의미하지는 않습니다.
+- **Vision과 Motion의 책임 정리:** Vision은 관측 Geometry와 적격 후보를 반환하고, Task Execution은 후보 순서와 전환을 결정합니다. Motion은 전달된 후보의 움직임 실행 가능성을 평가하고 요청별 Planning Occupancy를 구성해 선택 후보를 제외합니다. 검출 결과가 곧 파지 가능성이나 이동 허가를 뜻하지 않습니다.
+- **복구·결과·Safety 소유권:** Orchestration은 미션 수준 재시도와 Safety 승인 복구를 조정하고, Task Execution은 작업 내부 복구·후보 전환·PnP Action terminal 결과를 소유합니다. Motion은 선택 후보의 계획 탐색 재시도와 개별 movement 실행·취소·terminal 및 정지 근거를 소유하고, Safety는 독립적으로 모션 권한과 직접 정지를 결정합니다.
+- **시뮬레이터 경계:** v0.3.0은 공통 ROS 계약 뒤에 simulator별 상태·그리퍼 realization을 두는 기존 경계를 유지합니다. 이는 구현 교체를 고려한 설계 방향이며, Public 구현은 Isaac Sim 중심이고 실물 로봇 어댑터나 운전을 검증하지 않았습니다.
+
+세부 계약은 [구성요소 아키텍처](docs/design/arm-cell/architecture/components.md), [Task Execution CDS](docs/design/arm-cell/components/task-execution/cds.md), [Motion Execution FDS](docs/design/arm-cell/components/motion/fds-motion-execution.md), [Orchestration–Task Execution ICD](docs/design/arm-cell/interfaces/icd-orchestration-task-execution.md)와 [Vision–Motion Occupancy 기록](docs/record/arm-cell/engineering-story/vision-to-motion-occupancy-ownership.md)을 참고하세요.
 
 ### 설계 의도
 
@@ -64,7 +89,7 @@ flowchart LR
 
 ### 대표 시나리오
 
-운영자가 UI Hub에서 자재 공급을 요청하면 외부 상태 mock이 도착·도킹·하역을 시각화합니다. 하역과 인계가 완료된 뒤 Integration이 `MATERIAL_READY`를 발행하고, Orchestration은 Safety 허가와 현재 준비 상태를 확인해 미션을 시작합니다. 미션은 Vision에 RGB-D 타깃 감지를 요청하고, 결과를 바탕으로 Motion이 MoveIt 계획을 실행합니다. 이후 Orchestration은 PICK·holding 확인·PLACE·release 확인을 진행하며, Safety는 전체 과정에서 독립적으로 모션 capability와 정지 경로를 유지합니다.
+운영자가 UI Hub에서 자재 공급을 요청하면 외부 상태 mock이 도착·도킹·하역을 시각화합니다. 하역과 인계가 완료된 뒤 Integration이 `MATERIAL_READY`를 발행하고, Orchestration은 Safety 허가와 현재 준비 상태를 확인해 미션을 시작합니다. Orchestration은 Vision 관측과 Recipe를 바탕으로 단일 PnP Action을 제출합니다. Task Execution은 PICK·Holding 확인·PLACE·release 확인을 진행하고, 각 움직임은 Motion에 위임합니다. Motion은 결과와 상태를 Task Execution에 돌려주며 Task Execution은 PnP 결과를 Orchestration에 반환합니다. Safety는 전체 과정에서 독립적으로 모션 capability와 정지 경로를 유지합니다.
 
 이 흐름은 현재 공개 구현의 역할과 연결을 요약합니다. 전체 시나리오가 실시간 Isaac Sim 환경에서 최종 acceptance를 통과했다는 의미는 아닙니다.
 
@@ -134,7 +159,7 @@ docker build --progress=plain -t sftwin-arm-cell:humble .
 
 공개 소스에는 위에서 설명한 Vision, Motion, Orchestration, Safety, Material Integration, VDA mock, UI Hub 구현이 포함되어 있습니다. 구현 코드가 존재한다는 사실만으로 최종 통합 데모의 라이브 acceptance까지 완료된 것은 아닙니다.
 
-- **빌드 및 Docker 런타임 플러그인:** v0.3.0 후보 Docker 이미지 빌드와 `arm_cell_bringup`까지 ARM Cell 패키지 12개 컴파일이 성공했습니다. PR #12에서는 TRAC-IK 2.0.1을 `/opt/trac_ik`에 설치하고 MoveIt pluginlib 로딩, ARM Cell IK 플러그인 초기화, `solve_type=Distance`를 확인했습니다. 이 probe는 실제 IK 목표 자세를 계산하지 않으며 전체 Motion Launch나 Isaac Sim PnP도 검증하지 않았습니다. 공개 PR #2와 v0.2.0 export의 과거 빌드 결과는 별개 기준선입니다. 전체 공개 checkout의 ROS 테스트 실패는 릴리즈 노트에 기록한 상태로 남아 있으며, 컴파일과 플러그인 초기화 성공이 이를 해소하지 않습니다.
+- **빌드 및 Docker 런타임 플러그인:** v0.3.0 후보 Docker 이미지 빌드와 `arm_cell_bringup`까지의 12-package build closure 컴파일이 성공했습니다. PR #12에서는 TRAC-IK 2.0.1을 `/opt/trac_ik`에 설치하고 MoveIt pluginlib 로딩, ARM Cell IK 플러그인 초기화, `solve_type=Distance`를 확인했습니다. 이 probe는 실제 IK 목표 자세를 계산하지 않으며 전체 Motion Launch나 Isaac Sim PnP도 검증하지 않았습니다. 공개 PR #2와 v0.2.0 export의 과거 빌드 결과는 별개 기준선입니다. 전체 공개 checkout의 ROS 테스트 실패는 릴리즈 노트에 기록한 상태로 남아 있으며, 컴파일과 플러그인 초기화 성공이 이를 해소하지 않습니다.
 - **라이브 런타임:** 이번 v0.3.0 후보 작업의 Docker 검증은 전체 Motion Launch, 목표 자세 IK 해, Isaac Sim 연결·실시간 실행 또는 PnP를 포함하지 않았습니다. 별도의 과거 Private 라이브 보고서에는 로봇 단독 계획 및 제한 정적 scene 검증이 기록돼 있지만, 전체 미션 acceptance를 의미하지 않으며 기준 revision 추적에도 한계가 있습니다. 구성된 환경에서의 실행 절차는 Isaac 가이드를 참고하세요.
 - **E-Stop Recovery 근거:** 별도 Private 환경의 2026-10-30 최신 clean 라이브 기록에서 reset, SafetyRecovery, GO_HOME이 성공하고 Mission이 PnP를 재개했습니다. 이후 접근 단계는 `BACKEND_UNAVAILABLE`로 끝나 전체 Mission 성공은 아닙니다. Public Docker 검증과 별개이며 해당 실행 조건만 뒷받침하고 일반 성공률을 의미하지 않습니다.
 - **시뮬레이션·안전 경계:** VDA/외부 상태 어댑터는 mock subset이며 전체 VDA 5050이나 AMR 내비게이션 구현이 아닙니다. 소프트웨어 Safety는 안전 등급 E-stop/STO 하드웨어가 아니며 이를 대체하지 않습니다. Isaac Sim이 지원 개발 환경이고 실물 로봇 운전은 검증 범위에 포함되지 않습니다.
