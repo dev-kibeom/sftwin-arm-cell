@@ -4,7 +4,7 @@
 
 Doosan M0609 로봇과 Robotiq 2F-85 그리퍼를 대상으로 하는 시뮬레이터 기반 ROS 2 로봇 셀 프로젝트입니다. 비전, 모션 계획, 작업 오케스트레이션, 소프트웨어 안전 감독, 자재 인계, 운영자 UI를 공통 ROS 인터페이스로 연결합니다.
 
-현재 공식 배포 버전은 v0.2.0이며, v0.3.0은 아직 정식 발행되지 않은 릴리즈 후보입니다. 후보 구현은 미션 흐름, 단일 Pick & Place 작업, 개별 로봇 움직임의 책임 경계를 더 분명히 나누고 있습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
+현재 공식 배포 버전은 v0.3.0입니다. v0.3.0은 미션 흐름, 단일 Pick & Place 작업, 개별 로봇 움직임의 책임 경계를 더 분명히 나눕니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
 
 ## 프로젝트 개요
 
@@ -144,7 +144,7 @@ docker build --progress=plain -t sftwin-arm-cell:humble .
 
 ## 문서 탐색
 
-- [v0.3.0 릴리즈 노트 (후보)](docs/releases/v0.3.0.ko.md) / [English](docs/releases/v0.3.0.en.md)
+- [v0.3.0 릴리즈 노트](docs/releases/v0.3.0.ko.md) / [English](docs/releases/v0.3.0.en.md)
 
 - [ARM Cell 데모 정의](docs/product/arm-cell/definition.md)
 - [시스템 아키텍처](docs/design/arm-cell/architecture/), [ARM Cell 컴포넌트 설계](docs/design/arm-cell/components/)
@@ -159,8 +159,8 @@ docker build --progress=plain -t sftwin-arm-cell:humble .
 
 공개 소스에는 위에서 설명한 Vision, Motion, Orchestration, Safety, Material Integration, VDA mock, UI Hub 구현이 포함되어 있습니다. 구현 코드가 존재한다는 사실만으로 최종 통합 데모의 라이브 acceptance까지 완료된 것은 아닙니다.
 
-- **빌드 및 Docker 런타임 플러그인:** v0.3.0 후보 Docker 이미지 빌드와 `arm_cell_bringup`까지의 12-package build closure 컴파일이 성공했습니다. PR #12에서는 TRAC-IK 2.0.1을 `/opt/trac_ik`에 설치하고 MoveIt pluginlib 로딩, ARM Cell IK 플러그인 초기화, `solve_type=Distance`를 확인했습니다. 이 probe는 실제 IK 목표 자세를 계산하지 않으며 전체 Motion Launch나 Isaac Sim PnP도 검증하지 않았습니다. 공개 PR #2와 v0.2.0 export의 과거 빌드 결과는 별개 기준선입니다. 전체 공개 checkout의 ROS 테스트 실패는 릴리즈 노트에 기록한 상태로 남아 있으며, 컴파일과 플러그인 초기화 성공이 이를 해소하지 않습니다.
-- **라이브 런타임:** 이번 v0.3.0 후보 작업의 Docker 검증은 전체 Motion Launch, 목표 자세 IK 해, Isaac Sim 연결·실시간 실행 또는 PnP를 포함하지 않았습니다. 별도의 과거 Private 라이브 보고서에는 로봇 단독 계획 및 제한 정적 scene 검증이 기록돼 있지만, 전체 미션 acceptance를 의미하지 않으며 기준 revision 추적에도 한계가 있습니다. 구성된 환경에서의 실행 절차는 Isaac 가이드를 참고하세요.
+- **빌드 및 Docker 런타임 플러그인:** v0.3.0 Docker 이미지 빌드와 `arm_cell_bringup`까지의 12-package build closure 컴파일이 성공했습니다. PR #12에서는 TRAC-IK 2.0.1을 `/opt/trac_ik`에 설치하고 MoveIt pluginlib 로딩, ARM Cell IK 플러그인 초기화, `solve_type=Distance`를 확인했습니다. 이 probe는 실제 IK 목표 자세를 계산하지 않으며 전체 Motion Launch나 Isaac Sim PnP도 검증하지 않았습니다. 공개 PR #2와 v0.2.0 export의 과거 빌드 결과는 별개 기준선입니다. 전체 공개 checkout의 ROS 테스트 실패는 릴리즈 노트에 기록한 상태로 남아 있으며, 컴파일과 플러그인 초기화 성공이 이를 해소하지 않습니다.
+- **라이브 런타임:** v0.3.0 Docker 검증은 전체 Motion Launch, 목표 자세 IK 해, Isaac Sim 연결·실시간 실행 또는 PnP를 포함하지 않았습니다. 별도의 과거 Private 라이브 보고서에는 로봇 단독 계획 및 제한 정적 scene 검증이 기록돼 있지만, 전체 미션 acceptance를 의미하지 않으며 기준 revision 추적에도 한계가 있습니다. 구성된 환경에서의 실행 절차는 Isaac 가이드를 참고하세요.
 - **E-Stop Recovery 근거:** 별도 Private 환경의 2026-10-30 최신 clean 라이브 기록에서 reset, SafetyRecovery, GO_HOME이 성공하고 Mission이 PnP를 재개했습니다. 이후 접근 단계는 `BACKEND_UNAVAILABLE`로 끝나 전체 Mission 성공은 아닙니다. Public Docker 검증과 별개이며 해당 실행 조건만 뒷받침하고 일반 성공률을 의미하지 않습니다.
 - **시뮬레이션·안전 경계:** VDA/외부 상태 어댑터는 mock subset이며 전체 VDA 5050이나 AMR 내비게이션 구현이 아닙니다. 소프트웨어 Safety는 안전 등급 E-stop/STO 하드웨어가 아니며 이를 대체하지 않습니다. Isaac Sim이 지원 개발 환경이고 실물 로봇 운전은 검증 범위에 포함되지 않습니다.
 
