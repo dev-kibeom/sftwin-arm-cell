@@ -46,11 +46,11 @@ transition, belongs to an explicit contract owned by that transition.
 The unnecessary policy gate that rejected a valid first pair was removed.
 Focused Vision tests and the affected package build passed for #268; Isaac
 live acceptance was still pending at that PR. This correction resolves that
-specific policy defect. It does not establish that all intermittent Vision
-timeouts or RGB-D acquisition failures are solved. Later observations of
-missing Depth frames and absent sync callbacks are tracked separately in the
-[intermittent RGB-D input investigation](rgbd-intermittent-input-instability.md)
-and its [Known Issue](vision-rgbd-intermittent-acquisition-failure.md).
+specific policy defect. Later observations of missing Depth frames and absent
+sync callbacks are retained in the [intermittent RGB-D input investigation](rgbd-intermittent-input-instability.md)
+as pre-resolution evidence. The intermittent pair acquisition issue was
+resolved in v0.3.0 and its [issue record](vision-rgbd-intermittent-acquisition-failure.md)
+is now closed.
 
 ## What we learned
 

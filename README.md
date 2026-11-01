@@ -4,7 +4,7 @@
 
 Doosan M0609 로봇과 Robotiq 2F-85 그리퍼를 대상으로 하는 시뮬레이터 기반 ROS 2 로봇 셀 프로젝트입니다. 비전, 모션 계획, 작업 오케스트레이션, 소프트웨어 안전 감독, 자재 인계, 운영자 UI를 공통 ROS 인터페이스로 연결합니다.
 
-현재 공식 배포 버전은 v0.3.0입니다. v0.3.0은 미션 흐름, 단일 Pick & Place 작업, 개별 로봇 움직임의 책임 경계를 더 분명히 나눕니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
+현재 공식 배포 버전은 v0.3.1입니다. v0.3.1은 v0.3.0의 미션·PnP·Motion 책임 구조를 유지하면서 호스트와 Docker에서 실행하는 경로를 정리하고 재현성을 높였습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
 
 ## 프로젝트 개요
 
@@ -119,9 +119,25 @@ git clone https://github.com/dev-kibeom/sftwin-arm-cell.git
 cd sftwin-arm-cell
 ```
 
-### ROS 2 Humble 호스트에서 빌드
+## ARM Cell 실행 방법
 
-ROS 2 Humble과 패키지 의존성을 설치한 환경에서 지원 workspace를 빌드합니다.
+두 방법 모두 Linux 호스트에 ROS 2 Humble과 Isaac Sim 5.1이 설치돼 있어야 합니다. Isaac Sim을 저장소 루트에서 시작합니다. 스크립트가 씬을 구성하고 Timeline과 UI Hub를 시작합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+./infra/isaac_sim/scripts/isaac_arm_cell.sh
+```
+
+Isaac Sim 설치 위치가 `$HOME/isaac_sim`과 다르면 `ISAAC_SIM_ROOT`를 지정합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
+```
+
+### 방법 1: 호스트에서 ROS 2 빌드 및 실행
+
+ROS 2 Humble과 workspace 의존성이 설치된 다른 터미널에서 저장소 루트 기준으로 빌드한 뒤 overlay를 source합니다.
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -130,35 +146,59 @@ colcon build --packages-up-to arm_cell_bringup --cmake-args -DBUILD_TESTING=ON
 source install/setup.bash
 ```
 
-### Docker로 빌드
-
-루트 Dockerfile은 Humble 컨테이너 안에서 같은 ROS 범위를 빌드합니다. 이미지 생성과 컴파일을 확인하는 용도이며 Isaac Sim을 제공하거나 ROS 노드를 실행하지 않습니다.
-
-저장소 루트에서 실행합니다.
+`info`는 기본 운영 로그 모드이고 선택적 구조화 진단 수집은 끕니다. 호스트에서 실행하려면 다음 명령을 사용합니다.
 
 ```bash
-docker build --progress=plain -t sftwin-arm-cell:humble .
+ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=info
 ```
 
-사전 조건과 빌드 결과 확인 방법은 [Docker 빌드 가이드](docs/guides/docker-humble-build.md)를 참고하세요.
+```bash
+ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=debug
+```
 
-### Isaac Sim + Docker 런타임
+`debug`는 ROS 노드의 상세 로그를 활성화하고 더 많은 로그와 진단 기록을 생성합니다. `diagnostics`를 생략하면 `debug`는 `motion`, `vision`, `safety`, `orchestration` 수집을 모두 켭니다. 로그 상세도와 구조화된 진단 수집은 별도 설정입니다. 예를 들어 진단 기록 없이 debug 로그만 보려면 `log_level:=debug diagnostics:=none`을 지정합니다. 반대로 info 로그에서 필요한 기록만 고를 수 있습니다.
 
-Isaac Sim에서 셀을 먼저 띄운 다음 저장소 루트에서 아래 명령으로 ROS bringup과 Python 3.10 sidecar를 시작할 수 있습니다. Isaac은 로컬 `ros2_ws/install`이 없어도 씬과 Hub를 시작하고, Docker sidecar가 준비되면 localhost TCP로 연결합니다.
+```bash
+ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=info diagnostics:=vision,motion
+```
+
+`diagnostics`는 `none`, `all`, 또는 `motion,vision,safety,orchestration`의 쉼표 구분 목록을 받습니다. 이 설정은 ROS bringup에 적용되며 Isaac Sim UI 프로세스의 진단 설정과는 별도입니다.
+
+ROS bringup을 종료하려면 `Ctrl+C`를 누릅니다.
+
+### 방법 2: Docker Compose로 실행
+
+호스트에 Docker Compose v2가 필요합니다. 별도의 호스트 ROS workspace 빌드 없이 저장소 루트에서 실행합니다.
 
 ```bash
 docker compose up --build
 ```
 
-이 구성은 Linux host networking과 기본 `ROS_DOMAIN_ID=0`을 사용합니다. Isaac Sim과 Docker의 ROS domain 및 RMW 설정은 같아야 합니다. 종료는 `Ctrl+C` 또는 `docker compose down`입니다.
+Compose가 ROS workspace를 이미지로 빌드하고 `arm_cell_bringup`과 Python 3.10 sidecar를 시작합니다. Linux host networking, 기본 `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, Fast DDS UDPv4 transport를 사용합니다. Isaac Sim과 컨테이너의 ROS domain 및 RMW 설정을 일치시킵니다. 기본 모드는 `info`이며, Docker에서는 시작할 때 환경변수로 모드를 선택합니다.
 
-### Isaac Sim에서 실행
+```bash
+ARM_CELL_LOG_LEVEL=info docker compose up --build
+```
 
-실시간 실행에는 호스트에 ROS 2 Humble과 Isaac Sim 5.1이 필요합니다. ROS 빌드만으로 simulator가 시작되거나 라이브 런타임이 검증되지는 않습니다. 사전 조건, 지원 launch profile, Isaac Script Editor entrypoint(`1_before_play.py` → Play → `2_after_play.py`)는 [ARM Cell Isaac Sim 가이드](docs/guides/isaac-sim.md)를 참고하세요.
+```bash
+ARM_CELL_LOG_LEVEL=debug docker compose up --build
+```
+
+`ARM_CELL_DIAGNOSTICS`를 생략하면 `info`는 선택적 진단 수집을 끄고 `debug`는 모든 ROS 진단 수집을 켭니다. 일부 기록만 수집하려면 함께 지정합니다.
+
+```bash
+ARM_CELL_LOG_LEVEL=info ARM_CELL_DIAGNOSTICS=vision,motion docker compose up --build
+```
+
+```bash
+ARM_CELL_LOG_LEVEL=debug ARM_CELL_DIAGNOSTICS=none docker compose up --build
+```
+
+`ARM_CELL_DIAGNOSTICS`는 `none`, `all`, 또는 `motion,vision,safety,orchestration`의 쉼표 구분 목록을 받습니다. 실행 중인 컨테이너의 모드를 바꾸려면 기존 Compose 실행을 내린 뒤 원하는 환경변수로 다시 시작합니다. 로그는 `docker compose logs -f arm-cell`로 확인하고, 종료할 때는 Compose 터미널에서 `Ctrl+C`를 누르거나 `docker compose down`을 실행합니다.
 
 ## 문서 탐색
 
-- [v0.3.0 릴리즈 노트](docs/releases/v0.3.0.ko.md) / [English](docs/releases/v0.3.0.en.md)
+- [v0.3.1 릴리즈 노트](docs/releases/v0.3.1.ko.md) / [English](docs/releases/v0.3.1.en.md) · [이전 버전 v0.3.0](docs/releases/v0.3.0.ko.md)
 
 - [ARM Cell 데모 정의](docs/product/definition.md)
 - [최종 라이브 인수 계약](docs/product/acceptance.md)
@@ -169,16 +209,10 @@ docker compose up --build
 - [Engineering Stories](docs/record/engineering-story/)
 - [기술 기록](docs/record/)
 - [Acceptance 보고서](docs/reports/acceptance/)
-- [운영 가이드](docs/guides/)
 
 ## 구현 상태 및 한계
 
-공개 소스에는 위에서 설명한 Vision, Motion, Orchestration, Safety, Material Integration, VDA mock, UI Hub 구현이 포함되어 있습니다. 구현 코드가 존재한다는 사실만으로 최종 통합 데모의 라이브 acceptance까지 완료된 것은 아닙니다.
-
-- **빌드 및 Docker 런타임 플러그인:** v0.3.0 Docker 이미지 빌드와 `arm_cell_bringup`까지의 12-package build closure 컴파일이 성공했습니다. PR #12에서는 TRAC-IK 2.0.1을 `/opt/trac_ik`에 설치하고 MoveIt pluginlib 로딩, ARM Cell IK 플러그인 초기화, `solve_type=Distance`를 확인했습니다. 이 probe는 실제 IK 목표 자세를 계산하지 않으며 전체 Motion Launch나 Isaac Sim PnP도 검증하지 않았습니다. 공개 PR #2와 v0.2.0 export의 과거 빌드 결과는 별개 기준선입니다. 전체 공개 checkout의 ROS 테스트 실패는 릴리즈 노트에 기록한 상태로 남아 있으며, 컴파일과 플러그인 초기화 성공이 이를 해소하지 않습니다.
-- **라이브 런타임:** v0.3.0 Docker 검증은 전체 Motion Launch, 목표 자세 IK 해, Isaac Sim 연결·실시간 실행 또는 PnP를 포함하지 않았습니다. 별도의 과거 Private 라이브 보고서에는 로봇 단독 계획 및 제한 정적 scene 검증이 기록돼 있지만, 전체 미션 acceptance를 의미하지 않으며 기준 revision 추적에도 한계가 있습니다. 구성된 환경에서의 실행 절차는 Isaac 가이드를 참고하세요.
-- **E-Stop Recovery 근거:** 별도 Private 환경의 2026-10-30 최신 clean 라이브 기록에서 reset, SafetyRecovery, GO_HOME이 성공하고 Mission이 PnP를 재개했습니다. 이후 접근 단계는 `BACKEND_UNAVAILABLE`로 끝나 전체 Mission 성공은 아닙니다. Public Docker 검증과 별개이며 해당 실행 조건만 뒷받침하고 일반 성공률을 의미하지 않습니다.
-- **시뮬레이션·안전 경계:** VDA/외부 상태 어댑터는 mock subset이며 전체 VDA 5050이나 AMR 내비게이션 구현이 아닙니다. 소프트웨어 Safety는 안전 등급 E-stop/STO 하드웨어가 아니며 이를 대체하지 않습니다. Isaac Sim이 지원 개발 환경이고 실물 로봇 운전은 검증 범위에 포함되지 않습니다.
+호스트 ROS 2 실행과 Docker Compose 실행이 정상 동작하고, Docker 환경에서 Isaac Sim의 RGB-D 토픽이 ROS에 전달되는 것을 확인했습니다. 전체 Mission acceptance나 실물 로봇 운전까지 검증됐다는 뜻은 아닙니다. 세부 개선과 검증 범위는 [v0.3.1 릴리즈 노트](docs/releases/v0.3.1.ko.md)를 참고하세요.
 
 ## 라이선스 및 제3자 저작물
 

@@ -109,5 +109,5 @@ documents rather than by this Architecture Record.
 ## 5. References
 
 - `docs/design/interfaces/icd-sim-state-time-tf.md`
-- `docs/guides/isaac-sim.md`
+- [Current ARM Cell run instructions](../../../README.md#arm-cell-실행-방법)
 - `docs/reports/acceptance/milestone-1a.md`

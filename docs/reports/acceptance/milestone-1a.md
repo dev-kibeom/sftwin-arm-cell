@@ -49,9 +49,8 @@ CDS/FDS/ICD migration establishes canonical identifiers.
 
 ## 3. Procedure
 
-Historical procedure source:
+Historical procedure source included the former Isaac Sim guide, which has since been removed. Current startup instructions are in the [README](../../../README.md#arm-cell-실행-방법).
 
-- `docs/guides/isaac-sim.md`
 - component/package `colcon test`
 - `tests/integration/arm_cell --state-source=isaac`
 - operator read-only TF/stage inspection
@@ -164,5 +163,5 @@ change, including:
 ## 11. References
 
 - `docs/record/architecture-decision/model-state-and-time.md`
-- `docs/guides/isaac-sim.md`
+- [Current ARM Cell startup instructions](../../../README.md#arm-cell-실행-방법)
 - `docs/design/interfaces/icd-sim-state-time-tf.md`

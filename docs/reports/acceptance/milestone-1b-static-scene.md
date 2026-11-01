@@ -53,9 +53,8 @@ static-scene VRs for traceability only; it does not retroactively create validat
 
 ## 3. Procedure
 
-Historical procedure/evidence sources:
+Historical procedure/evidence sources included the former Isaac Sim guide, which has since been removed. Current startup instructions are in the [README](../../../README.md#arm-cell-실행-방법).
 
-- `docs/guides/isaac-sim.md`
 - `tests/integration/arm_cell/test_static_scene_integration.py`
 - `tests/integration/arm_cell/test_synthetic_rerouting.py`
 - `tests/integration/arm_cell/test_real_cell_planning_smoke.py`
@@ -148,7 +147,7 @@ Re-evaluate the relevant claims when dependency surfaces change, including:
 
 - `docs/record/architecture-decision/static-planning-scene.md`
 - `docs/design/components/motion/cds.md` (current consolidated design)
-- `docs/guides/isaac-sim.md`
+- [Current ARM Cell run instructions](../../../README.md#arm-cell-실행-방법)
 - `tests/integration/arm_cell/test_static_scene_integration.py`
 - `tests/integration/arm_cell/test_synthetic_rerouting.py`
 - `tests/integration/arm_cell/test_real_cell_planning_smoke.py`

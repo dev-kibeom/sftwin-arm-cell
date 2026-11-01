@@ -1,6 +1,6 @@
 # Narrowing Intermittent RGB-D Input Failures in the ARM Cell
 
-*Engineering Story; non-authoritative. Current acquisition and timeout semantics are owned by Vision FDS/ICD.*
+*Engineering Story; non-authoritative. This is a historical pre-v0.3.0 investigation. The intermittent RGB-D pair acquisition issue was resolved in v0.3.0; current acquisition and timeout semantics are owned by Vision FDS/ICD.*
 
 ## Problem
 
@@ -60,7 +60,7 @@ duration separately from detector/processing duration. Any timeout
 recalculation or synchronization-policy change should be grounded in those
 measurements.
 
-The active investigation is tracked in the [Known Issue](vision-rgbd-intermittent-acquisition-failure.md).
+At the time of this story, the active investigation was tracked in the [Known Issue](vision-rgbd-intermittent-acquisition-failure.md). That issue was subsequently resolved in v0.3.0.
 The separate resolved settling-policy defect is documented in
 [Debugging an RGB-D Timeout That Wasn't a Synchronization Problem](rgbd-timeout-wasnt-synchronization.md).
 

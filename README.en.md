@@ -4,7 +4,7 @@
 
 A simulator-backed ROS 2 workcell for developing and evaluating a Doosan M0609 robot with a Robotiq 2F-85 gripper. The project brings perception, motion planning, task orchestration, software safety supervision, material handoff, and an operator UI together around shared ROS interfaces.
 
-The current official release is v0.3.0. It makes the boundaries between mission flow, one pick-and-place task, and individual robot movements more explicit. It is an engineering and simulation project; it is not a validated production or safety-rated robot cell.
+The current official release is v0.3.1. It retains the v0.3.0 mission, PnP, and Motion responsibility boundaries while making host and Docker run paths more reproducible. This is an engineering and simulation project, not a validated production or safety-rated robot cell.
 
 ## Project Overview
 
@@ -107,36 +107,49 @@ git clone https://github.com/dev-kibeom/sftwin-arm-cell.git
 cd sftwin-arm-cell
 ```
 
-### Build the ROS workspace on a Humble host
+## Run ARM Cell
 
-With ROS 2 Humble and the package dependencies installed, build the supported workspace subset:
+Both run methods require ROS 2 Humble and Isaac Sim 5.1 on a Linux host. Start the Isaac Sim cell from the repository root; the script builds the scene and starts the Timeline and UI Hub.
+
+```bash
+source /opt/ros/humble/setup.bash
+./infra/isaac_sim/scripts/isaac_arm_cell.sh
+```
+
+If Isaac Sim is not installed at `$HOME/isaac_sim`, set its location:
+
+```bash
+source /opt/ros/humble/setup.bash
+ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
+```
+
+### Method 1: Build and run ROS 2 on the host
+
+In another terminal with ROS 2 Humble and workspace dependencies installed, build and launch from the repository root:
 
 ```bash
 source /opt/ros/humble/setup.bash
 cd ros2_ws
 colcon build --packages-up-to arm_cell_bringup --cmake-args -DBUILD_TESTING=ON
 source install/setup.bash
+ros2 launch arm_cell_bringup arm_cell.launch.py
 ```
 
-### Build with Docker
+Press `Ctrl+C` to stop the ROS bringup.
 
-The root Dockerfile builds the same ROS subset in a Humble container. It verifies image construction and compilation; it does not provide Isaac Sim or run ROS nodes.
+### Method 2: Run with Docker Compose
 
-Run the following from the repository root:
+Docker Compose v2 is required. No separate host ROS workspace build is needed; run from the repository root:
 
 ```bash
-docker build --progress=plain -t sftwin-arm-cell:humble .
+docker compose up --build
 ```
 
-See the [Docker build guide](docs/guides/docker-humble-build.md) for prerequisites and build output details.
-
-### Run with Isaac Sim
-
-Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS build alone does not start the simulator or establish a live runtime. Follow the [ARM Cell Isaac Sim guide](docs/guides/isaac-sim.md) for prerequisites, the supported launch profiles, and the Isaac Script Editor entrypoints (`1_before_play.py` → Play → `2_after_play.py`).
+Compose builds the ROS workspace image and starts `arm_cell_bringup` with the Python 3.10 sidecars. It uses Linux host networking, `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, and Fast DDS UDPv4 transport by default. Keep the ROS domain and RMW settings consistent between Isaac Sim and the container. Follow logs with `docker compose logs -f arm-cell`; stop with `Ctrl+C` in the Compose terminal or run `docker compose down`.
 
 ## Documentation
 
-- [v0.3.0 release notes](docs/releases/v0.3.0.en.md) / [한국어](docs/releases/v0.3.0.ko.md)
+- [v0.3.1 release notes](docs/releases/v0.3.1.en.md) / [한국어](docs/releases/v0.3.1.ko.md) · [Previous release: v0.3.0](docs/releases/v0.3.0.en.md)
 
 - [ARM Cell demo definition](docs/product/definition.md)
 - [Final live acceptance contract](docs/product/acceptance.md)
@@ -147,18 +160,10 @@ Live operation requires ROS 2 Humble and Isaac Sim 5.1 on the host. The ROS buil
 - [Engineering Stories](docs/record/engineering-story/)
 - [Technical records](docs/record/)
 - [Acceptance reports](docs/reports/acceptance/)
-- [Operator guides](docs/guides/)
 
 ## Current Status & Limitations
 
-The public source contains the Vision, Motion, Orchestration, Safety, Material Integration, VDA mock, and UI Hub implementations described above. Their presence in source does not mean the complete final demonstration has passed live acceptance.
-
-- **Build and Docker runtime plugin:** The v0.3.0 Docker image build succeeded and compiled the 12-package `arm_cell_bringup` build closure. PR #12 installed TRAC-IK 2.0.1 in `/opt/trac_ik` and verified MoveIt pluginlib loading, ARM Cell IK plugin initialization, and `solve_type=Distance`. The probe does not calculate an IK solution for a target pose, and it does not validate the full Motion Launch or Isaac Sim PnP. Earlier Public PR #2 and v0.2.0 export build results are separate historical baselines. The full-checkout ROS test failures remain as recorded in the release notes; successful compilation and plugin initialization do not resolve them.
-- **Planning evidence:** Historical Milestone 1A robot-only planning and Milestone 1B bounded static-scene acceptance are documented in the [acceptance reports](docs/reports/acceptance/). The reports preserve their evidence limits: exact historical commit/tag identifiers are unavailable, and Milestone 1B does not establish general reachability or full-cell collision coverage.
-- **Live runtime:** The v0.3.0 Docker verification did not include the full Motion Launch, target-pose IK solution, Isaac Sim connection or live run, or PnP. Separate historical Private live reports record robot-only planning and a limited static-scene check, but they do not establish full mission acceptance and have limited baseline-revision traceability. Use the Isaac guide for the supported profile in a configured environment.
-- **RGB-D known issue:** Vision can intermittently fail to acquire a usable RGB-D pair before detector processing starts. Distinct depth-reception gaps and missing synchronization callbacks are recorded; a common cause and resolution remain unconfirmed. See the [open acquisition issue record](docs/record/engineering-story/vision-rgbd-intermittent-acquisition-failure.md).
-- **E-Stop recovery evidence:** A separate Private-environment clean live record from 2026-10-30 shows reset, SafetyRecovery, and GO_HOME succeeding, after which the Mission resumed PnP. A later approach ended with `BACKEND_UNAVAILABLE`, so the complete Mission did not succeed. This is separate from the Public Docker verification, supports only that execution condition, and does not establish a general success rate.
-- **Simulation and safety boundary:** The VDA/external-state adapter is a mock subset; it is not full VDA 5050 or AMR navigation. Software Safety is not safety-rated E-stop/STO hardware and is not a substitute for it. Isaac Sim is the supported development environment; physical robot operation is not validated here.
+The host ROS 2 and Docker Compose run paths work, and ROS receives Isaac Sim RGB-D topics in the Docker setup. The intermittent RGB-D pair acquisition issue was resolved in v0.3.0. This does not claim full Mission acceptance or physical-robot operation. See the [v0.3.1 release notes](docs/releases/v0.3.1.en.md) for changes and verification scope.
 
 ## License & Third-Party Attribution
 

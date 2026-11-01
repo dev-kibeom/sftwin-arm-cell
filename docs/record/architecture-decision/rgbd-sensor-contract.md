@@ -110,4 +110,4 @@ TF contracts are owned by the current interface/design documents rather than thi
 ## 5. References
 
 - `docs/design/interfaces/icd-sim-rgbd.md`
-- `docs/guides/isaac-sim.md`
+- [Current ARM Cell run instructions](../../../README.md#arm-cell-실행-방법)

@@ -101,5 +101,5 @@ relevant design documents.
 ## 5. References
 
 - `docs/design/components/motion/cds.md`
-- `docs/guides/isaac-sim.md`
+- [Current ARM Cell run instructions](../../../README.md#arm-cell-실행-방법)
 - `docs/reports/acceptance/milestone-1b-static-scene.md`
