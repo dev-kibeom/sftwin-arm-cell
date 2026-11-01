@@ -8,6 +8,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>arm_cell_description</depend>
   <depend>moveit_ros_move_group</depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
   <depend>moveit_kinematics</depend>
   <depend>moveit_planners_ompl</depend>
   <depend>moveit_ros_visualization</depend>

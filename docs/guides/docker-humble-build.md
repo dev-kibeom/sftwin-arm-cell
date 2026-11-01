@@ -52,3 +52,13 @@ The Docker verification completed image construction and the 12-package `arm_cel
 - **Cannot connect to the Docker daemon / permission denied on `docker.sock`:** start the Docker service or Docker Desktop and ensure your user can access the daemon. On Linux, use an authorized Docker group membership or run the Docker command with `sudo`.
 - **BuildKit progress option is unsupported:** enable BuildKit in the Docker installation or update it to a version that supports `docker build --progress=plain`.
 - **`apt-get`, `rosdep update`, or dependency downloads fail:** check that the Docker daemon's build environment has network access to Ubuntu package repositories and ROS/rosdep sources, then retry the same build command.
+
+## Run the ROS profile beside Isaac Sim
+
+Start Isaac Sim first with `isaac_arm_cell`, then run this from the repository root:
+
+```bash
+docker compose up --build
+```
+
+Compose starts the production ROS launch and both Python 3.10 ROS sidecars. On Linux it uses host networking so DDS discovery shares the host network. Isaac's Python 3.11 process connects to the sidecars over `127.0.0.1:47631` and `127.0.0.1:47632`; the ROS sidecars listen while Isaac starts and accept the connection later. Keep `ROS_DOMAIN_ID` and `RMW_IMPLEMENTATION` consistent between host and container. Stop with `Ctrl+C` or `docker compose down`.

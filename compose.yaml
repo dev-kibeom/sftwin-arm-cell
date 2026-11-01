@@ -1,0 +1,19 @@
+services:
+  arm-cell:
+    image: sftwin-arm-cell:humble
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    init: true
+    environment:
+      ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
+      RMW_IMPLEMENTATION: "${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+      FASTDDS_BUILTIN_TRANSPORTS: "${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
+      SFTWIN_PROJECT_ROOT: /arm_cell
+      SFTWIN_MATERIAL_SIDECAR_PORT: "${SFTWIN_MATERIAL_SIDECAR_PORT:-47631}"
+      SFTWIN_HUB_SIDECAR_PORT: "${SFTWIN_HUB_SIDECAR_PORT:-47632}"
+    volumes:
+      - .:/arm_cell
+    command: ["/arm_cell/infra/docker/run-arm-cell.sh"]
+    restart: unless-stopped

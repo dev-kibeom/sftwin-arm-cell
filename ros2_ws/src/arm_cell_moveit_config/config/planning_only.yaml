@@ -1,4 +1,7 @@
 allow_trajectory_execution: false
+# The planning-only profile still initializes MoveIt's trajectory manager.
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+moveit_manage_controllers: false
 # No executable action is advertised by this profile.
 disable_capabilities: move_group/MoveGroupExecuteTrajectoryAction
 publish_robot_description: true

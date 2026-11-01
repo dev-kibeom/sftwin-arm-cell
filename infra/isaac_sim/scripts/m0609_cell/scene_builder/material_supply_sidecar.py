@@ -37,10 +37,12 @@ def completion_payload(result: dict[str, Any]) -> dict[str, Any]:
 class MaterialSupplySidecarClient:
     """Small nonblocking JSON-line IPC client owned by the Isaac process."""
 
-    def __init__(self, sock: socket.socket, process: Any = None):
+    def __init__(self, sock: socket.socket | None, process: Any = None, endpoint=None):
         self._socket = sock
-        self._socket.setblocking(False)
+        if self._socket is not None:
+            self._socket.setblocking(False)
         self._process = process
+        self._endpoint = endpoint
         self._receive_buffer = bytearray()
         self._outgoing: list[memoryview] = []
         self._available = True
@@ -60,6 +62,10 @@ class MaterialSupplySidecarClient:
             raise RuntimeError(
                 f"material supply ROS sidecar is missing: {child_script}"
             )
+        if not (root / "ros2_ws/install/setup.bash").is_file():
+            host = os.environ.get("SFTWIN_MATERIAL_SIDECAR_HOST", "127.0.0.1")
+            port = int(os.environ.get("SFTWIN_MATERIAL_SIDECAR_PORT", "47631"))
+            return cls(None, endpoint=(host, port))
         parent, child = socket.socketpair()
         env = os.environ.copy()
         # Do not leak Kit's Python 3.11 module search path into system Python.
@@ -130,6 +136,27 @@ class MaterialSupplySidecarClient:
     def available(self) -> bool:
         if self._closed or not self._available:
             return False
+        if self._socket is None and self._endpoint is not None:
+            candidate = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            candidate.settimeout(0.05)
+            try:
+                candidate.connect(self._endpoint)
+                candidate.settimeout(1.0)
+                ready = bytearray()
+                while b"\n" not in ready:
+                    chunk = candidate.recv(4096)
+                    if not chunk:
+                        raise ConnectionError("sidecar closed before readiness")
+                    ready.extend(chunk)
+                response = json.loads(bytes(ready).split(b"\n", 1)[0])
+                if response.get("op") != "ready" or not response.get("ready"):
+                    raise RuntimeError(response.get("error", "sidecar unavailable"))
+                self._socket = candidate
+                self._socket.setblocking(False)
+                self._endpoint = None
+            except (OSError, ValueError, RuntimeError):
+                candidate.close()
+                return False
         if self._process is not None and self._process.poll() is not None:
             self._available = False
         return self._available
@@ -193,10 +220,11 @@ class MaterialSupplySidecarClient:
         if self._closed:
             return
         self._closed = True
-        try:
-            self._socket.close()
-        except OSError:
-            pass
+        if self._socket is not None:
+            try:
+                self._socket.close()
+            except OSError:
+                pass
         process = self._process
         if process is not None and process.poll() is None:
             try:

@@ -142,6 +142,16 @@ docker build --progress=plain -t sftwin-arm-cell:humble .
 
 사전 조건과 빌드 결과 확인 방법은 [Docker 빌드 가이드](docs/guides/docker-humble-build.md)를 참고하세요.
 
+### Isaac Sim + Docker 런타임
+
+Isaac Sim에서 셀을 먼저 띄운 다음 저장소 루트에서 아래 명령으로 ROS bringup과 Python 3.10 sidecar를 시작할 수 있습니다. Isaac은 로컬 `ros2_ws/install`이 없어도 씬과 Hub를 시작하고, Docker sidecar가 준비되면 localhost TCP로 연결합니다.
+
+```bash
+docker compose up --build
+```
+
+이 구성은 Linux host networking과 기본 `ROS_DOMAIN_ID=0`을 사용합니다. Isaac Sim과 Docker의 ROS domain 및 RMW 설정은 같아야 합니다. 종료는 `Ctrl+C` 또는 `docker compose down`입니다.
+
 ### Isaac Sim에서 실행
 
 실시간 실행에는 호스트에 ROS 2 Humble과 Isaac Sim 5.1이 필요합니다. ROS 빌드만으로 simulator가 시작되거나 라이브 런타임이 검증되지는 않습니다. 사전 조건, 지원 launch profile, Isaac Script Editor entrypoint(`1_before_play.py` → Play → `2_after_play.py`)는 [ARM Cell Isaac Sim 가이드](docs/guides/isaac-sim.md)를 참고하세요.

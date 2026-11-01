@@ -92,11 +92,16 @@ class IsaacRosSidecar:
             self._socket = parent_socket
             self._reader = parent_socket.makefile("rb")
             self._writer = parent_socket.makefile("wb")
+            self._endpoint = None
         else:
             self._process = None
             self._socket = None
             self._reader = None
             self._writer = None
+            self._endpoint = (
+                os.environ.get("SFTWIN_HUB_SIDECAR_HOST", "127.0.0.1"),
+                int(os.environ.get("SFTWIN_HUB_SIDECAR_PORT", "47632")),
+            )
         self.scenario_ports = (
             scenario_ports or OwnerScenarioPorts.from_process_registry()
         )
@@ -154,6 +159,35 @@ class IsaacRosSidecar:
             raise RuntimeError("Hub ROS sidecar disconnected")
         return json.loads(line)
 
+    def _connect_tcp_sidecar(self) -> bool:
+        if self._endpoint is None:
+            return False
+        candidate = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        candidate.settimeout(0.1)
+        try:
+            candidate.connect(self._endpoint)
+            candidate.settimeout(5.0)
+            reader = candidate.makefile("rb")
+            writer = candidate.makefile("wb")
+            line = reader.readline()
+            ready = json.loads(line) if line else {}
+            if not ready.get("ready"):
+                raise RuntimeError(ready.get("error", "Hub ROS sidecar unavailable"))
+            # Buffered readline() needs a blocking socket. The connect itself
+            # is short, while the ROS RPC has the same bounded wait as the
+            # local socketpair path.
+            candidate.settimeout(10.0)
+            self._socket = candidate
+            self._reader = reader
+            self._writer = writer
+            self._rpc_broken = False
+            self._sidecar_available = True
+            _LOGGER.info("Connected to Docker Hub ROS sidecar at %s", self._endpoint)
+            return True
+        except (OSError, ValueError, RuntimeError):
+            candidate.close()
+            return False
+
     def _rpc(
         self, message: dict[str, Any], *, timeout: float | None = None
     ) -> dict[str, Any]:
@@ -176,8 +210,9 @@ class IsaacRosSidecar:
         if self._fault_rpc_in_flight:
             return
         if self._rpc_broken:
-            self._mark_sidecar_unavailable()
-            return
+            if not self._connect_tcp_sidecar():
+                self._mark_sidecar_unavailable()
+                return
         # The ROS sidecar collects frames continuously. Transfer the latest
         # presentation snapshot at a bounded rate instead of blocking Kit on
         # a socket round trip for every application update.
@@ -749,12 +784,29 @@ def _serve(fd: int) -> None:
 
             if rclpy.ok():
                 rclpy.shutdown()
-        writer.close()
+        try:
+            writer.close()
+        except OSError:
+            pass
         connection.close()
 
 
 def main() -> None:
-    _serve(int(sys.argv[1]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "--listen":
+        host = os.environ.get("SFTWIN_HUB_SIDECAR_HOST", "127.0.0.1")
+        port = int(os.environ.get("SFTWIN_HUB_SIDECAR_PORT", "47632"))
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                listener.bind((host, port))
+                listener.listen(1)
+                connection, _address = listener.accept()
+                try:
+                    _serve(connection.detach())
+                except Exception:
+                    _LOGGER.exception("Hub sidecar client session failed")
+    else:
+        _serve(int(sys.argv[1]))
 
 
 if __name__ == "__main__":

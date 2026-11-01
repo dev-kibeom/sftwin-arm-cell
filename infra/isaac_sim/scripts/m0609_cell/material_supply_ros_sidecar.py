@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import select
 import socket
 import sys
+import time
 from collections import deque
 
 
@@ -200,8 +202,25 @@ def _run(fd):
 
 if __name__ == "__main__":
     try:
-        _run(int(sys.argv[1]))
+        if len(sys.argv) >= 2 and sys.argv[1] == "--listen":
+            host = os.environ.get("SFTWIN_MATERIAL_SIDECAR_HOST", "127.0.0.1")
+            port = int(os.environ.get("SFTWIN_MATERIAL_SIDECAR_PORT", "47631"))
+            while True:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+                    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    listener.bind((host, port))
+                    listener.listen(1)
+                    connection, _address = listener.accept()
+                    try:
+                        _run(connection.detach())
+                    except Exception as error:
+                        print(f"material sidecar session failed: {error}", file=sys.stderr)
+                        time.sleep(0.5)
+        else:
+            _run(int(sys.argv[1]))
     except Exception as error:
+        if len(sys.argv) >= 2 and sys.argv[1] == "--listen":
+            raise
         fd = int(sys.argv[1])
         try:
             sock = socket.socket(fileno=fd)

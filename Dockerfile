@@ -33,6 +33,12 @@ RUN apt-get update \
     && apt-get autoremove --purge -y \
     && rm -rf /workspace/trac_ik_ws /tmp/trac_ik_log \
     && rm -rf /var/lib/apt/lists/*
+
+# MoveGroup initializes its trajectory manager even for planning-only sessions.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ros-humble-moveit-simple-controller-manager \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /workspace/ros2_ws
 RUN . /opt/ros/humble/setup.sh \
     && . /opt/trac_ik/setup.sh \
