@@ -76,21 +76,27 @@ class IsaacRosSidecar:
             f'exec "{python}" -m arm_cell_simulation_ui_hub.sidecar '
             '"$SFTWIN_HUB_SIDECAR_FD"'
         )
-        parent_socket, child_socket = socket.socketpair()
-        env["SFTWIN_HUB_SIDECAR_FD"] = str(child_socket.fileno())
-        self._process = subprocess.Popen(
-            ["/bin/bash", "-c", bootstrap],
-            env=env,
-            pass_fds=(child_socket.fileno(),),
-            close_fds=True,
-            stdout=subprocess.DEVNULL,
-            stderr=sys.stderr,
-        )
-        child_socket.close()
-        parent_socket.settimeout(10.0)
-        self._socket = parent_socket
-        self._reader = parent_socket.makefile("rb")
-        self._writer = parent_socket.makefile("wb")
+        if (root / "ros2_ws/install/setup.bash").is_file():
+            parent_socket, child_socket = socket.socketpair()
+            env["SFTWIN_HUB_SIDECAR_FD"] = str(child_socket.fileno())
+            self._process = subprocess.Popen(
+                ["/bin/bash", "-c", bootstrap],
+                env=env,
+                pass_fds=(child_socket.fileno(),),
+                close_fds=True,
+                stdout=subprocess.DEVNULL,
+                stderr=sys.stderr,
+            )
+            child_socket.close()
+            parent_socket.settimeout(10.0)
+            self._socket = parent_socket
+            self._reader = parent_socket.makefile("rb")
+            self._writer = parent_socket.makefile("wb")
+        else:
+            self._process = None
+            self._socket = None
+            self._reader = None
+            self._writer = None
         self.scenario_ports = (
             scenario_ports or OwnerScenarioPorts.from_process_registry()
         )
@@ -128,14 +134,19 @@ class IsaacRosSidecar:
         self._sidecar_available: bool | None = None
         self._sidecar_camera_frame_available: bool | None = None
         self._closed = False
-        self._rpc_broken = False
+        self._rpc_broken = self._process is None
         self._fault_rpc_in_flight = False
         self._last_poll_at = 0.0
         self._tf_buffer_clear_pending = False
-        ready = self._read_message()
-        if not ready.get("ready"):
-            self.close()
-            raise RuntimeError(ready.get("error", "Hub ROS sidecar failed to start"))
+        if self._process is None:
+            self._mark_sidecar_unavailable("ROS workspace is not built")
+        else:
+            ready = self._read_message()
+            if not ready.get("ready"):
+                self._mark_sidecar_unavailable(
+                    ready.get("error", "Hub ROS sidecar failed to start")
+                )
+                self.close()
 
     def _read_message(self) -> dict[str, Any]:
         line = self._reader.readline()
@@ -146,6 +157,8 @@ class IsaacRosSidecar:
     def _rpc(
         self, message: dict[str, Any], *, timeout: float | None = None
     ) -> dict[str, Any]:
+        if self._rpc_broken or self._socket is None:
+            raise RuntimeError("Hub ROS sidecar is unavailable")
         previous_timeout = self._socket.gettimeout() if timeout is not None else None
         if timeout is not None:
             self._socket.settimeout(timeout)
@@ -497,17 +510,22 @@ class IsaacRosSidecar:
         if self._closed:
             return
         self._closed = True
-        if not self._fault_rpc_in_flight and not self._rpc_broken:
+        if self._process is not None and not self._fault_rpc_in_flight and not self._rpc_broken:
             try:
                 self._rpc({"op": "shutdown"})
             except (OSError, RuntimeError, json.JSONDecodeError):
                 pass
         for stream in (self._reader, self._writer):
+            if stream is None:
+                continue
             try:
                 stream.close()
             except OSError:
                 pass
-        self._socket.close()
+        if self._socket is not None:
+            self._socket.close()
+        if self._process is None:
+            return
         try:
             self._process.wait(timeout=2.0)
         except subprocess.TimeoutExpired:

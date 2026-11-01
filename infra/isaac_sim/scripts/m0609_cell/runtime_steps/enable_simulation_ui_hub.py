@@ -18,6 +18,12 @@ def enable_simulation_ui_hub():
         raise RuntimeError(
             "Simulation UI Hub extension is missing: " + str(extension_path)
         )
+    ros_install = Path(root_value).expanduser().resolve() / "ros2_ws/install/setup.bash"
+    if not ros_install.is_file():
+        print(
+            "ROS workspace is not built; enabling the Simulation UI Hub with "
+            "ROS-backed controls unavailable."
+        )
 
     import omni.kit.app
 

@@ -306,6 +306,13 @@ def _start_material_supply_adapter(context):
     _close_material_supply_adapter()
 
     project_root = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
+    ros_install = project_root / "ros2_ws/install/setup.bash"
+    if not ros_install.is_file():
+        print(
+            "ROS workspace is not built; deferring the Isaac material supply "
+            "sidecar. The scene can still start and play."
+        )
+        return
     supply_config_path = project_root / "infra/isaac_sim/config/material_supply.yaml"
     if not supply_config_path.is_file():
         raise RuntimeError(

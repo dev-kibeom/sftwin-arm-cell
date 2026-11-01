@@ -1,0 +1,15 @@
+# Environment-specific spawn and orientation distributions for the Isaac
+# Material Supply Adapter. Coordinates are relative to the Tray center.
+material_supply:
+  material_type: RawPart
+  mass_kg: 0.4
+  spawn_height_above_shelf_m: 0.35
+  spawn_interval_s: 0.5
+  # Centered Tray support fraction used to sample initial Physics Drop poses.
+  receiving_region_fraction: 0.5
+  position_distribution: uniform
+  orientation_distribution: uniform_rpy
+  orientation_rpy_rad:
+    roll: [-3.141592653589793, 3.141592653589793]
+    pitch: [-3.141592653589793, 3.141592653589793]
+    yaw: [-3.141592653589793, 3.141592653589793]
