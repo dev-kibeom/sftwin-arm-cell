@@ -4,11 +4,11 @@
 
 Doosan M0609 로봇과 Robotiq 2F-85 그리퍼를 대상으로 하는 시뮬레이터 기반 ROS 2 로봇 셀 프로젝트입니다. 비전, 모션 계획, 작업 오케스트레이션, 소프트웨어 안전 감독, 자재 인계, 운영자 UI를 공통 ROS 인터페이스로 연결합니다.
 
-현재 공식 배포 버전은 v0.3.1입니다. v0.3.1은 v0.3.0의 미션·PnP·Motion 책임 구조를 유지하면서 호스트와 Docker에서 실행하는 경로를 정리하고 재현성을 높였습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
+현재 공식 배포 버전은 v0.3.2입니다. v0.3.2는 잔여 ROS 패키지를 제거하고 Motion 설정, 공통 로봇 자산과 소스 폴더 구조를 정리했습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
 
 ## 프로젝트 개요
 
-Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공하고 ROS 2는 컴포넌트 통신과 런타임 통합을 담당합니다. MoveIt 2가 로봇 모션을 계획하고 실행합니다. Vision은 관측 후보와 Geometry를 제공하고, Orchestration은 미션 흐름을 관리하며, Task Execution은 단일 PnP 작업을 수행합니다. Motion은 개별 움직임을 계획·실행하고, Safety는 소프트웨어 모션 권한을 판단하며, Integration은 자재 인계 완료와 준비 상태를 관리합니다.
+Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공하고 ROS 2는 컴포넌트 통신과 런타임 통합을 담당합니다. MoveIt 2가 로봇 모션을 계획하고 실행합니다. Vision은 관측 후보와 Geometry를 제공하고, Orchestration은 미션 흐름을 관리하며, Task Execution은 단일 PnP 작업을 수행합니다. Motion은 개별 움직임을 계획·실행하고, Safety는 소프트웨어 모션 권한을 판단하며, Gateway는 자재 인계 완료와 준비 상태를 관리합니다.
 
 현재 프로파일에는 시뮬레이션 자재 공급 경로와 Isaac Sim UI Hub가 포함되어 있습니다. 외부 AMR/VDA, PLC, 안전 하드웨어 상태는 mock 어댑터로 표현합니다. AMR 내비게이션과 안전 등급 E-stop/STO 하드웨어는 구현하지 않습니다.
 
@@ -49,7 +49,7 @@ flowchart LR
     end
     TaskExecution -->|PnP terminal 결과| Orchestration
     Motion --> Isaac
-    VDA[VDA / 외부 상태 mock] --> Material[Material Integration]
+    VDA[VDA / 외부 상태 mock] --> Material[Gateway]
     Hub[Isaac UI Hub] --> Material
     Material --> Orchestration
     Safety[Safety 감독기] -->|모션 capability| Motion
@@ -70,7 +70,7 @@ flowchart LR
 | **Task Execution** | 단일 PnP의 후보 순서·전환, PICK/PLACE 단계, 그리퍼·Holding 처리, 작업 내부 복구와 PnP 결과를 소유합니다. BT 논리 계층이며 별도 프로세스가 아닙니다. |
 | **Motion** | 선택된 후보 안에서 Pose/IK/경로 탐색과 movement 실행 가능성을 평가하고 MoveIt 2로 계획·실행합니다. 선택 후보를 제외한 요청별 Planning Occupancy와 개별 movement 결과를 소유하며 Safety capability를 준수합니다. |
 | **Safety** | 필수 입력의 최신성과 운영 조건을 평가해 소프트웨어 모션 capability를 단독으로 발행하고 Motion에 직접 정지 요청을 보냅니다. 안전 등급 하드웨어를 대체하지 않습니다. |
-| **Material Integration** | 운영자 자재 공급 요청을 외부 상태 mock에 전달하고 시뮬레이션 인계가 완료된 뒤에만 `MATERIAL_READY`를 발행합니다. 미션 시작 여부는 Orchestration이 결정합니다. |
+| **Gateway** | 운영자 자재 공급 요청을 외부 상태 mock에 전달하고 시뮬레이션 인계가 완료된 뒤에만 `MATERIAL_READY`를 발행합니다. 미션 시작 여부는 Orchestration이 결정합니다. |
 | **UI Hub** | Isaac Sim/Kit 확장으로 동작합니다. 카메라와 컴포넌트 상태를 보여 주고 소유 컴포넌트에 요청을 보냅니다. canonical 런타임 상태를 직접 변경하지 않습니다. |
 
 ### v0.3.0 아키텍처 발전
@@ -87,13 +87,13 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 ### 설계 의도
 
-- **상태 소유권:** 각 컴포넌트는 자기 도메인의 상태와 결정을 소유합니다. 예를 들어 Material Integration은 인계 완료와 `MATERIAL_READY`를 발행하고, Orchestration은 이를 받아 미션 시작을 판단합니다. Safety는 모션 capability와 정지 판단을 소유하며, UI Hub는 이를 표시하고 요청만 전달합니다.
+- **상태 소유권:** 각 컴포넌트는 자기 도메인의 상태와 결정을 소유합니다. 예를 들어 Gateway는 인계 완료와 `MATERIAL_READY`를 발행하고, Orchestration은 이를 받아 미션 시작을 판단합니다. Safety는 모션 capability와 정지 판단을 소유하며, UI Hub는 이를 표시하고 요청만 전달합니다.
 - **인터페이스 분리:** 컴포넌트 간 데이터와 동작은 공통 ROS 메시지·서비스·액션 계약으로 교환합니다. Motion은 backend-neutral 그리퍼 경계를 사용하고, simulator 세부사항이 미션 의미를 정의하지 않도록 합니다. 계약 문서는 인터페이스 문서에서 확인할 수 있습니다.
 - **시뮬레이터 의존성 격리:** Isaac에서 얻은 상태와 그리퍼 동작은 Integration/backend 경계에서 ROS 계약으로 변환합니다. 이를 통해 상위 컴포넌트의 역할을 시뮬레이터 내부 표현과 구분합니다. 이 구조는 하드웨어 어댑터가 이미 제공되거나 실물 운전이 검증됐다는 뜻은 아닙니다.
 
 ### 대표 시나리오
 
-운영자가 UI Hub에서 자재 공급을 요청하면 외부 상태 mock이 도착·도킹·하역을 시각화합니다. 하역과 인계가 완료된 뒤 Integration이 `MATERIAL_READY`를 발행하고, Orchestration은 Safety 허가와 현재 준비 상태를 확인해 미션을 시작합니다. Orchestration은 Vision 관측과 Recipe를 바탕으로 단일 PnP Action을 제출합니다. Task Execution은 PICK·Holding 확인·PLACE·release 확인을 진행하고, 각 움직임은 Motion에 위임합니다. Motion은 결과와 상태를 Task Execution에 돌려주며 Task Execution은 PnP 결과를 Orchestration에 반환합니다. Safety는 전체 과정에서 독립적으로 모션 capability와 정지 경로를 유지합니다.
+운영자가 UI Hub에서 자재 공급을 요청하면 외부 상태 mock이 도착·도킹·하역을 시각화합니다. 하역과 인계가 완료된 뒤 Gateway가 `MATERIAL_READY`를 발행하고, Orchestration은 Safety 허가와 현재 준비 상태를 확인해 미션을 시작합니다. Orchestration은 Vision 관측과 Recipe를 바탕으로 단일 PnP Action을 제출합니다. Task Execution은 PICK·Holding 확인·PLACE·release 확인을 진행하고, 각 움직임은 Motion에 위임합니다. Motion은 결과와 상태를 Task Execution에 돌려주며 Task Execution은 PnP 결과를 Orchestration에 반환합니다. Safety는 전체 과정에서 독립적으로 모션 capability와 정지 경로를 유지합니다.
 
 이 흐름은 현재 공개 구현의 역할과 연결을 요약합니다. 전체 시나리오가 실시간 Isaac Sim 환경에서 최종 acceptance를 통과했다는 의미는 아닙니다.
 
@@ -106,7 +106,7 @@ Geometry-first Vision, Vision/Motion Occupancy 소유권, 재사용 Motion BT, O
 - **ROS 2 Humble** — 컴포넌트 통신, 공통 메시지·액션·서비스, workspace 빌드
 - **Isaac Sim 5.1** — M0609/2F-85 시뮬레이션 셀, 로봇 상태, 시뮬레이션 시간, RGB-D 입력
 - **MoveIt 2** — 로봇 기구학, planning scene 연동, 모션 계획과 실행
-- **C++ / `rclcpp`** — Vision, Motion, Orchestration, Safety, Integration 등 ROS 런타임 컴포넌트
+- **C++ / `rclcpp`** — Vision, Motion, Orchestration, Safety, Gateway 등 ROS 런타임 컴포넌트
 - **Python** — Isaac Sim 장면·런타임 entrypoint, 검증 도구, UI Hub 확장
 - **Xacro, TF2, OpenCV, OMPL** — 로봇 설명, 좌표 변환, 영상 처리, 모션 계획 지원
 
@@ -198,7 +198,7 @@ ARM_CELL_LOG_LEVEL=debug ARM_CELL_DIAGNOSTICS=none docker compose up --build
 
 ## 문서 탐색
 
-- [v0.3.1 릴리즈 노트](docs/releases/v0.3.1.ko.md) / [English](docs/releases/v0.3.1.en.md) · [이전 버전 v0.3.0](docs/releases/v0.3.0.ko.md)
+- [v0.3.2 릴리즈 노트](docs/releases/v0.3.2.ko.md) / [English](docs/releases/v0.3.2.en.md) · [이전 버전 v0.3.1](docs/releases/v0.3.1.ko.md)
 
 - [ARM Cell 데모 정의](docs/product/definition.md)
 - [최종 라이브 인수 계약](docs/product/acceptance.md)
@@ -212,7 +212,7 @@ ARM_CELL_LOG_LEVEL=debug ARM_CELL_DIAGNOSTICS=none docker compose up --build
 
 ## 구현 상태 및 한계
 
-호스트 ROS 2 실행과 Docker Compose 실행이 정상 동작하고, Docker 환경에서 Isaac Sim의 RGB-D 토픽이 ROS에 전달되는 것을 확인했습니다. 전체 Mission acceptance나 실물 로봇 운전까지 검증됐다는 뜻은 아닙니다. 세부 개선과 검증 범위는 [v0.3.1 릴리즈 노트](docs/releases/v0.3.1.ko.md)를 참고하세요.
+호스트 ROS 2 실행과 Docker Compose 실행이 정상 동작하고, Docker 환경에서 Isaac Sim의 RGB-D 토픽이 ROS에 전달되는 것을 확인했습니다. 전체 Mission acceptance나 실물 로봇 운전까지 검증됐다는 뜻은 아닙니다. 자산·소스 구조 정리 후 live test 통과를 확인했습니다. 전체 테스트 모음에는 알려진 실패가 남아 있습니다. 세부 개선과 검증 범위는 [v0.3.2 릴리즈 노트](docs/releases/v0.3.2.ko.md)를 참고하세요.
 
 ## 라이선스 및 제3자 저작물
 
