@@ -78,7 +78,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_cycle_coordinator tests/test_cycle_coordinator.cpp)
   target_include_directories(test_cycle_coordinator PRIVATE include)
   target_compile_definitions(test_cycle_coordinator PRIVATE
-    ARM_CELL_TEST_RECIPE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../arm_cell_bringup/config/recipes")
+    ARM_CELL_TEST_RECIPE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../bringup/config/recipes")
   target_link_libraries(test_cycle_coordinator arm_cell_orchestration_core)
   ament_target_dependencies(
     test_cycle_coordinator arm_cell_interfaces builtin_interfaces)

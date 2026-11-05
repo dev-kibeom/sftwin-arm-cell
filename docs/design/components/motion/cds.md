@@ -197,4 +197,4 @@ Motion은 Task Execution이 MotionPort로 제출한 교란 요청의 후보 우�
 - Motion이 쓰는 정적 환경 의미: [Simulation Environment Semantics](../simulation-environment-semantics.md)
 - 관측·진단: [Observability Records ICD](../../interfaces/icd-observability-records.md)
 - 독립 계산 절차: [Motion PICK 후보 생성·탐색](../../algorithms/motion-pick-candidate-search.md), [Motion PLACE 자세 후보 탐색](../../algorithms/motion-place-pose-search.md), [RawPart L자 기반 후보 생성·신뢰도 판정](../../algorithms/cuboid-top-face-grasp-selection.md) (Vision 소유 후보 Geometry 절차)
-- 실행 가능한 인터페이스 SSOT: [`arm_cell_interfaces`](../../../../ros2_ws/src/interfaces/arm_cell_interfaces)
+- 실행 가능한 인터페이스 SSOT: [`arm_cell_interfaces`](../../../../ros2_ws/src/interfaces)

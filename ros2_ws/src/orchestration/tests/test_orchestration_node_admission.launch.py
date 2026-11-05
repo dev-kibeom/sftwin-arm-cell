@@ -29,7 +29,7 @@ from std_srvs.srv import Trigger
 def generate_test_description():
     recipe_directory = str(
         Path(__file__).resolve().parents[1].parent
-        / "arm_cell_bringup"
+        / "bringup"
         / "config"
         / "recipes"
     )

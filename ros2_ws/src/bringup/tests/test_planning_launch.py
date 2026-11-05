@@ -115,7 +115,7 @@ def test_planning_launches_filter_moveit_raw_detail_loggers(monkeypatch):
     package_root = Path(__file__).parents[1]
     package_roots = {
         "arm_cell_bringup": package_root,
-        "arm_cell_motion": package_root.parent / "arm_cell_motion",
+        "arm_cell_motion": package_root.parent / "motion",
     }
     monkeypatch.setattr(
         "ament_index_python.packages.get_package_share_directory",

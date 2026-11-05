@@ -937,7 +937,7 @@ def test_static_scene_profile_excludes_support_overlaps():
     assert loaded.MINIMUM_STATIC_OBJECT_IDS == ("pedestal", "cnc_front_top")
     scene = (
         Path(__file__).parents[2]
-        / "arm_cell_motion/config/moveit/m0609_pnp_static_scene.json"
+        / "motion/config/moveit/m0609_pnp_static_scene.json"
     )
     object_ids = {obj["id"] for obj in json.loads(scene.read_text())["objects"]}
     assert set(loaded.MINIMUM_STATIC_OBJECT_IDS).issubset(object_ids)

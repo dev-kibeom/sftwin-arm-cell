@@ -15,5 +15,5 @@
 - **Rationale:** Preserve Safety ownership while making the accepted recovery
   arbitration observable and deterministic.
 - **Affected Work Unit / PR:** WU-10; PR #42 handoff corrections
-- **Normative owner(s):** [Safety Stop/Recovery FDS](../../design/components/safety/fds-stop-recovery.md); [Safety ↔ Orchestration ICD](../../design/interfaces/icd-safety-orchestration.md); shared [`SafetyState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/SafetyState.msg); [Safety ↔ Motion ICD](../../design/interfaces/icd-safety-motion.md) for the Safety-owned stop-initiation/severity boundary
+- **Normative owner(s):** [Safety Stop/Recovery FDS](../../design/components/safety/fds-stop-recovery.md); [Safety ↔ Orchestration ICD](../../design/interfaces/icd-safety-orchestration.md); shared [`SafetyState.msg`](../../../ros2_ws/src/interfaces/msg/SafetyState.msg); [Safety ↔ Motion ICD](../../design/interfaces/icd-safety-motion.md) for the Safety-owned stop-initiation/severity boundary
 - **Status:** Accepted

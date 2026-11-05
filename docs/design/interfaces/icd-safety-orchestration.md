@@ -13,7 +13,7 @@
 
 ## 2. SafetyState 전송 계약
 
-실행 가능한 인터페이스는 [`SafetyState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/SafetyState.msg)로 구현되며, 공유 도메인은 [`MotionCapability.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/MotionCapability.msg)와 [`SafetyCauseSet.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/SafetyCauseSet.msg)이다.
+실행 가능한 인터페이스는 [`SafetyState.msg`](../../../ros2_ws/src/interfaces/msg/SafetyState.msg)로 구현되며, 공유 도메인은 [`MotionCapability.msg`](../../../ros2_ws/src/interfaces/msg/MotionCapability.msg)와 [`SafetyCauseSet.msg`](../../../ros2_ws/src/interfaces/msg/SafetyCauseSet.msg)이다.
 
 | 필드 | 타입 | 의미 |
 |---|---|---|

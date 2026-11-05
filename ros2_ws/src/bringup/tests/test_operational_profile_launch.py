@@ -129,7 +129,7 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     } == expected_motion
     kinematics = yaml.safe_load(
         (
-            PACKAGE_ROOT.parent / "arm_cell_motion/config/moveit/kinematics.yaml"
+            PACKAGE_ROOT.parent / "motion/config/moveit/kinematics.yaml"
         ).read_text()
     )
     assert (
@@ -300,7 +300,7 @@ def test_diagnostics_selection_never_changes_ros_logger_levels():
 def test_moveit_raw_logs_are_filtered_at_their_source_logger(monkeypatch):
     package_roots = {
         "arm_cell_bringup": PACKAGE_ROOT,
-        "arm_cell_motion": PACKAGE_ROOT.parent / "arm_cell_motion",
+        "arm_cell_motion": PACKAGE_ROOT.parent / "motion",
     }
     monkeypatch.setattr(
         "ament_index_python.packages.get_package_share_directory",
@@ -615,7 +615,7 @@ def test_operational_profile_selects_static_collision_geometry_for_isaac_motion(
 
     scene_path = (
         Path(__file__).resolve().parents[2]
-        / "arm_cell_motion"
+        / "motion"
         / "config/moveit"
         / "m0609_static_scene.json"
     )
@@ -772,7 +772,7 @@ def test_motion_backend_receives_canonical_arm_kinematics_parameters():
     (parameters,) = evaluate_parameters(LaunchContext(), motion._Node__parameters)
     kinematics = yaml.safe_load(
         (
-            PACKAGE_ROOT.parent / "arm_cell_motion/config/moveit/kinematics.yaml"
+            PACKAGE_ROOT.parent / "motion/config/moveit/kinematics.yaml"
         ).read_text()
     )
     for key, value in kinematics["arm"].items():

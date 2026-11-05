@@ -97,7 +97,7 @@ def test_validation_profile_selects_time_parameterization_and_acceleration_limit
     context.launch_configurations["log_level"] = "info"
     context.launch_configurations["planning_profile"] = str(
         Path(__file__).resolve().parents[2]
-        / "arm_cell_bringup/config/pnp_validation_profile.yaml"
+        / "bringup/config/pnp_validation_profile.yaml"
     )
     move_group = next(
         entity
