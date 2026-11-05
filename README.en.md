@@ -4,11 +4,11 @@
 
 A simulator-backed ROS 2 workcell for developing and evaluating a Doosan M0609 robot with a Robotiq 2F-85 gripper. The project brings perception, motion planning, task orchestration, software safety supervision, material handoff, and an operator UI together around shared ROS interfaces.
 
-The current official release is v0.3.1. It retains the v0.3.0 mission, PnP, and Motion responsibility boundaries while making host and Docker run paths more reproducible. This is an engineering and simulation project, not a validated production or safety-rated robot cell.
+The current official release is v0.3.2. It removes leftover ROS packages and consolidates Motion configuration, shared robot assets, and source directory layout. This is an engineering and simulation project, not a validated production or safety-rated robot cell.
 
 ## Project Overview
 
-The ARM Cell uses Isaac Sim as its simulated robot and sensor environment and ROS 2 as the integration and runtime layer. MoveIt plans and executes robot motion. Vision reports observed candidates and geometry, Orchestration manages mission flow, Task Execution runs one PnP task, Motion plans and executes individual movements, Safety controls software motion capability, and Integration owns material-transfer readiness.
+The ARM Cell uses Isaac Sim as its simulated robot and sensor environment and ROS 2 as the integration and runtime layer. MoveIt plans and executes robot motion. Vision reports observed candidates and geometry, Orchestration manages mission flow, Task Execution runs one PnP task, Motion plans and executes individual movements, Safety controls software motion capability, and Gateway owns material-transfer readiness.
 
 The current profile includes a simulated material-delivery path and an Isaac Sim UI Hub for operator observation and requests. External AMR/VDA, PLC, and safety-hardware state are represented by a mock adapter. The project does not implement AMR navigation or safety-rated E-stop/STO hardware.
 
@@ -49,7 +49,7 @@ flowchart LR
     end
     TaskExecution -->|PnP terminal result| Orchestration
     Motion --> Isaac
-    VDA[VDA / external-state mock] --> Material[Material Integration]
+    VDA[VDA / external-state mock] --> Material[Gateway]
     Hub[Isaac UI Hub] --> Material
     Material --> Orchestration
     Safety[Safety supervisor] -->|motion capability| Motion
@@ -70,7 +70,7 @@ Task Execution BT and Motion leaf Actions are the logical execution layers for o
 | **Task Execution** | Owns one PnP task's candidate order/transitions, PICK/PLACE phases, gripper and holding handling, internal recovery, and PnP result. It is a BT responsibility layer, not a separate process. |
 | **Motion** | Searches poses, IK, and paths within the selected candidate and uses MoveIt 2 to plan and execute individual movement requests. It owns per-request planning occupancy, excluding the selected candidate, and movement results; it consumes Safety's motion capability. |
 | **Safety** | Evaluates required input freshness and operational conditions, publishes the sole software motion capability, and sends stop requests directly to Motion. It does not replace safety-rated hardware. |
-| **Material Integration** | Connects operator supply requests to the external-state mock and publishes `MATERIAL_READY` only after the simulated handoff completes. Orchestration, not Integration, admits the mission. |
+| **Gateway** | Connects operator supply requests to the external-state mock and publishes `MATERIAL_READY` only after the simulated handoff completes. Orchestration admits the mission. |
 | **UI Hub** | Runs as an Isaac Sim/Kit extension. It presents camera and component state and sends requests to their owning components; it does not author canonical runtime state. |
 
 ### Architecture evolution in v0.3.0
@@ -149,7 +149,7 @@ Compose builds the ROS workspace image and starts `arm_cell_bringup` with the Py
 
 ## Documentation
 
-- [v0.3.1 release notes](docs/releases/v0.3.1.en.md) / [한국어](docs/releases/v0.3.1.ko.md) · [Previous release: v0.3.0](docs/releases/v0.3.0.en.md)
+- [v0.3.2 release notes](docs/releases/v0.3.2.en.md) / [한국어](docs/releases/v0.3.2.ko.md) · [Previous release: v0.3.1](docs/releases/v0.3.1.en.md)
 
 - [ARM Cell demo definition](docs/product/definition.md)
 - [Final live acceptance contract](docs/product/acceptance.md)
@@ -163,7 +163,7 @@ Compose builds the ROS workspace image and starts `arm_cell_bringup` with the Py
 
 ## Current Status & Limitations
 
-The host ROS 2 and Docker Compose run paths work, and ROS receives Isaac Sim RGB-D topics in the Docker setup. The intermittent RGB-D pair acquisition issue was resolved in v0.3.0. This does not claim full Mission acceptance or physical-robot operation. See the [v0.3.1 release notes](docs/releases/v0.3.1.en.md) for changes and verification scope.
+The host ROS 2 and Docker Compose run paths work, and ROS receives Isaac Sim RGB-D topics in the Docker setup. The intermittent RGB-D pair acquisition issue was resolved in v0.3.0. This does not claim full Mission acceptance or physical-robot operation. Live tests passed after the asset and source layout cleanup; the full test suite still has known failures. See the [v0.3.2 release notes](docs/releases/v0.3.2.en.md) for changes and verification scope.
 
 ## License & Third-Party Attribution
 

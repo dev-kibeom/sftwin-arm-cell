@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /workspace
 COPY ros2_ws/src/ ros2_ws/src/
+COPY assets/ assets/
 
 # ROS 2 Humble has no binary TRAC-IK plugin package in the configured apt repositories.
 # Build the upstream MoveIt plugin into a separate overlay so ARM Cell's 12-package build stays isolated.

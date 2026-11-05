@@ -43,7 +43,7 @@ classDiagram
 
 Motion runtime은 Task Execution이 쓰는 단일 `GripperPort` 및 concrete Isaac adapter/transport를 소유·제공한다. Task Execution은 기존 Gripper command/holding choreography를 소유하며 같은 instance를 주입받는다. 물리 force/current/effort, 다중 관절 매핑 및 Isaac attachment는 adapter 책임이며 Motion이 직접 attach/detach하지 않는다. 공유 lifecycle은 [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)와 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)를 따른다.
 
-Motion의 작업 환경은 고정 equipment/Tray/Rail과 이동 RawPart를 다루는 정적 material-handling domain이다. Dynamic obstacle tracking과 Scene 변화에 대한 일반 목적 continuous replanning은 범위 밖이며 가벼운 자재 간 접촉은 Safety·고정 설비 충돌 허용을 뜻하지 않는다. 정적 Geometry는 canonical environment에서 선택적으로 투영하고, generated artifact는 authority가 아니다. Loader는 선택 정적 객체만 변경하고 candidate occupancy·attached object 등 무관한 Planning Scene 상태를 보존하며 load/readback 오류를 드러낸다. `arm_cell_moveit_config`가 planning configuration을, robot model이 물리 joint/velocity limit를 소유한다. Motion은 joint continuity·충돌·configured velocity/acceleration 조건을 검증하며 planning-only 결과를 실행·Safety acceptance로 주장하지 않는다.
+Motion의 작업 환경은 고정 equipment/Tray/Rail과 이동 RawPart를 다루는 정적 material-handling domain이다. Dynamic obstacle tracking과 Scene 변화에 대한 일반 목적 continuous replanning은 범위 밖이며 가벼운 자재 간 접촉은 Safety·고정 설비 충돌 허용을 뜻하지 않는다. 정적 Geometry는 canonical environment에서 선택적으로 투영하고, generated artifact는 authority가 아니다. Loader는 선택 정적 객체만 변경하고 candidate occupancy·attached object 등 무관한 Planning Scene 상태를 보존하며 load/readback 오류를 드러낸다. `arm_cell_motion`이 planning configuration을, robot model이 물리 joint/velocity limit를 소유한다. Motion은 joint continuity·충돌·configured velocity/acceleration 조건을 검증하며 planning-only 결과를 실행·Safety acceptance로 주장하지 않는다.
 
 Vision-derived PICK에서 Motion은 Task Execution이 선택한 Candidate의 운동학적 실현과 단일 movement를 소유한다. Target별 관측 Occupancy 계산은 [Motion PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 공유 입력·결과 의미는 [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)가 정의한다. 직접 지정 PICK의 기존 호환 점유 입력은 [Orchestration–Motion ICD](../../interfaces/icd-orchestration-motion.md)를 따른다. PICK/PLACE 전략 선택과 Candidate 순서는 Task Execution이 소유한다.
 
@@ -197,4 +197,4 @@ Motion은 Task Execution이 MotionPort로 제출한 교란 요청의 후보 우�
 - Motion이 쓰는 정적 환경 의미: [Simulation Environment Semantics](../simulation-environment-semantics.md)
 - 관측·진단: [Observability Records ICD](../../interfaces/icd-observability-records.md)
 - 독립 계산 절차: [Motion PICK 후보 생성·탐색](../../algorithms/motion-pick-candidate-search.md), [Motion PLACE 자세 후보 탐색](../../algorithms/motion-place-pose-search.md), [RawPart L자 기반 후보 생성·신뢰도 판정](../../algorithms/cuboid-top-face-grasp-selection.md) (Vision 소유 후보 Geometry 절차)
-- 실행 가능한 인터페이스 SSOT: [`arm_cell_interfaces`](../../../../ros2_ws/src/interfaces/arm_cell_interfaces)
+- 실행 가능한 인터페이스 SSOT: [`arm_cell_interfaces`](../../../../ros2_ws/src/interfaces)

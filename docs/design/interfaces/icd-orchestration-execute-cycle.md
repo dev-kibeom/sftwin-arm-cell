@@ -15,11 +15,11 @@ ExecuteCycle은 Orchestration이 발행하는 내부 Mission 실행 경계다. �
 
 ## 2. Feedback
 
-실행 인터페이스는 [`ExecuteCycle.action`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/action/ExecuteCycle.action)이다. `MissionPhase.value`는 `MISSION_PHASE_ENSURING_HOME`, `MISSION_PHASE_DETECTING_TARGET`, `MISSION_PHASE_PICKING`, `MISSION_PHASE_PLACING`, `MISSION_PHASE_RETURNING_HOME`, `MISSION_PHASE_WAITING_RECOVERY`, `MISSION_PHASE_RETRACTING`, `MISSION_PHASE_FINISHED`를 사용하며, `MISSION_PHASE_UNKNOWN`은 미설정 값이다.
+실행 인터페이스는 [`ExecuteCycle.action`](../../../ros2_ws/src/interfaces/action/ExecuteCycle.action)이다. `MissionPhase.value`는 `MISSION_PHASE_ENSURING_HOME`, `MISSION_PHASE_DETECTING_TARGET`, `MISSION_PHASE_PICKING`, `MISSION_PHASE_PLACING`, `MISSION_PHASE_RETURNING_HOME`, `MISSION_PHASE_WAITING_RECOVERY`, `MISSION_PHASE_RETRACTING`, `MISSION_PHASE_FINISHED`를 사용하며, `MISSION_PHASE_UNKNOWN`은 미설정 값이다.
 
 이 Phase는 공개 Mission 진행 상황만 전달하며 BehaviorTree 구현 세부사항을 노출하지 않는다. 내부 BehaviorTree.CPP 트리 및 Node Status는 ROS Action 계약의 일부가 아니다. Goal·Feedback·Result·식별자·취소 의미는 이 문서의 정의를 유지한다.
 
-Action Feedback은 Mission 진행과 수량·Retry·중단 사실을 관측하기 위한 공유 Snapshot이다. 실행 가능한 Field Type은 [`ExecuteCycle.action`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/action/ExecuteCycle.action)이 소유하며, 이 ICD는 소비자가 동일하게 해석해야 하는 의미를 정의한다.
+Action Feedback은 Mission 진행과 수량·Retry·중단 사실을 관측하기 위한 공유 Snapshot이다. 실행 가능한 Field Type은 [`ExecuteCycle.action`](../../../ros2_ws/src/interfaces/action/ExecuteCycle.action)이 소유하며, 이 ICD는 소비자가 동일하게 해석해야 하는 의미를 정의한다.
 
 | 필드 | 의미 |
 | --- | --- |

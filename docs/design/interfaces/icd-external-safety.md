@@ -23,19 +23,19 @@ AMR/PackML 소비자는 현재 ROS Clock Domain에서 Source Timestamp의 타당
 
 ## 3. AMR Docking 상태
 
-[`AMRDockingState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/AMRDockingState.msg)의 필드는 `header`, `amr_id`, `current_node_id`, `docking_state`, `driving`, `valid`다.
+[`AMRDockingState.msg`](../../../ros2_ws/src/interfaces/msg/AMRDockingState.msg)의 필드는 `header`, `amr_id`, `current_node_id`, `docking_state`, `driving`, `valid`다.
 
 `docking_state`는 `AMR_DOCKING_UNKNOWN`, `AMR_DOCKING_DOCKED`, `AMR_DOCKING_UNDOCKED`만 사용한다. 이는 ARM Cell이 지원하는 Docking Subset이며 전체 AMR/VDA 상태 모델은 아니다. Orchestration은 현재 자재 Delivery나 작업 진행에 필요한 경우에만 Docking/Driving을 평가한다. Unknown/Invalid 근거는 이에 의존하는 작업만 차단하며 Docking만으로 Material Readiness를 확정하지 않는다. 이 Simulation Demo에서 확인된 조기 Undocking은 Safety Interlock이 아니며 `UNDOCKED`/`driving` 값으로 Safety 정지 강도를 선택하지 않는다. 데모는 AMR–Robot 충돌 위험을 범위에서 제외한다. 실장비에는 물리적 위험 평가가 필요하다.
 
 ## 4. PackML 상태
 
-[`PackMLState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/PackMLState.msg)의 필드는 `header`, `state`, `valid`다.
+[`PackMLState.msg`](../../../ros2_ws/src/interfaces/msg/PackMLState.msg)의 필드는 `header`, `state`, `valid`다.
 
 지원하는 정규 Subset은 `PACKML_STATE_UNKNOWN`, `PACKML_STATE_IDLE`, `PACKML_STATE_STARTING`, `PACKML_STATE_EXECUTE`, `PACKML_STATE_COMPLETE`, `PACKML_STATE_ABORTED`로 한정한다. 이는 전체 PackML State Machine 지원을 뜻하지 않는다. PackML은 외부 CNC/공정 상태이며 ARM Mission 상태가 아니다. Orchestration은 현재 Workflow가 해당 상태에 의존할 때에만 Unknown/Invalid 또는 작업과 맞지 않는 상태를 Not Ready로 취급한다. 일반 PackML 상태는 Safety Cause를 생성하지 않으며 `EXECUTE`만으로 로봇 움직임을 전역 금지하지 않는다. `ABORTED` 또한 Motion 실행 여부와 무관하게 Safety Cause·StopMotion·Latch·Reset을 일으키지 않는다. Orchestration은 현재 Workflow가 해당 CNC 상태에 의존할 때에만 대응하고, 일반 상태나 Timestamp 품질을 전역 PnP Admission Gate로 사용하지 않는다. Final Demo는 정규 CNC 상태를 읽기 전용 Isaac Indicator 투영으로 관측하며 CNC·공유 구역 점유 Interlock을 요구하지 않는다.
 
 ## 5. Safety Hardware 상태
 
-[`SafetyHardwareState.msg`](../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/SafetyHardwareState.msg)의 필드는 `header`, `e_stop_active`, `sto_active`, `valid`다.
+[`SafetyHardwareState.msg`](../../../ros2_ws/src/interfaces/msg/SafetyHardwareState.msg)의 필드는 `header`, `e_stop_active`, `sto_active`, `valid`다.
 
 이 메시지는 현재 승인된 Supervisory Input만 전달하며, Safety는 Fail-closed Hardware-State Supervision을 위해 이를 소비한다. 무효·Unknown·Unavailable인 Hardware State 근거를 E-Stop/STO 해제 상태로 해석해서는 안 된다. 승인되지 않은 Protective-Stop Domain은 포함하지 않으며 별도의 Safety-rated E-Stop/STO 경로를 대체하지 않는다.
 

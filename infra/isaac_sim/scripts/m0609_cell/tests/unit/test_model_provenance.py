@@ -176,3 +176,19 @@ def test_scene_builder_refuses_stale_robot_artifact_before_referencing_it(
     with pytest.raises(ValueError, match="stale robot artifact"):
         robot_station.build_robot_station(context)
     assert references == []
+
+
+def test_repository_robot_artifact_matches_current_canonical_assets():
+    """Asset relocation must keep the shipped Isaac artifact and manifest current."""
+    import shutil
+
+    if shutil.which("xacro") is None:
+        pytest.skip("ROS xacro is required to verify the shipped robot artifact")
+    assets = Path(__file__).resolve().parents[4] / "assets"
+    usd = assets / "usd/m0609_robotiq_2f85_generated.usd"
+    verify_current_artifact(
+        assets / "urdf/assemblies/m0609_robotiq_2f85.xacro",
+        assets / "urdf/generated/m0609_robotiq_2f85.urdf",
+        usd,
+        usd.with_suffix(".provenance.json"),
+    )

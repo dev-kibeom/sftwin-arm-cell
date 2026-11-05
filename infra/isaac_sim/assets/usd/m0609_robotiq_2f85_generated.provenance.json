@@ -1,6 +1,6 @@
 {
-  "canonical_xacro_output_sha256": "d01aa4e5896eee9a2400f80c602244121c764afeed1bb7dbf2c70d887c944611",
-  "generated_urdf_sha256": "d01aa4e5896eee9a2400f80c602244121c764afeed1bb7dbf2c70d887c944611",
+  "canonical_xacro_output_sha256": "70f41aa4bfb07fa55bd8095a898c19dfa1a71aef18053dafdc2129c62d127180",
+  "generated_urdf_sha256": "70f41aa4bfb07fa55bd8095a898c19dfa1a71aef18053dafdc2129c62d127180",
   "schema_version": 2,
   "usd_sha256": "2445df306a306937319c6b307692cb05cf9bcbb3e8b3254445f945e58018aefa"
 }

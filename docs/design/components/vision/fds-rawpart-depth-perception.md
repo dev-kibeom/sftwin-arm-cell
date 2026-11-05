@@ -169,7 +169,7 @@ Vision은 관측 시각에 유효한 TF를 사용해 수락된 Optical-frame Obj
 | Valid Position·Stable Square Edge Angle Class | `SUCCESS`, `orientation_symmetry_order=4` |
 | Valid Position·Yaw Unobservable/Unstable | `SUCCESS`, `orientation_symmetry_order=0` |
 
-Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md), 실행 가능한 [DetectTarget Result Code IDL](../../../../ros2_ws/src/interfaces/arm_cell_interfaces/msg/DetectTargetResultCode.msg)을 따른다. 일시적인 Observation Validity 거부는 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET=7`, 유효한 관측에서 해결되지 않은 필수 Geometry는 기존 `DETECT_RESULT_GEOMETRY_ERROR`를 사용한다. 이 RawPart FDS는 현행 Result Code를 소비하며 코드를 추가·변경하지 않는다.
+Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md), 실행 가능한 [DetectTarget Result Code IDL](../../../../ros2_ws/src/interfaces/msg/DetectTargetResultCode.msg)을 따른다. 일시적인 Observation Validity 거부는 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET=7`, 유효한 관측에서 해결되지 않은 필수 Geometry는 기존 `DETECT_RESULT_GEOMETRY_ERROR`를 사용한다. 이 RawPart FDS는 현행 Result Code를 소비하며 코드를 추가·변경하지 않는다.
 
 ## 4. 책임과 교체 가능 경계
 
