@@ -14,8 +14,8 @@ explicitly documented.
 - Upstream: `https://github.com/robotiq/ros`
 - License: BSD 3-Clause
 - Distributed notices and license:
-  - `ros2_ws/src/arm_cell_description/third_party/robotiq/LICENSE`
-  - `ros2_ws/src/arm_cell_description/third_party/robotiq/UPSTREAM.md`
+  - `assets/robots/m0609_robotiq_2f85/third_party/robotiq/LICENSE`
+  - `assets/robots/m0609_robotiq_2f85/third_party/robotiq/UPSTREAM.md`
   - `infra/isaac_sim/assets/third_party/robotiq_description/LICENSE`
   - `infra/isaac_sim/assets/third_party/robotiq_description/UPSTREAM.md`
 

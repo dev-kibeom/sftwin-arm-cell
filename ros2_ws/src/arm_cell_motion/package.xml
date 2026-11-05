@@ -33,11 +33,25 @@
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>
-  <test_depend>moveit_planners_ompl</test_depend>
+  <depend>moveit_planners_ompl</depend>
   <test_depend>moveit_ros_planning</test_depend>
-  <test_depend>rclpy</test_depend>
+  <depend>rclpy</depend>
   <test_depend>arm_cell_safety</test_depend>
 
+  <depend>moveit_ros_move_group</depend>
+  <exec_depend>moveit_simple_controller_manager</exec_depend>
+  <depend>moveit_kinematics</depend>
+  <depend>moveit_ros_visualization</depend>
+  <depend>launch</depend>
+  <depend>launch_ros</depend>
+  <depend>ament_index_python</depend>
+  <depend>python3-yaml</depend>
+  <depend>xacro</depend>
+  <depend>rviz2</depend>
+  <depend>moveit_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <test_depend>ament_cmake_pytest</test_depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

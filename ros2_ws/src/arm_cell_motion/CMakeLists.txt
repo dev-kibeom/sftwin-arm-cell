@@ -344,4 +344,15 @@ if(BUILD_TESTING)
   add_launch_test(tests/test_safety_motion_stop_integration.py TIMEOUT 60)
 endif()
 
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets/robots/"
+  DESTINATION share/${PROJECT_NAME}/assets/robots)
+install(PROGRAMS scripts/load_static_scene.py scripts/generate_static_scene.py
+  DESTINATION lib/${PROJECT_NAME})
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  foreach(asset_test test_robot_description test_moveit_configuration test_static_scene_loader test_console_output_format)
+    ament_add_pytest_test(${asset_test} tests/${asset_test}.py)
+  endforeach()
+endif()
 ament_package()

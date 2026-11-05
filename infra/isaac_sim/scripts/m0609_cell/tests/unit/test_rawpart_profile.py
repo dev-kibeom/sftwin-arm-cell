@@ -126,7 +126,7 @@ def test_tray_sized_detection_roi_loads_without_supply_config(tmp_path, marker_y
 def test_deployed_detection_roi_matches_canonical_tray_plate():
     scene_path = (
         REPOSITORY
-        / "ros2_ws/src/arm_cell_moveit_config/config/m0609_static_scene.json"
+        / "ros2_ws/src/arm_cell_motion/config/moveit/m0609_static_scene.json"
     )
     objects = json.loads(scene_path.read_text())["objects"]
     tray = next(obj for obj in objects if obj["id"] == "amr_tray")

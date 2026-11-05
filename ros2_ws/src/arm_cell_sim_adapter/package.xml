@@ -16,6 +16,6 @@
   <test_depend>launch_ros</test_depend>
   <test_depend>xacro</test_depend>
   <test_depend>ament_index_python</test_depend>
-  <test_depend>arm_cell_description</test_depend>
+  <test_depend>arm_cell_motion</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>

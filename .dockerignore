@@ -11,3 +11,6 @@ ros2_ws/src/**/log/
 ros2_ws/src/**/__pycache__/
 ros2_ws/src/**/*.pyc
 ros2_ws/src/**/.pytest_cache/
+
+!assets/
+!assets/**

@@ -25,7 +25,7 @@ import yaml
 
 def _load_console_output_format():
     helper_path = (
-        Path(get_package_share_directory("arm_cell_moveit_config"))
+        Path(get_package_share_directory("arm_cell_motion"))
         / "launch/console_output_format.py"
     )
     spec = importlib.util.spec_from_file_location(
@@ -85,10 +85,19 @@ def compose(context):
     config = yaml.safe_load(
         Path(LaunchConfiguration("profile").perform(context)).read_text()
     )
-    description = Path(get_package_share_directory("arm_cell_description"))
+    description = (
+        Path(get_package_share_directory("arm_cell_motion"))
+        / "assets/robots/m0609_robotiq_2f85"
+    )
     model = {
         "robot_description": xacro.process_file(
-            str(description / "urdf/m0609_robotiq_2f85.urdf.xacro")
+            str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
+        mappings={
+            "mesh_root": (
+                "package://arm_cell_motion/assets/robots/"
+                "m0609_robotiq_2f85/meshes"
+            )
+        },
         ).toxml(),
         "use_sim_time": True,
     }
@@ -96,10 +105,10 @@ def compose(context):
     arguments = ["--frame-id", "world", "--child-frame-id", "base_link"]
     for key in ("x", "y", "z", "roll", "pitch", "yaw"):
         arguments.extend(["--" + key, str(pose[key])])
-    moveit = Path(get_package_share_directory("arm_cell_moveit_config"))
-    default_scene_file = str(moveit / "config/m0609_static_scene.json")
+    moveit = Path(get_package_share_directory("arm_cell_motion"))
+    default_scene_file = str(moveit / "config/moveit/m0609_static_scene.json")
     static_loader = Node(
-        package="arm_cell_moveit_config",
+        package="arm_cell_motion",
         executable="load_static_scene.py",
         output="screen",
         output_format=CONSOLE_OUTPUT_FORMAT,
@@ -203,8 +212,8 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "scene_file",
                 default_value=str(
-                    Path(get_package_share_directory("arm_cell_moveit_config"))
-                    / "config/m0609_static_scene.json"
+                    Path(get_package_share_directory("arm_cell_motion"))
+                    / "config/moveit/m0609_static_scene.json"
                 ),
             ),
             DeclareLaunchArgument(

@@ -22,7 +22,7 @@ import xacro
 @pytest.mark.launch_test
 def generate_test_description():
     model = (
-        Path(get_package_share_directory("arm_cell_description"))
+        (Path(get_package_share_directory("arm_cell_motion")) / "assets/robots/m0609_robotiq_2f85")
         / "urdf/m0609_robotiq_2f85.urdf.xacro"
     )
     # Do not share a latched process or /clock with another scenario. In particular,

@@ -27,8 +27,7 @@ def _load_launch_module():
     spec.loader.exec_module(module)
     source_root = PACKAGE_ROOT.parents[0]
     package_roots = {
-        "arm_cell_description": source_root / "arm_cell_description",
-        "arm_cell_moveit_config": source_root / "arm_cell_moveit_config",
+        "arm_cell_motion": Path(get_package_share_directory("arm_cell_motion")),
     }
     module.get_package_share_directory = lambda package: (
         str(PACKAGE_ROOT)
@@ -231,8 +230,8 @@ def test_validation_profile_uses_canonical_home_joint_pose():
 def test_sf_grasp_tcp_matches_nominal_contact_geometry():
     # The repository's canonical model is the 2F85 xacro.
     urdf = (
-        PACKAGE_ROOT.parents[0]
-        / "arm_cell_description/urdf/m0609_robotiq_2f85.urdf.xacro"
+        PACKAGE_ROOT.parents[2]
+        / "assets/robots/m0609_robotiq_2f85/urdf/m0609_robotiq_2f85.urdf.xacro"
     )
     root = ET.parse(urdf).getroot()
     joint = root.find(".//joint[@name='gripper_to_sf_grasp_tcp']/origin")

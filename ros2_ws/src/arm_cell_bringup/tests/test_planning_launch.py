@@ -73,7 +73,7 @@ def test_debug_level_reaches_planning_helpers_and_nested_moveit():
     )
     assert include_arguments["log_level"].perform(context) == "debug"
 
-    moveit_share = Path(get_package_share_directory("arm_cell_moveit_config"))
+    moveit_share = Path(get_package_share_directory("arm_cell_motion"))
     planning_spec = importlib.util.spec_from_file_location(
         "planning_only_debug", moveit_share / "launch/planning_only.launch.py"
     )
@@ -115,7 +115,7 @@ def test_planning_launches_filter_moveit_raw_detail_loggers(monkeypatch):
     package_root = Path(__file__).parents[1]
     package_roots = {
         "arm_cell_bringup": package_root,
-        "arm_cell_moveit_config": package_root.parent / "arm_cell_moveit_config",
+        "arm_cell_motion": package_root.parent / "arm_cell_motion",
     }
     monkeypatch.setattr(
         "ament_index_python.packages.get_package_share_directory",
@@ -129,7 +129,7 @@ def test_planning_launches_filter_moveit_raw_detail_loggers(monkeypatch):
         ),
         (
             "planning_only",
-            package_roots["arm_cell_moveit_config"] / "launch/planning_only.launch.py",
+            package_roots["arm_cell_motion"] / "launch/planning_only.launch.py",
         ),
     )
     expected = {

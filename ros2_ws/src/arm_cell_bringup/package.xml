@@ -6,16 +6,14 @@
   <maintainer email="neopkrrl@gmail.com">kibeom</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>arm_cell_description</depend>
+  <depend>arm_cell_motion</depend>
   <depend>arm_cell_vision</depend>
   <depend>arm_cell_vda</depend>
   <depend>arm_cell_safety</depend>
-  <depend>arm_cell_motion</depend>
   <depend>arm_cell_task_execution</depend>
   <depend>arm_cell_orchestration</depend>
   <depend>arm_cell_gateway</depend>
   <depend>arm_cell_sim_adapter</depend>
-  <depend>arm_cell_moveit_config</depend>
   <depend>robot_state_publisher</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>

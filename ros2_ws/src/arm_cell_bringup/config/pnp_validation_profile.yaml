@@ -77,7 +77,7 @@ validation:
   planning_scene:
     # Validation-only scene keeps support/contact geometry excluded while
     # retaining the observed CNC top frame and pedestal swept-path obstacles.
-    static_scene_file: config/m0609_pnp_static_scene.json
+    static_scene_file: config/moveit/m0609_pnp_static_scene.json
     fixture_object_id_prefix: wu14_fixture_
     attachment_link: gripper_robotiq_85_base_link
     touch_links:

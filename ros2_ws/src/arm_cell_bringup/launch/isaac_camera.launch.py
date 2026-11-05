@@ -16,7 +16,7 @@ import yaml
 
 def _load_console_output_format():
     helper_path = (
-        Path(get_package_share_directory("arm_cell_moveit_config"))
+        Path(get_package_share_directory("arm_cell_motion"))
         / "launch/console_output_format.py"
     )
     spec = importlib.util.spec_from_file_location(

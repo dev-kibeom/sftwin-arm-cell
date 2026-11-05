@@ -2,8 +2,8 @@
 set -euo pipefail
 
 plugin_prefix=$(ros2 pkg prefix trac_ik_kinematics_plugin)
-description_prefix=$(ros2 pkg prefix arm_cell_description)
-config_prefix=$(ros2 pkg prefix arm_cell_moveit_config)
+description_prefix=$(ros2 pkg prefix arm_cell_motion)
+config_prefix=$(ros2 pkg prefix arm_cell_motion)
 plugin_library="$plugin_prefix/lib/libtrac_ik_kinematics_plugin.so"
 plugin_description="$plugin_prefix/share/trac_ik_kinematics_plugin/trac_ik_kinematics_description.xml"
 
@@ -13,9 +13,9 @@ grep -Fq 'trac_ik_kinematics_plugin/TRAC_IKKinematicsPlugin' "$plugin_descriptio
 probe_dir=$(mktemp -d)
 trap 'rm -rf "$probe_dir"' EXIT
 
-xacro "$description_prefix/share/arm_cell_description/urdf/m0609_robotiq_2f85.urdf.xacro" \
+xacro "$description_prefix/share/arm_cell_motion/assets/robots/m0609_robotiq_2f85/urdf/m0609_robotiq_2f85.urdf.xacro" \
   > "$probe_dir/arm.urdf"
-cp "$config_prefix/share/arm_cell_moveit_config/config/m0609_robotiq_2f85.srdf" \
+cp "$config_prefix/share/arm_cell_motion/config/moveit/m0609_robotiq_2f85.srdf" \
   "$probe_dir/arm.srdf"
 
 cat > "$probe_dir/CMakeLists.txt" <<'CMAKE'
