@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 
-SNAPSHOT_PATH = ".local_artifacts/m0609_cell/camera_inspection/camera_snapshot.json"
+SNAPSHOT_PATH = "ros2_ws/src/vision/config/camera_snapshot.json"
 
 
 def _add_cell_module_root():

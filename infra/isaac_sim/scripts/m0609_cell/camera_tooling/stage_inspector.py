@@ -8,7 +8,7 @@ from pathlib import Path
 
 from camera_tooling.inspection_math import *  # compatibility re-export for inspect_camera
 from shared.script_editor_bootstrap import is_script_editor_path
-from shared.local_artifacts import output_path
+from shared.local_artifacts import project_root
 
 
 def collision_scene_query_snapshot(camera_transform, reference_geometry):
@@ -586,16 +586,19 @@ def inspect_stage(output_path, reference_prim_paths=None):
 def script_editor_output_path(
     environ, script_path=None, default_filename="camera_snapshot.json"
 ):
-    """Return an explicit override or the stable repo-local snapshot path."""
-    return str(
-        output_path(
-            environ.get("SFTWIN_CAMERA_SNAPSHOT_PATH"),
-            "camera_inspection",
-            default_filename,
-            script_path if script_path is not None else __file__,
-            environ,
+    """Return an explicit override or the Vision package config path."""
+    output = environ.get("SFTWIN_CAMERA_SNAPSHOT_PATH")
+    path = (
+        Path(output).expanduser()
+        if output
+        else project_root(
+            script_path if script_path is not None else __file__, environ
         )
+        / "ros2_ws/src/vision/config"
+        / default_filename
     )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def script_editor_reference_prims(environ):

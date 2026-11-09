@@ -2,7 +2,6 @@
 
 import importlib.util
 import json
-import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -53,18 +52,12 @@ def compose(context):
         config = yaml.safe_load(profile.read_text()) or {}
         snapshot_path = config.get("camera_snapshot")
     if not snapshot_path:
-        configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
-        candidates = [Path(configured_root).expanduser()] if configured_root else []
-        share = Path(get_package_share_directory("arm_cell_bringup"))
-        candidates.extend(share.parents)
-        for root in candidates:
-            candidate = (
-                root
-                / ".local_artifacts/m0609_cell/camera_inspection/camera_snapshot.json"
-            )
-            if candidate.is_file():
-                snapshot_path = str(candidate)
-                break
+        candidate = (
+            Path(get_package_share_directory("arm_cell_vision"))
+            / "config/camera_snapshot.json"
+        )
+        if candidate.is_file():
+            snapshot_path = str(candidate)
     if not snapshot_path:
         raise RuntimeError(
             "camera overlay needs an inspector-generated camera_snapshot; no pose is assumed"
