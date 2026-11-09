@@ -74,7 +74,9 @@ class GripperRuntimeSession:
         output_directory = diagnostic_output_directory or (
             Path(__file__).resolve().parents[5]
             / ".local_artifacts"
-            / "capture_diagnostic_records"
+            / "diagnostic_records"
+            / "unassociated"
+            / "gripper"
         )
         if self.capture_diagnostic_writer is None:
             try:

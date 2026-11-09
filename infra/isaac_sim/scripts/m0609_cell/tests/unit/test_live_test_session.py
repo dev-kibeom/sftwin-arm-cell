@@ -37,7 +37,7 @@ def test_session_descriptor_uses_unique_path_and_stop_closes(tmp_path, monkeypat
         tmp_path / "snapshots" / first.root.parent.name / first.root.name
     )
     for component in ("vision", "motion", "gripper", "safety", "orchestration"):
-        assert (first.root / component).is_dir()
+        assert not (first.root / component).exists()
 
     first.finish()
     first.finish()

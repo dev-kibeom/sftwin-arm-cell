@@ -1689,7 +1689,8 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   if (diagnostics_capture_enabled) {
     const char * requested_capture_id = std::getenv("ARM_CELL_OBSERVABILITY_CAPTURE_ID");
     clock_diagnostic_capture_ = std::make_unique<ClockDiagnosticCapture>(
-      diagnostics_output_directory_, std::string(node_->get_name()) + "-pid-" +
+      (std::filesystem::path(diagnostics_output_directory_).parent_path() / "clock").string(),
+      std::string(node_->get_name()) + "-pid-" +
       std::to_string(static_cast<unsigned long long>(::getpid())),
       std::chrono::duration_cast<std::chrono::steady_clock::duration>(
         std::chrono::duration<double>(trajectory_watchdog_.liveness_timeout_s())),

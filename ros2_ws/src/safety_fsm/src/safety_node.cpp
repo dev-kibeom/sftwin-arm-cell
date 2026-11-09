@@ -310,25 +310,8 @@ private:
   {
     bool record_in_flight = false;
     try {
-      std::filesystem::create_directories(directory_);
+      std::ofstream output;
       std::uint64_t retained_bytes = 0;
-      for (const auto & entry : std::filesystem::directory_iterator(directory_)) {
-        if (entry.is_regular_file()) {retained_bytes += entry.file_size();}
-      }
-      if (retained_bytes >= kDiagnosticByteLimit - 512) {
-        {
-          std::lock_guard<std::mutex> lock(mutex_);
-          truncated_ = true;
-        }
-        RCLCPP_WARN(logger_, "Safety diagnostic capture total storage limit is already full");
-        return;
-      }
-      const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-      std::ofstream output(
-        std::filesystem::path(directory_) / ("safety-" + std::to_string(stamp) + ".jsonl"),
-        std::ios::out | std::ios::binary);
-      if (!output) {throw std::runtime_error("open failed");}
       std::uint64_t bytes = 0;
       for (;; ) {
         SafetyDiagnosticRecord record;
@@ -346,6 +329,22 @@ private:
           ++dropped_count_;
           continue;
         }
+        if (!output.is_open()) {
+          std::filesystem::create_directories(directory_);
+          for (const auto & entry : std::filesystem::directory_iterator(directory_)) {
+            if (entry.is_regular_file()) {retained_bytes += entry.file_size();}
+          }
+          if (retained_bytes >= kDiagnosticByteLimit - 512) {
+            {
+              std::lock_guard<std::mutex> lock(mutex_);
+              truncated_ = true;
+              dropped_count_ += queue_.size() + 1U;
+              queue_.clear();
+            }
+            RCLCPP_WARN(logger_, "Safety diagnostic capture total storage limit is already full");
+            return;
+          }
+        }
         if (retained_bytes + bytes + line.size() > kDiagnosticByteLimit - 512) {
           {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -358,11 +357,20 @@ private:
             "Safety diagnostic capture reached its byte limit; further records are dropped");
           break;
         }
+        if (!output.is_open()) {
+          const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+          output.open(
+            std::filesystem::path(directory_) / ("safety-" + std::to_string(stamp) + ".jsonl"),
+            std::ios::out | std::ios::binary);
+          if (!output) {throw std::runtime_error("open failed");}
+        }
         output.write(line.data(), static_cast<std::streamsize>(line.size()));
         if (!output) {throw std::runtime_error("write failed");}
         bytes += line.size();
         record_in_flight = false;
       }
+      if (!output.is_open()) {return;}
       std::uint64_t dropped = 0;
       bool truncated = false;
       {
@@ -413,7 +421,7 @@ SafetyNode::SafetyNode(const rclcpp::NodeOptions & options)
   const bool diagnostic_capture_enabled = declare_parameter<bool>(
     "diagnostics.capture_enabled", false);
   const auto diagnostics_directory = declare_parameter<std::string>(
-    "diagnostics.output_directory", ".local_artifacts/observability/safety");
+    "diagnostics.output_directory", ".local_artifacts/diagnostic_records/unassociated/safety");
   if (diagnostic_capture_enabled) {
     diagnostic_capture_ = std::make_unique<SafetyDiagnosticCapture>(
       diagnostics_directory, get_logger());

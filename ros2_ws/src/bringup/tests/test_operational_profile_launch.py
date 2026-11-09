@@ -21,6 +21,14 @@ PROFILE_PATH = PACKAGE_ROOT / "config/operational_profile.yaml"
 HOME_PATH = PACKAGE_ROOT / "config/home_joint_positions.yaml"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_recording_outputs(tmp_path, monkeypatch):
+    root = tmp_path / "project"
+    (root / "ros2_ws/src").mkdir(parents=True)
+    (root / "infra/isaac_sim/scripts/m0609_cell").mkdir(parents=True)
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(root))
+
+
 def _assert_installed_package_identity(package_name):
     share_path = Path(get_package_share_directory(package_name))
     package_xml = share_path / "package.xml"
@@ -353,6 +361,9 @@ def test_log_level_does_not_change_optional_capture_parameters():
         debug_parameters = _node_parameters(debug_nodes[executable])
         info_parameters.pop("diagnostics.snapshot_run_directory", None)
         debug_parameters.pop("diagnostics.snapshot_run_directory", None)
+        for key in ("diagnostics.output_directory", "diagnostics.live_test_session_id"):
+            info_parameters.pop(key, None)
+            debug_parameters.pop(key, None)
         assert info_parameters == debug_parameters
     assert (
         _node_parameters(selected_nodes["motion_node"])["diagnostics.capture_enabled"]
@@ -481,12 +492,12 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
     assert vision_snapshot_directory == motion_snapshot_directory
     assert vision_snapshot_directory.parent.name.isdigit()
     assert vision_snapshot_directory.parent.parent.name == "snapshots"
-    assert _node_parameters(vision)["diagnostics.live_test_session_id"] == ""
+    assert _node_parameters(vision)["diagnostics.live_test_session_id"]
     clock_directory = Path(
         _node_parameters(nodes["motion_node"])["diagnostics.output_directory"]
     )
     assert clock_directory.is_absolute()
-    assert clock_directory.parts[-2:] == (".local_artifacts", "observability")
+    assert "diagnostic_records" in clock_directory.parts
     assert module.node_ros_arguments("arm_cell_vision", "info") == [
         "--log-level",
         "info",
@@ -558,7 +569,7 @@ def test_component_diagnostics_selects_only_requested_component_producers():
     assert "diagnostics=motion" in summary_text
     assert "Motion profile trace capture=enabled" in summary_text
     assert "Isaac Gripper baseline capture is always enabled" in summary_text
-    assert "ROS session association=unassociated" in summary_text
+    assert "ROS session association=created" in summary_text
     motion_arguments = _node_ros_arguments(nodes["motion_node"])
     assert "motion_node:=debug" not in motion_arguments
     assert "motion_core:=debug" not in motion_arguments
@@ -869,7 +880,8 @@ def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch):
     vision_snapshot_directory = Path(vision_parameters["diagnostics.snapshot_run_directory"])
     assert vision_snapshot_directory.parent.parent == artifact_root / "snapshots"
     assert vision_snapshot_directory.parent.name.isdigit()
-    assert vision_snapshot_directory.is_dir()
+    assert vision_snapshot_directory == artifact_root / "snapshots/20261020/120000"
+    assert not vision_snapshot_directory.exists()
     motion_parameters = _node_parameters(joined_nodes["motion_node"])
     assert motion_parameters["diagnostics.snapshot_run_directory"] == str(
         vision_snapshot_directory
@@ -972,3 +984,89 @@ def test_bringup_session_write_failure_is_unassociated(tmp_path, monkeypatch):
 
     assert module.join_live_test_session(artifact_root) is None
     assert json.loads(descriptor.read_text())["status"] == "open"
+
+
+def test_standalone_recording_session_is_lazy_and_closes_on_shutdown(tmp_path):
+    module = _load_launch_module()
+    artifact_root = tmp_path / ".local_artifacts"
+    session = module.create_recording_session(artifact_root, "hardware")
+    data = json.loads((session / "session.json").read_text())
+    assert data["owner"] == "ros_bringup"
+    assert data["runtime"] == "hardware"
+    assert data["timezone"]
+    assert data["started_at"][-6] in "+-"
+    snapshot_path = module.reserve_snapshot_run_directory(artifact_root, session)
+    assert data["recording_locations"]["snapshots"] == str(snapshot_path)
+    assert not snapshot_path.exists()
+    assert sorted(p.name for p in session.iterdir()) == ["session.json"]
+    module.finish_recording_session(None, session)
+    closed = json.loads((session / "session.json").read_text())
+    assert closed["status"] == "closed"
+    assert closed["ended_at"]
+    assert closed["end_condition"] == "bringup_shutdown"
+
+
+def test_recording_sessions_reserve_distinct_snapshot_namespaces(tmp_path):
+    module = _load_launch_module()
+    first = module.create_recording_session(tmp_path, "simulation")
+    second = module.create_recording_session(tmp_path, "simulation")
+    assert first != second
+    assert module.reserve_snapshot_run_directory(tmp_path, first) != module.reserve_snapshot_run_directory(tmp_path, second)
+    assert not (tmp_path / "snapshots").exists()
+
+
+def test_failed_session_creation_is_nonblocking_and_leaves_no_run(tmp_path, monkeypatch):
+    module = _load_launch_module()
+    monkeypatch.setattr(module.os, "replace", lambda *_: (_ for _ in ()).throw(OSError("full")))
+    assert module.create_recording_session(tmp_path, "unspecified") is None
+    assert not list(tmp_path.rglob("session.json"))
+    assert not list(tmp_path.rglob("*.tmp"))
+    assert not list(tmp_path.glob("diagnostic_records/*/*"))
+
+
+def test_new_bringup_uses_fresh_namespace_but_links_prior_isaac_session(tmp_path):
+    module = _load_launch_module()
+    root = tmp_path / ".local_artifacts"
+    session_dir = root / "diagnostic_records/20261020/120000"
+    session_dir.mkdir(parents=True)
+    start = Path(f"/proc/{os.getpid()}/stat").read_text().rsplit(")", 1)[1].split()[19]
+    (session_dir / "session.json").write_text(json.dumps({
+        "session_id": "isaac-parent", "status": "open", "participants": [
+            {"process": "isaac", "instance_id": f"isaac-{os.getpid()}", "process_start_token": start},
+            {"process": "ros_bringup", "instance_id": "previous-bringup"}]}))
+    assert module.join_live_test_session(root) is None
+    module.project_artifacts_directory = lambda: str(root)
+    actions = _composed_nodes(module=module)
+    nodes = _project_nodes(actions)
+    parameters = _node_parameters(nodes["detect_target_node"])
+    assert parameters["diagnostics.live_test_session_id"] != "isaac-parent"
+    assert Path(parameters["diagnostics.snapshot_run_directory"]) != root / "snapshots/20261020/120000"
+    descriptor = Path(parameters["diagnostics.output_directory"]).parent / "session.json"
+    data = json.loads(descriptor.read_text())
+    assert data["related_live_test_session_id"] == "isaac-parent"
+    assert data["related_live_test_session_path"] == str(session_dir / "session.json")
+    assert data["recording_locations"]["gripper"] == str(session_dir / "gripper")
+    assert data["recording_locations"]["simulation"] == str(session_dir / "simulation")
+    assert data["recording_locations"]["motion"] == str(descriptor.parent / "motion")
+    gripper_environment = next(a for a in actions if isinstance(a, SetEnvironmentVariable)
+                               and "".join(part.text for part in a.name) == "ARM_CELL_GRIPPER_RECORD_DIR")
+    assert "".join(part.text for part in gripper_environment.value) == str(session_dir / "gripper")
+
+
+def test_session_indexes_selected_calibration_and_camera_topics(tmp_path):
+    import hashlib
+
+    module = _load_launch_module()
+    root = module.create_recording_session(tmp_path, "unspecified")
+    calibration = tmp_path / "selected-camera.yaml"
+    calibration.write_text("camera_optical_frame: selected_camera\n")
+    config = {"vision": {"calibration_file": str(calibration),
+                         "camera_id": "real_d455_01", "camera_info_topic": "/d455/camera_info"}}
+    module.record_session_configuration(root, config, PROFILE_PATH, {"vision"}, False)
+    data = json.loads((root / "session.json").read_text())
+    assert data["diagnostic_selection"] == ["vision"]
+    assert data["simulation_composition_enabled"] is False
+    assert data["runtime"] == "unspecified"
+    assert data["camera"]["camera_id"] == "real_d455_01"
+    assert data["camera"]["vision_calibration"]["path"] == str(calibration)
+    assert data["camera"]["vision_calibration"]["sha256"] == hashlib.sha256(calibration.read_bytes()).hexdigest()

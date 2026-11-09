@@ -312,3 +312,13 @@ TEST(ClockDiagnosticCapture, RearmsForSecondAnomalyAfterFirstWindowCompletes) {
 
 } // namespace
 } // namespace arm_cell_motion
+
+TEST(ClockDiagnosticCapture, IdleCaptureDoesNotCreateArtifacts) {
+  const auto root = std::filesystem::temp_directory_path() /
+    ("arm-cell-idle-clock-" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  {
+    arm_cell_motion::ClockDiagnosticCapture capture(root.string(), "idle-process");
+  }
+  EXPECT_FALSE(std::filesystem::exists(root));
+}

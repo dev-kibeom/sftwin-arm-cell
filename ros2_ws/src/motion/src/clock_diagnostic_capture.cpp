@@ -411,6 +411,12 @@ void ClockDiagnosticCapture::writer_loop() {
 }
 
 void ClockDiagnosticCapture::write_manifest(bool final) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (observed_count_ == 0 && written_count_ == 0) {
+      return;
+    }
+  }
   const auto directory =
       std::filesystem::path(artifact_root_) / capture_id_ / process_instance_;
   std::error_code error;
@@ -428,7 +434,8 @@ void ClockDiagnosticCapture::write_manifest(bool final) {
   output << "{\"schema_version\":1,\"capture_id\":\""
          << escape_json(capture_id_) << "\",\"process_instance\":\""
          << escape_json(process_instance_)
-         << "\",\"observer\":\"motion_node\",\"artifact\":\"events.jsonl\""
+         << "\",\"observer\":\"motion_node\",\"artifact\":"
+         << (written_count_ > 0 ? "\"events.jsonl\"" : "null")
          << ",\"clock_domains\":[\"ros_sim_time\",\"steady_clock_local\"]"
          << ",\"receipt_gap_threshold_ns\":" << receipt_gap_threshold_ns_
          << ",\"isaac_sim_time_status\":\"unavailable\",\"observed_count\":"

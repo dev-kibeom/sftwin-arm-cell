@@ -6,10 +6,10 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 
-COMPONENTS = ("vision", "motion", "gripper", "safety", "orchestration")
+COMPONENTS = ("vision", "motion", "gripper", "safety", "orchestration", "clock", "simulation")
 
 
 def _git_provenance(project_root):
@@ -66,8 +66,8 @@ class LiveTestSession:
 
     def __init__(self, artifact_root, detail_selection=()):
         self.session_id = str(uuid.uuid4())
-        self.started_at = datetime.now(timezone.utc).isoformat()
         now = datetime.now().astimezone()
+        self.started_at = now.isoformat()
         project_root = Path(
             os.environ.get("SFTWIN_PROJECT_ROOT", Path(artifact_root).resolve().parent)
         )
@@ -85,6 +85,9 @@ class LiveTestSession:
         artifact_root = Path(artifact_root)
         self.data = {
             "schema_version": 1,
+            "owner": "isaac",
+            "runtime": "simulation",
+            "timezone": str(now.tzinfo),
             "session_id": self.session_id,
             "status": "open",
             "started_at": self.started_at,
@@ -133,13 +136,11 @@ class LiveTestSession:
                     "status": "unconfirmed",
                 },
                 "rawpart_pose_recordings": {
-                    "path": str(artifact_root / "isaac_pose_recordings"),
+                    "path": str(candidate / "simulation"),
                     "status": "unconfirmed",
                 },
             },
         }
-        for name in COMPONENTS:
-            (candidate / name).mkdir()
         self._write()
 
     def _write(self):
@@ -170,7 +171,7 @@ class LiveTestSession:
                     return None
                 original = self.data
                 latest["status"] = "closed"
-                latest["ended_at"] = datetime.now(timezone.utc).isoformat()
+                latest["ended_at"] = datetime.now().astimezone().isoformat()
                 latest["end_condition"] = condition
                 for participant in latest.get("participants", []):
                     if participant.get("status") == "participating":

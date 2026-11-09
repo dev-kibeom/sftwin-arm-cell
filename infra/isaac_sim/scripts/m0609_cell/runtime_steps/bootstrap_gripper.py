@@ -133,7 +133,7 @@ runtime_session = session_module.create_gripper_runtime_session(
     diagnostic_output_directory=(
         Path(os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"]).parent / "gripper"
         if os.environ.get("SFTWIN_LIVE_TEST_SESSION_PATH")
-        else project_root / ".local_artifacts/capture_diagnostic_records"
+        else project_root / ".local_artifacts/diagnostic_records/unassociated/gripper"
     ),
 )
 # Both Motion-driven profiles require the selected reference. Direct users of
