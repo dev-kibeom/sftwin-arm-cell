@@ -102,7 +102,7 @@ def test_camera_overlay_uses_vision_package_snapshot_by_default(
     bringup_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
     vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_vision"
     bringup_share.mkdir(parents=True)
-    snapshot = vision_share / "config/camera_snapshot.json"
+    snapshot = vision_share / "config/isaac_d455_camera_calibration.json"
     snapshot.parent.mkdir(parents=True)
     snapshot.write_text(
         json.dumps(
