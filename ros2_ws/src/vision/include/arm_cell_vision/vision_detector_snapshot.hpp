@@ -149,6 +149,12 @@ private:
     std::string primary_text_color_rgb = "#FFDC00";
     std::string detail_text_color_rgb = "#FFFFFF";
   };
+  struct AcquisitionSnapshotFiles
+  {
+    std::filesystem::path directory;
+    bool image_saved{false};
+    bool metadata_saved{false};
+  };
   void run();
   arm_cell_interfaces::msg::VisionDetectorSnapshot render(VisionDetectorSnapshotJob & job);
   cv::Mat render_annotation(
@@ -173,7 +179,7 @@ private:
   std::filesystem::path artifact_root_;
   std::filesystem::path diagnostic_root_;
   std::filesystem::path snapshot_run_directory_;
-  std::unordered_map<std::string, std::filesystem::path> acquisition_snapshot_directories_;
+  std::unordered_map<std::string, AcquisitionSnapshotFiles> acquisition_snapshots_;
   std::string live_test_session_id_;
   std::string run_date_;
   std::string run_time_;

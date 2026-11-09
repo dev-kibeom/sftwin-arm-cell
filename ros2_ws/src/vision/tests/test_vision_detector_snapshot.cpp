@@ -1850,6 +1850,8 @@ TEST_F(VisionDetectorSnapshotTest, NoSubscriberStillWritesThePublishedPngAndJson
   EXPECT_NE(failure_json.find("\"diagnostic_record_path\":"), std::string::npos);
   EXPECT_NE(published[1].diagnostic_record_json.find("\"image_file\":\"detection.png\""),
     std::string::npos);
+  EXPECT_NE(published[1].diagnostic_record_json.find("\"metadata_file\":\"metadata.json\""),
+    std::string::npos);
   EXPECT_EQ(failure_json, published[1].metadata_json);
   for (const auto & entry : std::filesystem::recursive_directory_iterator(root / "diagnostic_records")) {
     EXPECT_NE(entry.path().extension(), ".png");
@@ -1859,6 +1861,64 @@ TEST_F(VisionDetectorSnapshotTest, NoSubscriberStillWritesThePublishedPngAndJson
   for (const auto & entry : std::filesystem::directory_iterator(run_directory)) {
     EXPECT_NE(entry.path().extension(), ".json");
   }
+  std::filesystem::remove_all(root);
+}
+
+TEST_F(VisionDetectorSnapshotTest, DiagnosticSnapshotReferencesOnlyFilesThatWereSaved)
+{
+  const auto root = temporary_snapshot_root("snapshot-file-save-status");
+  std::filesystem::remove_all(root);
+  const auto snapshot_run_directory = root / "snapshots" / "20261110" / "120000";
+  const auto total_failure_directory = snapshot_run_directory / "01";
+  const auto partial_failure_directory = snapshot_run_directory / "02";
+  const auto image_only_directory = snapshot_run_directory / "03";
+  std::filesystem::create_directories(total_failure_directory / "detection.png");
+  std::filesystem::create_directories(partial_failure_directory / "detection.png");
+  std::filesystem::create_directories(image_only_directory);
+  std::filesystem::create_symlink("/proc/1/vision-snapshot-missing/metadata.json",
+    total_failure_directory / "metadata.json");
+  std::filesystem::create_symlink("/proc/1/vision-snapshot-missing/metadata.json",
+    image_only_directory / "metadata.json");
+
+  std::vector<arm_cell_interfaces::msg::VisionDetectorSnapshot> published;
+  arm_cell_vision::VisionDetectorSnapshotOutput output(
+    *node, root / "snapshots", "run-file-save-status", {},
+    [&](const auto & message) {published.push_back(message);}, "20261110",
+    root / "diagnostic_records", "", "120000", snapshot_run_directory);
+  for (const auto & acquisition_id : {"acq-1", "acq-2", "acq-3"}) {
+    auto job = calibration_job();
+    job.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
+    job.calibration_id.clear();
+    job.acquisition_id = acquisition_id;
+    job.terminal_result_code = 2;
+    job.terminal_diagnostic = "snapshot file save failure case";
+    output.submit(std::move(job));
+  }
+  output.shutdown();
+
+  ASSERT_EQ(published.size(), 3U);
+  EXPECT_NE(published[0].diagnostic_record_json.find("\"snapshot\":null"), std::string::npos);
+  EXPECT_EQ(published[0].diagnostic_record_json.find("\"image_file\":"), std::string::npos);
+  EXPECT_EQ(published[0].diagnostic_record_json.find("\"metadata_file\":"), std::string::npos);
+  EXPECT_TRUE(std::filesystem::is_directory(total_failure_directory / "detection.png"));
+  EXPECT_TRUE(std::filesystem::is_symlink(total_failure_directory / "metadata.json"));
+  EXPECT_FALSE(std::filesystem::exists(total_failure_directory / "metadata.json") &&
+    std::filesystem::is_regular_file(total_failure_directory / "metadata.json"));
+  EXPECT_NE(published[1].diagnostic_record_json.find("\"snapshot\":{"), std::string::npos);
+  EXPECT_EQ(published[1].diagnostic_record_json.find("\"image_file\":"), std::string::npos);
+  EXPECT_NE(published[1].diagnostic_record_json.find("\"metadata_file\":\"metadata.json\""),
+    std::string::npos);
+  EXPECT_TRUE(std::filesystem::is_directory(partial_failure_directory / "detection.png"));
+  EXPECT_TRUE(std::filesystem::is_regular_file(partial_failure_directory / "metadata.json"));
+  EXPECT_NE(published[2].diagnostic_record_json.find("\"snapshot\":{"), std::string::npos);
+  EXPECT_NE(published[2].diagnostic_record_json.find("\"image_file\":\"detection.png\""),
+    std::string::npos);
+  EXPECT_EQ(published[2].diagnostic_record_json.find("\"metadata_file\":"), std::string::npos);
+  EXPECT_TRUE(std::filesystem::is_regular_file(image_only_directory / "detection.png"));
+  EXPECT_TRUE(std::filesystem::is_symlink(image_only_directory / "metadata.json"));
+  EXPECT_TRUE(std::filesystem::is_regular_file(root / "diagnostic_records" / "acq-1.json"));
+  EXPECT_TRUE(std::filesystem::is_regular_file(root / "diagnostic_records" / "acq-2.json"));
+  EXPECT_TRUE(std::filesystem::is_regular_file(root / "diagnostic_records" / "acq-3.json"));
   std::filesystem::remove_all(root);
 }
 

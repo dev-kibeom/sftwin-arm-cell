@@ -829,14 +829,18 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
   json << ",\"association_status\":\"" <<
     (live_test_session_id_.empty() ? "unassociated" : "associated") << "\","
        << "\"snapshot\":";
-  const auto snapshot_directory = acquisition_snapshot_directories_.find(job.acquisition_id);
-  if (snapshot_directory == acquisition_snapshot_directories_.end()) {
+  const auto snapshot = acquisition_snapshots_.find(job.acquisition_id);
+  if (snapshot == acquisition_snapshots_.end() ||
+    (!snapshot->second.image_saved && !snapshot->second.metadata_saved))
+  {
     json << "null";
   } else {
-    const auto relative_directory = std::filesystem::absolute(snapshot_directory->second).
+    const auto relative_directory = std::filesystem::absolute(snapshot->second.directory).
       lexically_relative(std::filesystem::absolute(diagnostic_root_)).generic_string();
-    json << "{\"directory\":\"" << json_escape(relative_directory) <<
-      "\",\"image_file\":\"detection.png\",\"metadata_file\":\"metadata.json\"}";
+    json << "{\"directory\":\"" << json_escape(relative_directory) << '"';
+    if (snapshot->second.image_saved) {json << ",\"image_file\":\"detection.png\"";}
+    if (snapshot->second.metadata_saved) {json << ",\"metadata_file\":\"metadata.json\"";}
+    json << '}';
   }
   json << ",\"strategy\":\"" << json_escape(job.algorithm) << "\",\"target_id\":\"" <<
     json_escape(job.target_id) << "\",\"observation\":";
