@@ -66,6 +66,7 @@ enum class MotionOrientationSymmetry : std::uint8_t
 struct MotionConstraints
 {
   double approach_distance_m{0.0};
+  double grasp_backoff_m{0.0};
   double retract_distance_m{0.0};
   double position_tolerance_m{0.0};
   double orientation_tolerance_rad{0.0};

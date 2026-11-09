@@ -186,6 +186,7 @@ public:
     bool has_unobserved_yaw_policy{false};
     PickApproachAxis pick_approach_axis{PickApproachAxis::TCP_INSERTION_AXIS};
     double pick_approach_distance_m{0.0};
+    double pick_grasp_backoff_m{0.0};
     double pick_grasp_position_tolerance_m{0.0};
     double pick_grasp_orientation_tolerance_rad{0.0};
     geometry_msgs::msg::PoseStamped place_pose;

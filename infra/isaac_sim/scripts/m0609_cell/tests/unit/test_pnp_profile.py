@@ -154,7 +154,6 @@ def test_capture_reference_profile_maps_fixture_geometry_and_motion_semantics():
             "fixture": {"dimensions_m": [0.07, 0.07, 0.08]},
             "motion": {
                 "observation_reference": "fixture_profile_reference",
-                "observation_to_object_translation": [0.0, 0.0, -0.04],
                 "object_to_grasp_tcp_translation": [0.0, 0.0, 0.0375],
                 "insertion_axis_tcp": [0.0, 0.0, 1.0],
             },

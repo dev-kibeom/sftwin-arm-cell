@@ -219,7 +219,7 @@ Unknown/Unconfigured `target_id`는 `DETECT_RESULT_INVALID_RESULT`를 반환해�
 부분 형상 RawPart 성공 응답은 Recipe에서 추정한 양수 Side Length와 선택한 추정 자체 두께를 기존 필드에 전달해야 한다. 이 경우 `has_observed_rectangle=false`는 외곽선 실측이 없다는 provenance를 유지하며 값이 제공되지 않았다는 의미로 해석해서는 안 된다. 일반 Cuboid의 실측 치수와 기존 외부 메시지 스키마는 변경하지 않는다.
 
 ### VR-ICD-VIS-ORCH-11 — Validation Provenance 격리
-Validation-only Fixed Vision Result는 Public ROS Shape·Result/Frame/Object Reference 의미·Fixture Registration Stamp를 유지하면서 Production Operational Profile에서 선택할 수 없어야 한다. 그 Evidence를 RGB-D Perception Validation으로 나타내서는 안 된다.
+Validation-only Fixed Vision Result는 Public ROS Shape·Result/Frame/Object Reference 의미·Fixture Registration Stamp를 유지하면서 Production Operational Profile에서 선택할 수 없어야 한다. 그 Evidence를 RGB-D Perception Validation으로 나타내서는 안 된다. Fixed Registration의 `dimensions_m`은 등록 Top Surface 좌표계 기준의 알려진 양수 자재 치수이며 Z가 자체 두께다. 등록 helper는 Fixture 치수를 전달하고 Fixed Vision은 Z를 후보 자체 두께로, X/Y를 상판 치수로 전달한다. 이 경로에서도 고정 중심 오프셋을 사용하지 않는다.
 
 ### VR-ICD-VIS-ORCH-12 — Profile 격리 Target 선택
 서로 다른 Configured `target_id`는 각각 다른 Vision-owned Profile을 선택해야 한다. Unknown/Unconfigured ID는 Generic Foreground Aggregation이 아닌 `INVALID_RESULT`를 반환해야 한다. 경쟁 Foreground Geometry가 선택 Profile Pose를 이동시켜서는 안 된다. RawPart Profile은 필수 Observation이 유효할 때만 RawPart를 선택하며 부재/무효 RawPart는 Profile 계약에 따라 거부하거나 Absence로 보고한다.

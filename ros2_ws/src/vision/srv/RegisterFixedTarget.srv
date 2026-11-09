@@ -1,6 +1,8 @@
 string target_id
 string run_id
 geometry_msgs/PoseStamped pose
+# Known dimensions in the registered top-surface frame; Z is box thickness.
+float64[3] dimensions_m
 uint8 orientation_symmetry_order
 builtin_interfaces/Duration ttl
 ---

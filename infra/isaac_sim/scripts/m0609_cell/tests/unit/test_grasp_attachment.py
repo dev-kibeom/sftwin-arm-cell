@@ -36,6 +36,7 @@ def valid_candidate(path="/World/Cube"):
         position_error_m=0.005,
         orientation_error_deg=2.0,
         measured_opening_mm=12.0,
+        capture_reference={"expected_contact_width_mm": 12.7},
         shape="box",
     )
 
@@ -2688,3 +2689,125 @@ def test_direct_open_runtime_error_remains_unknown_without_new_open():
     assert instance.consume_release_detach_event()["result"] == "runtime_error"
     instance.update(0.01)
     assert instance.holding_observation().state is HoldingState.UNKNOWN
+
+
+def test_selected_object_association_is_unique_and_pinned():
+    query = StageCaptureQuery(None, '/tcp', EligibleObjectRegistry(), SimpleNamespace())
+    query.configure_selected_object((0.0, 0.0, 0.0), (0.12, 0.12, 0.12))
+    assert query._associate_selected_object({'/a': (0.01, 0, 0), '/b': (0.2, 0, 0)}) == '/a'
+    # Once bound, later motion must not switch the identity.
+    assert query._associate_selected_object({'/a': (0.2, 0, 0), '/b': (0, 0, 0)}) == '/a'
+    query.configure_selected_object((0.0, 0.0, 0.0), (0.12, 0.12, 0.12))
+    assert query._associate_selected_object({'/a': (0.01, 0, 0), '/b': (0.02, 0, 0)}) is None
+    assert query._associate_selected_object({'/a': (0.01, 0, 0)}) is None
+
+
+@pytest.mark.parametrize('frame_yaw', [0.0, math.pi / 2])
+@pytest.mark.parametrize('tcp_position,accepted', [((0, 0, 0.1), True), ((0.1, 0, 0.1), False)])
+def test_selected_object_capture_uses_grasp_goal_not_object_origin(monkeypatch, tcp_position, accepted, frame_yaw):
+    monkeypatch.setattr(grasp_stage, '_pxr_modules', lambda: (_FakeGf, None, None, None, None))
+    class Prim:
+        def IsValid(self): return True
+        def GetAttribute(self, name):
+            return SimpleNamespace(Get=lambda: 'box') if name == 'sf_twin:shape' else None
+    class Stage:
+        def GetPrimAtPath(self, path): return Prim()
+    registry = EligibleObjectRegistry()
+    registry.register('/a')
+    registry.register('/b')
+    query = StageCaptureQuery(Stage(), '/tcp', registry,
+        SimpleNamespace(robot_root_path='/robot', get_width=lambda: 70.0))
+    identity = _Quaternion(math.cos(frame_yaw / 2), (0, 0, math.sin(frame_yaw / 2)))
+    poses = {'/robot/base_link': (0, 0, 0), '/tcp': tcp_position,
+             '/a': (0, 0, 0), '/b': (0.2, 0, 0)}
+    class Transform(_RigidWorldTransform):
+        def GetInverse(self):
+            inverse = _RigidWorldTransform((0, 0, 0), self.rotation.GetInverse())
+            return SimpleNamespace(Transform=lambda point: inverse.TransformDir(tuple(
+                point[i] - self.translation[i] for i in range(3))))
+    frame = Transform((1, -2, 0.5), identity)
+    query._world_transform = lambda path: (
+        frame if path == '/robot/base_link' else Transform(frame.Transform(poses[path]), identity))
+    query.configure_expected_tcp_reference('base_link', (0, 0, 0.1), (0, 0, 0, 1), 1, 70)
+    query.configure_selected_object((0, 0, 0), (0.12, 0.12, 0.12))
+    available, candidates = query.query()
+    assert available
+    assert [candidate.prim_path for candidate in candidates] == ['/a'], (query._selected_object, query._selected_object_path, query._last_reference_diagnostics)
+    result = CapturePolicy.evaluate(close_active=True, candidates=candidates,
+        config=capture_config(), runtime_available=True)
+    assert (result.candidate is not None) is accepted
+    query.clear_expected_tcp_reference()
+    assert query._selected_object is None
+
+
+@pytest.mark.parametrize('association', [None, [1, 2], [0, 0, float('nan')]])
+def test_selected_reference_with_missing_or_invalid_association_cannot_capture(association):
+    query = StageCaptureQuery(None, '/tcp', EligibleObjectRegistry(), SimpleNamespace())
+    instance = manager(query, FakeJointOwner(), arm=False)
+    packet = {'motion_goal_uuid': 'pick-123', 'frame_id': 'base_link',
+              'values': (0, 0, 0, 0, 0, 0, 1, 70, 1)}
+    if association is not None:
+        packet['object_position'] = association
+    assert instance.configure_selected_grasp_reference(packet)
+    assert query.query() == (False, [])
+
+
+def test_missing_selected_object_reports_protocol_mismatch_instead_of_unknown_reference():
+    query = StageCaptureQuery(None, '/tcp', EligibleObjectRegistry(), SimpleNamespace())
+    instance = manager(query, FakeJointOwner(), arm=False)
+    instance.configure_selected_grasp_reference({
+        'motion_goal_uuid': 'old-motion-binary', 'frame_id': 'base_link',
+        'values': (0, 0, 0, 0, 0, 0, 1, 70, 1)})
+    assert query.query() == (False, [])
+    assert query.reference_diagnostics()['rejection_reason'] == 'capture_object_association_missing'
+
+
+@pytest.mark.parametrize('reached_delta_mm', [1.0, -4.5])
+def test_close_waits_for_selected_width_before_stopping_and_attaching(reached_delta_mm):
+    expected_width_mm = 46.3
+    candidate = replace(valid_candidate(), measured_opening_mm=expected_width_mm + 13.0,
+        capture_reference={'expected_contact_width_mm': expected_width_mm})
+    source = FakeCandidateSource([candidate])
+    joints = FakeJointOwner()
+    instance = manager(source, joints, arm=False)
+    instance.arm_close_transaction()
+    instance.gripper.state.value = 'closing'
+    instance.update(0.01)
+    assert instance.gripper.stop_calls == 0
+    assert joints.created == []
+    assert instance._capture_transaction_armed
+    source.candidates = [replace(candidate,
+        measured_opening_mm=expected_width_mm + reached_delta_mm)]
+    instance.update(0.01)
+    assert instance.gripper.stop_calls == 1
+    assert len(joints.created) == 1
+    assert joints.created[0][1] == candidate.prim_path
+    assert instance.holding_observation().state is HoldingState.HELD
+
+
+@pytest.mark.parametrize('opening_mm', [None, float('nan'), float('inf')])
+def test_unavailable_width_keeps_closing_but_holding_uses_final_capture(opening_mm):
+    source = FakeCandidateSource([replace(valid_candidate(), measured_opening_mm=opening_mm,
+        capture_reference={'expected_contact_width_mm': 46.3})])
+    joints = FakeJointOwner()
+    instance = manager(source, joints, arm=False)
+    instance.arm_close_transaction()
+    instance.gripper.state.value = 'closing'
+    instance.update(0.01)
+    assert instance.gripper.stop_calls == 0
+    assert joints.created == []
+    assert instance._capture_transaction_armed
+    instance.gripper.state.value = 'holding'
+    instance.update(0.01)
+    assert instance.gripper.stop_calls == 0
+    assert len(joints.created) == 1
+
+
+def test_holding_capture_does_not_apply_closing_width_threshold():
+    source = FakeCandidateSource([replace(valid_candidate(), measured_opening_mm=59.3,
+        capture_reference={'expected_contact_width_mm': 46.3})])
+    joints = FakeJointOwner()
+    instance = manager(source, joints)
+    instance.update(0.01)
+    assert instance.gripper.stop_calls == 0
+    assert len(joints.created) == 1

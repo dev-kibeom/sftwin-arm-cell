@@ -30,8 +30,6 @@ namespace
 {
 MotionGeometry read_motion_geometry(rclcpp::Node & node)
 {
-  const auto observation_translation = node.declare_parameter<std::vector<double>>(
-    "observation_to_object_translation", std::vector<double>{});
   const auto observation_rotation = node.declare_parameter<std::vector<double>>(
     "observation_to_object_quaternion", std::vector<double>{});
   const auto observation_reference = node.declare_parameter<std::string>(
@@ -92,16 +90,13 @@ MotionGeometry read_motion_geometry(rclcpp::Node & node)
     geometry.place_waypoint_clearance_toward_positive_y = true;
     geometry.place_waypoint_configured = true;
   }
-  if (observation_translation.size() == 3U && observation_rotation.size() == 4U &&
+  if (observation_rotation.size() == 4U &&
     translation.size() == 3U && rotation.size() == 4U && insertion_axis.size() == 3U)
   {
-    geometry.observation_to_object.translation.x = observation_translation[0];
-    geometry.observation_to_object.translation.y = observation_translation[1];
-    geometry.observation_to_object.translation.z = observation_translation[2];
-    geometry.observation_to_object.rotation.x = observation_rotation[0];
-    geometry.observation_to_object.rotation.y = observation_rotation[1];
-    geometry.observation_to_object.rotation.z = observation_rotation[2];
-    geometry.observation_to_object.rotation.w = observation_rotation[3];
+    geometry.observation_to_object_rotation.x = observation_rotation[0];
+    geometry.observation_to_object_rotation.y = observation_rotation[1];
+    geometry.observation_to_object_rotation.z = observation_rotation[2];
+    geometry.observation_to_object_rotation.w = observation_rotation[3];
     geometry.object_to_grasp_tcp.translation.x = translation[0];
     geometry.object_to_grasp_tcp.translation.y = translation[1];
     geometry.object_to_grasp_tcp.translation.z = translation[2];

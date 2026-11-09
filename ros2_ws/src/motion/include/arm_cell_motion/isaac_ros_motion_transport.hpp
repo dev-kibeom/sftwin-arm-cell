@@ -135,6 +135,9 @@ public:
   bool stage_pick_capture_reference(
     const geometry_msgs::msg::PoseStamped & pose, double width_mm, uint8_t symmetry_order,
     const std::string & execution_id) override;
+  bool publish_pick_capture_reference(
+    const geometry_msgs::msg::PoseStamped & pose, double width_mm, uint8_t symmetry_order,
+    const std::string & execution_id, const geometry_msgs::msg::PoseStamped * object_pose);
   void discard_pending_grasp_relation() override;
   bool commit_pending_grasp_relation() override;
   void clear_grasp_relation_after_release() override;

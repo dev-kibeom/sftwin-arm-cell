@@ -33,22 +33,17 @@ def production_capture_configuration(profile, mission_recipe):
         float(value)
         for value in profile["material_definitions"]["RawPart"]["nominal_dimensions_m"]
     )
-    observation_to_object = tuple(
-        float(value) for value in motion["observation_to_object_translation"]
-    )
     translation = tuple(
         float(value) for value in motion["object_to_grasp_tcp_translation"]
     )
     insertion_axis = tuple(float(value) for value in motion["insertion_axis_tcp"])
     if len(translation) != 3:
         raise ValueError("object_to_grasp_tcp_translation must have three values")
-    if len(observation_to_object) != 3:
-        raise ValueError("observation_to_object_translation must have three values")
     if len(dimensions) != 3:
         raise ValueError("RawPart dimensions_m must have three values")
     reference = CaptureReferenceConfig(
         fixture_dimensions_m=dimensions,
-        observation_to_grasp_tcp_m=observation_to_object[2] + translation[2],
+        observation_to_grasp_tcp_m=-dimensions[2] / 2.0 + translation[2],
         insertion_axis_tcp=insertion_axis,
     ).validate()
     config = CaptureConfig(

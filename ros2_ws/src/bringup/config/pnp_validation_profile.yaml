@@ -38,7 +38,6 @@ motion:
   # fixture object's geometric center. This is validation-only geometry; the
   # historical WU-14 contact seed remains isolated from production config.
   observation_reference: fixture_visible_top_surface_centroid
-  observation_to_object_translation: [0.0, 0.0, -0.04]
   observation_to_object_quaternion: [0.0, 0.0, 0.0, 1.0]
   object_to_grasp_tcp_translation: [0.0, 0.0, 0.0375]
   # Relative X-180 tool convention: TCP +X remains the closing axis and

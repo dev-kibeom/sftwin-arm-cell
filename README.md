@@ -166,6 +166,16 @@ ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=info diagnostics:=vis
 
 ROS bringup을 종료하려면 `Ctrl+C`를 누릅니다.
 
+파지 목표·attach 코드처럼 C++ Motion과 Isaac Python 사이의 메시지를 함께 변경한 경우,
+실행 중인 bringup을 종료한 뒤 위 빌드와 overlay source를 다시 수행하고 bringup을 재시작합니다.
+Isaac에서도 현재 체크아웃의 `2_after_play.py`를 다시 실행해 그리퍼 runtime을 교체합니다.
+`/tmp`의 검증용 빌드는 이 `ros2_ws/install`이나 실행 중인 프로세스를 갱신하지 않습니다.
+
+현재 파지 reference 메시지는 보정된 TCP 목표 `position`과 비전에서 계산한 자재 중심
+`object_position`을 함께 전달합니다. `capture_object_association_missing`이면 이전 Motion
+실행 파일이 보내는 메시지인지 확인합니다. `capture_object_association_runtime_unavailable`이면
+Isaac 그리퍼 runtime이 현재 Python 모듈로 다시 로드되었는지 확인합니다.
+
 ### 방법 2: Docker Compose로 실행
 
 호스트에 Docker Compose v2가 필요합니다. 별도의 호스트 ROS workspace 빌드 없이 저장소 루트에서 실행합니다.
@@ -173,6 +183,11 @@ ROS bringup을 종료하려면 `Ctrl+C`를 누릅니다.
 ```bash
 docker compose up --build
 ```
+
+C++ 소스 변경 후에는 기존 Compose 실행을 종료하고 `docker compose up --build`로
+이미지를 다시 빌드해 컨테이너를 교체합니다. 저장소 bind mount는 `/arm_cell`의 Python
+소스를 갱신하지만, 실행 파일은 이미지의 `/workspace/ros2_ws/install`에서 로드하므로
+Python 파일만 갱신해서는 Motion 메시지 변경이 반영되지 않습니다.
 
 Compose가 ROS workspace를 이미지로 빌드하고 `arm_cell_bringup`과 Python 3.10 sidecar를 시작합니다. Linux host networking, 기본 `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, Fast DDS UDPv4 transport를 사용합니다. Isaac Sim과 컨테이너의 ROS domain 및 RMW 설정을 일치시킵니다. 기본 모드는 `info`이며, Docker에서는 시작할 때 환경변수로 모드를 선택합니다.
 

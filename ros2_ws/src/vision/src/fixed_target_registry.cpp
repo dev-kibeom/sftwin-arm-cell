@@ -40,6 +40,11 @@ FixedTargetReceipt FixedTargetRegistry::register_target(
   if (registration.run_id.empty()) {
     return {false, 0, receipt_time_ns, "run_id must not be empty"};
   }
+  for (const auto dimension : registration.dimensions_m) {
+    if (!std::isfinite(dimension) || dimension <= 0.0) {
+      return {false, 0, receipt_time_ns, "known material dimensions must be finite and positive"};
+    }
+  }
   if (registration.pose.header.frame_id != "base_link") {
     return {false, 0, receipt_time_ns, "pose must be expressed in base_link"};
   }

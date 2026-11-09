@@ -1768,6 +1768,17 @@ bool IsaacRosMotionTransport::stage_pick_capture_reference(
   const geometry_msgs::msg::PoseStamped & pose, double width_mm, uint8_t symmetry_order,
   const std::string & execution_id)
 {
+  return publish_pick_capture_reference(pose, width_mm, symmetry_order, execution_id, nullptr);
+}
+
+bool IsaacRosMotionTransport::publish_pick_capture_reference(
+  const geometry_msgs::msg::PoseStamped & pose, double width_mm, uint8_t symmetry_order,
+  const std::string & execution_id, const geometry_msgs::msg::PoseStamped * object_pose)
+{
+  if (object_pose && (object_pose->header.frame_id != pose.header.frame_id ||
+    !std::isfinite(object_pose->pose.position.x) ||
+    !std::isfinite(object_pose->pose.position.y) ||
+    !std::isfinite(object_pose->pose.position.z))) {return false;}
   if (!capture_reference_publisher_ || execution_id.empty() || pose.header.frame_id.empty() ||
     !std::isfinite(width_mm) || width_mm <= 0.0 ||
     !std::isfinite(pose.pose.position.x) || !std::isfinite(pose.pose.position.y) ||
@@ -1788,6 +1799,13 @@ bool IsaacRosMotionTransport::stage_pick_capture_reference(
           << pose.pose.orientation.y << "," << pose.pose.orientation.z << ","
           << pose.pose.orientation.w << "],\"expected_contact_width_mm\":" << width_mm
           << ",\"orientation_symmetry_order\":" << static_cast<unsigned>(symmetry_order) << "}";
+  if (object_pose) {
+    auto json = nlohmann::json::parse(payload.str());
+    json["object_position"] = {object_pose->pose.position.x,
+      object_pose->pose.position.y, object_pose->pose.position.z};
+    payload.str("");
+    payload << json.dump();
+  }
   message.data = payload.str();
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -5805,6 +5823,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             grasp_pose.pose.position.x += offset_base.x();
             grasp_pose.pose.position.y += offset_base.y();
             grasp_pose.pose.position.z += offset_base.z();
+            grasp_pose = shallower_pick_grasp(grasp_pose, request.insertion_axis_tcp, request.pick_grasp_backoff_m);
             const auto approach_pose = pick_approach_pose(
               grasp_pose, request.pick_approach_axis, request.insertion_axis_tcp,
               request.approach_distance_m);
@@ -5922,6 +5941,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         planning_context->insertion_axis_tcp = request.insertion_axis_tcp;
         planning_context->approach_axis = request.pick_approach_axis;
         planning_context->approach_distance_m = request.approach_distance_m;
+        planning_context->pick_grasp_backoff_m = request.pick_grasp_backoff_m;
         planning_context->measured_start = measured_start;
         planning_context->continuity_limits = continuity_limits;
         planning_context->latest_collision_contacts = latest_pick_collision_contacts;
@@ -6277,9 +6297,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         stage_selected_pick_grasp_relation(
           object_to_tcp_relation(
             selected_candidate.object_pose, selected_candidate.target_pose));
-        if (!stage_pick_capture_reference(
+        if (!publish_pick_capture_reference(
             selected_candidate.target_pose, selected_candidate.expected_contact_width_mm,
-            request.orientation_symmetry_order, request.motion_goal_uuid))
+            request.orientation_symmetry_order, request.motion_goal_uuid,
+            &selected_candidate.object_pose))
         {
           capture_reference_status = "failed";
           if (capture_reference_failure_reason.empty()) {

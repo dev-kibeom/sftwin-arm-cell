@@ -1031,6 +1031,7 @@ CycleCoordinator::ExecutePnp::Goal CycleCoordinator::pnp_goal(
     ExecutePnp::Goal::PICK_APPROACH_PLANNING_FRAME_VERTICAL :
     ExecutePnp::Goal::PICK_APPROACH_TCP_INSERTION_AXIS;
   goal.pick_approach_distance_m = recipe.pick_approach_distance_m;
+  goal.pick_grasp_backoff_m = recipe.pick_grasp_backoff_m;
   goal.pick_grasp_position_tolerance_m = recipe.pick_grasp_position_tolerance_m;
   goal.pick_grasp_orientation_tolerance_rad = recipe.pick_grasp_orientation_tolerance_rad;
   goal.grasp_width_min_mm = recipe.grasp_width_min_mm;
@@ -1105,6 +1106,7 @@ CycleCoordinator::Result CycleCoordinator::execute(
         (candidate->pick_approach_axis == PickApproachAxis::TCP_INSERTION_AXIS ||
         candidate->pick_approach_axis == PickApproachAxis::PLANNING_FRAME_VERTICAL);
       const bool valid_pick_grasp_envelope = candidate &&
+        std::isfinite(candidate->pick_grasp_backoff_m) && candidate->pick_grasp_backoff_m >= 0.0 &&
         std::isfinite(candidate->pick_approach_distance_m) &&
         candidate->pick_approach_distance_m > 0.0 &&
         std::isfinite(candidate->pick_grasp_position_tolerance_m) &&

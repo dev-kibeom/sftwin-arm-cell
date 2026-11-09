@@ -189,6 +189,7 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
   pick.vision_acquisition_id = goal.vision_acquisition_id;
   pick.pick_approach_translation_direction = goal.pick_approach_translation_direction;
   pick.pick_approach_distance_m = goal.pick_approach_distance_m;
+  pick.pick_grasp_backoff_m = goal.pick_grasp_backoff_m;
   pick.pick_grasp_position_tolerance_m = goal.pick_grasp_position_tolerance_m;
   pick.pick_grasp_orientation_tolerance_rad = goal.pick_grasp_orientation_tolerance_rad;
   pick.grasp_width_min_mm = goal.grasp_width_min_mm;

@@ -105,6 +105,9 @@ class StageCaptureQuery:
         self.reference_config = None
         self._last_reference_diagnostics = None
         self.expected_tcp_reference = None
+        self._selected_object = None
+        self._selected_object_path = None
+        self._association_attempted = False
         self._expected_tcp_reference_error = None
         self.actual_orientation_tolerance_deg = 5.0
         self.actual_contact_width_tolerance_mm = 2.0
@@ -124,6 +127,9 @@ class StageCaptureQuery:
         expected_contact_width_mm=None,
     ):
         self.expected_tcp_reference = None
+        self._selected_object = None
+        self._selected_object_path = None
+        self._association_attempted = False
         self._expected_tcp_reference_error = None
         if not isinstance(frame_id, str) or not frame_id.strip():
             self._expected_tcp_reference_error = {
@@ -169,12 +175,36 @@ class StageCaptureQuery:
         )
         return True
 
+    def configure_selected_object(self, position, dimensions):
+        values = tuple(float(v) for v in position)
+        if len(values) != 3 or not all(math.isfinite(v) for v in values):
+            raise ValueError("invalid selected object position")
+        self._selected_object = (values, tuple(dimensions))
+        self._selected_object_path = None
+        self._association_attempted = False
+
+    def _associate_selected_object(self, positions):
+        if not self._association_attempted:
+            self._association_attempted = True
+            position, dimensions = self._selected_object
+            matches = [path for path, center in positions.items() if all(
+                abs(float(center[i]) - position[i]) <= float(dimensions[i]) / 2
+                for i in range(3))]
+            self._selected_object_path = matches[0] if len(matches) == 1 else None
+        return self._selected_object_path
+
     def clear_expected_tcp_reference(self):
         self.expected_tcp_reference = None
+        self._selected_object = None
+        self._selected_object_path = None
+        self._association_attempted = False
         self._expected_tcp_reference_error = None
 
     def invalidate_expected_tcp_reference(self, reason, frame_id=None):
         self.expected_tcp_reference = None
+        self._selected_object = None
+        self._selected_object_path = None
+        self._association_attempted = False
         self._expected_tcp_reference_error = {
             "frame_id": frame_id,
             "rejection_reason": str(reason),
@@ -198,6 +228,7 @@ class StageCaptureQuery:
     def query(self):
         if self._expected_tcp_reference_error is not None:
             self._last_reference_diagnostics = dict(self._expected_tcp_reference_error)
+            return False, []
         tcp_prim = self.stage.GetPrimAtPath(self.tcp_path)
         if not tcp_prim.IsValid():
             return False, []
@@ -242,6 +273,21 @@ class StageCaptureQuery:
         )
         if paths is None:
             return False, []
+        if self._selected_object is not None:
+            if world_reference is None:
+                return False, []
+            # Resolve once in the observation frame; subsequent CLOSE ticks keep
+            # the same identity even if another material moves nearer the goal.
+            if not self._association_attempted:
+                frame_inverse = frame_world.GetInverse()
+                positions = {
+                    path: tuple(frame_inverse.Transform(
+                        self._world_transform(path).ExtractTranslation()))
+                    for path in paths
+                }
+                self._associate_selected_object(positions)
+            selected = self._selected_object_path
+            paths = [selected] if selected in paths else []
         for path in paths:
             target_prim = self.stage.GetPrimAtPath(path)
             if not target_prim.IsValid():
@@ -342,7 +388,13 @@ class StageCaptureQuery:
                 position_error = None
                 orientation_error = None
                 reference_position = None
-            local_position = tcp_world.GetInverse().Transform(target_position)
+            material_local_position = tcp_world.GetInverse().Transform(target_position)
+            capture_position = (
+                _pxr_modules()[0].Vec3d(*world_reference[0])
+                if self._selected_object is not None and world_reference is not None
+                else target_position
+            )
+            local_position = tcp_world.GetInverse().Transform(capture_position)
             tcp_rotation = tcp_world.ExtractRotationQuat()
             target_rotation = target_world.ExtractRotationQuat()
             try:
@@ -437,7 +489,7 @@ class StageCaptureQuery:
                     tcp_stage_world_pose=tcp_stage_pose,
                     stage_world_pose=self._safe_pose_dict(target_world),
                     relative_pose={
-                        "position_m": tuple(float(local_position[i]) for i in range(3)),
+                        "position_m": tuple(float(material_local_position[i]) for i in range(3)),
                         "orientation_xyzw": (
                             tuple(float(local_rotation[i]) for i in range(1, 4))
                             + (float(local_rotation[0]),)

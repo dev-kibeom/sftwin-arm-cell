@@ -7,6 +7,8 @@ uint8 PICK_APPROACH_TCP_INSERTION_AXIS=0
 uint8 PICK_APPROACH_PLANNING_FRAME_VERTICAL=1
 uint8 pick_approach_translation_direction
 float64 pick_approach_distance_m
+# Recipe-owned distance opposite the final TCP insertion axis; zero disables.
+float64 pick_grasp_backoff_m
 float64 pick_grasp_position_tolerance_m
 float64 pick_grasp_orientation_tolerance_rad
 float32 grasp_width_min_mm

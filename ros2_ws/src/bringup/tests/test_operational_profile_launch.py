@@ -686,9 +686,7 @@ def test_operational_profile_uses_w06_place_destination():
     assert rawpart["material_id"] == "RawPart"
     assert "dimensions_m" not in rawpart
     assert "shape" not in rawpart
-    observation_offset = profile["motion"]["observation_to_object_translation"]
-    assert observation_offset[:2] == [0.0, 0.0]
-    assert observation_offset[2] == -nominal_dimensions[2] / 2.0
+    assert "observation_to_object_translation" not in profile["motion"]
     pick_approach_distance = recipe["pick"]["approach_distance_m"]
     rawpart_top_surface_offset = nominal_dimensions[2] / 2.0
     assert recipe["pick"]["approach_axis"] == "tcp_insertion_axis"

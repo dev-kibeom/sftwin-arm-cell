@@ -92,6 +92,7 @@ erDiagram
 | `orientation_symmetry_order`, `has_unobserved_yaw_fallback`, `unobserved_yaw_fallback_rad` | 관측 대칭 동치류와 별도 Recipe 방향 정책 | 0/1/2/4만 인정; order 0 fallback은 관측 근거로 취급 금지 |
 | `grasp_width_min_mm`, `grasp_width_max_mm` | Recipe의 허용 접촉 폭 구간 | 유한 양수·최솟값 ≤ 최댓값 |
 | `pick_approach_translation_direction`, `pick_approach_distance_m` | PICK 접근축 모드·Grasp와 Approach 분리 거리 | RawPart는 TCP insertion axis, 양의 거리 |
+| `pick_grasp_backoff_m` | Recipe `pick.grasp_backoff_m`의 파지 깊이 보정 거리 | Recipe에 명시하는 유한 비음수 metre 값. 0은 무보정. 최종 TCP 후보의 정규화된 insertion axis 반대 방향으로 적용하며 Approach 거리와 독립 |
 | `pick_grasp_position_tolerance_m`, `pick_grasp_orientation_tolerance_rad` | Recipe의 Grasp 목표 허용오차 | 후보 상판 높이 동치 허용오차와 구별 |
 | `has_non_target_occupancy`, `non_target_occupancy` | 직접/non-Vision PICK 호환용 점유 Availability·Primitive. Vision-derived PnP는 후보 Geometry를 Task Execution–Motion ICD로 전달하고 Motion이 맵을 구성 | 직접 입력에서만 flag와 목록을 한 쌍으로 해석 |
 | `place_position_tolerance_m`, `place_orientation_tolerance_rad`, `place_orientation_constraint` | PLACE 공정 위치·방향 제약 | FIXED/BOUNDED/FREE, FREE에서 방향 허용오차 무시 |

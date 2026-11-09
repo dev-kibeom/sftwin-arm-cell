@@ -116,7 +116,6 @@ def test_fixture_profile_loader_is_shared_by_live_entrypoints():
             },
         },
         "motion": {
-            "observation_to_object_translation": [0.0, 0.0, -0.04],
             "object_to_grasp_tcp_translation": [0.0, 0.0, 0.0375],
             "object_to_grasp_tcp_quaternion": [1.0, 0.0, 0.0, 0.0],
         },

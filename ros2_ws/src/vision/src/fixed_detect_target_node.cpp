@@ -1,4 +1,5 @@
 #include <chrono>
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -73,6 +74,7 @@ private:
     registration.target_id = request.target_id;
     registration.run_id = request.run_id;
     registration.pose = request.pose;
+    registration.dimensions_m = request.dimensions_m;
     registration.orientation_symmetry_order = request.orientation_symmetry_order;
     registration.ttl_ns = duration_ns(request.ttl);
     if (registration.ttl_ns == 0) {
@@ -114,6 +116,11 @@ private:
     candidate.candidate_id = "candidate-1";
     candidate.target_pose = result->pose;
     candidate.orientation_symmetry_order = result->orientation_symmetry_order;
+    candidate.has_estimated_height = true;
+    candidate.estimated_height_m = result->dimensions_m[2];
+    candidate.has_observed_rectangle = true;
+    candidate.rectangle_long_side_m = std::max(result->dimensions_m[0], result->dimensions_m[1]);
+    candidate.rectangle_short_side_m = std::min(result->dimensions_m[0], result->dimensions_m[1]);
     response.material_candidates = {std::move(candidate)};
     response.diagnostic_detail = "fixed validation registration";
   }

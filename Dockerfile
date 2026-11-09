@@ -2,6 +2,13 @@ FROM ros:humble-ros-base-jammy
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Use a reachable Ubuntu mirror for dependency downloads, including rosdep's apt calls.
+ARG UBUNTU_MIRROR=https://mirror.kakao.com/ubuntu
+RUN sed -i \
+      -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
+      -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_MIRROR}|g" \
+      /etc/apt/sources.list
+
 WORKDIR /workspace
 COPY ros2_ws/src/ ros2_ws/src/
 COPY assets/ assets/

@@ -879,12 +879,22 @@ TEST_F(
         world.collision_objects.empty() ? default_planner_code :
         moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
       result->planned_trajectory.joint_trajectory.joint_names = arm_joint_names();
-      for (const auto z : {0.2, 0.1}) {
-        trajectory_msgs::msg::JointTrajectoryPoint point;
-        point.positions = {0.0, 0.0, z, 0.0, 0.0, 0.0};
-        point.time_from_start = rclcpp::Duration::from_seconds(z == 0.2 ? 0.0 : 1.0);
-        result->planned_trajectory.joint_trajectory.points.push_back(point);
+      // Follow the planner's requested joint goal, including the grasp depth
+      // correction, rather than returning an obsolete hard-coded endpoint.
+      trajectory_msgs::msg::JointTrajectoryPoint start;
+      start.positions = {0.0, 0.0, 0.2, 0.0, 0.0, 0.0};
+      trajectory_msgs::msg::JointTrajectoryPoint finish;
+      finish.positions = start.positions;
+      const auto & constraints = goal->get_goal()->request.goal_constraints.front();
+      for (const auto & joint : constraints.joint_constraints) {
+        const auto names = arm_joint_names();
+        const auto found = std::find(names.begin(), names.end(), joint.joint_name);
+        if (found != names.end()) {
+          finish.positions[std::distance(names.begin(), found)] = joint.position;
+        }
       }
+      finish.time_from_start = rclcpp::Duration::from_seconds(1.0);
+      result->planned_trajectory.joint_trajectory.points = {start, finish};
       goal->succeed(result);
     });
   auto group_future = std::async(std::launch::async, [&]() {
@@ -997,6 +1007,7 @@ TEST_F(
   request.target_pose = request.tcp_target;
   request.object_pose = request.target_pose;
   request.insertion_axis_tcp.z = -1.0;
+  request.pick_grasp_backoff_m = 0.019;
   const auto submit = [&]() {
       auto submitted = std::async(std::launch::async, [&]() {
           return transport_->submit_normalized(request);
@@ -1021,6 +1032,13 @@ TEST_F(
   const bool submitted = submit();
   ASSERT_FALSE(planning_requests.empty()) << transport_->last_pick_candidate_evaluation();
   EXPECT_TRUE(submitted);
+  pump_until([this]() {return !capture_reference_payloads().empty();});
+  const auto reference = nlohmann::json::parse(capture_reference_payloads().front());
+  ASSERT_TRUE(reference.contains("object_position"));
+  EXPECT_DOUBLE_EQ(reference["object_position"][2], request.object_pose.pose.position.z);
+  EXPECT_NEAR(reference["position"][2].get<double>() - reference["object_position"][2].get<double>(),
+    request.pick_grasp_backoff_m, 1e-8);
+
   pump_until([&]() {return command_count() > 0U;});
   EXPECT_EQ(snapshot_count, 1U);
   EXPECT_EQ(validity_call_count, 0U);
@@ -2288,6 +2306,23 @@ TEST_P(SelectedCaptureReferenceTest, CloseWaitsForMatchingAppliedCaptureReferenc
 INSTANTIATE_TEST_SUITE_P(
   ProductionAndFixedVision, SelectedCaptureReferenceTest,
   testing::Values(uint8_t{0}, uint8_t{1}, uint8_t{2}, uint8_t{4}));
+
+TEST_F(IsaacRosMotionTransportTest, SelectedReferenceWireIncludesObservedObjectCenter)
+{
+  geometry_msgs::msg::PoseStamped target;
+  target.header.frame_id = "base_link";
+  target.pose.orientation.w = 1.0;
+  target.pose.position.z = 0.13;
+  auto object = target;
+  object.pose.position.z = 0.1;
+  ASSERT_TRUE(transport_->publish_pick_capture_reference(target, 70.0, 1, "pick-wire", &object));
+  pump_until([this]() {return !capture_reference_payloads().empty();});
+  const auto packet = nlohmann::json::parse(capture_reference_payloads().front());
+  EXPECT_DOUBLE_EQ(packet["position"][2], 0.13);
+  ASSERT_TRUE(packet.contains("object_position"));
+  EXPECT_EQ(packet["object_position"], nlohmann::json({0.0, 0.0, 0.1}));
+  EXPECT_EQ(packet["motion_goal_uuid"], "pick-wire");
+}
 
 TEST_F(IsaacRosMotionTransportTest, FixedVisionSelectedReferencePreservesPoseWidthAndOrder)
 {

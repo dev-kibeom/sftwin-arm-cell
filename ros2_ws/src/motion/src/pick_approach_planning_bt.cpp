@@ -201,6 +201,8 @@ BT::NodeStatus PrepareAttempt::execute(PlanningContext & context)
     attempt.current_grasp_goal.pose.position.z += offset.z();
     attempt.expected_closing_axis = candidate.contact->closing_axis;
   }
+  attempt.current_grasp_goal = shallower_pick_grasp(
+    attempt.current_grasp_goal, context.insertion_axis_tcp, context.pick_grasp_backoff_m);
   attempt.current_approach_goal = pick_approach_pose(
     attempt.current_grasp_goal,
     context.approach_axis, context.insertion_axis_tcp, context.approach_distance_m);

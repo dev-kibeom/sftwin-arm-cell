@@ -32,11 +32,13 @@ def _registration(
     pose=None,
     orientation_symmetry_order=1,
     ttl=(0, 0),
+    dimensions=(0.061, 0.052, 0.093),
 ):
     request = RegisterFixedTarget.Request()
     request.target_id = target_id
     request.run_id = run_id
     request.pose = pose or _pose()
+    request.dimensions_m = list(dimensions)
     request.orientation_symmetry_order = orientation_symmetry_order
     request.ttl.sec = ttl[0]
     request.ttl.nanosec = ttl[1]
@@ -135,8 +137,9 @@ def fixed_vision():
 
 
 def test_registration_detects_registered_pose_and_consumes_once(fixed_vision):
+    dimensions = (0.083, 0.047, 0.112)
     response = fixed_vision.register(
-        _registration(orientation_symmetry_order=1, pose=_pose(stamp=(11, 22)))
+        _registration(orientation_symmetry_order=1, pose=_pose(stamp=(11, 22)), dimensions=dimensions)
     )
     assert response.accepted
     assert response.receipt_sequence > 0
@@ -147,6 +150,12 @@ def test_registration_detects_registered_pose_and_consumes_once(fixed_vision):
     result = fixed_vision.detect(request)
     assert result.result_code.value == DetectTargetResultCode.DETECT_RESULT_SUCCESS
     assert len(result.material_candidates) == 1
+    candidate = result.material_candidates[0]
+    assert candidate.has_estimated_height
+    assert candidate.estimated_height_m == pytest.approx(dimensions[2])
+    assert candidate.has_observed_rectangle
+    assert candidate.rectangle_long_side_m == pytest.approx(max(dimensions[:2]))
+    assert candidate.rectangle_short_side_m == pytest.approx(min(dimensions[:2]))
     assert result.material_candidates[0].orientation_symmetry_order == 1
     assert result.material_candidates[0].target_pose.header.frame_id == "base_link"
     assert result.material_candidates[0].target_pose.header.stamp.sec == 11
