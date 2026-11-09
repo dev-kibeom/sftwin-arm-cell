@@ -787,3 +787,29 @@ TEST(PickGraspSearch, ExhaustedVerticalPoseCanAdvanceToAnotherDirection)
 
 }  // namespace
 }  // namespace arm_cell_motion
+
+TEST(PickGraspClearance, FollowsFinalTiltedInsertionAxis)
+{
+  geometry_msgs::msg::PoseStamped pose;
+  pose.pose.orientation.y = std::sqrt(0.5);
+  pose.pose.orientation.w = std::sqrt(0.5);
+  geometry_msgs::msg::Vector3 axis;
+  axis.z = 2.0;
+  const double clearance_m = 0.017;
+  const auto shifted = arm_cell_motion::shallower_pick_grasp(pose, axis, clearance_m);
+  EXPECT_NEAR(shifted.pose.position.x, -clearance_m, 1e-12);
+  EXPECT_NEAR(shifted.pose.position.z, 0.0, 1e-12);
+}
+
+TEST(PickGraspClearance, ZeroIsIdentityAndInvalidRequestIsRejected)
+{
+  geometry_msgs::msg::PoseStamped pose;
+  pose.pose.orientation.w = 1.0;
+  pose.pose.position.z = 0.314;
+  geometry_msgs::msg::Vector3 axis;
+  axis.z = 1.0;
+  EXPECT_EQ(arm_cell_motion::shallower_pick_grasp(pose, axis, 0.0), pose);
+  EXPECT_THROW(arm_cell_motion::shallower_pick_grasp(pose, axis, -0.001), std::invalid_argument);
+  EXPECT_THROW(arm_cell_motion::shallower_pick_grasp(pose, axis,
+    std::numeric_limits<double>::quiet_NaN()), std::invalid_argument);
+}

@@ -41,7 +41,7 @@ constexpr char kValidRecipe[] = R"({
   "recipe_id": "rawpart-placement-v1",
   "target_id": "RawPart",
   "grasp": {"min_expected_contact_width_mm": 60.0, "max_expected_contact_width_mm": 85.0, "yaw_rad": 0.0, "unobserved_yaw_policy": "forbidden"},
-  "pick": {"approach_distance_m": 0.15, "grasp_position_tolerance_m": 0.01, "grasp_orientation_tolerance_rad": 0.08726646259971647},
+  "pick": {"grasp_backoff_m": 0.017, "approach_distance_m": 0.15, "grasp_position_tolerance_m": 0.01, "grasp_orientation_tolerance_rad": 0.08726646259971647},
   "place": {
     "orientation_constraint": "bounded",
     "desired_object_pose": {
@@ -68,6 +68,7 @@ TEST_F(RecipeRepositoryTest, ParsesAValidRecipeIntoMissionSemantics)
   EXPECT_FLOAT_EQ(result.recipe->grasp_width_min_mm, 60.0F);
   EXPECT_FLOAT_EQ(result.recipe->grasp_width_max_mm, 85.0F);
   EXPECT_DOUBLE_EQ(result.recipe->pick_approach_distance_m, 0.15);
+  EXPECT_DOUBLE_EQ(result.recipe->pick_grasp_backoff_m, 0.017);
   EXPECT_DOUBLE_EQ(result.recipe->pick_grasp_position_tolerance_m, 0.01);
   EXPECT_DOUBLE_EQ(result.recipe->pick_grasp_orientation_tolerance_rad, 0.08726646259971647);
   EXPECT_DOUBLE_EQ(result.recipe->grasp_yaw_rad, 0.0);
@@ -80,6 +81,24 @@ TEST_F(RecipeRepositoryTest, ParsesAValidRecipeIntoMissionSemantics)
   EXPECT_EQ(result.recipe->place_orientation_constraint, PlaceOrientationConstraint::BOUNDED);
   EXPECT_DOUBLE_EQ(result.recipe->place_approach_distance_m, 0.015);
   EXPECT_DOUBLE_EQ(result.recipe->retract_distance_m, 0.05);
+}
+
+TEST_F(RecipeRepositoryTest, RequiresFiniteNonnegativeRecipeBackoff)
+{
+  const std::string field = "\"grasp_backoff_m\": 0.017, ";
+  for (const auto & value : {"0.0", "0.043", "-0.001", "null", "\"NaN\""}) {
+    auto contents = std::string(kValidRecipe);
+    const auto offset = contents.find(field);
+    ASSERT_NE(offset, std::string::npos);
+    contents.replace(offset, field.size(), std::string("\"grasp_backoff_m\": ") + value + ", ");
+    write("RawPart.json", contents);
+    const auto result = RecipeRepository(directory_).load("RawPart");
+    EXPECT_EQ(result.recipe.has_value(), std::string(value) == "0.0" || std::string(value) == "0.043");
+  }
+  auto missing = std::string(kValidRecipe);
+  missing.erase(missing.find(field), field.size());
+  write("RawPart.json", missing);
+  EXPECT_FALSE(RecipeRepository(directory_).load("RawPart").recipe);
 }
 
 TEST_F(RecipeRepositoryTest, DefaultsOmittedVisionAlgorithmToCuboid)

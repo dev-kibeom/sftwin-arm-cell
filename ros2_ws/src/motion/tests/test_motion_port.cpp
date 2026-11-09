@@ -1,6 +1,7 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -58,6 +59,8 @@ MotionPortRequest pick_approach_request(std::string movement_id)
   request.target_pose.header.frame_id = "base_link";
   request.target_pose.pose.orientation.w = 1.0;
   request.constraints.orientation_symmetry_order = MotionOrientationSymmetry::FOURFOLD;
+  request.constraints.has_estimated_object_height = true;
+  request.constraints.estimated_object_height_m = 0.094F;
   return request;
 }
 
@@ -67,6 +70,20 @@ MotionPortRequest retract_request(MotionSegmentKind segment, std::string movemen
   request.segment = segment;
   request.constraints.orientation_symmetry_order = MotionOrientationSymmetry::UNIQUE;
   return request;
+}
+
+TEST(MotionPortTest, InvalidBackoffIsRejectedBeforePlanning)
+{
+  for (const double backoff : {-0.001, std::numeric_limits<double>::quiet_NaN()}) {
+    auto backend = std::make_shared<FakeMotionBackend>();
+    MotionCore core(backend);
+    grant_normal(core);
+    auto request = pick_approach_request("invalid-backoff");
+    request.constraints.grasp_backoff_m = backoff;
+    EXPECT_EQ(core.planAndExecuteMotion(request).result_code,
+      arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+    EXPECT_EQ(backend->planning_calls(), 0);
+  }
 }
 
 TEST(MotionPortTest, ExecutesOneMovementThroughTheSharedMotionCore)

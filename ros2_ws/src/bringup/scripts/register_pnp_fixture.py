@@ -54,6 +54,12 @@ def request_from_handoff(data: dict, service_type=None):
     request = service_type() if service_type is not None else _request_type()()
     request.target_id = payload["target_id"]
     request.run_id = payload["run_id"]
+    dimensions = data["fixture"]["dimensions_m"]
+    if len(dimensions) != 3 or any(
+        not math.isfinite(float(value)) or float(value) <= 0.0 for value in dimensions
+    ):
+        raise ValueError("known fixture dimensions must be three finite positive values")
+    request.dimensions_m = [float(value) for value in dimensions]
     request.pose = PoseStamped()
     request.pose.header.frame_id = pose_data["frame_id"]
     request.pose.pose.position.x = float(pose_data["x"])

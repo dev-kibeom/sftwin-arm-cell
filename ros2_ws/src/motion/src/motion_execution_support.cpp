@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include "arm_cell_motion/motion_execution_support.hpp"
 
 #include <cmath>
@@ -62,22 +63,21 @@ geometry_msgs::msg::Quaternion from_tf2(const tf2::Quaternion & quaternion)
 }
 
 geometry_msgs::msg::PoseStamped resolve_object_pose(
-  const geometry_msgs::msg::PoseStamped & observation_pose, const MotionGeometry & geometry)
+  const geometry_msgs::msg::PoseStamped & observation_pose, const MotionGeometry & geometry,
+  bool has_thickness, double face_thickness_m)
 {
+  if (!has_thickness || !std::isfinite(face_thickness_m) || face_thickness_m <= 0.0) {
+    throw std::invalid_argument("PICK top-surface observation requires known material face thickness");
+  }
   const auto observation_rotation = to_tf2(observation_pose.pose.orientation);
-  const auto observation_to_object_translation = geometry.observation_to_object.translation;
-  const auto offset = tf2::quatRotate(
-    observation_rotation,
-    tf2::Vector3(
-      observation_to_object_translation.x,
-      observation_to_object_translation.y,
-      observation_to_object_translation.z));
+  const auto inward = tf2::quatRotate(
+    observation_rotation, tf2::Vector3(0.0, 0.0, -face_thickness_m / 2.0));
   auto object_pose = observation_pose;
-  object_pose.pose.position.x += offset.x();
-  object_pose.pose.position.y += offset.y();
-  object_pose.pose.position.z += offset.z();
+  object_pose.pose.position.x += inward.x();
+  object_pose.pose.position.y += inward.y();
+  object_pose.pose.position.z += inward.z();
   const auto object_rotation = observation_rotation *
-    to_tf2(geometry.observation_to_object.rotation);
+    to_tf2(geometry.observation_to_object_rotation);
   object_pose.pose.orientation = from_tf2(object_rotation);
   return object_pose;
 }
@@ -137,8 +137,7 @@ bool MotionGeometry::valid() const
 {
   const auto & translation = object_to_grasp_tcp.translation;
   const auto & rotation = object_to_grasp_tcp.rotation;
-  const auto & observation_translation = observation_to_object.translation;
-  const auto & observation_rotation = observation_to_object.rotation;
+  const auto & observation_rotation = observation_to_object_rotation;
   const auto observation_rotation_norm = observation_rotation.x * observation_rotation.x +
     observation_rotation.y * observation_rotation.y + observation_rotation.z *
     observation_rotation.z +
@@ -149,8 +148,7 @@ bool MotionGeometry::valid() const
     insertion_axis_tcp.x * insertion_axis_tcp.x +
     insertion_axis_tcp.y * insertion_axis_tcp.y + insertion_axis_tcp.z * insertion_axis_tcp.z);
   return configured && !observation_reference.empty() &&
-         finite(observation_translation.x) && finite(observation_translation.y) &&
-         finite(observation_translation.z) && finite(observation_rotation.x) &&
+         finite(observation_rotation.x) &&
          finite(observation_rotation.y) && finite(observation_rotation.z) &&
          finite(observation_rotation.w) && finite(observation_rotation_norm) &&
          observation_rotation_norm > 1e-12 && finite(translation.x) && finite(translation.y) &&
@@ -177,7 +175,13 @@ uint8_t MotionExecutionSupport::execute_motion(const MotionPortRequest & request
 {
   const auto started = std::chrono::steady_clock::now();
   const auto parent_execution_id = execution_uuid_string(request.execution_id);
-  auto normalized = normalized_request(request);
+  NormalizedMotionRequest normalized;
+  try {
+    normalized = normalized_request(request);
+  } catch (const std::invalid_argument & error) {
+    RCLCPP_WARN(rclcpp::get_logger("motion_execution_support"), "%s", error.what());
+    return MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+  }
   normalized.interruption_result = interruption_checker_;
   RCLCPP_DEBUG(
     rclcpp::get_logger("motion_execution_support"),
@@ -236,7 +240,13 @@ uint8_t MotionExecutionSupport::execute_motion(const MotionPortRequest & request
 std::uint8_t MotionExecutionSupport::plan_motion(
   const MotionPortRequest & request, NormalizedTrajectoryPlan & plan)
 {
-  auto normalized = normalized_request(request);
+  NormalizedMotionRequest normalized;
+  try {
+    normalized = normalized_request(request);
+  } catch (const std::invalid_argument & error) {
+    RCLCPP_WARN(rclcpp::get_logger("motion_execution_support"), "%s", error.what());
+    return MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+  }
   normalized.interruption_result = interruption_checker_;
   if (!backend_->supports_split_planning()) {
     return MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
@@ -354,6 +364,9 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   request.phase = phase;
   const bool is_pick = goal.task_type.value == MotionTaskType::TASK_TYPE_PICK;
   const bool is_place = goal.task_type.value == MotionTaskType::TASK_TYPE_PLACE;
+  if (is_pick && (!std::isfinite(goal.pick_grasp_backoff_m) || goal.pick_grasp_backoff_m < 0.0)) {
+    throw std::invalid_argument("PICK grasp backoff must be finite and nonnegative");
+  }
   request.observation_reference = is_pick ? geometry_.observation_reference : "";
   request.orientation_symmetry_order = is_pick ? goal.orientation_symmetry_order : 0;
   request.has_estimated_object_height = is_pick && goal.has_estimated_object_height;
@@ -389,19 +402,9 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   } else if (is_pick) {
     request.observation_pose = goal.target_pose;
   }
-  auto object_pose =
-    is_pick ? resolve_object_pose(request.observation_pose, geometry_) : goal.target_pose;
-  if (is_pick && goal.has_estimated_object_height &&
-    std::isfinite(goal.rectangle_long_side_m) && goal.rectangle_long_side_m > 0.0F &&
-    std::isfinite(goal.rectangle_short_side_m) && goal.rectangle_short_side_m > 0.0F)
-  {
-    const auto rotation = to_tf2(request.observation_pose.pose.orientation);
-    const auto inward = tf2::quatRotate(
-      rotation, tf2::Vector3(0.0, 0.0, -static_cast<double>(goal.estimated_object_height_m) / 2.0));
-    object_pose.pose.position.x = request.observation_pose.pose.position.x + inward.x();
-    object_pose.pose.position.y = request.observation_pose.pose.position.y + inward.y();
-    object_pose.pose.position.z = request.observation_pose.pose.position.z + inward.z();
-  }
+  const auto object_pose = is_pick ? resolve_object_pose(
+    request.observation_pose, geometry_, goal.has_estimated_object_height,
+    goal.estimated_object_height_m) : goal.target_pose;
   request.object_pose = object_pose;
   request.target_pose = compose_target_pose(object_pose, geometry_);
   request.object_to_grasp_tcp = geometry_.object_to_grasp_tcp;
@@ -426,6 +429,7 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   const auto approach_distance = is_pick ? goal.pick_approach_distance_m :
     goal.place_approach_distance_m;
   request.approach_distance_m = approach_distance;
+  request.pick_grasp_backoff_m = is_pick ? goal.pick_grasp_backoff_m : 0.0;
   request.retract_distance_m = is_place ? goal.place_retract_distance_m :
     geometry_.pick_retract_distance_m;
   request.estimated_object_height_m = is_pick ? goal.estimated_object_height_m : 0.0;
@@ -500,6 +504,11 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   request.target_is_tcp_pose = movement.target_is_tcp_pose;
   request.place_waypoint_approach = movement.place_waypoint_approach;
   request.place_waypoint_clearance_y_margin_m = movement.place_waypoint_clearance_y_margin_m;
+  if (pick && (!std::isfinite(movement.constraints.grasp_backoff_m) ||
+    movement.constraints.grasp_backoff_m < 0.0))
+  {
+    throw std::invalid_argument("PICK grasp backoff must be finite and nonnegative");
+  }
   request.observation_reference = pick ? geometry_.observation_reference : "";
   request.orientation_symmetry_order = static_cast<std::uint8_t>(
     movement.constraints.orientation_symmetry_order);
@@ -537,24 +546,9 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   } else if (pick) {
     request.observation_pose = movement.target_pose;
   }
-  auto object_pose = pick ? resolve_object_pose(request.observation_pose, geometry_) :
-    movement.target_pose;
-  if (pick && movement.constraints.has_estimated_object_height &&
-    std::isfinite(movement.constraints.rectangle_long_side_m) &&
-    movement.constraints.rectangle_long_side_m > 0.0F &&
-    std::isfinite(movement.constraints.rectangle_short_side_m) &&
-    movement.constraints.rectangle_short_side_m > 0.0F)
-  {
-    const auto rotation = to_tf2(request.observation_pose.pose.orientation);
-    const auto inward = tf2::quatRotate(
-      rotation,
-      tf2::Vector3(
-        0.0, 0.0,
-      -static_cast<double>(movement.constraints.estimated_object_height_m) / 2.0));
-    object_pose.pose.position.x = request.observation_pose.pose.position.x + inward.x();
-    object_pose.pose.position.y = request.observation_pose.pose.position.y + inward.y();
-    object_pose.pose.position.z = request.observation_pose.pose.position.z + inward.z();
-  }
+  const auto object_pose = pick ? resolve_object_pose(
+    request.observation_pose, geometry_, movement.constraints.has_estimated_object_height,
+    movement.constraints.estimated_object_height_m) : movement.target_pose;
   request.object_pose = object_pose;
   request.target_pose = disturbance || movement.target_is_tcp_pose ? movement.target_pose :
     compose_target_pose(object_pose, geometry_);
@@ -576,6 +570,7 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
     movement.constraints.approach_direction_object : geometry_msgs::msg::Vector3{};
   request.insertion_axis_tcp = geometry_.insertion_axis_tcp;
   request.approach_distance_m = movement.constraints.approach_distance_m;
+  request.pick_grasp_backoff_m = pick ? movement.constraints.grasp_backoff_m : 0.0;
   request.retract_distance_m = movement.constraints.retract_distance_m;
   request.estimated_object_height_m = pick ? movement.constraints.estimated_object_height_m : 0.0;
   request.is_disturbance = disturbance;

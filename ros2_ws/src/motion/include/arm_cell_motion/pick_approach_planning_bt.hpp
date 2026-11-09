@@ -125,6 +125,7 @@ struct PlanningContext
   geometry_msgs::msg::Vector3 insertion_axis_tcp;
   PickApproachAxis approach_axis{PickApproachAxis::PLANNING_FRAME_VERTICAL};
   double approach_distance_m{0.0};
+  double pick_grasp_backoff_m{0.0};
   std::vector<double> measured_start;
   std::vector<JointContinuityLimit> continuity_limits;
   std::vector<PickCollisionContact> latest_collision_contacts;

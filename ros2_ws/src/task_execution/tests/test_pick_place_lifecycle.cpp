@@ -613,7 +613,7 @@ MotionGeometry valid_geometry()
   MotionGeometry geometry;
   geometry.configured = true;
   geometry.observation_reference = "profile_reference";
-  geometry.observation_to_object.rotation.w = 1.0;
+  geometry.observation_to_object_rotation.w = 1.0;
   geometry.object_to_grasp_tcp.rotation.w = 1.0;
   geometry.object_to_grasp_tcp.translation.z = 0.1;
   geometry.object_to_grasp_tcp.rotation.w = 1.0;
@@ -683,7 +683,8 @@ TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturni
   auto backend = std::make_shared<RecordingBackend>();
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
     valid_geometry());
-  const auto goal = execute_pnp_goal();
+  auto goal = execute_pnp_goal();
+  goal.pick_grasp_backoff_m = 0.013;
 
   const auto result = executor.execute_pnp(goal, "pnp-goal-uuid");
 
@@ -696,6 +697,10 @@ TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturni
   EXPECT_EQ(backend->requests.front().task_type.value, MotionTaskType::TASK_TYPE_PICK);
   EXPECT_EQ(backend->requests.back().task_type.value, MotionTaskType::TASK_TYPE_PLACE);
   EXPECT_EQ(backend->requests.back().object_pose.pose.position.z, 0.5);
+  for (const auto & request : backend->requests) {
+    EXPECT_DOUBLE_EQ(request.pick_grasp_backoff_m,
+      request.task_type.value == MotionTaskType::TASK_TYPE_PICK ? goal.pick_grasp_backoff_m : 0.0);
+  }
   ASSERT_FALSE(backend->events.empty());
   EXPECT_EQ(backend->events.back(), "home");
 }
@@ -1520,7 +1525,6 @@ TEST(TaskExecutorPickPlaceTest, OrderZeroUsesOnlyTheExplicitFallbackForObservati
 {
   auto backend = std::make_shared<RecordingBackend>();
   auto geometry = valid_geometry();
-  geometry.observation_to_object.translation.x = 0.1;
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), geometry);
   auto goal = pick_goal();
   goal.orientation_symmetry_order = ExecuteTask::Goal::ORIENTATION_UNOBSERVABLE;
@@ -1572,11 +1576,26 @@ TEST(TaskExecutorPickPlaceTest, FreshReleaseInvalidatesAcceptedRelation)
   EXPECT_EQ(backend->release_relation_count, 1);
 }
 
+TEST(TaskExecutorPickPlaceTest, PropagatesRequestedBackoffWithoutInferringItFromThickness)
+{
+  auto backend = std::make_shared<RecordingBackend>();
+  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), valid_geometry());
+  auto goal = pick_goal();
+  goal.pick_grasp_backoff_m = 0.031;
+  goal.estimated_object_height_m = 0.146F;
+  ASSERT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_SUCCESS);
+  ASSERT_FALSE(backend->requests.empty());
+  for (const auto & request : backend->requests) {
+    EXPECT_DOUBLE_EQ(request.pick_grasp_backoff_m, goal.pick_grasp_backoff_m);
+    EXPECT_NEAR(request.object_pose.pose.position.z,
+      goal.target_pose.pose.position.z - goal.estimated_object_height_m / 2.0, 1e-8);
+  }
+}
+
 TEST(TaskExecutorPickPlaceTest, ResolvesProfileObservationToObjectCenterBeforeTargetTransform)
 {
   auto backend = std::make_shared<RecordingBackend>();
   auto geometry = valid_geometry();
-  geometry.observation_to_object.translation.z = -0.04;
   geometry.object_to_grasp_tcp.translation.z = 0.0;
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), geometry);
 
@@ -1595,11 +1614,30 @@ TEST(TaskExecutorPickPlaceTest, ResolvesProfileObservationToObjectCenterBeforeTa
   EXPECT_NEAR(backend->tcp_z_values[2], 0.55, 1e-6);
 }
 
-TEST(TaskExecutorPickPlaceTest, LegacyProfilePickWithoutRectangleRetainsConfiguredTransform)
+TEST(TaskExecutorPickPlaceTest, KnownThicknessResolvesCenterWithoutRectangleGeometry)
+{
+  auto backend = std::make_shared<RecordingBackend>();
+  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), valid_geometry());
+  auto goal = pick_goal();
+  goal.has_observed_rectangle = false;
+  goal.rectangle_long_side_m = 0.0F;
+  goal.rectangle_short_side_m = 0.0F;
+  goal.orientation_symmetry_order = ExecuteTask::Goal::ORIENTATION_UNIQUE;
+  goal.estimated_object_height_m = 0.126F;
+  goal.target_pose.pose.orientation.y = std::sqrt(0.5);
+  goal.target_pose.pose.orientation.w = std::sqrt(0.5);
+  ASSERT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_SUCCESS);
+  ASSERT_FALSE(backend->requests.empty());
+  EXPECT_NEAR(backend->requests.front().object_pose.pose.position.x,
+    -goal.estimated_object_height_m / 2.0, 1e-8);
+  EXPECT_NEAR(backend->requests.front().object_pose.pose.position.z,
+    goal.target_pose.pose.position.z, 1e-8);
+}
+
+TEST(TaskExecutorPickPlaceTest, PickWithoutKnownFaceThicknessIsRejected)
 {
   auto backend = std::make_shared<RecordingBackend>();
   auto geometry = valid_geometry();
-  geometry.observation_to_object.translation.z = -0.04;
   geometry.object_to_grasp_tcp.translation.z = 0.0;
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), geometry);
   auto goal = pick_goal();
@@ -1609,10 +1647,8 @@ TEST(TaskExecutorPickPlaceTest, LegacyProfilePickWithoutRectangleRetainsConfigur
   goal.rectangle_short_side_m = 0.0F;
   goal.orientation_symmetry_order = ExecuteTask::Goal::ORIENTATION_UNIQUE;
 
-  EXPECT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_SUCCESS);
-  ASSERT_FALSE(backend->requests.empty());
-  EXPECT_DOUBLE_EQ(backend->requests.front().object_pose.pose.position.z, 0.96);
-  EXPECT_FALSE(backend->requests.front().has_observed_rectangle);
+  EXPECT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+  EXPECT_TRUE(backend->requests.empty());
 }
 
 TEST(TaskExecutorPickPlaceTest, EstimatedRectangleGeometryIsConsumedWithoutObservedOutline)
@@ -1640,7 +1676,6 @@ TEST(TaskExecutorPickPlaceTest, PlaceTreatsRecipePoseAsDesiredObjectPose)
 {
   auto backend = std::make_shared<RecordingBackend>();
   auto geometry = valid_geometry();
-  geometry.observation_to_object.translation.z = -0.04;
   geometry.object_to_grasp_tcp.translation.z = 0.1;
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), geometry);
   auto goal = place_goal();

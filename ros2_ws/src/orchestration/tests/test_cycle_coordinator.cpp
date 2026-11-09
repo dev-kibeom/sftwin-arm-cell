@@ -227,6 +227,7 @@ struct Fixture
     recipe.pick_approach_axis =
       arm_cell_orchestration::PickApproachAxis::TCP_INSERTION_AXIS;
     recipe.pick_approach_distance_m = 0.15;
+    recipe.pick_grasp_backoff_m = 0.027;
     recipe.pick_grasp_position_tolerance_m = 0.01;
     recipe.pick_grasp_orientation_tolerance_rad = 0.08726646259971647;
     recipe.has_grasp_yaw = true;
@@ -326,6 +327,7 @@ struct Fixture
         pick.pick_approach_translation_direction =
           pnp_goal.pick_approach_translation_direction;
         pick.pick_approach_distance_m = pnp_goal.pick_approach_distance_m;
+        pick.pick_grasp_backoff_m = pnp_goal.pick_grasp_backoff_m;
         pick.pick_grasp_position_tolerance_m = pnp_goal.pick_grasp_position_tolerance_m;
         pick.pick_grasp_orientation_tolerance_rad =
           pnp_goal.pick_grasp_orientation_tolerance_rad;
@@ -1865,6 +1867,7 @@ TEST(CycleCoordinatorTest, ForwardsEstimatedRectangleAndRecipeWidthWithoutObserv
   EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_QUANTITY_REACHED);
   ASSERT_EQ(fixture.pnp_goals.size(), 1U);
   const auto & pnp = fixture.pnp_goals.front();
+  EXPECT_DOUBLE_EQ(pnp.pick_grasp_backoff_m, fixture.recipe.pick_grasp_backoff_m);
   EXPECT_EQ(pnp.material_candidates.front().orientation_symmetry_order, 2U);
   EXPECT_FALSE(pnp.material_candidates.front().has_observed_rectangle);
   EXPECT_TRUE(pnp.material_candidates.front().has_estimated_height);

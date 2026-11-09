@@ -178,13 +178,9 @@ def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
     # applying the object-center-to-TCP transform. The WU-14 contact value
     # remains a validation-only geometry sanity reference.
     translation = profile["motion"]["object_to_grasp_tcp_translation"]
-    observation_translation = profile["motion"]["observation_to_object_translation"]
-    assert observation_translation[:2] == [0.0, 0.0]
-    assert observation_translation[2] == pytest.approx(
-        -profile["fixture"]["dimensions_m"][2] / 2.0
-    )
+    assert "observation_to_object_translation" not in profile["motion"]
     grasp_recipe = profile["fixture"]["grasp_recipe"]
-    grasp_offset = observation_translation[2] + translation[2]
+    grasp_offset = -profile["fixture"]["dimensions_m"][2] / 2.0 + translation[2]
     assert grasp_offset == pytest.approx(grasp_recipe["object_top_to_grasp_tcp_z_m"])
     contact_band = grasp_recipe["measured_contact_band_m"]
     assert contact_band[0] <= grasp_offset <= contact_band[1]

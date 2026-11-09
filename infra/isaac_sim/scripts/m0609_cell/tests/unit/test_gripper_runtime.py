@@ -1408,7 +1408,6 @@ def test_production_capture_configuration_uses_rawpart_geometry_and_recipe_width
                 }
             },
             "motion": {
-                "observation_to_object_translation": [0.0, 0.0, -0.04],
                 "object_to_grasp_tcp_translation": [0.0, 0.0, 0.0],
                 "insertion_axis_tcp": [0.0, 0.0, 1.0],
             },
@@ -1553,3 +1552,50 @@ def test_session_publishes_manager_unavailability():
     assert status["grasp_confirmed"] is False
     assert status["attached"] is False
     assert status["released"] is False
+
+
+@pytest.mark.parametrize('position', [None, 3, '123', [1, 2], [1, 2, float('nan')]])
+def test_invalid_selected_object_reference_is_ignored(position):
+    import json
+    packet = {'motion_goal_uuid': 'pick-123', 'frame_id': 'base_link',
+        'position': [0, 0, 0], 'orientation_xyzw': [0, 0, 0, 1],
+        'expected_contact_width_mm': 70, 'orientation_symmetry_order': 1,
+        'object_position': position}
+    controller = _GenerationController(
+        _Attribute(-1.0), _Attribute(1), _Attribute(json.dumps(packet)))
+    adapter = SimGripperAdapter(_Gripper(), graph_path='/Graph', controller=controller)
+    assert adapter.read_capture_reference() is None
+
+
+def test_capture_reference_preserves_observed_object_center_separately_from_tcp_goal():
+    import json
+    packet = {'motion_goal_uuid': 'pick-123', 'frame_id': 'base_link',
+        'position': [0, 0, 0.03], 'orientation_xyzw': [0, 0, 0, 1],
+        'expected_contact_width_mm': 70, 'orientation_symmetry_order': 1,
+        'object_position': [0, 0, 0]}
+    controller = _GenerationController(
+        _Attribute(-1.0), _Attribute(1), _Attribute(json.dumps(packet)))
+    adapter = SimGripperAdapter(_Gripper(), graph_path='/Graph', controller=controller)
+    reference = adapter.read_capture_reference()
+    assert reference['object_position'] == (0, 0, 0)
+    assert reference['values'][:3] == (0, 0, 0.03)
+
+
+def test_motion_wire_packet_reaches_real_capture_manager_with_object_association():
+    import json
+    from gripper_runtime.grasp_stage import StageCaptureQuery, EligibleObjectRegistry
+    from test_grasp_attachment import manager, FakeJointOwner
+
+    packet = {'motion_goal_uuid': 'pick-wire', 'frame_id': 'base_link',
+        'position': [0.4, 0.2, 0.13], 'orientation_xyzw': [0, 0, 0, 1],
+        'expected_contact_width_mm': 70, 'orientation_symmetry_order': 1,
+        'object_position': [0.4, 0.2, 0.1]}
+    controller = _GenerationController(
+        _Attribute(-1.0), _Attribute(1), _Attribute(json.dumps(packet)))
+    adapter = SimGripperAdapter(_Gripper(), graph_path='/Graph', controller=controller)
+    source = StageCaptureQuery(None, '/tcp', EligibleObjectRegistry(), None)
+    grasp = manager(source, FakeJointOwner(), arm=False)
+    assert grasp.configure_selected_grasp_reference(adapter.read_capture_reference())
+    assert source.expected_tcp_reference[1] == (0.4, 0.2, 0.13)
+    assert source._selected_object[0] == (0.4, 0.2, 0.1)
+    assert source._expected_tcp_reference_error is None

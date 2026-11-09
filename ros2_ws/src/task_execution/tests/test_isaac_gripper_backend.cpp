@@ -117,7 +117,7 @@ TEST(IsaacMotionBackendTest, TCPAccuracyDoesNotGateGripperAndHeldConfirmationSti
   MotionGeometry geometry;
   geometry.configured = true;
   geometry.observation_reference = "test_reference";
-  geometry.observation_to_object.rotation.w = 1.0;
+  geometry.observation_to_object_rotation.w = 1.0;
   geometry.object_to_grasp_tcp.rotation.w = 1.0;
   geometry.insertion_axis_tcp.z = 1.0;
   geometry.pick_retract_distance_m = 0.05;

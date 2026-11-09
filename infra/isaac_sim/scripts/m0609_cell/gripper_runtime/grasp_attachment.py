@@ -16,6 +16,7 @@ from gripper_runtime.grasp_policy import (
     CaptureDecision,
     CapturePolicy,
     CaptureResult,
+    GraspConfig,
 )
 from gripper_runtime.grasp_stage import (
     CanonicalCaptureReference,
@@ -460,9 +461,11 @@ class GraspManager:
     def configure_selected_grasp_reference(self, values):
         reference_id = None
         frame_id = None
+        object_position = None
         if isinstance(values, dict):
             reference_id = values.get("motion_goal_uuid")
             frame_id = values.get("frame_id")
+            object_position = values.get("object_position")
             if values.get("invalidate") is True:
                 if reference_id == self.capture_reference_id:
                     self._diagnostic_outcome("capture_reference_invalidated")
@@ -494,18 +497,30 @@ class GraspManager:
         if not callable(configure):
             return False
         self.capture_reference_id = reference_id
+        failure_reason = "capture_reference_unavailable"
         try:
             position = values[0:3]
             orientation = values[3:7]
             width_mm = float(values[7])
             symmetry_order = int(values[8])
             configure(frame_id, position, orientation, symmetry_order, width_mm)
-        except (TypeError, ValueError, ArithmeticError):
+            failure_reason = "capture_object_association_missing"
+            if object_position is None:
+                raise ValueError("object_position is absent; rebuild and restart Motion with the matching capture protocol")
+            failure_reason = "capture_object_association_runtime_unavailable"
+            configure_object = getattr(self.candidate_source, "configure_selected_object", None)
+            if not callable(configure_object):
+                raise AttributeError("StageCaptureQuery is outdated; reload the gripper runtime")
+            failure_reason = "capture_object_association_invalid"
+            configure_object(object_position, self.config.capture_volume_dimensions_m)
+        except (TypeError, ValueError, ArithmeticError, AttributeError) as error:
+            LOGGER.warning("Selected capture reference %s rejected: %s: %s",
+                           reference_id, failure_reason, error)
             invalidate = getattr(
                 self.candidate_source, "invalidate_expected_tcp_reference", None
             )
             if callable(invalidate):
-                invalidate("capture_reference_unavailable", frame_id)
+                invalidate(failure_reason, frame_id)
         return True
 
     def _discover_tcp_path(self):
@@ -1003,6 +1018,25 @@ class GraspManager:
         )
         return self.state
 
+    def _closing_width_reached(self, candidate):
+        """Wait for the selected opening during CLOSE, without requiring contact."""
+        try:
+            measured = float(candidate.measured_opening_mm)
+            expected = float(candidate.capture_reference["expected_contact_width_mm"])
+            tolerance = float(getattr(
+                self.candidate_source,
+                "actual_contact_width_tolerance_mm",
+                GraspConfig().contact_width_tolerance_mm,
+            ))
+            return (
+                math.isfinite(measured) and measured >= 0.0
+                and math.isfinite(expected) and expected > 0.0
+                and math.isfinite(tolerance) and tolerance >= 0.0
+                and measured <= expected + tolerance
+            )
+        except (TypeError, ValueError, KeyError, OverflowError):
+            return False
+
     def _evaluate_capture_transaction(self, actuator_state):
         """Search during CLOSE and make one final Capture assessment at HOLDING."""
         if (
@@ -1099,6 +1133,22 @@ class GraspManager:
             )
         else:
             if actuator_state == "closing":
+                if not self._closing_width_reached(selection.candidate):
+                    self.state = GraspState.SEEKING
+                    self.object_detected = False
+                    self.resistance = False
+                    self._record_capture_decision(candidates, selection)
+                    self._diagnostic_append("observation", {
+                        "phase": "close_width_wait",
+                        "result": "keep_closing",
+                        "measured_opening_mm": selection.candidate.measured_opening_mm,
+                        "expected_contact_width_mm": (
+                            (selection.candidate.capture_reference or {}).get(
+                                "expected_contact_width_mm"
+                            )
+                        ),
+                    })
+                    return False
                 try:
                     self.gripper.stop()
                 except Exception as error:

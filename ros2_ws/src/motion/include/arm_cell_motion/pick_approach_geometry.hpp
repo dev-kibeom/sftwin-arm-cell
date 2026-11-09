@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <optional>
+#include <stdexcept>
 #include <vector>
 
 #include <Eigen/Geometry>
@@ -47,6 +48,19 @@ inline geometry_msgs::msg::PoseStamped pick_approach_pose(
   approach.pose.position.y -= distance * axis.y();
   approach.pose.position.z -= distance * axis.z();
   return approach;
+}
+
+// Keep grasp depth independent of the approach/retract travel distance.
+inline geometry_msgs::msg::PoseStamped shallower_pick_grasp(
+  const geometry_msgs::msg::PoseStamped & grasp,
+  const geometry_msgs::msg::Vector3 & insertion_axis_tcp,
+  double clearance_m)
+{
+  if (!std::isfinite(clearance_m) || clearance_m < 0.0) {
+    throw std::invalid_argument("PICK grasp backoff must be finite and nonnegative");
+  }
+  return pick_approach_pose(grasp, PickApproachAxis::TCP_INSERTION_AXIS,
+    insertion_axis_tcp, clearance_m);
 }
 
 }  // namespace arm_cell_motion

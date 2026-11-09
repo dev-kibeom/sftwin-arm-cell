@@ -62,6 +62,7 @@ struct NormalizedMotionRequest
   double pick_grasp_orientation_tolerance_rad{0.0};
   geometry_msgs::msg::Vector3 place_approach_direction_object;
   double approach_distance_m{0.0};
+  double pick_grasp_backoff_m{0.0};
   double retract_distance_m{0.0};
   double estimated_object_height_m{0.0};
   double motion_speed_fraction{1.0};

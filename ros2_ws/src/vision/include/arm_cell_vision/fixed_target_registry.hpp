@@ -2,6 +2,7 @@
 #define ARM_CELL_VISION__FIXED_TARGET_REGISTRY_HPP_
 
 #include <cstdint>
+#include <array>
 #include <functional>
 #include <optional>
 #include <string>
@@ -16,6 +17,7 @@ struct FixedTargetRegistration
   std::string target_id;
   std::string run_id;
   geometry_msgs::msg::PoseStamped pose;
+  std::array<double, 3> dimensions_m{};
   uint8_t orientation_symmetry_order = 0;
   int64_t ttl_ns = 30'000'000'000LL;
 };

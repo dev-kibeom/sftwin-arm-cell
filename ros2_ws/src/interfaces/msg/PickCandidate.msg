@@ -5,6 +5,7 @@ geometry_msgs/PoseStamped target_pose
 # Vision profile tolerance for comparing observed top elevations in this Acquisition.
 float64 top_height_tolerance_m
 uint8 orientation_symmetry_order
+# Selected visible-face thickness from the known material dimensions.
 float32 estimated_height_m
 bool has_estimated_height
 bool has_observed_rectangle

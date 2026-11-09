@@ -13,6 +13,7 @@
     "unobserved_yaw_policy": "forbidden"
   },
   "pick": {
+    "grasp_backoff_m": 0.02,
     "approach_axis": "tcp_insertion_axis",
     "approach_distance_m": 0.15,
     "grasp_position_tolerance_m": 0.01,

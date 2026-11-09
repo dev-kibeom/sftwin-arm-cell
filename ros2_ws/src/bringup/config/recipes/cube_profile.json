@@ -8,6 +8,7 @@
     "unobserved_yaw_policy": "allowed"
   },
   "pick": {
+    "grasp_backoff_m": 0.0,
     "approach_axis": "tcp_insertion_axis",
     "approach_distance_m": 0.05,
     "grasp_position_tolerance_m": 0.01,

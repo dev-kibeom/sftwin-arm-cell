@@ -35,15 +35,14 @@ def capture_reference_config_from_profile(profile: dict) -> CaptureReferenceConf
     """Load the validation fixture geometry used by Isaac capture queries."""
     fixture = profile["fixture"]
     motion = profile["motion"]
-    observation_to_object = motion["observation_to_object_translation"]
     translation = motion["object_to_grasp_tcp_translation"]
-    if len(observation_to_object) != 3 or len(translation) != 3:
+    if len(translation) != 3:
         raise ValueError(
             "observation and object grasp transforms must have three values"
         )
     config = CaptureReferenceConfig(
         fixture_dimensions_m=tuple(float(value) for value in fixture["dimensions_m"]),
-        observation_to_grasp_tcp_m=float(observation_to_object[2])
+        observation_to_grasp_tcp_m=-float(fixture["dimensions_m"][2]) / 2.0
         + float(translation[2]),
         insertion_axis_tcp=tuple(
             float(value) for value in motion["insertion_axis_tcp"]
@@ -86,30 +85,9 @@ def validate_validation_profile(profile: dict) -> dict:
     if grasp_dimension_mm > Robotiq2F85Actuator.MAX_WIDTH_MM:
         raise ValueError("fixture grasp dimension exceeds Robotiq 2F-85 opening")
     motion = profile["motion"]
-    observation_translation = motion.get("observation_to_object_translation")
-    if (
-        not isinstance(observation_translation, list)
-        or len(observation_translation) != 3
-        or not all(math.isfinite(float(value)) for value in observation_translation)
-    ):
-        raise ValueError(
-            "validation observation_to_object_translation must have three finite values"
-        )
     observation_reference = motion.get("observation_reference")
     if not isinstance(observation_reference, str) or not observation_reference:
         raise ValueError("validation fixture observation reference is not declared")
-    if not math.isclose(float(observation_translation[0]), 0.0, abs_tol=1e-9):
-        raise ValueError("validation observation_to_object_translation x must be zero")
-    if not math.isclose(float(observation_translation[1]), 0.0, abs_tol=1e-9):
-        raise ValueError("validation observation_to_object_translation y must be zero")
-    if not math.isclose(
-        float(observation_translation[2]),
-        -float(fixture["dimensions_m"][2]) * 0.5,
-        abs_tol=1e-9,
-    ):
-        raise ValueError(
-            "validation observation reference must resolve to geometric center"
-        )
     grasp_translation = motion.get("object_to_grasp_tcp_translation")
     if (
         not isinstance(grasp_translation, list)
@@ -146,7 +124,7 @@ def validate_validation_profile(profile: dict) -> dict:
     ):
         raise ValueError("validation grasp recipe contact band is invalid")
     if not math.isclose(
-        float(observation_translation[2]) + float(grasp_translation[2]),
+        -dimensions_m[2] / 2.0 + float(grasp_translation[2]),
         float(selected_offset),
         abs_tol=1e-9,
     ):

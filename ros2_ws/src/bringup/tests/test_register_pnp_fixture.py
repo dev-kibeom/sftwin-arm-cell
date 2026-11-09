@@ -80,10 +80,13 @@ def test_request_mapping_preserves_context_pose_frame_and_ttl(monkeypatch):
     class Request:
         pass
 
-    request = module.request_from_handoff(_handoff(), Request)
+    handoff = _handoff()
+    handoff["fixture"]["dimensions_m"] = [0.061, 0.052, 0.093]
+    request = module.request_from_handoff(handoff, Request)
 
     assert request.target_id == "cube_profile"
     assert request.run_id == "run-1"
+    assert list(request.dimensions_m) == handoff["fixture"]["dimensions_m"]
     assert request.pose.header.frame_id == "base_link"
     assert request.pose.pose.position.z == pytest.approx(0.84)
     assert request.orientation_symmetry_order == 1

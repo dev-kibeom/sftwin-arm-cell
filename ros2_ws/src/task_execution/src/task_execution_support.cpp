@@ -85,6 +85,7 @@ MotionPortRequest TaskExecutionSupport::make_motion_request(
     (phase == Phase::TASK_PHASE_APPROACHING ? MotionSegmentKind::PLACE_APPROACH :
     phase == Phase::TASK_PHASE_RETRACTING ? MotionSegmentKind::PLACE_RETRACT :
     MotionSegmentKind::PLACE_DESCENT);
+  request.constraints.grasp_backoff_m = pick ? goal.pick_grasp_backoff_m : 0.0;
   request.constraints.approach_distance_m = pick ? goal.pick_approach_distance_m :
     goal.place_approach_distance_m;
   request.constraints.retract_distance_m = pick ? geometry_.pick_retract_distance_m :

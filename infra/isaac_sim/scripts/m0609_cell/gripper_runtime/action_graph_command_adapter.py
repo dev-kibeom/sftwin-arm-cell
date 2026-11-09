@@ -162,11 +162,22 @@ class SimGripperAdapter:
         if values[7] <= 0.0 or values[8] not in (0.0, 1.0, 2.0, 4.0):
             self._applied_capture_reference_id = None
             return None
+        object_position = None
+        if "object_position" in packet:
+            try:
+                if not isinstance(packet["object_position"], (list, tuple)):
+                    return None
+                object_position = tuple(float(v) for v in packet["object_position"])
+                if len(object_position) != 3 or not all(math.isfinite(v) for v in object_position):
+                    return None
+            except (TypeError, ValueError):
+                return None
         signature = (
             packet["motion_goal_uuid"],
             False,
             packet.get("frame_id"),
             values,
+            object_position,
         )
         if signature == self._last_capture_reference_packet:
             return None
@@ -175,6 +186,7 @@ class SimGripperAdapter:
             "motion_goal_uuid": packet["motion_goal_uuid"],
             "frame_id": packet.get("frame_id"),
             "values": values,
+            **({"object_position": object_position} if object_position is not None else {}),
         }
 
     def _read_close_execution_id(self):

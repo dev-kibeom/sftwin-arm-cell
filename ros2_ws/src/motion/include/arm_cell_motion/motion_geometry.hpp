@@ -12,7 +12,7 @@ namespace arm_cell_motion
 struct MotionGeometry
 {
   std::string observation_reference;
-  geometry_msgs::msg::Transform observation_to_object = geometry_msgs::msg::Transform();
+  geometry_msgs::msg::Quaternion observation_to_object_rotation;
   geometry_msgs::msg::Transform object_to_grasp_tcp = geometry_msgs::msg::Transform();
   geometry_msgs::msg::Vector3 insertion_axis_tcp = geometry_msgs::msg::Vector3();
   double pick_retract_distance_m{0.0};

@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -14,6 +15,7 @@ arm_cell_vision::FixedTargetRegistration valid_registration()
   arm_cell_vision::FixedTargetRegistration registration;
   registration.target_id = "cube_profile";
   registration.run_id = "run-1";
+  registration.dimensions_m = {0.061, 0.052, 0.093};
   registration.pose.header.frame_id = "base_link";
   registration.pose.pose.position.x = 0.2;
   registration.pose.pose.position.y = -0.1;
@@ -37,6 +39,17 @@ TEST(FixedTargetRegistry, RegistrationDefaultsToThirtySecondTtl)
   EXPECT_EQ(registration.ttl_ns, 30'000'000'000LL);
 }
 
+TEST(FixedTargetRegistry, RejectsUnknownOrInvalidMaterialDimensions)
+{
+  int64_t now = 100;
+  auto registry = make_registry(&now);
+  for (const auto dimension : {0.0, -0.01, std::numeric_limits<double>::infinity()}) {
+    auto registration = valid_registration();
+    registration.dimensions_m[2] = dimension;
+    EXPECT_FALSE(registry.register_target(registration).accepted);
+  }
+}
+
 TEST(FixedTargetRegistry, AcceptsValidRegistrationAndConsumesItOnce)
 {
   int64_t now = 100;
@@ -48,6 +61,8 @@ TEST(FixedTargetRegistry, AcceptsValidRegistrationAndConsumesItOnce)
   EXPECT_EQ(accepted.receipt_time_ns, now);
 
   const auto result = registry.consume("cube_profile", now + 1);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->dimensions_m, valid_registration().dimensions_m);
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->run_id, "run-1");
   EXPECT_EQ(result->orientation_symmetry_order, 1U);

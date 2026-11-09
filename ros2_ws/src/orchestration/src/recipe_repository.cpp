@@ -213,17 +213,21 @@ RecipeLoadResult RecipeRepository::load(const std::string & target_id) const
 
     PickApproachAxis pick_approach_axis = PickApproachAxis::TCP_INSERTION_AXIS;
     double pick_approach_distance_m = 0.0;
+    double pick_grasp_backoff_m = 0.0;
     double pick_grasp_position_tolerance_m = 0.0;
     double pick_grasp_orientation_tolerance_rad = 0.0;
     const auto & pick = object(required(document, "pick"), "pick");
       pick_approach_distance_m = number_value(
         required(pick, "approach_distance_m"), "pick.approach_distance_m");
+      pick_grasp_backoff_m = number_value(
+        required(pick, "grasp_backoff_m"), "pick.grasp_backoff_m");
       pick_grasp_position_tolerance_m = number_value(
         required(pick, "grasp_position_tolerance_m"), "pick.grasp_position_tolerance_m");
       pick_grasp_orientation_tolerance_rad = number_value(
         required(pick, "grasp_orientation_tolerance_rad"),
         "pick.grasp_orientation_tolerance_rad");
-      if (!std::isfinite(pick_approach_distance_m) || pick_approach_distance_m <= 0.0 ||
+      if (!std::isfinite(pick_grasp_backoff_m) || pick_grasp_backoff_m < 0.0 ||
+        !std::isfinite(pick_approach_distance_m) || pick_approach_distance_m <= 0.0 ||
         !std::isfinite(pick_grasp_position_tolerance_m) ||
         pick_grasp_position_tolerance_m <= 0.0 ||
         !std::isfinite(pick_grasp_orientation_tolerance_rad) ||
@@ -379,6 +383,7 @@ RecipeLoadResult RecipeRepository::load(const std::string & target_id) const
     recipe.has_unobserved_yaw_policy = true;
     recipe.pick_approach_axis = pick_approach_axis;
     recipe.pick_approach_distance_m = pick_approach_distance_m;
+    recipe.pick_grasp_backoff_m = pick_grasp_backoff_m;
     recipe.pick_grasp_position_tolerance_m = pick_grasp_position_tolerance_m;
     recipe.pick_grasp_orientation_tolerance_rad = pick_grasp_orientation_tolerance_rad;
     recipe.place_pose.header.frame_id = frame;
