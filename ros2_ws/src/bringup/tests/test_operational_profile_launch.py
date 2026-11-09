@@ -349,9 +349,11 @@ def test_log_level_does_not_change_optional_capture_parameters():
     selected_nodes = _project_nodes(_composed_nodes("info", "motion,vision"))
 
     for executable in info_nodes:
-        assert _node_parameters(info_nodes[executable]) == _node_parameters(
-            debug_nodes[executable]
-        )
+        info_parameters = _node_parameters(info_nodes[executable])
+        debug_parameters = _node_parameters(debug_nodes[executable])
+        info_parameters.pop("diagnostics.snapshot_run_directory", None)
+        debug_parameters.pop("diagnostics.snapshot_run_directory", None)
+        assert info_parameters == debug_parameters
     assert (
         _node_parameters(selected_nodes["motion_node"])["diagnostics.capture_enabled"]
         is True
@@ -470,7 +472,15 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
     vision = nodes["detect_target_node"]
 
     assert _node_parameters(vision)["diagnostics.capture_enabled"] is True
-    assert _node_parameters(vision)["diagnostics.snapshot_run_directory"] == ""
+    vision_snapshot_directory = Path(
+        _node_parameters(vision)["diagnostics.snapshot_run_directory"]
+    )
+    motion_snapshot_directory = Path(
+        _node_parameters(nodes["motion_node"])["diagnostics.snapshot_run_directory"]
+    )
+    assert vision_snapshot_directory == motion_snapshot_directory
+    assert vision_snapshot_directory.parent.name.isdigit()
+    assert vision_snapshot_directory.parent.parent.name == "snapshots"
     assert _node_parameters(vision)["diagnostics.live_test_session_id"] == ""
     clock_directory = Path(
         _node_parameters(nodes["motion_node"])["diagnostics.output_directory"]
@@ -856,14 +866,14 @@ def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch):
     joined_nodes = _project_nodes(_composed_nodes(module=module))
     vision_parameters = _node_parameters(joined_nodes["detect_target_node"])
     assert vision_parameters["diagnostics.live_test_session_id"] == "isaac-session-1"
-    assert vision_parameters["diagnostics.snapshot_run_directory"] == str(
-        artifact_root / "snapshots" / "20261020" / "120000"
-    )
+    vision_snapshot_directory = Path(vision_parameters["diagnostics.snapshot_run_directory"])
+    assert vision_snapshot_directory.parent.parent == artifact_root / "snapshots"
+    assert vision_snapshot_directory.parent.name.isdigit()
+    assert vision_snapshot_directory.is_dir()
     motion_parameters = _node_parameters(joined_nodes["motion_node"])
     assert motion_parameters["diagnostics.snapshot_run_directory"] == str(
-        artifact_root / "snapshots" / "20261020" / "120000"
+        vision_snapshot_directory
     )
-    assert module.vision_snapshot_run_directory(artifact_root, None) is None
 
     second_dir = artifact_root / "diagnostic_records" / "20261020" / "120001"
     second_dir.mkdir(parents=True)

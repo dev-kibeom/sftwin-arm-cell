@@ -828,7 +828,21 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
   }
   json << ",\"association_status\":\"" <<
     (live_test_session_id_.empty() ? "unassociated" : "associated") << "\","
-       << "\"strategy\":\"" << json_escape(job.algorithm) << "\",\"target_id\":\"" <<
+       << "\"snapshot\":";
+  const auto snapshot = acquisition_snapshots_.find(job.acquisition_id);
+  if (snapshot == acquisition_snapshots_.end() ||
+    (!snapshot->second.image_saved && !snapshot->second.metadata_saved))
+  {
+    json << "null";
+  } else {
+    const auto relative_directory = std::filesystem::absolute(snapshot->second.directory).
+      lexically_relative(std::filesystem::absolute(diagnostic_root_)).generic_string();
+    json << "{\"directory\":\"" << json_escape(relative_directory) << '"';
+    if (snapshot->second.image_saved) {json << ",\"image_file\":\"detection.png\"";}
+    if (snapshot->second.metadata_saved) {json << ",\"metadata_file\":\"metadata.json\"";}
+    json << '}';
+  }
+  json << ",\"strategy\":\"" << json_escape(job.algorithm) << "\",\"target_id\":\"" <<
     json_escape(job.target_id) << "\",\"observation\":";
   if (job.observation_input()) {
     const bool rgb_available = is_renderable_presentation_rgb(job.observation_input()->rgb);

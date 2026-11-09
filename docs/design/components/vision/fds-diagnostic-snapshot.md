@@ -56,13 +56,13 @@ Snapshot 이미지는 해당 Acquisition에서 Runtime이 실제로 계산·평�
 
 | 파일 | 구성·표현 책임 | Availability 및 관측 제한 |
 |---|---|---|
-| `snapshot.png` | 선택적 호환 RGB의 최종 HIGH·MEDIUM 반환 윤곽·ID와 기존 DisturbanceCandidate 대표점 | RGB가 없거나 투영할 수 없으면 가상 Annotation 없이 RGB 없음/표시 unavailable을 기록한다. Calibration Snapshot의 기존 Readiness 표현을 유지한다. |
+| `detection.png` | 선택적 호환 RGB의 최종 HIGH·MEDIUM 반환 윤곽·ID와 기존 DisturbanceCandidate 대표점 | RGB가 없거나 투영할 수 없으면 가상 Annotation 없이 RGB 없음/표시 unavailable을 기록한다. Calibration Snapshot은 `snapshot.png`를 유지한다. |
 | `geometry_observation.png` | 가로 3패널: ① 관측 Height Grid와 실제 미관측 영역, ② 단색 배경의 원본 Boundary Extraction (관측 Contour·Fitted Edge·관측 모서리), ③ 실제 Plane 관측 Cell·ID·상태의 Plane Map | Stage 1은 `cuboid_replay_evidence.height_grid_m`을 사용한다. Stage 2는 `cuboid_boundaries`에 보존된 Plane 해석 전의 관측 Contour·Fitted Edge·모서리만 표시한다. 후속 Plane 분할, Rectangle, Hypothesis, Anchor 및 Selection을 표시하지 않는다. 미실행·미관측·렌더 불가를 구분해 Unavailable로 남긴다. |
 | `geometry_interpretation.png` | 가로 2패널: ④ Stage 3 Plane Map 위의 Runtime Rectangle Partition·전체 Hypothesis 평가 상태, ⑤ 동일한 Plane Map 위의 최종 HIGH·MEDIUM 반환 윤곽 | Stage 3은 `PlaneRegion`에서 보존한 관측 Cell만 사용한다. Stage 4는 `rectangle_regions`·`inferred_partition_edges` 및 보존된 Hypothesis·Candidate 근거만 합성해 표시한다. 관측 근거는 실선, 추론 경계는 점선이다. 같은 Acquisition의 실제 기록만 표시하며 서로 다른 Frame의 근거를 보충하지 않는다. |
 | `scene_stability_panorama.png` | 최근 최대 5개 Depth Observation의 변화·안정화 경과 및 실제 최종 상태 | 존재하는 관측만 표시한다. 보존되지 않은 Observation을 만들거나 관측 범위를 늘리지 않는다. |
 | 기존 `metadata.json` | Source·판단·Stability·이미지 참조 및 출력 상태의 상세 수치·설명 | 기존 Schema와 Optional/Unavailable 표현을 사용하며 별도 Metadata 저장 체계를 만들지 않는다. |
 
-`snapshot.png`의 RGB 후보 Annotation은 최종 Runtime 결과만 간결하게 나타낸다. 최종 정상 반환 HIGH는 녹색, MEDIUM은 파란색 윤곽과 ID로 표시한다. LOW·UNRESOLVED는 기존 Hypothesis와 진단 정보에 유지하며 별도의 RGB 정상 검출 객체로 표시하지 않는다. REJECTED와 미선택 대안도 RGB 대표 이미지에서 최종 객체로 표시하지 않는다. 실측·관측 경계는 실선, 평면 분할·Recipe 기반 추론/미관측 복원 경계는 점선으로 구분한다. Candidate ID는 필요한 경우 작은 식별 마커로만 표시한다. Support·Target 영역은 기존 근거가 있는 경우에 한해 시각 구분을 유지한다. Calibration Readiness Diagram의 기존 색상·의미는 바꾸지 않는다.
+`detection.png`의 RGB 후보 Annotation은 최종 Runtime 결과만 간결하게 나타낸다. 최종 정상 반환 HIGH는 녹색, MEDIUM은 파란색 윤곽과 ID로 표시한다. LOW·UNRESOLVED는 기존 Hypothesis와 진단 정보에 유지하며 별도의 RGB 정상 검출 객체로 표시하지 않는다. REJECTED와 미선택 대안도 RGB 대표 이미지에서 최종 객체로 표시하지 않는다. 실측·관측 경계는 실선, 평면 분할·Recipe 기반 추론/미관측 복원 경계는 점선으로 구분한다. Candidate ID는 필요한 경우 작은 식별 마커로만 표시한다. Support·Target 영역은 기존 근거가 있는 경우에 한해 시각 구분을 유지한다. Calibration Readiness Diagram의 기존 색상·의미는 바꾸지 않는다.
 
 RGB의 최종 Result Code·HIGH/MEDIUM 개수·핵심 범례는 상단에 배치하며 원본 크기·방향을 유지한다. Geometry는 지도 바깥 별도 Header에 Stage 이름과 한 줄 핵심 정보를 둔다. Heightmap의 높이 색·미관측 표현, Boundary의 관측 실선·추론 점선·Anchor, Plane의 상태별 개수, Hypothesis의 전체 수·실제 SELECTED/ALTERNATIVE/UNRESOLVED/REJECTED 개수와 별도의 Confidence 색 의미를 표시한다. 하단 설명 문단·별도 범례 영역은 두지 않는다. 작은 지도나 겹친 ID는 기존 충돌 방지·표시 생략을 적용하고 원본 진단 ID는 보존한다.
 
@@ -92,9 +92,9 @@ Terminal `cuboid_top_face` Snapshot은 기존 저장 선택 조건에서 Runtime
 
 Tray 좌표로 렌더링하는 깊이 미리보기와 Cuboid Stage Sidecar는 유효한 `tray_from_camera` 및 호환 `CameraInfo`가 있을 때 Tray 평면의 +X·+Y 기준축이 RGB 영상에 투영되는 방향에 맞춰 2D 방향을 정렬한다. `tray_from_camera`는 Camera 좌표를 Tray 좌표로 보내므로 방향 계산에는 그 역변환을 사용한다. Camera Optical Frame의 +X는 영상 오른쪽, +Y는 영상 아래쪽이며 Tray XY 이미지는 +X 오른쪽, +Y 위쪽이다. 두 투영축을 함께 사용해 회전과 필요한 좌우 또는 상하 반전을 결정한다. 프레임·보정·카메라 정보가 유효하지 않으면 기존 Tray XY 표시 방향을 유지한다.
 
-이 정렬은 물체 배치를 RGB와 같은 시각적 방향으로 이해하도록 하는 2D 회전·반전 표시 변환이다. 원근 보정이나 RGB 영상에 대한 픽셀 단위 정합을 뜻하지 않는다. 원본 RGB 입력과 `snapshot.png`의 RGB 패널은 회전·반전하지 않으며 기존 Snapshot Annotation 동작을 유지한다. Height Grid, Patch Cell, 후보 Geometry 및 Detector의 Tray XY 좌표·결과는 변경하지 않는다. 두 Geometry 이미지의 모든 패널에 관측 Cell·윤곽·후보 외곽선·라벨의 같은 변환을 적용하며, 회전 후 캔버스를 확장해 유효 영역을 보존한다. Geometry Observation의 HeightPatch 표현에는 텍스트 설명을 포함하지 않는다.
+이 정렬은 물체 배치를 RGB와 같은 시각적 방향으로 이해하도록 하는 2D 회전·반전 표시 변환이다. 원근 보정이나 RGB 영상에 대한 픽셀 단위 정합을 뜻하지 않는다. 원본 RGB 입력과 `detection.png`의 RGB 패널은 회전·반전하지 않으며 기존 Snapshot Annotation 동작을 유지한다. Height Grid, Patch Cell, 후보 Geometry 및 Detector의 Tray XY 좌표·결과는 변경하지 않는다. 두 Geometry 이미지의 모든 패널에 관측 Cell·윤곽·후보 외곽선·라벨의 같은 변환을 적용하며, 회전 후 캔버스를 확장해 유효 영역을 보존한다. Geometry Observation의 HeightPatch 표현에는 텍스트 설명을 포함하지 않는다.
 
-모든 이미지는 terminal 관측에서 보존된 Height Grid와 선택 Detector 증거로 Render한다. Snapshot이 Contour Extraction·Line Fitting·또 다른 Detection Pass를 실행해서는 안 된다. Detector의 Patch Cell·Contour·Fitted Edge는 상세 시각화 요청이 있을 때만 보존한다. 중간 근거가 없으면 해당 패널과 기존 Manifest 참조를 Unavailable로 표시하고 다른 Frame에서 재구성하지 않는다. 전체 평가 Hypothesis를 그릴 근거가 완전하지 않으면 일부 가설만 담아 성공처럼 표시하지 않고 해당 패널을 Unavailable로 둔다. 렌더 상태와 파일 저장 상태는 구분한다. Sidecar는 `snapshot.png`, 후보 선택·순위, Stability, 요청 시간을 변경하지 않는다. Geometry 이미지는 표시 RGB 없이도 제공할 수 있다.
+모든 이미지는 terminal 관측에서 보존된 Height Grid와 선택 Detector 증거로 Render한다. Snapshot이 Contour Extraction·Line Fitting·또 다른 Detection Pass를 실행해서는 안 된다. Detector의 Patch Cell·Contour·Fitted Edge는 상세 시각화 요청이 있을 때만 보존한다. 중간 근거가 없으면 해당 패널과 기존 Manifest 참조를 Unavailable로 표시하고 다른 Frame에서 재구성하지 않는다. 전체 평가 Hypothesis를 그릴 근거가 완전하지 않으면 일부 가설만 담아 성공처럼 표시하지 않고 해당 패널을 Unavailable로 둔다. 렌더 상태와 파일 저장 상태는 구분한다. Sidecar는 `detection.png`, 후보 선택·순위, Stability, 요청 시간을 변경하지 않는다. Geometry 이미지는 표시 RGB 없이도 제공할 수 있다.
 
 `snapshot_id`와 revision은 발행한 값마다 구분된다. `vision_run_id`는 Vision 프로세스 실행마다 고유하며 `calibration_id`, `acquisition_id`는 각 lifecycle Instance를 구별한다. 이러한 식별자는 Orchestration Gate가 아니고 기존 `scene_generation`도 변경하지 않는다. Snapshot의 화면 표시 수명은 Acquisition·Calibration 수명과 독립적이다. 요청 종료 뒤에도 Hub는 새 Snapshot을 받거나 Viewer Session이 끝날 때까지 마지막 Snapshot을 표시한다. ExecuteCycle 완료가 이를 지우지 않는다.
 
@@ -111,7 +111,7 @@ Vision 판단
 
 Vision은 명시적 Calibration 요청이 산출 파일을 생성했을 때에만 Calibration 완료 Snapshot을 저장한다. DetectTarget의 성공·실패 terminal Snapshot은 UI Annotation용으로 생성·저장·발행하지만 진행 중 Snapshot은 만들지 않는다. 프로세스 시작 시 선택 Calibration 파일을 로드하는 것만으로는 Snapshot이 생기지 않는다. 실패한 Calibration 요청은 서비스 결과로 보고하고 Calibration Output Snapshot을 만들지 않는다.
 
-Vision은 Snapshot의 생성·저장·발행을 소유한다. Vision과 Motion의 Snapshot 이미지는 공통 `snapshots/` 영역에 저장한다. Acquisition Snapshot Metadata JSON은 해당 Acquisition 이미지와 같은 디렉터리에 저장하며 Calibration Metadata JSON과 진단 JSON은 `diagnostic_records/` 영역에 저장한다. 이미지와 Metadata는 같은 세션 및 Acquisition 또는 Calibration 식별자로 연관 지을 수 있어야 한다. 세션에 연결되지 않은 실행도 다른 실행의 기록을 덮어쓰거나 혼동하지 않도록 실행 식별을 보존한다.
+Vision은 Snapshot의 생성·저장·발행을 소유한다. 한 bringup 실행의 Vision·Motion Snapshot은 같은 `snapshots/YYYYMMDD/HHMMSS/` 실행 폴더를 사용한다. Vision이 인계한 Acquisition 순번에 따라 `01/`, `02/` 같은 폴더를 만들며, 그 안에 `detection.png`, `metadata.json`, 기존 이름의 선택적 진단 이미지와 Motion의 `occupancy-01.png`, `occupancy-02.png`를 둔다. 이미지 파일명에는 UUID나 Acquisition ID를 넣지 않는다. Snapshot Metadata와 `diagnostic_records/`의 Vision/Motion 진단 JSON은 Acquisition ID·저장 경로·역할 파일명을 보존해 서로 연결한다. Calibration Metadata와 Calibration Snapshot은 기존 Calibration 경로와 `snapshot.png` 규칙을 유지한다. 세션에 연결되지 않은 실행도 각 bringup이 고유한 날짜·시간 실행 폴더를 사용해 다른 실행 기록을 덮어쓰지 않는다.
 
 Stage 이미지의 상대 참조는 선택적 `snapshot_directory`가 가리키는 이미지 디렉터리를 기준으로 해석한다. 이 필드와 기존 Metadata의 Source·식별자·Optional/Unavailable 의미는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)를 따른다. Metadata는 기존 Snapshot·Run·Acquisition·Calibration 식별자, Source, Terminal Result와 처리 단계 및 제한된 시간·Ingress Summary를 보존한다. 상세 Sample·Pair 기록은 기존 Capture 설정을 따른다. Metadata 저장 위치의 변경은 Stage 이미지나 정식 Diagnostic Record의 데이터 의미를 변경하지 않는다. 저장·발행은 Hub의 실행 여부에 의존하지 않으며 원본 RGB-D Replay 데이터는 기본 저장하지 않는다. Runtime Calibration의 원천은 Snapshot이 아닌 `vision.calibration_file`이 선택한 YAML이다.
 
@@ -135,7 +135,7 @@ Terminal Snapshot은 해당 Acquisition에서 결과를 확정한 뒤 구성한�
 
 ### VR-VIS-DETECT-17 — Terminal 근거와 Lifecycle 분리
 
-Calibration 파일 생성에 성공하면 Vision은 Calibration Snapshot의 생성·저장·발행을 시도해야 한다. DetectTarget의 Terminal 성공·실패 시 Vision은 `acquisition_id`별 디렉터리에 대표 Annotation Snapshot 하나를 생성·저장·발행해야 한다. 성공에는 Canonical Target Pose와 선택 Profile 결과, 실패에는 Terminal Domain Result와 실제 관측된 가장 구체적인 단계를 포함해야 한다. Snapshot Encoding·저장·발행 실패가 Vision 서비스 결과나 Safety·Motion·Orchestration·Mission 결과를 지연·변경해서는 안 된다.
+Calibration 파일 생성에 성공하면 Vision은 Calibration Snapshot의 생성·저장·발행을 시도해야 한다. DetectTarget Terminal 성공·실패 시 Vision은 Acquisition 순번 폴더에 대표 Annotation `detection.png`를 생성·저장·발행해야 한다. 해당 metadata와 진단 JSON은 `acquisition_id`와 이미지 상대 경로로 연계한다. 성공에는 Canonical Target Pose와 선택 Profile 결과, 실패에는 Terminal Domain Result와 실제 관측된 가장 구체적인 단계를 포함해야 한다. Snapshot Encoding·저장·발행 실패가 Vision 서비스 결과나 Safety·Motion·Orchestration·Mission 결과를 지연·변경해서는 안 된다.
 
 ### VR-VIS-DETECT-18 — Viewer와 독립적인 Snapshot 실행
 

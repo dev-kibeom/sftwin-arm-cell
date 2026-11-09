@@ -1,6 +1,7 @@
 #include "vision_snapshot_internal.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <ctime>
 #include <exception>
@@ -98,6 +99,24 @@ std::string normalized_sequence(std::string value)
   return first_nonzero == std::string::npos ? "0" : value.substr(first_nonzero);
 }
 
+std::optional<std::string> acquisition_snapshot_folder(const std::string & acquisition_id)
+{
+  const auto separator = acquisition_id.find_last_of('-');
+  if (separator == std::string::npos || separator + 1U >= acquisition_id.size()) {
+    return std::nullopt;
+  }
+  uint64_t sequence = 0U;
+  const auto * begin = acquisition_id.data() + separator + 1U;
+  const auto * end = acquisition_id.data() + acquisition_id.size();
+  const auto parsed = std::from_chars(begin, end, sequence);
+  if (parsed.ec != std::errc{} || parsed.ptr != end || sequence == 0U) {
+    return std::nullopt;
+  }
+  std::ostringstream folder;
+  folder << std::setw(2) << std::setfill('0') << sequence;
+  return folder.str();
+}
+
 bool reserve_numbered_directory(
   const std::filesystem::path & parent, std::filesystem::path & reserved,
   std::string & failure_cause)
@@ -173,22 +192,28 @@ bool reserve_timestamped_directory(
 bool write_snapshot_files(
   const std::filesystem::path & directory,
   const arm_cell_interfaces::msg::VisionDetectorSnapshot & message,
-  const std::filesystem::path & metadata_directory, std::string & failure_cause)
+  const std::filesystem::path & metadata_directory, const std::string & image_filename,
+  bool & image_saved, bool & metadata_saved,
+  std::string & failure_cause)
 {
-  bool success = true;
+  image_saved = false;
+  metadata_saved = false;
   {
-    std::ofstream png(directory / "snapshot.png", std::ios::binary);
-    if (png && !message.image_png.data.empty()) {
-      png.write(reinterpret_cast<const char *>(message.image_png.data.data()),
-        static_cast<std::streamsize>(message.image_png.data.size()));
-      if (!png) {
-        success = false;
-        failure_cause = "write snapshot.png failed: " +
+    std::ofstream png(directory / image_filename, std::ios::binary);
+    if (png) {
+      if (!message.image_png.data.empty()) {
+        png.write(reinterpret_cast<const char *>(message.image_png.data.data()),
+          static_cast<std::streamsize>(message.image_png.data.size()));
+        png.flush();
+      }
+      png.close();
+      image_saved = static_cast<bool>(png);
+      if (!image_saved) {
+        failure_cause = "write " + image_filename + " failed: " +
           std::error_code(errno, std::generic_category()).message();
       }
-    } else if (!png) {
-      success = false;
-      failure_cause = "open snapshot.png failed: " +
+    } else {
+      failure_cause = "open " + image_filename + " failed: " +
         std::error_code(errno, std::generic_category()).message();
     }
   }
@@ -202,19 +227,20 @@ bool write_snapshot_files(
   std::ofstream metadata(metadata_directory / "metadata.json", std::ios::binary);
   if (metadata) {
     metadata << message.metadata_json;
-    if (!metadata) {
-      success = false;
+    metadata.flush();
+    metadata.close();
+    metadata_saved = static_cast<bool>(metadata);
+    if (!metadata_saved) {
       if (!failure_cause.empty()) {failure_cause += "; ";}
       failure_cause += "write metadata.json failed: " +
         std::error_code(errno, std::generic_category()).message();
     }
   } else {
-    success = false;
     if (!failure_cause.empty()) {failure_cause += "; ";}
     failure_cause += "open metadata.json failed: " +
       std::error_code(errno, std::generic_category()).message();
   }
-  return success;
+  return image_saved && metadata_saved;
 }
 
 }  // namespace
@@ -462,12 +488,6 @@ void VisionDetectorSnapshotOutput::run()
     const bool terminal_snapshot =
       job.event_kind == arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_SUCCESS ||
       job.event_kind == arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
-    if (terminal_snapshot) {
-      std::string diagnostic_failure;
-      if (!save_diagnostic_record(job, diagnostic_failure, message.diagnostic_record_json)) {
-        RCLCPP_WARN(logger_, "vision diagnostic record save failed cause=%s", diagnostic_failure.c_str());
-      }
-    }
     if (job.save && (job.event_kind ==
       arm_cell_interfaces::msg::VisionDetectorSnapshot::CALIBRATION_COMPLETE || terminal_snapshot))
     {
@@ -478,6 +498,12 @@ void VisionDetectorSnapshotOutput::run()
         }
       } catch (const std::exception & error) {
         RCLCPP_WARN(logger_, "detector snapshot local save failed cause=%s", error.what());
+      }
+    }
+    if (terminal_snapshot) {
+      std::string diagnostic_failure;
+      if (!save_diagnostic_record(job, diagnostic_failure, message.diagnostic_record_json)) {
+        RCLCPP_WARN(logger_, "vision diagnostic record save failed cause=%s", diagnostic_failure.c_str());
       }
     }
     if (message.image_png.data.empty() && !encoding_failure_logged) {
@@ -597,19 +623,28 @@ bool VisionDetectorSnapshotOutput::save_job(
       failure_cause = "acquisition_id is empty or not a safe snapshot directory name";
       return false;
     }
-    const auto acquisition_root = *run_directory_ / "acquisition";
-    std::filesystem::create_directories(acquisition_root, error);
-    if (error) {
-      failure_cause = "create acquisition snapshot directory: " + error.message();
+    const auto acquisition_folder = acquisition_snapshot_folder(job.acquisition_id);
+    if (acquisition_folder) {
+      directory = *run_directory_ / *acquisition_folder;
+      error.clear();
+      if (!std::filesystem::create_directory(directory, error)) {
+        if (error) {
+          failure_cause = "reserve acquisition snapshot directory: " + error.message();
+          return false;
+        }
+        // Motion may create this shared Acquisition folder before the async
+        // Vision snapshot worker writes metadata.json.
+        if (!std::filesystem::is_directory(directory, error) || error ||
+          std::filesystem::exists(directory / "metadata.json", error) || error)
+        {
+          failure_cause = "snapshot directory already contains Vision metadata";
+          return false;
+        }
+      }
+    } else if (!reserve_numbered_directory(*run_directory_, directory, failure_cause)) {
       return false;
     }
-    directory = acquisition_root / job.acquisition_id;
-    error.clear();
-    if (!std::filesystem::create_directory(directory, error)) {
-      failure_cause = error ? "reserve acquisition snapshot directory: " + error.message() :
-        "snapshot directory already exists for this Acquisition";
-      return false;
-    }
+    acquisition_snapshots_[job.acquisition_id] = {directory, false, false};
   }
   bool stage_images_saved = true;
   std::map<std::string, bool> saved_stage_files;
@@ -677,10 +712,26 @@ bool VisionDetectorSnapshotOutput::save_job(
     }
     metadata_directory /= directory.lexically_relative(*run_directory_);
   }
+  const std::string image_filename = terminal_acquisition ? "detection.png" : "snapshot.png";
+  const auto diagnostic_record = terminal_acquisition ?
+    diagnostic_root_ / (job.acquisition_id + ".json") : std::filesystem::path();
+  const auto diagnostic_reference = diagnostic_record.empty() ? std::string{} :
+    std::filesystem::relative(diagnostic_record, directory, error).generic_string();
+  if (error) {error.clear();}
   message.metadata_json.insert(message.metadata_json.find_last_of('}'),
-    ",\"snapshot_directory\":\"" + json_escape(std::filesystem::absolute(directory).string()) + "\"");
+    ",\"snapshot_directory\":\"" + json_escape(std::filesystem::absolute(directory).string()) +
+    "\",\"image_filename\":\"" + image_filename + "\",\"diagnostic_record_path\":\"" +
+    json_escape(diagnostic_reference) + "\"");
+  bool image_saved = false;
+  bool metadata_saved = false;
   const bool snapshot_saved = write_snapshot_files(
-    directory, message, metadata_directory, failure_cause);
+    directory, message, metadata_directory, image_filename,
+    image_saved, metadata_saved, failure_cause);
+  if (terminal_acquisition) {
+    auto & snapshot_files = acquisition_snapshots_[job.acquisition_id];
+    snapshot_files.image_saved = image_saved;
+    snapshot_files.metadata_saved = metadata_saved;
+  }
   const bool saved = snapshot_saved && stage_images_saved && scene_panorama_saved;
   return saved;
 }

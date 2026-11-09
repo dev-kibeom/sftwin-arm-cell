@@ -44,6 +44,7 @@
 #include <cmath>
 #include <chrono>
 #include <cctype>
+#include <charconv>
 #include <cstdlib>
 #include <Eigen/Geometry>
 #include <exception>
@@ -57,6 +58,7 @@
 #include <mutex>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -117,6 +119,38 @@ std::string json_escape(const std::string & value)
     }
   }
   return escaped.str();
+}
+
+std::optional<std::string> acquisition_snapshot_folder(
+  const std::filesystem::path & snapshot_root, const std::string & acquisition_id)
+{
+  std::error_code error;
+  if (std::filesystem::is_directory(snapshot_root, error) && !error) {
+    for (const auto & entry : std::filesystem::directory_iterator(snapshot_root, error)) {
+      if (error) {break;}
+      if (!entry.is_directory(error) || error) {continue;}
+      std::ifstream metadata(entry.path() / "metadata.json");
+      if (!metadata) {continue;}
+      const auto record = nlohmann::json::parse(metadata, nullptr, false);
+      if (record.is_object() && record.value("acquisition_id", std::string{}) == acquisition_id) {
+        return entry.path().filename().string();
+      }
+    }
+  }
+  const auto separator = acquisition_id.find_last_of('-');
+  if (separator == std::string::npos || separator + 1U >= acquisition_id.size()) {
+    return std::nullopt;
+  }
+  uint64_t sequence = 0U;
+  const auto * begin = acquisition_id.data() + separator + 1U;
+  const auto * end = acquisition_id.data() + acquisition_id.size();
+  const auto parsed = std::from_chars(begin, end, sequence);
+  if (parsed.ec != std::errc{} || parsed.ptr != end || sequence == 0U) {
+    return std::nullopt;
+  }
+  std::ostringstream folder;
+  folder << std::setw(2) << std::setfill('0') << sequence;
+  return folder.str();
 }
 
 std::string diagnostic_goal_id(std::string value)
@@ -556,8 +590,9 @@ bool MotionPlanningDiagnosticCapture::enqueue_occupancy_snapshot(
   const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & primitives,
   std::string & relative_path)
 {
-  const auto file_stem = "occupancy_" + safe_goal_id(goal_uuid) + "_candidate_" +
-    safe_goal_id(candidate_id);
+  const auto acquisition_folder = acquisition_snapshot_folder(
+    snapshot_directory_, vision_acquisition_id);
+  if (!acquisition_folder) {return false;}
   {
     std::lock_guard<std::mutex> lock(mutex_);
     const auto attempt_key = goal_uuid + '\0' + vision_acquisition_id + '\0' + candidate_id;
@@ -569,10 +604,11 @@ bool MotionPlanningDiagnosticCapture::enqueue_occupancy_snapshot(
     if (stopping_ || occupancy_snapshot_queue_.size() >= kOccupancySnapshotQueueCapacity) {
       return false;
     }
-    const auto sequence = ++occupancy_snapshot_sequence_;
-    const auto file_name = (std::filesystem::path("acquisition") /
-      safe_goal_id(vision_acquisition_id) /
-      (file_stem + "_attempt_" + std::to_string(sequence) + ".png")).string();
+    const auto sequence = ++occupancy_snapshot_sequences_[vision_acquisition_id];
+    std::ostringstream file_name_stream;
+    file_name_stream << *acquisition_folder << "/occupancy-" << std::setw(2) <<
+      std::setfill('0') << sequence << ".png";
+    const auto file_name = file_name_stream.str();
     occupancy_snapshot_queue_.push_back(
       {file_name, vision_acquisition_id, candidate_id, primitives});
     relative_path = std::filesystem::absolute(
@@ -3598,18 +3634,18 @@ bool IsaacRosMotionTransport::submit_normalized_once(
               (request_validation_scene ? "EXCLUDED_DURING_PATH_SAMPLE_VALIDATION" :
               "NOT_RUN_SCENE_UNAVAILABLE") : "NOT_APPLICABLE"}}}};
     }
-    if (candidate_attempt_snapshot) {
-      nlohmann::json snapshot_record = {
-        {"status", occupancy_snapshot_queued ? "queued" : "enqueue_failed"},
-        {"candidate_id", request.vision_candidate_id},
-        {"acquisition_id", request.vision_acquisition_id},
-        {"primitive_count", request.non_target_occupancy.size()},
-        {"planning_object_ids", request_candidate_ids}};
-      if (occupancy_snapshot_queued) {
-        snapshot_record["path"] = occupancy_snapshot_path;
-      }
-      occupancy_evidence["snapshot"] = std::move(snapshot_record);
+  }
+  if (candidate_attempt_snapshot) {
+    nlohmann::json snapshot_record = {
+      {"status", occupancy_snapshot_queued ? "queued" : "enqueue_failed"},
+      {"candidate_id", request.vision_candidate_id},
+      {"acquisition_id", request.vision_acquisition_id},
+      {"primitive_count", request.non_target_occupancy.size()},
+      {"planning_object_ids", request_candidate_ids}};
+    if (occupancy_snapshot_queued) {
+      snapshot_record["path"] = occupancy_snapshot_path;
     }
+    occupancy_evidence["snapshot"] = std::move(snapshot_record);
   }
   JointTrajectoryContinuityResult continuity;
   std::vector<double> selected_global_goal;

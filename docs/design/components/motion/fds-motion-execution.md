@@ -140,7 +140,7 @@ Vision-derived PICK의 Candidate Geometry 입력은 [Task Execution–Motion ICD
 | Grasp 이후 Lift·Retract 경로 검증 및 실행 사전검사 | 충돌 판단에서 제외 | 검사 유지 |
 | PLACE | PICK에서 사용한 임시 Occupancy는 적용하지 않음 | 검사 유지 |
 
-각 Vision-derived Candidate attempt는 target별 planning map을 사용하고 같은 map을 보여주는 Occupancy Snapshot 하나를 기본적으로 생성·저장한다. 이 생성은 `diagnostics.capture_enabled`, `log_level` 및 상세 진단 선택 여부와 독립적이다. Snapshot은 candidate ID와 `vision_acquisition_id`로 해당 시도와 연결한다. 그 attempt의 Pose·Seed 탐색은 같은 map과 Snapshot을 공유하며 Candidate 전환 때 새 map과 Snapshot을 사용한다. Snapshot PNG는 공통 `snapshots/` 저장 영역에, 선택적 Planning Diagnostic JSON은 `diagnostic_records/` 영역에 둔다. 활성화된 Diagnostic Record에서 해당 Snapshot을 참조할 수 있어야 한다. 상세 Planning Diagnostic JSON과 Trace는 기존 Capture 정책을 따른다. Snapshot 생성·저장 실패는 planning 또는 실행 결과를 바꾸지 않는다.
+각 Vision-derived Candidate attempt는 target별 planning map을 사용하고 같은 map을 보여주는 Occupancy Snapshot 하나를 기본적으로 생성·저장한다. 이 생성은 `diagnostics.capture_enabled`, `log_level` 및 상세 진단 선택 여부와 독립적이다. Snapshot은 candidate ID와 `vision_acquisition_id`로 해당 시도와 연결한다. 그 attempt의 Pose·Seed 탐색은 같은 map과 Snapshot을 공유하며 Candidate 전환 때 새 map과 Snapshot을 사용한다. 이미지 파일은 Vision 인계 순번으로 정한 `snapshots/YYYYMMDD/HHMMSS/NN/` 폴더 안에 `occupancy-01.png`, `occupancy-02.png`처럼 저장한다. 파일명에 Goal UUID·Acquisition ID·Candidate ID를 넣지 않으며 이 식별자는 Motion Diagnostic Record에 Snapshot 경로와 함께 기록한다. 해당 기록은 `diagnostic_records/`에 저장하고 상세 Planning Diagnostic JSON과 Trace는 기존 Capture 정책을 따른다. Snapshot 생성·저장 실패는 planning 또는 실행 결과를 바꾸지 않는다.
 
 ### Grasp Occupancy 전략
 
@@ -279,7 +279,7 @@ Motion Result는 Gripper `HELD/RELEASED`나 PnP `PLACED`를 확정하지 않는�
 
 ### VR-MOT-EXEC-09 — PICK Planning Scene 정책
 
-동일 후보의 Grasp 끝점 충돌은 `GRASP_COLLISION` 근거로 분기하고 같은 Pose에 남은 Seed가 있으면 이를 우선해야 한다. Occupancy 구성은 [PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 구간별 사용은 이 절의 정책을 따라야 한다. Candidate attempt Snapshot은 동일 target의 실제 planning map 객체 집합을 표시해야 한다. Vision Acquisition과 연결된 Motion Occupancy Snapshot은 해당 Acquisition의 Vision Snapshot 및 Metadata와 같은 저장 디렉터리에 둔다. 요청별 점유·Scene 정책이 다른 요청에 남거나 종료 뒤 늦은 계산 결과가 새 요청에 반영되어서는 안 된다. 단계별 실패 원인과 누적 예산을 구분해야 한다.
+동일 후보의 Grasp 끝점 충돌은 `GRASP_COLLISION` 근거로 분기하고 같은 Pose에 남은 Seed가 있으면 이를 우선해야 한다. Occupancy 구성은 [PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 구간별 사용은 이 절의 정책을 따라야 한다. Candidate attempt Snapshot은 동일 target의 실제 planning map 객체 집합을 표시해야 한다. Vision Acquisition과 연결된 Motion Occupancy Snapshot은 해당 Acquisition의 Vision Snapshot 및 Metadata와 같은 numbered 폴더에 `occupancy-NN.png`로 저장하고 Motion Diagnostic Record에 acquisition·candidate·goal 식별자와 상대 이미지 경로를 남긴다. 요청별 점유·Scene 정책이 다른 요청에 남거나 종료 뒤 늦은 계산 결과가 새 요청에 반영되어서는 안 된다. 단계별 실패 원인과 누적 예산을 구분해야 한다.
 
 ### VR-MOT-EXEC-06 — PICK/PLACE Trajectory 완료와 Gate 배제
 
