@@ -100,6 +100,7 @@ add_executable(vision_ros_ingress_node src/vision_ros_ingress_node.cpp)
 target_link_libraries(vision_ros_ingress_node vision_ros_ingress)
 ament_target_dependencies(vision_ros_ingress_node rclcpp)
 install(TARGETS vision_ros_ingress_node DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

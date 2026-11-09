@@ -5,6 +5,13 @@ import pytest
 from camera_tooling import stage_inspector as camera
 
 
+def project_root(tmp_path):
+    root = tmp_path / "sftwin-project"
+    (root / "infra/isaac_sim/scripts/m0609_cell/shared").mkdir(parents=True)
+    (root / "ros2_ws/src").mkdir(parents=True)
+    return root
+
+
 def test_optical_basis_is_rigid_and_matches_declared_axes():
     assert camera.is_rigid_rotation(camera.CAMERA_LINK_TO_OPTICAL_BASIS)
     assert camera.optical_transform_snapshot()["translation_m"] == [0.0, 0.0, 0.0]
@@ -226,14 +233,13 @@ def test_script_editor_uses_explicit_output_without_parsing_kit_arguments():
     assert snapshot["path"] == "/tmp/camera_snapshot.json"
 
 
-def test_script_editor_uses_stable_repo_local_output_without_override():
+def test_script_editor_uses_vision_package_config_without_override(tmp_path):
+    root = project_root(tmp_path)
     output = camera.script_editor_output_path(
-        {"SFTWIN_PROJECT_ROOT": str(Path(__file__).resolve().parents[6])},
+        {"SFTWIN_PROJECT_ROOT": str(root)},
         "/tmp/carb/script_1789055439.py",
     )
-    assert output.endswith(
-        ".local_artifacts/m0609_cell/camera_inspection/camera_snapshot.json"
-    )
+    assert output.endswith("ros2_ws/src/vision/config/isaac_d455_camera_calibration.json")
 
 
 def test_script_editor_snapshot_override_is_preserved():
@@ -268,13 +274,15 @@ def test_empty_reference_prim_list_does_not_fall_back_to_removed_mockup_prim():
     assert camera.selected_reference_prim_paths(None) == [camera.DEFAULT_REFERENCE_PRIM]
 
 
-def test_script_editor_output_precedence_is_environment_then_wrapper_then_library_default():
-    project_root = str(Path(__file__).resolve().parents[6])
+def test_script_editor_output_precedence_is_environment_then_wrapper_then_library_default(
+    tmp_path,
+):
+    root = str(project_root(tmp_path))
     script_path = "/tmp/carb/script_1789055439.py"
     assert (
         camera.script_editor_output_path(
             {
-                "SFTWIN_PROJECT_ROOT": project_root,
+                "SFTWIN_PROJECT_ROOT": root,
                 "SFTWIN_CAMERA_SNAPSHOT_PATH": "/tmp/env.json",
             },
             script_path,
@@ -283,11 +291,11 @@ def test_script_editor_output_precedence_is_environment_then_wrapper_then_librar
         == "/tmp/env.json"
     )
     assert camera.script_editor_output_path(
-        {"SFTWIN_PROJECT_ROOT": project_root}, script_path, "wrapper.json"
-    ).endswith("camera_inspection/wrapper.json")
+        {"SFTWIN_PROJECT_ROOT": root}, script_path, "wrapper.json"
+    ).endswith("ros2_ws/src/vision/config/wrapper.json")
     assert camera.script_editor_output_path(
-        {"SFTWIN_PROJECT_ROOT": project_root}, script_path
-    ).endswith("camera_inspection/camera_snapshot.json")
+        {"SFTWIN_PROJECT_ROOT": root}, script_path
+    ).endswith("ros2_ws/src/vision/config/isaac_d455_camera_calibration.json")
 
 
 def test_standalone_cli_output_precedes_script_editor_filename_default():

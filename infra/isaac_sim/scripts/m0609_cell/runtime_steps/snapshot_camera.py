@@ -15,12 +15,7 @@ import camera_tooling.stage_inspector as stage_inspector
 
 importlib.reload(local_artifacts)
 importlib.reload(stage_inspector)
-output = local_artifacts.output_path(
-    os.environ.get("SFTWIN_CAMERA_SNAPSHOT_PATH"),
-    "camera_inspection",
-    "camera_snapshot.json",
-    __file__,
-)
+output = stage_inspector.script_editor_output_path(os.environ, __file__)
 stage_inspector.inspect_stage(
     str(output), stage_inspector.script_editor_reference_prims(os.environ)
 )

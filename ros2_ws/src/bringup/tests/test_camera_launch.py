@@ -18,7 +18,7 @@ def load_module():
     return module
 
 
-def test_camera_overlay_requires_snapshot_when_no_local_artifact_exists(
+def test_camera_overlay_requires_snapshot_when_no_packaged_snapshot_exists(
     tmp_path, monkeypatch
 ):
     profile = tmp_path / "profile.yaml"
@@ -26,9 +26,13 @@ def test_camera_overlay_requires_snapshot_when_no_local_artifact_exists(
     context = LaunchContext()
     context.launch_configurations.update({"profile": str(profile), "snapshot": ""})
     module = load_module()
-    package_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
-    package_share.mkdir(parents=True)
-    module.get_package_share_directory = lambda _package: str(package_share)
+    bringup_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
+    vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_vision"
+    bringup_share.mkdir(parents=True)
+    vision_share.mkdir(parents=True)
+    module.get_package_share_directory = lambda package: str(
+        vision_share if package == "arm_cell_vision" else bringup_share
+    )
     monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     with pytest.raises(RuntimeError, match="inspector-generated"):
         module.compose(context)
@@ -92,13 +96,13 @@ def test_camera_overlay_snapshot_argument_overrides_profile(tmp_path):
     assert len(nodes) == 2
 
 
-def test_camera_overlay_discovers_before_play_artifact_from_project_root(
+def test_camera_overlay_uses_vision_package_snapshot_by_default(
     tmp_path, monkeypatch
 ):
-    root = tmp_path / "checkout"
-    snapshot = (
-        root / ".local_artifacts/m0609_cell/camera_inspection/camera_snapshot.json"
-    )
+    bringup_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
+    vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_vision"
+    bringup_share.mkdir(parents=True)
+    snapshot = vision_share / "config/isaac_d455_camera_calibration.json"
     snapshot.parent.mkdir(parents=True)
     snapshot.write_text(
         json.dumps(
@@ -118,9 +122,13 @@ def test_camera_overlay_discovers_before_play_artifact_from_project_root(
             }
         )
     )
-    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(root))
+    module = load_module()
+    module.get_package_share_directory = lambda package: str(
+        vision_share if package == "arm_cell_vision" else bringup_share
+    )
+    monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     context = LaunchContext()
     profile = tmp_path / "profile.yaml"
     profile.write_text("camera_snapshot: null\n")
     context.launch_configurations.update({"profile": str(profile), "snapshot": ""})
-    assert len(load_module().compose(context)) == 2
+    assert len(module.compose(context)) == 2
