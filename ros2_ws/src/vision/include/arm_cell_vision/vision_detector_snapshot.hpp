@@ -12,6 +12,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <arm_cell_interfaces/msg/vision_detector_snapshot.hpp>
@@ -172,6 +173,7 @@ private:
   std::filesystem::path artifact_root_;
   std::filesystem::path diagnostic_root_;
   std::filesystem::path snapshot_run_directory_;
+  std::unordered_map<std::string, std::filesystem::path> acquisition_snapshot_directories_;
   std::string live_test_session_id_;
   std::string run_date_;
   std::string run_time_;

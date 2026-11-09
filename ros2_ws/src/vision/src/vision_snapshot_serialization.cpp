@@ -828,7 +828,17 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
   }
   json << ",\"association_status\":\"" <<
     (live_test_session_id_.empty() ? "unassociated" : "associated") << "\","
-       << "\"strategy\":\"" << json_escape(job.algorithm) << "\",\"target_id\":\"" <<
+       << "\"snapshot\":";
+  const auto snapshot_directory = acquisition_snapshot_directories_.find(job.acquisition_id);
+  if (snapshot_directory == acquisition_snapshot_directories_.end()) {
+    json << "null";
+  } else {
+    const auto relative_directory = std::filesystem::absolute(snapshot_directory->second).
+      lexically_relative(std::filesystem::absolute(diagnostic_root_)).generic_string();
+    json << "{\"directory\":\"" << json_escape(relative_directory) <<
+      "\",\"image_file\":\"detection.png\",\"metadata_file\":\"metadata.json\"}";
+  }
+  json << ",\"strategy\":\"" << json_escape(job.algorithm) << "\",\"target_id\":\"" <<
     json_escape(job.target_id) << "\",\"observation\":";
   if (job.observation_input()) {
     const bool rgb_available = is_renderable_presentation_rgb(job.observation_input()->rgb);

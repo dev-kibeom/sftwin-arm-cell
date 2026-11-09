@@ -1785,19 +1785,23 @@ TEST_F(VisionDetectorSnapshotTest, NoSubscriberStillWritesThePublishedPngAndJson
   const auto date = utc_date_now();
   arm_cell_vision::VisionDetectorSnapshotOutput output(
     *node, directory, "run-3", {},
-    [&](const auto & message) {published.push_back(message);}, date, root / "diagnostic_records", {}, "123456");
+    [&](const auto & message) {published.push_back(message);}, date, root / "diagnostic_records", {},
+    "123456", directory / date / "123456");
+  const auto early_motion_directory = directory / date / "123456" / "01";
+  std::filesystem::create_directories(early_motion_directory);
+  std::ofstream(early_motion_directory / "occupancy-01.png") << "motion snapshot";
   output.submit(calibration_job());
   auto terminal = calibration_job();
   terminal.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
   terminal.calibration_id.clear();
-  terminal.acquisition_id = "acq-10";
+  terminal.acquisition_id = "acq-1";
   terminal.terminal_result_code = 2;
   terminal.terminal_diagnostic = "timeout";
   output.submit(std::move(terminal));
   auto second_terminal = calibration_job();
   second_terminal.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_SUCCESS;
   second_terminal.calibration_id.clear();
-  second_terminal.acquisition_id = "acq-11";
+  second_terminal.acquisition_id = "acq-2";
   second_terminal.terminal_result_code = 0;
   output.submit(std::move(second_terminal));
   auto progress = calibration_job();
@@ -1809,8 +1813,8 @@ TEST_F(VisionDetectorSnapshotTest, NoSubscriberStillWritesThePublishedPngAndJson
   output.shutdown();
   ASSERT_EQ(published.size(), 4U);
   EXPECT_EQ(published[0].calibration_id, "cal-1");
-  EXPECT_EQ(published[1].acquisition_id, "acq-10");
-  EXPECT_EQ(published[2].acquisition_id, "acq-11");
+  EXPECT_EQ(published[1].acquisition_id, "acq-1");
+  EXPECT_EQ(published[2].acquisition_id, "acq-2");
   EXPECT_EQ(published[3].acquisition_id, "acq-progress");
   const auto run_directory = directory / date / "123456";
   const auto calibration_directory = run_directory / "calibration" / "01";
@@ -1831,21 +1835,28 @@ TEST_F(VisionDetectorSnapshotTest, NoSubscriberStillWritesThePublishedPngAndJson
     std::istreambuf_iterator<char>());
   EXPECT_EQ(bytes, calibration_message.image_png.data);
   EXPECT_TRUE(std::filesystem::is_directory(calibration_directory));
-  const auto success_directory = run_directory / "acquisition" / "acq-11";
-  const auto failure_directory = run_directory / "acquisition" / "acq-10";
-  ASSERT_TRUE(std::filesystem::exists(metadata_run / "acquisition" / "acq-11" / "metadata.json"));
-  ASSERT_TRUE(std::filesystem::exists(success_directory / "snapshot.png"));
-  ASSERT_TRUE(std::filesystem::exists(metadata_run / "acquisition" / "acq-10" / "metadata.json"));
-  ASSERT_TRUE(std::filesystem::exists(failure_directory / "snapshot.png"));
-  std::ifstream failure_metadata(metadata_run / "acquisition" / "acq-10" / "metadata.json");
+  const auto success_directory = run_directory / "02";
+  const auto failure_directory = run_directory / "01";
+  ASSERT_TRUE(std::filesystem::exists(success_directory / "metadata.json"));
+  ASSERT_TRUE(std::filesystem::exists(success_directory / "detection.png"));
+  EXPECT_TRUE(std::filesystem::exists(failure_directory / "occupancy-01.png"));
+  ASSERT_TRUE(std::filesystem::exists(failure_directory / "metadata.json"));
+  ASSERT_TRUE(std::filesystem::exists(failure_directory / "detection.png"));
+  std::ifstream failure_metadata(failure_directory / "metadata.json");
   const std::string failure_json((std::istreambuf_iterator<char>(failure_metadata)), {});
-  EXPECT_NE(failure_json.find("\"acquisition_id\":\"acq-10\""), std::string::npos);
+  EXPECT_NE(failure_json.find("\"acquisition_id\":\"acq-1\""), std::string::npos);
   EXPECT_NE(failure_json.find("\"event_kind\":\"DETECT_TARGET_FAILURE\""), std::string::npos);
+  EXPECT_NE(failure_json.find("\"image_filename\":\"detection.png\""), std::string::npos);
+  EXPECT_NE(failure_json.find("\"diagnostic_record_path\":"), std::string::npos);
+  EXPECT_NE(published[1].diagnostic_record_json.find("\"image_file\":\"detection.png\""),
+    std::string::npos);
   EXPECT_EQ(failure_json, published[1].metadata_json);
   for (const auto & entry : std::filesystem::recursive_directory_iterator(root / "diagnostic_records")) {
     EXPECT_NE(entry.path().extension(), ".png");
   }
-  for (const auto & entry : std::filesystem::recursive_directory_iterator(directory)) {
+  EXPECT_TRUE(std::filesystem::exists(failure_directory / "metadata.json"));
+  EXPECT_TRUE(std::filesystem::exists(success_directory / "metadata.json"));
+  for (const auto & entry : std::filesystem::directory_iterator(run_directory)) {
     EXPECT_NE(entry.path().extension(), ".json");
   }
   std::filesystem::remove_all(root);
@@ -1880,7 +1891,7 @@ TEST_F(VisionDetectorSnapshotTest, GeometryPanelsShareTheAcquisitionAndReference
   output.submit(std::move(job));
   output.shutdown();
   ASSERT_EQ(published.size(), 1U);
-  const auto directory = root / date / "123456" / "acquisition" / "geometry-acq";
+  const auto directory = root / date / "123456" / "01";
   const auto observation = cv::imread((directory / "geometry_observation.png").string(), cv::IMREAD_COLOR);
   const auto interpretation = cv::imread((directory / "geometry_interpretation.png").string(), cv::IMREAD_COLOR);
   ASSERT_FALSE(observation.empty());
@@ -1917,7 +1928,7 @@ TEST_F(VisionDetectorSnapshotTest, GeometryPanelsShareTheAcquisitionAndReference
     std::ofstream(std::filesystem::path(preview) / "metadata.json") << published.front().metadata_json;
     std::ofstream(std::filesystem::path(preview) / "diagnostic_record.json") <<
       published.front().diagnostic_record_json;
-    for (const auto * name : {"geometry_observation.png", "geometry_interpretation.png", "snapshot.png"}) {
+    for (const auto * name : {"geometry_observation.png", "geometry_interpretation.png", "detection.png"}) {
       std::filesystem::copy_file(directory / name, std::filesystem::path(preview) / name,
         std::filesystem::copy_options::overwrite_existing);
     }
@@ -2556,7 +2567,7 @@ TEST_F(VisionDetectorSnapshotTest, CombinedGeometryImagesUseOneTrayOrientationFo
     output.submit(std::move(job));
     output.shutdown();
     ASSERT_EQ(published.size(), 1U);
-    const auto directory = root / date / "123456" / "acquisition" / acquisition_id;
+    const auto directory = root / date / "123456" / "01";
     const auto observation = cv::imread((directory / filenames[0]).string(), cv::IMREAD_COLOR);
     const auto interpretation = cv::imread((directory / filenames[1]).string(), cv::IMREAD_COLOR);
     ASSERT_FALSE(observation.empty());
@@ -2639,8 +2650,7 @@ TEST_F(VisionDetectorSnapshotTest, RgbSnapshotKeepsSourceSizeAndOrientationWitho
     output.submit(std::move(job));
     output.shutdown();
     ASSERT_EQ(published.size(), 1U);
-    const auto snapshot_path = root / date / "123456" / "acquisition" / acquisition_id /
-      "snapshot.png";
+    const auto snapshot_path = root / date / "123456" / "01" / "detection.png";
     const auto snapshot = cv::imread(snapshot_path.string(), cv::IMREAD_COLOR);
     ASSERT_FALSE(snapshot.empty());
     EXPECT_EQ(snapshot.cols, 160);
@@ -2711,7 +2721,7 @@ TEST_F(VisionDetectorSnapshotTest, CuboidStageImagesRemainReadableWhenThereAreNo
   EXPECT_TRUE(metadata_is_valid_json(published.front().metadata_json));
   EXPECT_NE(published.front().metadata_json.find("\"candidate_count_displayed\":0"),
     std::string::npos);
-  const auto directory = root / utc_date_now() / "123456" / "acquisition" / "stage-empty";
+  const auto directory = root / utc_date_now() / "123456" / "01";
   for (const auto * filename : {"geometry_observation.png", "geometry_interpretation.png"}) {
     const auto image = cv::imread((directory / filename).string(), cv::IMREAD_COLOR);
     ASSERT_FALSE(image.empty()) << filename;
@@ -2741,7 +2751,7 @@ TEST_F(VisionDetectorSnapshotTest, IncompleteHypothesesStayUnavailableAndRgbTime
         std::string::npos);
       EXPECT_NE(published.front().metadata_json.find("\"stage\":\"final_candidates\",\"status\":\"evidence_unavailable\""),
         std::string::npos);
-      const auto directory = root / utc_date_now() / "123456" / "acquisition" / acquisition_id;
+      const auto directory = root / utc_date_now() / "123456" / "01";
       EXPECT_TRUE(std::filesystem::exists(directory / "geometry_interpretation.png"));
       const auto interpretation = cv::imread(
         (directory / "geometry_interpretation.png").string(), cv::IMREAD_COLOR);
@@ -2772,8 +2782,7 @@ TEST_F(VisionDetectorSnapshotTest, IncompleteHypothesesStayUnavailableAndRgbTime
   EXPECT_EQ(published.front().metadata_json.find("observation_identity_mismatch"),
     std::string::npos);
   EXPECT_NE(published.front().metadata_json.find("\"candidate_ids\":[]"), std::string::npos);
-  const auto directory = root / utc_date_now() / "123456" / "acquisition" /
-    "stage-rgb-timestamp-difference";
+  const auto directory = root / utc_date_now() / "123456" / "01";
   EXPECT_TRUE(std::filesystem::exists(directory / "geometry_interpretation.png"));
   std::filesystem::remove_all(root);
 }
@@ -2798,8 +2807,8 @@ TEST_F(VisionDetectorSnapshotTest, HypothesisCompletenessUsesMatchingRuntimeEval
   EXPECT_NE(published.front().metadata_json.find(
       "\"stage\":\"final_candidates\",\"status\":\"evidence_unavailable\""),
     std::string::npos);
-  EXPECT_TRUE(std::filesystem::exists(root / utc_date_now() / "123456" / "acquisition" /
-      "stage-attempt-count-mismatch" / "geometry_interpretation.png"));
+  EXPECT_TRUE(std::filesystem::exists(root / utc_date_now() / "123456" / "01" /
+      "geometry_interpretation.png"));
   std::filesystem::remove_all(root);
 }
 
@@ -2807,7 +2816,7 @@ TEST_F(VisionDetectorSnapshotTest, CuboidStageFileSaveFailureKeepsMetadataValidA
 {
   const auto root = temporary_snapshot_root("cuboid-stage-save-failure");
   const auto run_directory = root / "run";
-  std::filesystem::create_directories(run_directory / "acquisition");
+  std::filesystem::create_directories(run_directory);
   auto job = cuboid_stage_job("stage-save-failure");
   std::vector<arm_cell_interfaces::msg::VisionDetectorSnapshot> published;
   arm_cell_vision::VisionDetectorSnapshotOutput output(
@@ -2829,7 +2838,7 @@ TEST_F(VisionDetectorSnapshotTest, CuboidStageFileSaveFailureKeepsMetadataValidA
   }
   EXPECT_EQ(metadata.find("\"relative_path\""), std::string::npos);
 
-  const auto snapshot_directory = run_directory / "acquisition" / "stage-save-failure";
+  const auto snapshot_directory = run_directory / "01";
   std::filesystem::permissions(snapshot_directory, std::filesystem::perms::owner_all,
     std::filesystem::perm_options::replace);
   std::filesystem::permissions(root / "diagnostic_records", std::filesystem::perms::owner_all,
@@ -2927,7 +2936,7 @@ TEST_F(VisionDetectorSnapshotTest, SessionSnapshotDirectoryUsesSuppliedSessionTi
   ASSERT_EQ(published.size(), 2U);
   const std::array<std::filesystem::path, 2> event_paths{
     std::filesystem::path("calibration") / "01",
-    std::filesystem::path("acquisition") / terminal.acquisition_id};
+    std::filesystem::path("01")};
   for (std::size_t index = 0; index < event_paths.size(); ++index) {
     const auto image_directory = snapshot_run_directory / event_paths[index];
     const auto metadata_path = index == 0U ?
@@ -2938,11 +2947,11 @@ TEST_F(VisionDetectorSnapshotTest, SessionSnapshotDirectoryUsesSuppliedSessionTi
     const std::string saved((std::istreambuf_iterator<char>(metadata)), {});
     EXPECT_EQ(saved, published[index].metadata_json);
     EXPECT_NE(saved.find("\"snapshot_directory\":\"" + image_directory.string()), std::string::npos);
-    EXPECT_FALSE(cv::imread((image_directory / "snapshot.png").string()).empty());
+    EXPECT_FALSE(cv::imread((image_directory / (index == 0U ? "snapshot.png" : "detection.png")).string()).empty());
     EXPECT_EQ(std::filesystem::exists(image_directory / "metadata.json"), index != 0U);
   }
   EXPECT_FALSE(std::filesystem::exists(
-      diagnostic_root / "snapshot_metadata" / "acquisition" / "session-acquisition"));
+      diagnostic_root / "snapshot_metadata" / "session-acquisition"));
   EXPECT_FALSE(std::filesystem::exists(snapshot_run_directory / "20261020" / "120000-01"));
   std::filesystem::remove_all(root);
 }
@@ -2979,9 +2988,10 @@ TEST_F(VisionDetectorSnapshotTest, MetadataDirectoryFailureKeepsPngAndPublicatio
   EXPECT_NE(published.back().diagnostic_record_json.find("\"result_code\":2"), std::string::npos);
   const std::array<std::filesystem::path, 2> event_paths{
     std::filesystem::path("calibration") / "01",
-    std::filesystem::path("acquisition") / terminal.acquisition_id};
+    std::filesystem::path("01")};
   for (std::size_t index = 0; index < event_paths.size(); ++index) {
-    const auto image_path = snapshot_run_directory / event_paths[index] / "snapshot.png";
+    const auto image_path = snapshot_run_directory / event_paths[index] /
+      (index == 0U ? "snapshot.png" : "detection.png");
     EXPECT_FALSE(cv::imread(image_path.string()).empty());
     std::ifstream image(image_path, std::ios::binary);
     const std::vector<uint8_t> saved((std::istreambuf_iterator<char>(image)), {});
@@ -3620,7 +3630,7 @@ TEST_F(VisionDetectorSnapshotTest, DetailedDepthScenePanoramaUsesSnapshotWorkerO
   }
   output.submit(std::move(job));
   output.shutdown();
-  const auto panorama = root / "snapshot-run" / "acquisition" / "depth-scene-panorama" /
+  const auto panorama = root / "snapshot-run" / "01" /
     "scene_stability_panorama.png";
   ASSERT_TRUE(std::filesystem::exists(panorama));
   const auto rendered_panorama = cv::imread(panorama.string(), cv::IMREAD_COLOR);

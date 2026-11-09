@@ -22,7 +22,7 @@ class MotionPlanningDiagnosticCapture final
 public:
   MotionPlanningDiagnosticCapture(
     std::string directory, rclcpp::Logger logger,
-    std::string snapshot_directory = ".local_artifacts/snapshots/motion");
+    std::string snapshot_directory = ".local_artifacts/snapshots");
   ~MotionPlanningDiagnosticCapture();
 
   bool enqueue(
@@ -98,7 +98,7 @@ private:
   std::unordered_map<std::string, PendingRecord> pending_summary_coverage_;
   std::unordered_map<std::string, DetailSnapshot> detail_snapshots_;
   std::unordered_map<std::string, std::string> occupancy_snapshot_paths_;
-  uint64_t occupancy_snapshot_sequence_{0U};
+  std::unordered_map<std::string, uint64_t> occupancy_snapshot_sequences_;
   bool stopping_{false};
   std::thread worker_;
 };

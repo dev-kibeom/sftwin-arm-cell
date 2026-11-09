@@ -980,7 +980,7 @@ TEST_F(
   request.grasp_width_min_mm = 10.0F;
   request.grasp_width_max_mm = 80.0F;
   request.has_non_target_occupancy = true;
-  request.vision_acquisition_id = "acquisition-occupancy-snapshot";
+  request.vision_acquisition_id = "vision-run-acq-1";
   request.vision_candidate_id = "selected-candidate";
   arm_cell_interfaces::msg::PickCandidate selected_candidate;
   selected_candidate.acquisition_id = request.vision_acquisition_id;
@@ -1070,8 +1070,9 @@ TEST_F(
         for (const auto & entry : std::filesystem::recursive_directory_iterator(snapshots_directory)) {
           if (entry.is_regular_file() && entry.path().extension() == ".png") {
             ++count;
-            EXPECT_EQ(entry.path().parent_path(), snapshots_directory / "acquisition" /
-              request.vision_acquisition_id);
+            EXPECT_EQ(entry.path().parent_path(), snapshots_directory / "01");
+            EXPECT_TRUE(entry.path().filename() == "occupancy-01.png" ||
+              entry.path().filename() == "occupancy-02.png");
             EXPECT_FALSE(cv::imread(entry.path().string(), cv::IMREAD_COLOR).empty());
           }
         }
@@ -1089,6 +1090,10 @@ TEST_F(
   request.material_candidates.front().candidate_id = request.vision_candidate_id;
   EXPECT_TRUE(submit());
   pump_until([&]() {return png_count() == 2U;});
+  EXPECT_TRUE(std::filesystem::exists(
+      snapshots_directory / "01" / "occupancy-01.png"));
+  EXPECT_TRUE(std::filesystem::exists(
+      snapshots_directory / "01" / "occupancy-02.png"));
   EXPECT_FALSE(std::filesystem::exists(diagnostic_directory / "motion_planning_records"));
   if (std::filesystem::exists(diagnostic_directory)) {
     for (const auto & entry : std::filesystem::recursive_directory_iterator(diagnostic_directory)) {

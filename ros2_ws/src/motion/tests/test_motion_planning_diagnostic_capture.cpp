@@ -34,21 +34,21 @@ TEST(MotionPlanningDiagnosticCaptureTest, SnapshotCanBeSavedWithoutDetailedDiagn
     MotionPlanningDiagnosticCapture capture((root / "diagnostic_records").string(), logger,
       snapshots.string());
     EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "acq-1", "candidate-a", {}, first_path));
+      "goal", "vision-run-acq-1", "candidate-a", {}, first_path));
     std::string duplicate_path;
     EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "acq-1", "candidate-a", {}, duplicate_path));
+      "goal", "vision-run-acq-1", "candidate-a", {}, duplicate_path));
     EXPECT_EQ(first_path, duplicate_path);
     std::string candidate_path;
     EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "acq-1", "candidate-b", {}, candidate_path));
+      "goal", "vision-run-acq-1", "candidate-b", {}, candidate_path));
     std::string other_acquisition_path;
     EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "acq-2", "candidate-a", {}, other_acquisition_path));
+      "goal", "vision-run-acq-2", "candidate-a", {}, other_acquisition_path));
     EXPECT_NE(first_path, candidate_path);
     EXPECT_NE(first_path, other_acquisition_path);
     EXPECT_NE(first_path.find(
-        "snapshots/acquisition/acq-1/occupancy_goal_candidate_candidate-a_attempt_1.png"),
+        "snapshots/01/occupancy-01.png"),
       std::string::npos);
   }
   ASSERT_TRUE(std::filesystem::exists(snapshots));
@@ -61,11 +61,11 @@ TEST(MotionPlanningDiagnosticCaptureTest, SnapshotCanBeSavedWithoutDetailedDiagn
   }
   EXPECT_EQ(png_count, 3U);
   EXPECT_TRUE(std::filesystem::exists(
-      snapshots / "acquisition" / "acq-1" / "occupancy_goal_candidate_candidate-a_attempt_1.png"));
+      snapshots / "01" / "occupancy-01.png"));
   EXPECT_TRUE(std::filesystem::exists(
-      snapshots / "acquisition" / "acq-1" / "occupancy_goal_candidate_candidate-b_attempt_2.png"));
+      snapshots / "01" / "occupancy-02.png"));
   EXPECT_TRUE(std::filesystem::exists(
-      snapshots / "acquisition" / "acq-2" / "occupancy_goal_candidate_candidate-a_attempt_3.png"));
+      snapshots / "02" / "occupancy-01.png"));
   EXPECT_FALSE(std::filesystem::exists(root / "diagnostic_records"));
   std::filesystem::remove_all(root);
 }
@@ -81,9 +81,9 @@ TEST(MotionPlanningDiagnosticCaptureTest, OccupancySnapshotReferenceResolvesInDi
     MotionPlanningDiagnosticCapture capture((root / "diagnostic_records").string(),
       rclcpp::get_logger("motion_snapshot_reference_test"), (root / "snapshots").string());
     ASSERT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "acq-1", "candidate-a", {}, image_reference));
+      "goal", "vision-run-acq-1", "candidate-a", {}, image_reference));
     ASSERT_TRUE(capture.enqueue("goal", "TASK_TYPE_PICK", 0U,
-      nlohmann::json{{"occupancy_snapshot", {{"path", image_reference}}}}.dump(), "acq-1"));
+      nlohmann::json{{"occupancy_snapshot", {{"path", image_reference}}}}.dump(), "vision-run-acq-1"));
   }
   std::ifstream record(root / "diagnostic_records" / "goal.json");
   ASSERT_TRUE(record.good());

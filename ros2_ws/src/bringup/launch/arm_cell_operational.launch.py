@@ -1,6 +1,7 @@
 """Compose the supported software-only ARM Cell operational profile."""
 
 import fcntl
+from datetime import datetime, timezone
 import importlib.util
 import json
 import os
@@ -323,17 +324,21 @@ def join_live_test_session(artifact_directory):
     return descriptor.parent
 
 
-def vision_snapshot_run_directory(artifact_directory, live_session_root):
-    """Reuse the joined session's date/time path for Vision Snapshots."""
-    if live_session_root is None:
-        return None
-    session_root = Path(live_session_root)
-    return (
-        Path(artifact_directory)
-        / "snapshots"
-        / session_root.parent.name
-        / session_root.name
-    )
+def reserve_snapshot_run_directory(artifact_directory):
+    """Choose one shared date/time folder for this bringup's snapshots."""
+    now = datetime.now(timezone.utc)
+    date_directory = Path(artifact_directory) / "snapshots" / now.strftime("%Y%m%d")
+    date_directory.mkdir(parents=True, exist_ok=True)
+    timestamp = now.strftime("%H%M%S")
+    suffix = 0
+    while True:
+        run_name = timestamp if suffix == 0 else f"{timestamp}-{suffix}"
+        candidate = date_directory / run_name
+        try:
+            candidate.mkdir()
+            return candidate
+        except FileExistsError:
+            suffix += 1
 
 
 def node_ros_arguments(
@@ -400,9 +405,7 @@ def compose(context):
         if live_session_root
         else artifact_directory / "observability" / "vision"
     )
-    snapshot_run_directory = vision_snapshot_run_directory(
-        artifact_directory, live_session_root
-    )
+    snapshot_run_directory = reserve_snapshot_run_directory(artifact_directory)
     motion_artifact_directory = (
         live_session_root / "motion"
         if live_session_root
