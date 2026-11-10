@@ -1,5 +1,25 @@
 """D455 asset reference, mount, and rigid-body handling."""
 
+import os
+from pathlib import Path
+
+
+def local_d455_asset():
+    """Resolve the prepared asset without contacting a remote asset server."""
+    override = os.environ.get("SFTWIN_D455_ASSET")
+    if override and "://" in override:
+        raise ValueError("SFTWIN_D455_ASSET must be a local filesystem path")
+    root = Path(os.environ.get("SFTWIN_PROJECT_ROOT") or Path(__file__).resolve().parents[5])
+    asset = Path(override).expanduser() if override else root / ".local_artifacts/isaac/d455/rsd455.usd"
+    asset = asset.resolve()
+    if not asset.is_file():
+        raise FileNotFoundError(
+            f"Local D455 asset missing: {asset}. Run infra/isaac_sim/scripts/prepare_d455_assets.py "
+            "with Isaac python.sh while online first (see infra/isaac_sim/OFFLINE.md)."
+        )
+    return str(asset)
+
+
 D455_COLOR_CAMERA_NAME = "Camera_OmniVision_OV9782_Color"
 D455_ASSET_RELATIVE_PATH = "Isaac/Sensors/Intel/RealSense/rsd455.usd"
 D455_ASSET_FALLBACK_URL = (

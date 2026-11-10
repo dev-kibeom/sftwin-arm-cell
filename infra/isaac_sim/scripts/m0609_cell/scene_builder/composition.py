@@ -12,7 +12,7 @@ from scene_builder.cell_metadata import (
     build_status_hardware,
     initialize_cell_metadata,
 )
-from scene_builder.d455_camera import d455_asset_url, mount_d455
+from scene_builder.d455_camera import local_d455_asset, mount_d455
 from scene_builder.environment import build_environment
 from scene_builder.logical_camera import create_logical_camera_sensor
 from scene_builder.reachability import run_reachability_check
@@ -145,7 +145,7 @@ def build_camera_rig(context, get_assets_root_path):
         ),
     ]:
         static_box(object_id, path, name, color, material)
-    realsense_url = d455_asset_url(get_assets_root_path())
+    realsense_url = local_d455_asset()
     rs_path = f"{cell_root}/CameraRig/RealSense_D455"
     mount_d455(
         stage,
