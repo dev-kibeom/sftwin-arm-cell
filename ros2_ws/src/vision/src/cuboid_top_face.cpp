@@ -617,6 +617,18 @@ DetectionResult detect_cuboid_top_face(
   enumeration_stage.auxiliary_counts["enumerated_candidates"] = accepted.size();
   enumeration_stage.reason = "deterministic_candidate_id_enumeration";
   const auto unresolved = unresolved_observation_cells(models, obs, profile, missing);
+  std::vector<const PlaneRegion *> inclined_regions;
+  const auto collect_inclined = [&](const auto & regions) {
+      for (const auto & region : regions) {
+        if (region.plane_fitted && has_positive_inclined_surface_evidence(
+            region, obs, profile.cuboid.height_tolerance_m))
+        {
+          inclined_regions.push_back(&region);
+        }
+      }
+    };
+  collect_inclined(plane_map.regions);
+  collect_inclined(plane_map.recovered_inclined_regions);
   std::set<uint32_t> supporting_candidates;
   std::set<uint32_t> supported_candidates;
   for (const auto & upper : accepted) {
@@ -664,12 +676,29 @@ DetectionResult detect_cuboid_top_face(
     {model.center.x, model.center.y, model.top,
       fit.face.length, fit.face.width, fit.face.thickness};
     const bool supports_material = supporting_candidates.count(fit.candidate_id) != 0;
+    // Compare actual observed cells in Tray XY. A small contact area can
+    // support an inclined part, so whole-footprint IoU cannot clear a candidate.
+    const bool inclined_contact = fit.covered_by_upper_surface && std::any_of(
+      inclined_regions.begin(), inclined_regions.end(), [&](const PlaneRegion * region) {
+        bool overlaps_above = false;
+        bool overlaps_at_contact_height = false;
+        for (const auto & pixel : region->pixels) {
+          if (!fit.mask.at<uint8_t>(pixel)) {continue;}
+          const double height = obs.heights.at<double>(pixel);
+          overlaps_above |= height > fit.top + profile.cuboid.height_tolerance_m;
+          overlaps_at_contact_height |= within_height_tolerance(
+            height, fit.top, profile.support_contact_tolerance_m);
+          if (overlaps_above && overlaps_at_contact_height) {return true;}
+        }
+        return false;
+      });
     const bool support_unresolved = fit.covered_by_upper_surface && !supports_material;
-    candidate.is_stack_top = !supports_material && !support_unresolved &&
+    candidate.is_stack_top = !supports_material && !inclined_contact && !support_unresolved &&
       supported_candidates.count(fit.candidate_id) != 0;
-    candidate.confidence_grade = supports_material || support_unresolved ? "LOW" :
+    candidate.confidence_grade = supports_material || inclined_contact || support_unresolved ? "LOW" :
       complete_top_observed ? "HIGH" : "MEDIUM";
     candidate.confidence_reason = supports_material ? "supports_upper_material" :
+      inclined_contact ? "inclined_surface_contact_possible" :
       support_unresolved ? "upper_surface_support_unresolved" :
       complete_top_observed ?
       "top_surface_observed_and_individual_pose_resolved" :
