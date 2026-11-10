@@ -680,17 +680,7 @@ DetectionResult detect_cuboid_top_face(
     // support an inclined part, so whole-footprint IoU cannot clear a candidate.
     const bool inclined_contact = fit.covered_by_upper_surface && std::any_of(
       inclined_regions.begin(), inclined_regions.end(), [&](const PlaneRegion * region) {
-        bool overlaps_above = false;
-        bool overlaps_at_contact_height = false;
-        for (const auto & pixel : region->pixels) {
-          if (!fit.mask.at<uint8_t>(pixel)) {continue;}
-          const double height = obs.heights.at<double>(pixel);
-          overlaps_above |= height > fit.top + profile.cuboid.height_tolerance_m;
-          overlaps_at_contact_height |= within_height_tolerance(
-            height, fit.top, profile.support_contact_tolerance_m);
-          if (overlaps_above && overlaps_at_contact_height) {return true;}
-        }
-        return false;
+        return inclined_surface_overlaps_contact_band(*region, fit, obs, profile);
       });
     const bool support_unresolved = fit.covered_by_upper_surface && !supports_material;
     candidate.is_stack_top = !supports_material && !inclined_contact && !support_unresolved &&

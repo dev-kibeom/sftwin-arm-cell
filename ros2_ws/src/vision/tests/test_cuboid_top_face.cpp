@@ -227,6 +227,30 @@ TEST(CuboidTopFace, SmallWholePlaneResidualDoesNotHideLocallyDistinctRamp)
   }
 }
 
+TEST(CuboidTopFace, InclinedContactRequiresObservedOverlapAtBothHeights)
+{
+  namespace geometry = arm_cell_vision::cuboid_geometry;
+  auto obs = scene();
+  geometry::Fit target;
+  target.top = 0.03;
+  target.mask = cv::Mat::zeros(obs.heights.size(), CV_8U);
+  target.mask(cv::Rect(100, 100, 20, 20)).setTo(255);
+  geometry::PlaneRegion ramp;
+  ramp.pixels = {{120, 105}, {121, 105}};
+  obs.heights.at<double>(105, 120) = 0.03;
+  obs.heights.at<double>(105, 121) = 0.04;
+  const auto p = profile();
+  EXPECT_FALSE(geometry::inclined_surface_overlaps_contact_band(ramp, target, obs, p));
+
+  ramp.pixels.push_back({119, 105});
+  obs.heights.at<double>(105, 119) = 0.04;
+  EXPECT_FALSE(geometry::inclined_surface_overlaps_contact_band(ramp, target, obs, p));
+
+  ramp.pixels.push_back({118, 105});
+  obs.heights.at<double>(105, 118) = 0.031;
+  EXPECT_TRUE(geometry::inclined_surface_overlaps_contact_band(ramp, target, obs, p));
+}
+
 TEST(CuboidTopFace, LocalPlaneDecisionKeepsNoisySingleSurfacesAndSubToleranceBendTogether)
 {
   namespace geometry = arm_cell_vision::cuboid_geometry;
