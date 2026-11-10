@@ -60,9 +60,11 @@ class PickSearchController
 {
 public:
   PickSearchController(
-    std::size_t pose_count, std::size_t seed_limit, std::size_t first_pose = 0U)
+    std::size_t pose_count, std::size_t seed_limit, std::size_t first_pose = 0U,
+    std::size_t preferred_end = 0U)
   : seed_limit_(seed_limit), first_pose_(first_pose), pose_index_(first_pose),
-    poses_(pose_count) {}
+    round_end_(preferred_end > first_pose && preferred_end < pose_count ?
+      preferred_end : pose_count), poses_(pose_count) {}
 
   // Called at the existing attempt boundary, after runtime interruption checks.
   // The caller supplies the remaining shared budget; advancing never resets it.
@@ -100,13 +102,18 @@ public:
     ++pose_index_;
     // Finish this seed round before revisiting any pose with another seed.
     while (true) {
-      if (pose_index_ >= poses_.size()) {
-        pose_index_ = first_pose_;
+      if (pose_index_ >= round_end_) {
         bool pending = false;
-        for (std::size_t i = first_pose_; i < poses_.size(); ++i) {
+        for (std::size_t i = first_pose_; i < round_end_; ++i) {
           pending = pending || poses_[i].deferred;
         }
-        if (!pending) {pose_index_ = poses_.size(); break;}
+        if (pending) {
+          pose_index_ = first_pose_;
+        } else {
+          first_pose_ = round_end_;
+          round_end_ = poses_.size();
+          if (pose_index_ == poses_.size()) {break;}
+        }
       }
       if (poses_[pose_index_].attempts == 0U || poses_[pose_index_].deferred) {break;}
       ++pose_index_;
@@ -130,8 +137,9 @@ private:
     bool deferred{false};
   };
   const std::size_t seed_limit_;
-  const std::size_t first_pose_;
+  std::size_t first_pose_;
   std::size_t pose_index_;
+  std::size_t round_end_;
   std::vector<PoseProgress> poses_;
   std::size_t seed_attempt_{0U};
   std::size_t attempt_count_{0U};

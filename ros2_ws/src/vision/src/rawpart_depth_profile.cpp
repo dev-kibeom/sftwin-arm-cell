@@ -1122,6 +1122,12 @@ DetectionResult DetectTargetProcessor::process_profile(
         result.rawpart_absence_confirmation_available = true;
         result.rawpart_absence_confirmed = true;
         result.diagnostic_detail = "valid workspace coverage confirms absence";
+      } else if (!coverage) {
+        result.diagnostic_detail += "; tray_depth_coverage_unavailable";
+      } else if (!coverage->fully_visible) {
+        result.diagnostic_detail += "; tray_roi_outside_depth_frame";
+      } else {
+        result.diagnostic_detail += "; insufficient_tray_depth_coverage";
       }
     }
     return result;

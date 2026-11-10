@@ -762,4 +762,25 @@ TEST(RawPartDetectTarget, UnknownTargetIdDoesNotUseAnotherConfiguredProfile)
   EXPECT_FALSE(result.has_target_pose);
 }
 
+TEST(RawPartDetectTarget, EmptyTrayRequiresEntireTrayInFrame)
+{
+  auto input = rgbd_input(true);
+  clear_candidate(input, 0, 0, kWidth, kHeight);
+  auto profile = rawpart_profile();
+  profile.algorithm = "cuboid_top_face";
+  profile.tray_roi_min_m = {-0.08, -0.08};
+  profile.tray_roi_max_m = {0.08, 0.08};
+  const auto visible = process_with_fixture_calibration(input, "RawPart", {profile});
+  EXPECT_EQ(visible.result_code, ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND)
+    << visible.diagnostic_detail;
+  EXPECT_TRUE(visible.rawpart_absence_confirmed);
+
+  profile.tray_roi_max_m[0] = 0.5;
+  const auto clipped = process_with_fixture_calibration(input, "RawPart", {profile});
+  EXPECT_EQ(clipped.result_code, ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET)
+    << clipped.diagnostic_detail;
+  EXPECT_FALSE(clipped.rawpart_absence_confirmed);
+  EXPECT_NE(clipped.diagnostic_detail.find("tray_roi_outside_depth_frame"), std::string::npos);
+}
+
 }  // namespace
