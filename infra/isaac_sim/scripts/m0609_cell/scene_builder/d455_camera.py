@@ -1,18 +1,27 @@
 """D455 asset reference, mount, and rigid-body handling."""
 
+import os
+from pathlib import Path
+
+
+def local_d455_asset():
+    """Resolve the bundled asset without contacting a remote asset server."""
+    override = os.environ.get("SFTWIN_D455_ASSET")
+    if override and "://" in override:
+        raise ValueError("SFTWIN_D455_ASSET must be a local filesystem path")
+    root = Path(os.environ.get("SFTWIN_PROJECT_ROOT") or Path(__file__).resolve().parents[5])
+    asset = Path(override).expanduser() if override else root / "infra/isaac_sim/assets/sensors/d455/rsd455.usd"
+    asset = asset.resolve()
+    if not asset.is_file():
+        raise FileNotFoundError(
+            f"Bundled D455 asset missing: {asset}. Restore the complete repository checkout "
+            "or set SFTWIN_D455_ASSET to a local D455 USD with local dependencies."
+        )
+    return str(asset)
+
+
 D455_COLOR_CAMERA_NAME = "Camera_OmniVision_OV9782_Color"
-D455_ASSET_RELATIVE_PATH = "Isaac/Sensors/Intel/RealSense/rsd455.usd"
-D455_ASSET_FALLBACK_URL = (
-    "https://omniverse-content-production.s3-us-west-2.amazonaws.com/"
-    "Assets/Isaac/5.1/Isaac/Sensors/Intel/RealSense/rsd455.usd"
-)
 EMBEDDED_IMU_PRIM_NAME = "Imu_Sensor"
-
-
-def d455_asset_url(assets_root):
-    if assets_root:
-        return f"{assets_root}/{D455_ASSET_RELATIVE_PATH}"
-    return D455_ASSET_FALLBACK_URL
 
 
 def _pxr_modules():

@@ -45,3 +45,23 @@ explicitly documented.
 
 The project MIT license applies only to project-owned material and does not
 replace these third-party declarations or terms.
+
+## NVIDIA D455 sensor and materials
+
+- Source: NVIDIA Isaac Sim 5.1 content pack,
+  `Isaac/Sensors/Intel/RealSense/rsd455.usd` on
+  `https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/`.
+- Location: `infra/isaac_sim/assets/sensors/d455/`.
+- Creator/provider: NVIDIA Corporation and its licensors; RealSense D455
+  represents Intel hardware. No affiliation or endorsement is implied.
+- The asset is incorporated into the ARM Cell simulation camera rig. It is
+  third-party Content, not project-owned MIT material or a standalone asset pack.
+- Governing content-pack notice and supplied Omniverse agreement are preserved
+  as `LICENSE.txt` and `OMNIVERSE-LICENSE.txt` beside the asset. Use and further
+  distribution remain subject to those terms, including the Content distribution
+  conditions and restrictions on standalone redistribution.
+- Kit USD Collector localized the USD, MDL and texture dependencies and rewrote
+  their paths. `.collect.mapping.json` records source URLs and hashes. The local
+  materials still use the OmniPBR implementation supplied by Isaac Sim.
+- All files are checked into Git directly. No asset download or preparation step
+  is required after a complete checkout.
