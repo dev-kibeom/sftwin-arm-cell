@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# Numeric Compose users may have no passwd entry; keep ROS logs out of /root.
+export HOME="${HOME:-/tmp/arm-cell-home}"
+export ROS_HOME="${ROS_HOME:-$HOME/.ros}"
+mkdir -p "$ROS_HOME"
+
 source /opt/ros/humble/setup.bash
 source /opt/trac_ik/setup.bash
 source /workspace/ros2_ws/install/setup.bash

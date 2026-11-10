@@ -4,9 +4,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # Match the host Isaac user so bind-mounted records remain writable.
+    user: "${ARM_CELL_UID:-1000}:${ARM_CELL_GID:-1000}"
     network_mode: host
     init: true
     environment:
+      HOME: /tmp/arm-cell-home
+      ROS_HOME: /tmp/arm-cell-home/.ros
       ROS_DOMAIN_ID: "${ROS_DOMAIN_ID:-0}"
       RMW_IMPLEMENTATION: "${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
       FASTDDS_BUILTIN_TRANSPORTS: "${FASTDDS_BUILTIN_TRANSPORTS:-UDPv4}"
