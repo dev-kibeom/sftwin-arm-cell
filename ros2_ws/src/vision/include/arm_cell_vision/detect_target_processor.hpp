@@ -215,6 +215,7 @@ struct DetectorProfile;
 
 struct DetectionResult
 {
+  bool is_stack_top = false;
   std::vector<DisturbanceRegionDiagnostic> disturbance_regions;
   // Internal Vision classification. Never projected onto PickCandidate.
   std::string confidence_grade;

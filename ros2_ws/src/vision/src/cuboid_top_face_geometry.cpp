@@ -670,6 +670,23 @@ bool has_positive_inclined_surface_evidence(
          has_spatial_height_trend(patch.pixels, obs.heights, false, tolerance));
 }
 
+bool inclined_surface_overlaps_contact_band(
+  const PlaneRegion & region, const Fit & fit,
+  const CuboidHeightObservation & obs, const DetectorProfile & profile)
+{
+  bool overlaps_above = false;
+  bool overlaps_at_contact_height = false;
+  for (const auto & pixel : region.pixels) {
+    if (!fit.mask.at<uint8_t>(pixel)) {continue;}
+    const double height = obs.heights.at<double>(pixel);
+    overlaps_above |= height > fit.top + profile.cuboid.height_tolerance_m;
+    overlaps_at_contact_height |= within_height_tolerance(
+      height, fit.top, profile.support_contact_tolerance_m);
+    if (overlaps_above && overlaps_at_contact_height) {return true;}
+  }
+  return false;
+}
+
 namespace
 {
 struct Corner

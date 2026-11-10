@@ -118,7 +118,13 @@ std::uint8_t PickCandidateSearch::prepare(
         index, candidate.target_pose.pose.position.y,
         candidate.target_pose.pose.position.z, candidate.candidate_id});
   }
-  state_.candidate_cursor.reset(order_candidate_indices(priorities, priority_policy_));
+  auto order = order_candidate_indices(priorities, priority_policy_);
+  if (priority_policy_ == CandidatePriorityPolicy::DISTANCE_FIRST) {
+    std::stable_partition(order.begin(), order.end(), [this](std::size_t index) {
+      return state_.ordered_candidates[index].is_stack_top;
+    });
+  }
+  state_.candidate_cursor.reset(std::move(order));
   return MotionTaskResultCode::TASK_RESULT_SUCCESS;
 }
 

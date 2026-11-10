@@ -616,8 +616,35 @@ DetectionResult detect_cuboid_top_face(
   enumeration_stage.output_count = accepted.size();
   enumeration_stage.auxiliary_counts["enumerated_candidates"] = accepted.size();
   enumeration_stage.reason = "deterministic_candidate_id_enumeration";
-  append_disturbance_regions(result, plane_map.outlines, partitions, obs, profile);
   const auto unresolved = unresolved_observation_cells(models, obs, profile, missing);
+  std::vector<const PlaneRegion *> inclined_regions;
+  const auto collect_inclined = [&](const auto & regions) {
+      for (const auto & region : regions) {
+        if (region.plane_fitted && has_positive_inclined_surface_evidence(
+            region, obs, profile.cuboid.height_tolerance_m))
+        {
+          inclined_regions.push_back(&region);
+        }
+      }
+    };
+  collect_inclined(plane_map.regions);
+  collect_inclined(plane_map.recovered_inclined_regions);
+  std::set<uint32_t> supporting_candidates;
+  std::set<uint32_t> supported_candidates;
+  for (const auto & upper : accepted) {
+    const double bottom = upper.top - upper.face.thickness;
+    for (const auto & lower : accepted) {
+      if (upper.candidate_id == lower.candidate_id || upper.top <= lower.top ||
+        std::abs(bottom - lower.top) > profile.support_contact_tolerance_m)
+      {
+        continue;
+      }
+      if (materially_overlaps(upper, lower, obs.spacing_m)) {
+        supporting_candidates.insert(lower.candidate_id);
+        supported_candidates.insert(upper.candidate_id);
+      }
+    }
+  }
   result.cuboid_stages.push_back(std::move(enumeration_stage));
   result.unresolved_pixels = cv::countNonZero(unresolved);
   result.rawpart_profile_match_count = accepted.size();
@@ -648,8 +675,22 @@ DetectionResult detect_cuboid_top_face(
     candidate.profile_candidate_features =
     {model.center.x, model.center.y, model.top,
       fit.face.length, fit.face.width, fit.face.thickness};
-    candidate.confidence_grade = complete_top_observed ? "HIGH" : "MEDIUM";
-    candidate.confidence_reason = complete_top_observed ?
+    const bool supports_material = supporting_candidates.count(fit.candidate_id) != 0;
+    // Compare actual observed cells in Tray XY. A small contact area can
+    // support an inclined part, so whole-footprint IoU cannot clear a candidate.
+    const bool inclined_contact = fit.covered_by_upper_surface && std::any_of(
+      inclined_regions.begin(), inclined_regions.end(), [&](const PlaneRegion * region) {
+        return inclined_surface_overlaps_contact_band(*region, fit, obs, profile);
+      });
+    const bool support_unresolved = fit.covered_by_upper_surface && !supports_material;
+    candidate.is_stack_top = !supports_material && !inclined_contact && !support_unresolved &&
+      supported_candidates.count(fit.candidate_id) != 0;
+    candidate.confidence_grade = supports_material || inclined_contact || support_unresolved ? "LOW" :
+      complete_top_observed ? "HIGH" : "MEDIUM";
+    candidate.confidence_reason = supports_material ? "supports_upper_material" :
+      inclined_contact ? "inclined_surface_contact_possible" :
+      support_unresolved ? "upper_surface_support_unresolved" :
+      complete_top_observed ?
       "top_surface_observed_and_individual_pose_resolved" :
       "partial_top_surface_resolved_by_l_corner_height_and_recipe_evidence";
     for (auto & hypothesis : result.cuboid_hypotheses) {
@@ -684,15 +725,23 @@ DetectionResult detect_cuboid_top_face(
       diagnostic.fitted_outline_support.push_back(point);
     }
     result.rawpart_candidate_diagnostics.push_back(diagnostic);
-    result.ordered_candidates.push_back(std::move(candidate));
+    if (candidate.confidence_grade != "LOW") {
+      result.ordered_candidates.push_back(std::move(candidate));
+    }
   }
   inherit_normalized_confidence(result.cuboid_hypotheses);
-  result.result_code = Code::DETECT_RESULT_SUCCESS;
-  result.processing_stage = "target_pose_estimation";
-  result.diagnostic_detail = "cuboid_top_face; " + result.rawpart_candidate_generation;
+  append_disturbance_regions(result, plane_map.outlines, partitions, obs, profile);
   if (!result.cuboid_replay_evidence) {
     result.cuboid_replay_evidence = std::move(selected_replay);
   }
+  if (result.ordered_candidates.empty()) {
+    result.result_code = Code::DETECT_RESULT_GEOMETRY_ERROR;
+    result.diagnostic_detail = "cuboid_top_face; no_candidate_clear_of_upper_material";
+    return result;
+  }
+  result.result_code = Code::DETECT_RESULT_SUCCESS;
+  result.processing_stage = "target_pose_estimation";
+  result.diagnostic_detail = "cuboid_top_face; " + result.rawpart_candidate_generation;
   return result;
 }
 

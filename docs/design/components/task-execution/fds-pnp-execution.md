@@ -164,7 +164,7 @@ Trajectory 완료는 Gripper `HELD/RELEASED`, Isaac 객체 부착·분리 및 PI
 ## Recipe 해석·후보 실행과 Gripper 경계
 
 Orchestration은 대상별 Recipe snapshot과 전체 Vision 후보를 바꾸지 않고 전달한다. Task Execution은
-후보 우선순위·candidate transition과 PnP 의미를 소유한다. 후보는 기존 `target_pose`의 `base_link` Y 내림차순으로 평가한다. 설치 좌표계/TF에서 Tray +Y는 로봇 쪽을 향하므로 Y가 큰 후보가 Tray 안쪽에 있고 먼저 선택된다. 이는 로봇까지의 3차원 거리가 아니라 Tray Y 순서다. Y가 같으면 관측 상판 높이 `target_pose.position.z` 내림차순, Y와 Z가 같으면 Candidate ID 오름차순으로 결정한다. 객체 두께나 눕힌 면은 순위 계산에서 별도로 보정하지 않으며, 적층 층수·높이 동등 그룹은 계산하지 않는다. Vision 열거 순서를
+후보 우선순위·candidate transition과 PnP 의미를 소유한다. Vision이 다른 자재의 지지를 확인한 적층 최상단 후보를 먼저 평가한다. 각 그룹은 기존 `target_pose`의 `base_link` Y 내림차순으로 평가한다. 설치 좌표계/TF에서 Tray +Y는 로봇 쪽을 향하므로 Y가 큰 후보가 Tray 안쪽에 있고 먼저 선택된다. 이는 로봇까지의 3차원 거리가 아니라 Tray Y 순서다. Y가 같으면 관측 상판 높이 `target_pose.position.z` 내림차순, Y와 Z가 같으면 Candidate ID 오름차순으로 결정한다. Task Execution은 Vision의 `is_stack_top`을 사용하며 적층 층수·높이 동등 그룹은 계산하지 않는다. Vision 열거 순서를
 우선순위로 쓰지 않으며, 기존 탐색 예산과 전환 적격 조건을 유지한다. 실제 trajectory 실행 실패는
 후보 전환 성공으로 바꾸지 않는다.
 

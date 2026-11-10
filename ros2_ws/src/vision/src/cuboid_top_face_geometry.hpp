@@ -123,6 +123,8 @@ struct Selection
   std::vector<uint32_t> competitors;
 };
 
+bool materially_overlaps(const Fit & a, const Fit & b, double spacing);
+
 std::map<uint32_t, Selection> select_hypotheses(
   const std::vector<Fit> & candidates, const CuboidHeightObservation & obs,
   const DetectorProfile & profile, size_t & operations);
@@ -149,6 +151,9 @@ struct PlaneMap
 };
 PlaneMap build_plane_map(const CuboidHeightObservation & obs, const DetectorProfile & profile,
   size_t & operations, bool retain_evidence);
+bool inclined_surface_overlaps_contact_band(
+  const PlaneRegion & region, const Fit & fit,
+  const CuboidHeightObservation & obs, const DetectorProfile & profile);
 bool has_positive_inclined_surface_evidence(
   const PlaneRegion & patch, const CuboidHeightObservation & obs, double tolerance);
 PlaneFits reconstruct_plane(
