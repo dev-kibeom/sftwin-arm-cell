@@ -135,8 +135,7 @@ motion:
   # Each Grasp and Approach 6D IK call has its own timeout (0, 30] seconds.
   pick_grasp_ik_timeout_s: 1.0
   pick_approach_ik_timeout_s: 1.0
-  # Shared monotonic budget (0, 600] seconds, from candidate generation through executable Approach plan selection.
-  pick_search_budget_s: 100.0
+  # PICK search exhausts pose/seed counts, stopping at the first executable plan.
   # Retained for non-PICK/general IK paths.
   pick_ik_timeout_s: 1.0
   # Withdrawal tilt from the RawPart support outward normal, degrees [0, 180].
@@ -162,8 +161,7 @@ motion:
   pick_ik_seed_attempts_per_grasp_pose: 2
   # PLACE's current deterministic FREE/BOUNDED generator yields at most 13 poses.
   place_max_pose_candidates: 13
-  # Existing PICK/PLACE per-candidate path-search budget across repeated
-  # Approach requests. PICK also shares pick_search_budget_s across candidates.
+  # Per-approach path planning timeout; does not limit the whole PICK search.
   # Neither value is a Motion action or trajectory completion deadline.
   planning_time_s: 15.0
   # Applied around PICK and PLACE approach plan() calls only. MoveIt attempts

@@ -80,7 +80,8 @@ TEST(MotionPortTest, InvalidBackoffIsRejectedBeforePlanning)
     grant_normal(core);
     auto request = pick_approach_request("invalid-backoff");
     request.constraints.grasp_backoff_m = backoff;
-    EXPECT_EQ(core.planAndExecuteMotion(request).result_code,
+    EXPECT_EQ(
+      core.planAndExecuteMotion(request).result_code,
       arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
     EXPECT_EQ(backend->planning_calls(), 0);
   }
@@ -355,6 +356,9 @@ TEST(MotionPortTest, CancelDuringPlannedExecutionHasOneTerminalOwner)
   EXPECT_EQ(
     execution_result.result_code,
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_CANCELED);
+  EXPECT_EQ(backend->diagnostic_finalize_calls(), 0);
+  core.finalizeMotionPlanningDiagnostic(
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_CANCELED, 0.0, "task_terminal", "");
   EXPECT_EQ(backend->diagnostic_finalize_calls(), 1);
   EXPECT_TRUE(core.status().has_active_execution);
   backend->set_execution_active(false);
@@ -394,6 +398,9 @@ TEST(MotionPortTest, CancelDuringChainedPlanningClearsTheRetainedPlan)
   EXPECT_EQ(
     second_result.result_code,
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_CANCELED);
+  EXPECT_EQ(backend->diagnostic_finalize_calls(), 0);
+  core.finalizeMotionPlanningDiagnostic(
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_CANCELED, 0.0, "task_terminal", "");
   EXPECT_EQ(backend->diagnostic_finalize_calls(), 1);
   EXPECT_FALSE(core.status().has_active_execution);
   EXPECT_EQ(
@@ -443,6 +450,10 @@ TEST(MotionPortTest, SafetyDuringPlannedExecutionKeepsStopUntilBackendEvidence)
   EXPECT_EQ(
     execution_result.result_code,
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED);
+  EXPECT_EQ(backend->diagnostic_finalize_calls(), 0);
+  core.finalizeMotionPlanningDiagnostic(
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED, 0.0,
+    "task_terminal", "");
   EXPECT_EQ(backend->diagnostic_finalize_calls(), 1);
   backend->set_execution_active(false);
   backend->set_inactivity_confirmed(true);
@@ -566,7 +577,7 @@ TEST(MotionPortTest, PlanningPreservesSearchAndSystemFailuresEvenWhenDiagnostics
   using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
   class ThrowingDiagnosticBackend : public MotionBackend
   {
-  public:
+public:
     bool available() const override {return true;}
     bool submit(const arm_cell_interfaces::action::ExecuteTask::Goal &) override {return false;}
     bool supports_split_planning() const override {return true;}
@@ -601,6 +612,36 @@ TEST(MotionPortTest, PlanningPreservesSearchAndSystemFailuresEvenWhenDiagnostics
     EXPECT_EQ(result.failure_kind == MotionFailureKind::PLANNING, planning);
     EXPECT_EQ(backend->executions, 0);
   }
+}
+
+TEST(MotionPortTest, PickSegmentsKeepDiagnosticOpenUntilTaskFinalization)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  class DiagnosticBackend final : public MotionBackend
+  {
+public:
+    bool available() const override {return true;}
+    bool submit(const arm_cell_interfaces::action::ExecuteTask::Goal &) override {return false;}
+    void cancel() override {}
+    void hold() override {}
+    void stop() override {}
+    bool execution_active() const override {return false;}
+    bool backend_inactivity_confirmed() const override {return true;}
+    bool supports_split_planning() const override {return true;}
+    uint8_t plan_normalized(const NormalizedMotionRequest &, NormalizedTrajectoryPlan &) override
+    {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
+    void finalize_motion_planning_diagnostic(uint8_t) override {++finalizations;}
+    int finalizations{0};
+  };
+  auto backend = std::make_shared<DiagnosticBackend>();
+  MotionCore core(backend);
+  grant_normal(core);
+  EXPECT_EQ(
+    core.planMotion(pick_approach_request("first-material")).result_code,
+    Code::TASK_RESULT_PATH_OBSTRUCTED);
+  EXPECT_EQ(backend->finalizations, 0);
+  core.finalizeMotionPlanningDiagnostic(Code::TASK_RESULT_PATH_OBSTRUCTED, 61.0, "approach", "");
+  EXPECT_EQ(backend->finalizations, 1);
 }
 
 TEST(MotionPortTest, TrajectoryCompletionReleasesReservationWithoutInactivity)

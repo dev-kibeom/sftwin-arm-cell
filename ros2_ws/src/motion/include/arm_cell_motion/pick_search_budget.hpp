@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
+#include <optional>
 
 namespace arm_cell_motion
 {
@@ -11,9 +13,13 @@ class PickSearchBudget
 public:
   using Clock = std::chrono::steady_clock;
 
+  // Production PICK search is bounded by pose/seed counts, not elapsed time.
+  PickSearchBudget()
+  : start_(Clock::now()) {}
+
   explicit PickSearchBudget(double budget_s, Clock::time_point start = Clock::now())
   : start_(start), deadline_(start + std::chrono::duration_cast<Clock::duration>(
-      std::chrono::duration<double>(budget_s)))
+        std::chrono::duration<double>(budget_s)))
   {}
 
   PickSearchBudget(
@@ -22,13 +28,14 @@ public:
   : PickSearchBudget(action_s, action_start)
   {
     deadline_ = std::min(
-      deadline_, candidate_start +
+      *deadline_, candidate_start +
       std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(candidate_s)));
   }
 
   double remaining_s(Clock::time_point now = Clock::now()) const
   {
-    return std::max(0.0, std::chrono::duration<double>(deadline_ - now).count());
+    return deadline_ ? std::max(0.0, std::chrono::duration<double>(*deadline_ - now).count()) :
+           std::numeric_limits<double>::infinity();
   }
 
   double call_timeout_s(double configured_timeout_s, Clock::time_point now = Clock::now()) const
@@ -43,7 +50,7 @@ public:
 
 private:
   Clock::time_point start_;
-  Clock::time_point deadline_;
+  std::optional<Clock::time_point> deadline_;
 };
 
 }  // namespace arm_cell_motion

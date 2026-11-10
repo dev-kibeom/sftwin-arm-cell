@@ -129,6 +129,8 @@ struct PlanningContext
   std::vector<double> measured_start;
   std::vector<JointContinuityLimit> continuity_limits;
   std::vector<PickCollisionContact> latest_collision_contacts;
+  // Contacts survive intervening poses until the next seed round of their pose.
+  std::map<std::size_t, std::vector<PickCollisionContact>> collision_contacts_by_pose;
   std::vector<std::vector<std::vector<double>>> attempted_solutions;
   std::shared_ptr<const moveit::core::RobotState> robot_state;
   moveit::core::RobotModelConstPtr robot_model;

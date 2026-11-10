@@ -67,7 +67,8 @@ geometry_msgs::msg::PoseStamped resolve_object_pose(
   bool has_thickness, double face_thickness_m)
 {
   if (!has_thickness || !std::isfinite(face_thickness_m) || face_thickness_m <= 0.0) {
-    throw std::invalid_argument("PICK top-surface observation requires known material face thickness");
+    throw std::invalid_argument(
+            "PICK top-surface observation requires known material face thickness");
   }
   const auto observation_rotation = to_tf2(observation_pose.pose.orientation);
   const auto inward = tf2::quatRotate(
@@ -251,13 +252,16 @@ std::uint8_t MotionExecutionSupport::plan_motion(
   if (!backend_->supports_split_planning()) {
     return MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
   }
+  const bool finalize_diagnostics = normalized.task_type.value != MotionTaskType::TASK_TYPE_PICK;
   const auto interrupted = interruption_checker_ ? interruption_checker_() :
     MotionTaskResultCode::TASK_RESULT_SUCCESS;
   if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
     const auto failure_stage = interrupted == MotionTaskResultCode::TASK_RESULT_CANCELED ?
       "motion_port:canceled" : "motion_port:safety_preempted";
     try {
-      backend_->finalize_motion_planning_diagnostic(interrupted, 0.0, failure_stage, "");
+      if (finalize_diagnostics) {
+        backend_->finalize_motion_planning_diagnostic(interrupted, 0.0, failure_stage, "");
+      }
     } catch (...) {
       // Diagnostic capture is best-effort and cannot replace the motion result.
     }
@@ -265,7 +269,7 @@ std::uint8_t MotionExecutionSupport::plan_motion(
   }
   const auto started = std::chrono::steady_clock::now();
   const auto result = backend_->plan_normalized(normalized, plan);
-  if (result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+  if (result != MotionTaskResultCode::TASK_RESULT_SUCCESS && finalize_diagnostics) {
     const auto failure_stage = result == MotionTaskResultCode::TASK_RESULT_CANCELED ?
       "motion_port:canceled" : result == MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED ?
       "motion_port:safety_preempted" : "motion_port:planning";
@@ -287,6 +291,8 @@ std::uint8_t MotionExecutionSupport::execute_planned_motion(
   if (!backend_->supports_split_planning()) {
     return MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
   }
+  finalize_diagnostics = finalize_diagnostics &&
+    plan.request.task_type.value != MotionTaskType::TASK_TYPE_PICK;
   const auto started = std::chrono::steady_clock::now();
   const auto interrupted = interruption_checker_ ? interruption_checker_() :
     MotionTaskResultCode::TASK_RESULT_SUCCESS;
@@ -378,7 +384,8 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
     std::vector<arm_cell_interfaces::msg::PickCandidate>{};
   const bool vision_derived_pick = is_pick && !request.material_candidates.empty() &&
     !request.vision_candidate_id.empty();
-  request.has_non_target_occupancy = is_pick && (vision_derived_pick || goal.has_non_target_occupancy);
+  request.has_non_target_occupancy = is_pick &&
+    (vision_derived_pick || goal.has_non_target_occupancy);
   if (vision_derived_pick) {
     request.non_target_occupancy = candidate_occupancy_from_candidates(
       request.material_candidates, request.vision_acquisition_id, request.vision_candidate_id);

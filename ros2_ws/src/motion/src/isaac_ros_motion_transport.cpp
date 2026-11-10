@@ -155,9 +155,10 @@ std::optional<std::string> acquisition_snapshot_folder(
 
 std::string diagnostic_goal_id(std::string value)
 {
-  std::replace_if(value.begin(), value.end(), [](unsigned char character) {
-    return !std::isalnum(character) && character != '-' && character != '_';
-  }, '_');
+  std::replace_if(
+    value.begin(), value.end(), [](unsigned char character) {
+      return !std::isalnum(character) && character != '-' && character != '_';
+    }, '_');
   return value.empty() ? "unknown-goal" : value;
 }
 
@@ -242,7 +243,9 @@ auto plan_with_num_attempts(
     moveit::planning_interface::MoveGroupInterface & move_group;
     unsigned int attempts;
     ~RestoreAttempts() {move_group.setNumPlanningAttempts(attempts);}
-  } restore{move_group, static_cast<unsigned int>(std::max(1, original_request.num_planning_attempts))};
+  } restore{move_group, static_cast<unsigned int>(std::max(
+      1,
+      original_request.num_planning_attempts))};
   move_group.setNumPlanningAttempts(num_attempts);
   return std::forward<PlanFunction>(plan_function)();
 }
@@ -486,8 +489,7 @@ nlohmann::json merge_pick_candidate_history(const nlohmann::json & snapshot)
         }
         auto existing = candidates_by_number.find({material_id, number});
         if (existing == candidates_by_number.end() ||
-          (existing->second.value("result", "NOT_EVALUATED") == "NOT_EVALUATED" &&
-          candidate.value("result", "NOT_EVALUATED") != "NOT_EVALUATED"))
+          candidate.value("result", "NOT_EVALUATED") != "NOT_EVALUATED")
         {
           candidates_by_number[{material_id, number}] = std::move(candidate_with_material_id);
         }
@@ -498,6 +500,8 @@ nlohmann::json merge_pick_candidate_history(const nlohmann::json & snapshot)
         auto material_attempt = attempt;
         const auto material_id = source.value("material_candidate_id", std::string{});
         if (!material_id.empty()) {material_attempt["material_candidate_id"] = material_id;}
+        // Equal payloads in distinct evaluations are still distinct solver attempts.
+        // Exact duplicate snapshots are filtered above, before collecting attempts.
         attempts.push_back(std::move(material_attempt));
       }
     }
@@ -508,7 +512,9 @@ nlohmann::json merge_pick_candidate_history(const nlohmann::json & snapshot)
     }
   }
   auto candidate_array = nlohmann::json::array();
-  for (auto & entry : candidates_by_number) {candidate_array.push_back(std::move(entry.second));}
+  for (auto & entry : candidates_by_number) {
+    candidate_array.push_back(std::move(entry.second));
+  }
   merged["grasp_pose_candidates"] = std::move(candidate_array);
   merged["pick_attempts"] = std::move(attempts);
   merged["approach_global_planning_call_count"] = approach_planning_calls;
@@ -572,8 +578,8 @@ bool MotionPlanningDiagnosticCapture::enqueue_progress(
   }
   record << ",\"task_type\":\"" << task_type
          << "\",\"record_status\":\"planning_in_progress\","
-            "\"task_executor_result_code\":null,\"task_executor_result_code_value\":null,"
-            "\"planning_evidence\":" << evidence << '}';
+    "\"task_executor_result_code\":null,\"task_executor_result_code_value\":null,"
+    "\"planning_evidence\":" << evidence << '}';
   if (std::string(task_type) == "TASK_TYPE_PICK") {
     try {
       (void)enqueue_pick_details(goal_uuid, vision_acquisition_id, evidence);
@@ -640,9 +646,12 @@ std::size_t MotionPlanningDiagnosticCapture::enqueue_pick_details(
       candidate_snapshot["pick_attempts"].is_array())
     {
       for (const auto & attempt : candidate_snapshot["pick_attempts"]) {
-        if (attempt.value("grasp_pose_candidate", 0U) == candidates[index].value("candidate", index + 1U) &&
+        if (attempt.value(
+            "grasp_pose_candidate",
+            0U) == candidates[index].value("candidate", index + 1U) &&
           attempt.value("material_candidate_id", std::string{}) ==
-          candidates[index].value("material_candidate_id", std::string{})) {
+          candidates[index].value("material_candidate_id", std::string{}))
+        {
           attempts.push_back(attempt);
         }
       }
@@ -651,7 +660,8 @@ std::size_t MotionPlanningDiagnosticCapture::enqueue_pick_details(
       {"schema_version", 1}, {"motion_goal_uuid", goal_uuid},
       {"vision_acquisition_id", vision_acquisition_id.empty() ?
         nlohmann::json(nullptr) : nlohmann::json(vision_acquisition_id)},
-      {"candidate_number", index + 1U}, {"candidate", candidates[index]},
+      {"candidate_number", candidates[index].value("candidate", index + 1U)},
+      {"candidate", candidates[index]},
       {"attempts", std::move(attempts)}};
     if (candidates[index].contains("material_candidate_id")) {
       detail["material_candidate_id"] = candidates[index]["material_candidate_id"];
@@ -660,11 +670,7 @@ std::size_t MotionPlanningDiagnosticCapture::enqueue_pick_details(
     if (index == 0U && snapshot.contains("vision_occupancy_evidence")) {
       detail["vision_occupancy_evidence"] = snapshot["vision_occupancy_evidence"];
     }
-    std::ostringstream file_name;
-    file_name << "motion_planning_details/" << safe_goal_id(goal_uuid) << "_candidate_" <<
-      std::setw(3)
-              << std::setfill('0') << index + 1U << ".json";
-    const auto detail_path = file_name.str();
+    const auto detail_path = pick_detail_path(goal_uuid, candidates[index], index + 1U);
     const auto logical_serialized = detail.dump();
     const bool oversized = logical_serialized.size() + 32U > kMaxDetailBytes;
     const auto cached = detail_snapshots_.find(detail_path);
@@ -736,7 +742,13 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
         {"result", attempt.value("result", std::string("unavailable"))},
         {"failure_stage", attempt.value("failure_stage", std::string("unavailable"))},
         {"pick_grasp_insertion_started", attempt.value(
-          "pick_grasp_insertion_started", false)}};
+            "pick_grasp_insertion_started", false)}};
+      for (const auto * key :
+        {"generated_pose_count", "evaluated_pose_count", "evaluation_attempt_count",
+          "search_elapsed_s", "final_planning_failure_stage", "final_planning_failure_reason"})
+      {
+        if (attempt.contains(key)) {compact_attempt[key] = attempt[key];}
+      }
       if (attempt.contains("result_code")) {
         compact_attempt["result_code"] = attempt["result_code"];
       }
@@ -752,21 +764,24 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
     {"task_executor_result_code_value", result_code},
     {"pick_grasp_insertion_started", insertion_started},
     {"material_candidate_search", {
-      {"attempt_count", raw_material_attempts.is_array() ? raw_material_attempts.size() : 0U},
-      {"attempts", material_attempts},
-      {"candidate_switch_occurred", material_attempts.size() > 1U},
-      {"final_target_candidate_id", snapshot.is_object() ?
-        snapshot.value("outcome_material_candidate_id", std::string{}) : std::string{}},
-      {"grasp_pose_candidates_reference", "motion_planning_details"}}},
+        {"attempt_count", raw_material_attempts.is_array() ? raw_material_attempts.size() : 0U},
+        {"attempts", material_attempts},
+        {"candidate_switch_occurred", raw_material_attempts.is_array() && std::count_if(
+            raw_material_attempts.begin(), raw_material_attempts.end(), [](const auto & attempt) {
+              return attempt.is_object() && attempt.value("precise_search_began", true);
+            }) > 1},
+        {"final_target_candidate_id", snapshot.is_object() ?
+          snapshot.value("outcome_material_candidate_id", std::string{}) : std::string{}},
+        {"grasp_pose_candidates_reference", "motion_planning_details"}}},
     {"candidate_counts", {{"scope", "GRASP_POSE"}, {"generated", 0},
-      {"evaluated", 0}, {"unevaluated", 0}}},
+        {"evaluated", 0}, {"unevaluated", 0}}},
     {"candidate_dispositions", nlohmann::json::object()},
     {"failure_stage_counts", nlohmann::json::object()},
     {"stage_failure_totals", {{"ik", 0}, {"fk", 0}, {"collision", 0},
-      {"approach", 0}, {"cartesian", 0}, {"fallback", 0}}},
+        {"approach", 0}, {"cartesian", 0}, {"fallback", 0}}},
     {"approach_execution_count", 0}, {"insertion_execution_count", insertion_started ? 1 : 0},
     {"detail_coverage", {{"status", "unavailable"}, {"detail_references", nlohmann::json::array()},
-      {"missing_count", 0}, {"missing_reason", "candidate_evidence_unavailable"}}}};
+        {"missing_count", 0}, {"missing_reason", "candidate_evidence_unavailable"}}}};
   if (snapshot.is_object()) {
     summary["material_candidate_search"]["acquisition_id"] =
       snapshot.value("vision_acquisition_id", vision_acquisition_id);
@@ -792,10 +807,8 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
         summary["stage_failure_totals"]["approach"] =
           summary["stage_failure_totals"]["approach"].get<std::size_t>() + 1U;
       }
-      std::ostringstream ref;
-      ref << "motion_planning_details/" << safe_goal_id(goal_uuid) << "_candidate_"
-          << std::setw(3) << std::setfill('0') << index + 1U << ".json";
-      summary["detail_coverage"]["detail_references"].push_back(ref.str());
+      summary["detail_coverage"]["detail_references"].push_back(
+        pick_detail_path(goal_uuid, candidates[index], index + 1U));
     }
     summary["selected_candidate"] = candidate_snapshot.value("selected_candidate", -1);
     summary["selected_candidate_scope"] = "GRASP_POSE";
@@ -804,20 +817,36 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
     summary["selected_candidate_number"] = selected_index >= 0 ?
       nlohmann::json(selected_index + 1) : nlohmann::json(nullptr);
     nlohmann::json last_evaluated_number = nullptr;
-    for (std::size_t index = 0; index < candidates.size(); ++index) {
-      if (candidates[index].value("result", "NOT_EVALUATED") != "NOT_EVALUATED") {
-        last_evaluated_number = index + 1U;
-      }
+    nlohmann::json last_material_id = nullptr;
+    const auto chronological_attempts = candidate_snapshot.value(
+      "pick_attempts",
+      nlohmann::json::array());
+    for (auto it = chronological_attempts.rbegin(); it != chronological_attempts.rend(); ++it) {
+      const auto local_number = it->value("grasp_pose_candidate", 0U);
+      if (local_number == 0U) {continue;}
+      last_evaluated_number = local_number;
+      last_material_id = it->value("material_candidate_id", std::string{});
+      summary["last_evaluated_candidate"] = local_number - 1U;
+      break;
+    }
+    if (last_evaluated_number.is_null() && snapshot.value("active_candidate", -1) >= 0) {
+      last_evaluated_number = snapshot.value("active_candidate", -1) + 1;
+      last_material_id = snapshot.value("material_candidate_id", std::string{});
     }
     summary["last_evaluated_candidate_number"] = last_evaluated_number;
+    summary["last_evaluated_material_candidate_id"] = last_material_id;
     summary["final_failure_stage"] = snapshot.value("final_failure_stage", "unavailable");
     summary["final_failure_reason"] = snapshot.value("final_failure_reason", "unavailable");
     if (snapshot.contains("vision_occupancy_evidence")) {
       summary["vision_occupancy_evidence"] = snapshot["vision_occupancy_evidence"];
     }
-    if (snapshot.contains("task_executor_elapsed_s")) {
-      summary["task_executor_elapsed_s"] = snapshot["task_executor_elapsed_s"];
+    for (const auto * key :
+      {"task_executor_elapsed_s", "task_failure_stage", "task_failure_detail"})
+    {
+      if (snapshot.contains(key)) {summary[key] = snapshot[key];}
     }
+    summary["selected_material_candidate_id"] = snapshot.value(
+      "outcome_material_candidate_id", snapshot.value("material_candidate_id", std::string{}));
     if (snapshot.contains("final_segment_planning")) {
       summary["final_segment_planning"] = snapshot["final_segment_planning"];
       const auto & final_segment = snapshot["final_segment_planning"];
@@ -879,14 +908,15 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
         if (accuracy.value("segment", "") == "APPROACH") {
           summary["approach_execution_count"] =
             summary["approach_execution_count"].get<std::size_t>() + 1U;
-          approach_results.push_back({
-            {"execution_result", accuracy.value("execution_result", "unavailable")},
-            {"measurement_status", accuracy.value("measurement_status", "unavailable")},
-            {"path_strategy", accuracy.value("path_strategy", "unavailable")},
-            {"tcp_position_error_mm", accuracy.contains("tcp_position_error_mm") ?
-              accuracy["tcp_position_error_mm"] : nlohmann::json(nullptr)},
-            {"tcp_orientation_error_rad", accuracy.contains("tcp_orientation_error_rad") ?
-              accuracy["tcp_orientation_error_rad"] : nlohmann::json(nullptr)}});
+          approach_results.push_back(
+            {
+              {"execution_result", accuracy.value("execution_result", "unavailable")},
+              {"measurement_status", accuracy.value("measurement_status", "unavailable")},
+              {"path_strategy", accuracy.value("path_strategy", "unavailable")},
+              {"tcp_position_error_mm", accuracy.contains("tcp_position_error_mm") ?
+                accuracy["tcp_position_error_mm"] : nlohmann::json(nullptr)},
+              {"tcp_orientation_error_rad", accuracy.contains("tcp_orientation_error_rad") ?
+                accuracy["tcp_orientation_error_rad"] : nlohmann::json(nullptr)}});
         }
       }
       summary["approach_execution_results"] = std::move(approach_results);
@@ -928,7 +958,8 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
       const auto & final_segment = summary["final_segment_planning"];
       summary["final_segment_planning"] = {
         {"cartesian_result", final_segment.value("cartesian_result", "unavailable")},
-        {"cartesian_failure_reason", final_segment.value("cartesian_failure_reason", "unavailable")},
+        {"cartesian_failure_reason",
+          final_segment.value("cartesian_failure_reason", "unavailable")},
         {"final_planning_result", final_segment.value("final_planning_result", "unavailable")},
         {"selected_strategy", final_segment.value("selected_strategy", "unavailable")},
         {"global_fallback_attempt_count",
@@ -973,15 +1004,16 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
           retained_attempts.push_back(full_attempts.back());
         }
         material["attempts"] = std::move(retained_attempts);
-        const std::size_t omitted_count = full_attempts.size() - prefix_count - retained_final_count;
+        const std::size_t omitted_count = full_attempts.size() - prefix_count -
+          retained_final_count;
         const auto omitted_begin = prefix_count;
         const auto omitted_end = full_attempts.size() - retained_final_count;
         if (omitted_count > 0U) {
           material["omitted_attempts"] = {
             {"count", omitted_count},
             {"attempt_order_range", {
-              full_attempts[omitted_begin].value("attempt_order", omitted_begin + 1U),
-              full_attempts[omitted_end - 1U].value("attempt_order", omitted_end)}},
+                full_attempts[omitted_begin].value("attempt_order", omitted_begin + 1U),
+                full_attempts[omitted_end - 1U].value("attempt_order", omitted_end)}},
             {"reason", "summary_byte_limit"},
             {"failure_counts_by_result_and_stage", omitted_failure_counts[omitted_begin]}};
         }
@@ -1020,21 +1052,21 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
       {"final_failure_stage", summary.value("final_failure_stage", "unavailable")},
       {"final_failure_reason", summary.value("final_failure_reason", "unavailable")},
       {"material_candidate_search", {
-        {"attempt_count", raw_material_attempts.is_array() ? raw_material_attempts.size() : 0U},
-        {"attempts", retained_final_count > 0U ? nlohmann::json::array({attempts.back()}) :
-          nlohmann::json::array()},
-        {"candidate_switch_occurred", material.value("candidate_switch_occurred", false)},
-        {"final_target_candidate_id", material.value("final_target_candidate_id", std::string{})},
-        {"acquisition_id", material.value("acquisition_id", vision_acquisition_id)},
-        {"grasp_pose_candidates_reference", "motion_planning_details"},
-        {"omitted_attempts", {
-          {"count", raw_material_attempts.is_array() ?
-            raw_material_attempts.size() - retained_final_count : 0U},
-          {"reason", "summary_byte_limit"},
-          {"failure_counts_by_result_and_stage", failure_counts}}}}},
+          {"attempt_count", raw_material_attempts.is_array() ? raw_material_attempts.size() : 0U},
+          {"attempts", retained_final_count > 0U ? nlohmann::json::array({attempts.back()}) :
+            nlohmann::json::array()},
+          {"candidate_switch_occurred", material.value("candidate_switch_occurred", false)},
+          {"final_target_candidate_id", material.value("final_target_candidate_id", std::string{})},
+          {"acquisition_id", material.value("acquisition_id", vision_acquisition_id)},
+          {"grasp_pose_candidates_reference", "motion_planning_details"},
+          {"omitted_attempts", {
+              {"count", raw_material_attempts.is_array() ?
+                raw_material_attempts.size() - retained_final_count : 0U},
+              {"reason", "summary_byte_limit"},
+              {"failure_counts_by_result_and_stage", failure_counts}}}}},
       {"detail_coverage", {
-        {"status", "unavailable"}, {"detail_references", nlohmann::json::array()},
-        {"missing_reason", "summary_byte_limit"}, {"references_omitted", true}}}};
+          {"status", "unavailable"}, {"detail_references", nlohmann::json::array()},
+          {"missing_reason", "summary_byte_limit"}, {"references_omitted", true}}}};
     serialized = summary.dump();
   }
   {
@@ -1062,16 +1094,16 @@ bool MotionPlanningDiagnosticCapture::enqueue_serialized(
 {
   if (serialized.size() > kMaxRecordBytes) {
     RCLCPP_WARN(
-        logger_,
-        "Motion planning diagnostic unavailable reason=record_byte_limit");
+      logger_,
+      "Motion planning diagnostic unavailable reason=record_byte_limit");
     return false;
   }
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stopping_) {
       RCLCPP_WARN(
-          logger_,
-          "Motion planning diagnostic unavailable reason=writer_stopping");
+        logger_,
+        "Motion planning diagnostic unavailable reason=writer_stopping");
       return false;
     }
     const auto queued = std::find_if(
@@ -1084,8 +1116,8 @@ bool MotionPlanningDiagnosticCapture::enqueue_serialized(
     }
     if (queue_.size() >= kQueueCapacity) {
       RCLCPP_WARN(
-          logger_,
-          "Motion planning diagnostic unavailable reason=writer_queue_full");
+        logger_,
+        "Motion planning diagnostic unavailable reason=writer_queue_full");
       return false;
     }
     queue_.push_back({goal_uuid, {}, std::move(serialized)});
@@ -1099,15 +1131,17 @@ void MotionPlanningDiagnosticCapture::queue_ready_summary_finalizations()
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto iterator = pending_summary_coverage_.begin();
     iterator != pending_summary_coverage_.end() &&
-    summary_queue_.size() < kSummaryQueueCapacity;)
+    summary_queue_.size() < kSummaryQueueCapacity; )
   {
     const auto & goal_uuid = iterator->first;
     const bool details_pending = std::any_of(
       detail_queue_.begin(), detail_queue_.end(), [&](const PendingRecord & detail) {
         return detail.goal_uuid == goal_uuid;
-      }) || std::any_of(detail_snapshots_.begin(), detail_snapshots_.end(),
+      }) || std::any_of(
+      detail_snapshots_.begin(), detail_snapshots_.end(),
       [&](const auto & item) {
-        return item.first.rfind("motion_planning_details/" + safe_goal_id(goal_uuid) +
+        return item.first.rfind(
+          "motion_planning_details/" + safe_goal_id(goal_uuid) +
           "_candidate_", 0U) == 0U && item.second.write_pending;
       });
     if (details_pending) {
@@ -1127,7 +1161,7 @@ void MotionPlanningDiagnosticCapture::clear_detail_snapshots_for_goal(
   const auto prefix = "motion_planning_details/" + safe_goal_id(goal_uuid) + "_candidate_";
   const auto occupancy_prefix = goal_uuid + '\0';
   std::lock_guard<std::mutex> lock(mutex_);
-  for (auto iterator = detail_snapshots_.begin(); iterator != detail_snapshots_.end();) {
+  for (auto iterator = detail_snapshots_.begin(); iterator != detail_snapshots_.end(); ) {
     if (iterator->first.rfind(prefix, 0U) == 0U) {
       iterator = detail_snapshots_.erase(iterator);
     } else {
@@ -1135,7 +1169,7 @@ void MotionPlanningDiagnosticCapture::clear_detail_snapshots_for_goal(
     }
   }
   for (auto iterator = occupancy_snapshot_paths_.begin();
-    iterator != occupancy_snapshot_paths_.end();)
+    iterator != occupancy_snapshot_paths_.end(); )
   {
     if (iterator->first.rfind(occupancy_prefix, 0U) == 0U) {
       iterator = occupancy_snapshot_paths_.erase(iterator);
@@ -1151,9 +1185,10 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
     PendingRecord record;
     {
       std::unique_lock<std::mutex> lock(mutex_);
-      condition_.wait(lock, [this]() {
+      condition_.wait(
+        lock, [this]() {
           return stopping_ || !queue_.empty() || !detail_queue_.empty() || !summary_queue_.empty() ||
-                 !occupancy_snapshot_queue_.empty();
+          !occupancy_snapshot_queue_.empty();
         });
       if (queue_.empty() && detail_queue_.empty() && summary_queue_.empty() &&
         occupancy_snapshot_queue_.empty() && stopping_) {return;}
@@ -1204,9 +1239,10 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
                 }));
             const auto in_flight_count = static_cast<std::size_t>(std::count_if(
                 detail_snapshots_.begin(), detail_snapshots_.end(), [&](const auto & item) {
-                  return item.first.rfind("motion_planning_details/" +
+                  return item.first.rfind(
+                    "motion_planning_details/" +
                     safe_goal_id(record.goal_uuid) + "_candidate_", 0U) == 0U &&
-                    item.second.write_pending && std::none_of(
+                  item.second.write_pending && std::none_of(
                     detail_queue_.begin(), detail_queue_.end(), [&](const PendingRecord & detail) {
                       return detail.file_name == item.first;
                     });
@@ -1248,10 +1284,15 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
               const auto marker = name.rfind("_candidate_");
               std::size_t candidate_number = 0U;
               if (marker != std::string::npos) {
-                try {candidate_number = static_cast<std::size_t>(std::stoul(name.substr(marker + 11U)));}
-                catch (...) {candidate_number = 0U;}
+                try {
+                  candidate_number =
+                    static_cast<std::size_t>(std::stoul(name.substr(marker + 11U)));
+                } catch (...) {
+                  candidate_number = 0U;
+                }
               }
-              const bool known_revision = expected.is_number_unsigned() || expected.is_number_integer();
+              const bool known_revision = expected.is_number_unsigned() ||
+                expected.is_number_integer();
               if (known_revision && reference.is_string() &&
                 std::filesystem::is_regular_file(record_root / reference_text, reference_error) &&
                 !reference_error)
@@ -1263,7 +1304,9 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
                   persisted = detail_record.is_object() &&
                     detail_record.value("detail_revision", uint64_t{0U}) ==
                     expected.get<std::uint64_t>();
-                } catch (...) {persisted = false;}
+                } catch (...) {
+                  persisted = false;
+                }
               }
               if (persisted) {
                 ++persisted_count;
@@ -1305,8 +1348,9 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
           retained_bytes, std::filesystem::file_size(destination));
       }
       if (retained_bytes + record.serialized.size() > kMaxDirectoryBytes) {
-        RCLCPP_WARN(logger_, "Motion planning diagnostic unavailable "
-                             "reason=directory_byte_limit");
+        RCLCPP_WARN(
+          logger_, "Motion planning diagnostic unavailable "
+          "reason=directory_byte_limit");
       } else {
         const auto temporary = destination.string() + ".tmp";
         {
@@ -1320,8 +1364,9 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
         persisted_record = true;
       }
     } catch (const std::exception & error) {
-      RCLCPP_WARN(logger_, "Motion planning diagnostic save failed cause=%s",
-                  error.what());
+      RCLCPP_WARN(
+        logger_, "Motion planning diagnostic save failed cause=%s",
+        error.what());
     } catch (...) {
       RCLCPP_WARN(logger_, "Motion planning diagnostic save failed");
     }
@@ -1342,6 +1387,23 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
     }
     queue_ready_summary_finalizations();
   }
+}
+
+std::string MotionPlanningDiagnosticCapture::pick_detail_path(
+  const std::string & goal_uuid, const nlohmann::json & candidate, std::size_t fallback_number)
+{
+  std::ostringstream path;
+  path << "motion_planning_details/" << safe_goal_id(goal_uuid) << "_candidate_"
+       << std::setw(3) << std::setfill('0') << candidate.value("candidate", fallback_number);
+  const auto material_id = candidate.value("material_candidate_id", std::string{});
+  if (!material_id.empty()) {
+    // Byte encoding is injective: punctuation and sanitized IDs must never alias.
+    path << "_material_" << std::hex;
+    for (const unsigned char value : material_id) {
+      path << std::setw(2) << std::setfill('0') << static_cast<unsigned>(value);
+    }
+  }
+  return path.str() + ".json";
 }
 
 std::string MotionPlanningDiagnosticCapture::safe_goal_id(std::string value)
@@ -1410,7 +1472,8 @@ void IsaacRosMotionTransport::load_place_waypoint_trajectory()
           point.time_from_start.sec < 0 || point.time_from_start.nanosec >= 1000000000U)
         {throw std::runtime_error("trajectory point timing or derivatives are incomplete");}
         const auto finite_values = [](const std::vector<double> & values) {
-            return std::all_of(values.begin(), values.end(),
+            return std::all_of(
+              values.begin(), values.end(),
               [](double value) {return std::isfinite(value);});
           };
         const auto time_ns = static_cast<std::int64_t>(point.time_from_start.sec) * 1000000000LL +
@@ -1425,15 +1488,17 @@ void IsaacRosMotionTransport::load_place_waypoint_trajectory()
         throw std::runtime_error("trajectory has fewer than two points");
       }
       for (std::size_t joint = 0; joint < home_joint_positions_.size(); ++joint) {
-        if (std::abs(loaded.trajectory.points.front().positions[joint] -
-          home_joint_positions_[joint]) > 1.0e-6)
+        if (std::abs(
+            loaded.trajectory.points.front().positions[joint] -
+            home_joint_positions_[joint]) > 1.0e-6)
         {throw std::runtime_error("trajectory start state does not match HOME");}
       }
       std::lock_guard<std::mutex> lock(place_waypoint_cache_mutex_);
       cached_place_waypoint_approach_ = std::move(loaded);
       RCLCPP_DEBUG(node_->get_logger(), "PLACE WAYPOINT trajectory loaded");
     } catch (const std::exception & error) {
-      RCLCPP_ERROR(node_->get_logger(), "PLACE WAYPOINT trajectory unavailable: %s",
+      RCLCPP_ERROR(
+        node_->get_logger(), "PLACE WAYPOINT trajectory unavailable: %s",
         error.what());
     }
   }
@@ -1505,9 +1570,6 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   if (!node_->has_parameter("pick_approach_ik_timeout_s")) {
     node_->declare_parameter<double>("pick_approach_ik_timeout_s", 1.0);
   }
-  if (!node_->has_parameter("pick_search_budget_s")) {
-    node_->declare_parameter<double>("pick_search_budget_s", 100.0);
-  }
   if (!node_->has_parameter("pick_max_withdrawal_tilt_deg")) {
     node_->declare_parameter<double>("pick_max_withdrawal_tilt_deg", 90.0);
   }
@@ -1576,11 +1638,12 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
     node_->get_parameter("place_tray_return_joint_positions").as_double_array();
   if (!place_tray_return_joint_positions_.empty() &&
     (place_tray_return_joint_positions_.size() != arm_joint_names_.size() ||
-    !std::all_of(place_tray_return_joint_positions_.begin(),
+    !std::all_of(
+      place_tray_return_joint_positions_.begin(),
       place_tray_return_joint_positions_.end(), [](double v) {return std::isfinite(v);})))
   {
     throw std::invalid_argument(
-      "place_tray_return_joint_positions must be finite and follow arm_joint_names");
+            "place_tray_return_joint_positions must be finite and follow arm_joint_names");
   }
   place_pose_candidate_limit_ = declare_positive_limit("place_max_pose_candidates", 13);
   pick_approach_global_max_requests_ = declare_stage_limit(
@@ -1600,12 +1663,6 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   pick_ik_timeout_s_ = node_->get_parameter("pick_ik_timeout_s").as_double();
   pick_grasp_ik_timeout_s_ = node_->get_parameter("pick_grasp_ik_timeout_s").as_double();
   pick_approach_ik_timeout_s_ = node_->get_parameter("pick_approach_ik_timeout_s").as_double();
-  if (!node_->has_parameter("pick_candidate_search_budget_s")) {
-    node_->declare_parameter<double>("pick_candidate_search_budget_s", 15.0);
-  }
-  pick_candidate_search_budget_s_ =
-    node_->get_parameter("pick_candidate_search_budget_s").as_double();
-  pick_search_budget_s_ = node_->get_parameter("pick_search_budget_s").as_double();
   pick_max_withdrawal_tilt_deg_ =
     node_->get_parameter("pick_max_withdrawal_tilt_deg").as_double();
   pick_position_range_half_length_fraction_ =
@@ -1667,10 +1724,7 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   if (!std::isfinite(pick_grasp_ik_timeout_s_) || pick_grasp_ik_timeout_s_ <= 0.0 ||
     pick_grasp_ik_timeout_s_ > 30.0 ||
     !std::isfinite(pick_approach_ik_timeout_s_) || pick_approach_ik_timeout_s_ <= 0.0 ||
-    pick_approach_ik_timeout_s_ > 30.0 || !std::isfinite(pick_search_budget_s_) ||
-    pick_search_budget_s_ <= 0.0 || pick_search_budget_s_ > 600.0 ||
-    !std::isfinite(pick_candidate_search_budget_s_) ||
-    pick_candidate_search_budget_s_ <= 0.0 || pick_candidate_search_budget_s_ > 600.0)
+    pick_approach_ik_timeout_s_ > 30.0)
   {
     throw std::invalid_argument("invalid PICK search budget or 6D IK timeout");
   }
@@ -1944,8 +1998,8 @@ void IsaacRosMotionTransport::initialize_move_group()
   const auto pick_ik_timeout_s = pick_ik_timeout_s_;
   move_group_worker_ = std::thread(
     [state, node, velocity_scaling_factor, acceleration_scaling_factor, planning_time_s,
-      planning_planner_id, pick_ik_solver_name, pick_ik_solve_type,
-      pick_ik_timeout_s]() {
+    planning_planner_id, pick_ik_solver_name, pick_ik_solve_type,
+    pick_ik_timeout_s]() {
       try {
         using MoveGroupAction = moveit_msgs::action::MoveGroup;
         const auto discovery_deadline =
@@ -1993,10 +2047,11 @@ void IsaacRosMotionTransport::initialize_move_group()
           "moveit_core", "kinematics::KinematicsBase");
         auto pick_solver = pick_loader->createSharedInstance(pick_ik_solver_name);
         if (!pick_solver || !pick_solver->initialize(
-            pick_node, *move_group->getRobotModel(), "arm", "base_link", {"sf_grasp_tcp"}, 0.005))
+          pick_node, *move_group->getRobotModel(), "arm", "base_link", {"sf_grasp_tcp"}, 0.005))
         {
-          throw std::runtime_error("PICK IK plugin initialization failed: " +
-                  pick_ik_solver_name);
+          throw std::runtime_error(
+            "PICK IK plugin initialization failed: " +
+            pick_ik_solver_name);
         }
         pick_solver->setDefaultTimeout(pick_ik_timeout_s);
         RCLCPP_DEBUG(
@@ -2075,7 +2130,6 @@ void IsaacRosMotionTransport::begin_pick_search()
 {
   std::lock_guard<std::mutex> lock(pick_search_budget_mutex_);
   pick_search_started_at_ = std::chrono::steady_clock::now();
-  pick_candidate_search_started_at_ = pick_search_started_at_;
   pick_search_goal_uuid_.clear();
   pick_candidate_grasp_pose_candidates_remaining_ = pick_grasp_pose_candidate_limit_;
   std::lock_guard<std::mutex> state_lock(mutex_);
@@ -2097,12 +2151,33 @@ void IsaacRosMotionTransport::begin_pick_search(const std::string & execution_id
   begin_pick_search();
   std::lock_guard<std::mutex> lock(pick_search_budget_mutex_);
   pick_search_goal_uuid_ = execution_id;
+  // Establish action identity before opening the gripper or issuing any planning request.
+  std::lock_guard<std::mutex> diagnostic_lock(planning_diagnostic_mutex_);
+  pending_motion_planning_goal_uuid_ = execution_id;
+  pending_motion_planning_task_type_ = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK;
+  pending_motion_planning_vision_acquisition_id_.clear();
+  pending_motion_planning_evidence_.clear();
+  planning_candidate_history_.clear();
+  task_accuracy_history_.clear();
 }
 
 void IsaacRosMotionTransport::begin_pick_candidate_search()
 {
+  {
+    std::lock_guard<std::mutex> lock(planning_diagnostic_mutex_);
+    auto previous = nlohmann::json::parse(pending_motion_planning_evidence_, nullptr, false);
+    if (pending_motion_planning_task_type_ ==
+      arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK && previous.is_object() &&
+      !previous.value("material_candidate_id", std::string{}).empty())
+    {
+      previous["material_search_elapsed_s"] = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - material_diagnostic_started_at_).count();
+      planning_candidate_history_.push_back(previous.dump());
+      pending_motion_planning_evidence_.clear();
+    }
+    material_diagnostic_started_at_ = std::chrono::steady_clock::now();
+  }
   std::lock_guard<std::mutex> lock(pick_search_budget_mutex_);
-  pick_candidate_search_started_at_ = std::chrono::steady_clock::now();
   pick_candidate_grasp_pose_candidates_remaining_ = pick_grasp_pose_candidate_limit_;
   {
     std::lock_guard<std::mutex> state_lock(mutex_);
@@ -2119,6 +2194,19 @@ void IsaacRosMotionTransport::record_material_candidate_search(
   std::lock_guard<std::mutex> lock(planning_diagnostic_mutex_);
   auto evidence = nlohmann::json::parse(pending_motion_planning_evidence_, nullptr, false);
   if (!evidence.is_object()) {evidence = nlohmann::json::object();}
+  if (!attempts.empty() && pending_motion_planning_vision_acquisition_id_.empty()) {
+    pending_motion_planning_vision_acquisition_id_ = attempts.front().acquisition_id;
+  }
+  if (!evidence.value("material_candidate_id", std::string{}).empty()) {
+    evidence["material_search_elapsed_s"] = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - material_diagnostic_started_at_).count();
+  }
+  auto snapshots = nlohmann::json::array();
+  for (const auto & previous : planning_candidate_history_) {
+    auto parsed = nlohmann::json::parse(previous, nullptr, false);
+    if (parsed.is_object()) {snapshots.push_back(std::move(parsed));}
+  }
+  snapshots.push_back(evidence);
   auto & attempt_records = evidence["material_candidate_attempts"];
   attempt_records = nlohmann::json::array();
   std::vector<std::string> attempted;
@@ -2126,14 +2214,38 @@ void IsaacRosMotionTransport::record_material_candidate_search(
   for (std::size_t index = 0; index < attempts.size(); ++index) {
     const auto & attempt = attempts[index];
     if (attempt.search_began) {attempted.push_back(attempt.candidate_id);}
-    attempt_records.push_back({
-      {"attempt_order", index + 1U},
-      {"candidate_id", attempt.candidate_id},
-      {"result_code", attempt.result_code},
-      {"result", motion_result_code_name(attempt.result_code)},
-      {"failure_stage", attempt.failure_stage},
-      {"pick_grasp_insertion_started", attempt.grasp_insertion_started},
-      {"precise_search_began", attempt.search_began}});
+    attempt_records.push_back(
+      {
+        {"attempt_order", index + 1U},
+        {"candidate_id", attempt.candidate_id},
+        {"result_code", attempt.result_code},
+        {"result", motion_result_code_name(attempt.result_code)},
+        {"failure_stage", attempt.failure_stage},
+        {"pick_grasp_insertion_started", attempt.grasp_insertion_started},
+        {"precise_search_began", attempt.search_began},
+        {"search_elapsed_s", attempt.search_elapsed_s}});
+    auto & recorded = attempt_records.back();
+    nlohmann::json material_history = {{"candidate_attempt_history", nlohmann::json::array()}};
+    for (const auto & snapshot : snapshots) {
+      if (snapshot.value("material_candidate_id", std::string{}) != attempt.candidate_id) {
+        continue;
+      }
+      material_history["candidate_attempt_history"].push_back(snapshot);
+      recorded["final_planning_failure_stage"] =
+        snapshot.value("final_failure_stage", "unavailable");
+      recorded["final_planning_failure_reason"] = snapshot.value(
+        "final_failure_reason",
+        "unavailable");
+    }
+    const auto merged = merge_pick_candidate_history(material_history);
+    const auto candidates = merged.value("grasp_pose_candidates", nlohmann::json::array());
+    recorded["generated_pose_count"] = candidates.size();
+    recorded["evaluated_pose_count"] = std::count_if(
+      candidates.begin(), candidates.end(), [](const auto & candidate) {
+        return candidate.value("result", "NOT_EVALUATED") != "NOT_EVALUATED";
+      });
+    recorded["evaluation_attempt_count"] =
+      merged.value("pick_attempts", nlohmann::json::array()).size();
   }
   evidence["attempted_material_candidate_ids"] = attempted;
   evidence["outcome_material_candidate_id"] = outcome;
@@ -2194,6 +2306,7 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(uint8_t result
   std::string vision_acquisition_id;
   std::string evidence;
   std::vector<std::string> task_accuracy_history;
+  std::vector<std::string> candidate_history;
   uint8_t task_type = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_UNSPECIFIED;
   {
     std::lock_guard<std::mutex> lock(planning_diagnostic_mutex_);
@@ -2205,6 +2318,11 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(uint8_t result
     if (goal_uuid.empty()) {goal_uuid = task_accuracy_goal_uuid_;}
     if (task_type == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_UNSPECIFIED) {
       task_type = task_accuracy_task_type_;
+    }
+    candidate_history = planning_candidate_history_;
+    if (task_type == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK) {
+      // PnP reuses its execution UUID for PLACE; PICK history belongs to this terminal only.
+      planning_candidate_history_.clear();
     }
     pending_motion_planning_vision_acquisition_id_.clear();
     task_accuracy_goal_uuid_.clear();
@@ -2218,9 +2336,9 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(uint8_t result
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR) {return;}
   auto terminal_evidence = nlohmann::json::parse(evidence, nullptr, false);
   if (!terminal_evidence.is_object()) {terminal_evidence = nlohmann::json::object();}
-  if (!planning_candidate_history_.empty()) {
+  if (!candidate_history.empty()) {
     auto history = nlohmann::json::array();
-    for (const auto & snapshot : planning_candidate_history_) {
+    for (const auto & snapshot : candidate_history) {
       auto item = nlohmann::json::parse(snapshot, nullptr, false);
       if (!item.is_discarded()) {history.push_back(std::move(item));}
     }
@@ -2272,20 +2390,18 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(uint8_t result
     if (terminal_evidence.contains("backend_failure")) {
       compact["backend_failure"] = terminal_evidence["backend_failure"];
     }
-    auto candidate_evidence = terminal_evidence;
-    if (terminal_evidence.contains("candidate_attempt_history") &&
-      terminal_evidence["candidate_attempt_history"].is_array() &&
-      !terminal_evidence["candidate_attempt_history"].empty())
-    {
-      candidate_evidence = terminal_evidence["candidate_attempt_history"].back();
-    }
-    compact["generated_candidate_count"] = candidate_evidence.value(
-      "generated_candidate_count", candidate_evidence.value("candidate_count", 0U));
-    compact["evaluated_candidate_count"] = candidate_evidence.value(
-      "evaluated_candidate_count", 0U);
-    if (candidate_evidence.contains("selected_candidate")) {
-      compact["selected_candidate"] = candidate_evidence["selected_candidate"];
-    }
+    const auto candidate_evidence = merge_pick_candidate_history(terminal_evidence);
+    const auto candidates = candidate_evidence.value(
+      "grasp_pose_candidates",
+      nlohmann::json::array());
+    compact["generated_candidate_count"] = candidates.size();
+    compact["evaluated_candidate_count"] = std::count_if(
+      candidates.begin(), candidates.end(), [](const auto & candidate) {
+        return candidate.value("result", "NOT_EVALUATED") != "NOT_EVALUATED";
+      });
+    compact["selected_candidate"] = terminal_evidence.value("selected_candidate", -1);
+    compact["outcome_material_candidate_id"] = terminal_evidence.value(
+      "outcome_material_candidate_id", std::string{});
     if (terminal_evidence.contains("final_segment_planning")) {
       compact["final_segment_planning"] = terminal_evidence["final_segment_planning"];
     }
@@ -2298,8 +2414,9 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(uint8_t result
       goal_uuid, motion_task_type_name(task_type), result_code, evidence,
       vision_acquisition_id))
   {
-    RCLCPP_WARN(node_->get_logger(),
-                "Motion planning diagnostic was not persisted");
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "Motion planning diagnostic was not persisted");
   }
 }
 
@@ -2324,6 +2441,8 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(
     }
     if (evidence.is_object()) {
       evidence["task_executor_elapsed_s"] = elapsed_s;
+      evidence["task_failure_stage"] = failure_stage;
+      evidence["task_failure_detail"] = failure_detail;
       if (pending_motion_planning_task_type_ ==
         arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE &&
         !last_place_failure_stage_.empty())
@@ -2367,10 +2486,12 @@ void IsaacRosMotionTransport::finalize_motion_planning_diagnostic(
             "backend_evidence_has_no_failure_reason" : "NONE"},
           {"backend_result_code", motion_result_code_name(result_code)}};
         for (const auto * key : {"moveit_error_code", "planner_result_code", "result_code"}) {
-          if (evidence.contains(key)) {backend_failure["backend_result_evidence"][key] = evidence[key];}
+          if (evidence.contains(key)) {
+            backend_failure["backend_result_evidence"][key] = evidence[key];
+          }
         }
         for (const auto * key : {"execution_active", "backend_inactivity_confirmed",
-          "backend_execution_state"})
+            "backend_execution_state"})
         {
           if (evidence.contains(key)) {backend_failure["backend_state"][key] = evidence[key];}
         }
@@ -2647,9 +2768,10 @@ void IsaacRosMotionTransport::begin_profile_trace(
     environment_or("ARM_CELL_PROFILE_ID", node_->get_name()), "ROS /clock simulation time",
     build_commit_sha(), motion_goal_uuid, execution_id);
   active_profile_configuration_ = config;
-  RCLCPP_DEBUG(node_->get_logger(),
-               "[motion profile] event=START kind=%s time_basis=sim_clock",
-               kind.c_str());
+  RCLCPP_DEBUG(
+    node_->get_logger(),
+    "[motion profile] event=START kind=%s time_basis=sim_clock",
+    kind.c_str());
 }
 
 void IsaacRosMotionTransport::finish_profile_trace(const std::string & outcome)
@@ -2897,7 +3019,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       request.motion_goal_uuid != pick_search_goal_uuid_))
     {
       pick_search_started_at_ = std::chrono::steady_clock::now();
-      pick_candidate_search_started_at_ = pick_search_started_at_;
       pick_search_goal_uuid_ = request.motion_goal_uuid;
     }
     {
@@ -3011,7 +3132,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     };
   if (discard_if_interrupted()) {return false;}
   if (!waypoint && !qualify_place_target &&
-    request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING) {
+    request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING)
+  {
     bool new_goal = false;
     bool preserve_previous = false;
     {
@@ -3075,10 +3197,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       if (!request.place_waypoint_approach && !accepted_object_to_tcp_valid_) {
         record_place_preplanning_failure(
           "preconditions_not_met", "accepted_pick_grasp_relation_unavailable");
-        RCLCPP_WARN(node_->get_logger(),
-                    "Motion internal cause: no grasp relation was established "
-                    "by an accepted PICK target"
-                    "");
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "Motion internal cause: no grasp relation was established "
+          "by an accepted PICK target"
+          "");
         return false;
       }
       if (!request.place_waypoint_approach) {
@@ -3105,17 +3228,17 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   }
   std::lock_guard<std::mutex> lock(move_group_state_->mutex);
   RCLCPP_DEBUG(
-      node_->get_logger(),
-      "%s motion is preparing its %s phase from the %s observation reference",
-      motion_task_type_name(request.task_type.value),
-      motion_task_phase_name(request.phase),
-      request.observation_reference.c_str());
+    node_->get_logger(),
+    "%s motion is preparing its %s phase from the %s observation reference",
+    motion_task_type_name(request.task_type.value),
+    motion_task_phase_name(request.phase),
+    request.observation_reference.c_str());
   if (move_group_state_->required && !move_group_state_->ready) {
     record_place_preplanning_failure("preconditions_not_met", "move_group_not_ready");
     RCLCPP_WARN(
-        node_->get_logger(),
-        "motion diagnostic normalized submit rejected: MoveGroup not ready"
-        "");
+      node_->get_logger(),
+      "motion diagnostic normalized submit rejected: MoveGroup not ready"
+      "");
     return false;
   }
   bool cached_state_received = false;
@@ -3177,17 +3300,19 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       set_pending_motion_planning_evidence(
         request.motion_goal_uuid, request.task_type.value, evidence.str());
     }
-    RCLCPP_WARN(node_->get_logger(),
-                "motion diagnostic normalized submit rejected: current joint "
-                "state is missing or stale"
-                "");
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "motion diagnostic normalized submit rejected: current joint "
+      "state is missing or stale"
+      "");
     return false;
   }
   if (!move_group_state_->move_group) {
     record_place_preplanning_failure("preconditions_not_met", "move_group_interface_unavailable");
-    RCLCPP_WARN(node_->get_logger(), "motion diagnostic normalized submit "
-                                     "rejected: MoveGroupInterface is null"
-                                     "");
+    RCLCPP_WARN(
+      node_->get_logger(), "motion diagnostic normalized submit "
+      "rejected: MoveGroupInterface is null"
+      "");
     return false;
   }
   const auto envelope = applied_motion_envelope();
@@ -3211,9 +3336,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   if (!current_state || !joint_group) {
     record_place_preplanning_failure(
       "preconditions_not_met", "planning_start_state_or_arm_group_unavailable");
-    RCLCPP_WARN(node_->get_logger(),
-                "Motion planning cannot continue because the current robot "
-                "state or arm planning group is unavailable");
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "Motion planning cannot continue because the current robot "
+      "state or arm planning group is unavailable");
     return false;
   }
   const bool grasp_contact_policy_requested =
@@ -3225,9 +3351,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   if (grasp_contact_policy_requested) {
     grasp_contact_policy_active = apply_validation_grasp_contact_policy(original_acm);
     if (!grasp_contact_policy_active) {
-      RCLCPP_WARN(node_->get_logger(),
-                  "[Motion validation] grasp contact policy rejected closed"
-                  "");
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "[Motion validation] grasp contact policy rejected closed"
+        "");
       return false;
     }
   }
@@ -3435,22 +3562,24 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       {"vision_candidate_id", request.vision_candidate_id},
       {"vision_occupancy_scene_valid", false},
       {"vision_occupancy_evidence", {
-        {"computed", true},
-        {"scene_snapshot", {
-          {"source", scene_snapshot_source},
-          {"status", retract_exception_context_result},
-          {"candidate_identity_match", false}}},
-        {"actual_validation_policy", {
-          {"vision_occupancy_exclusion_applied", false},
-          {"requested_phase", motion_task_phase_name(request.phase)},
-          {"failure_before_collision_check", true}}},
-        {"primitives", [&request]() {
-          auto primitives = nlohmann::json::array();
-          for (const auto & primitive : request.non_target_occupancy) {
-            primitives.push_back({{"occupancy_class", occupancy_class_name(primitive.occupancy_class)}});
-          }
-          return primitives;
-        }()}}}};
+          {"computed", true},
+          {"scene_snapshot", {
+              {"source", scene_snapshot_source},
+              {"status", retract_exception_context_result},
+              {"candidate_identity_match", false}}},
+          {"actual_validation_policy", {
+              {"vision_occupancy_exclusion_applied", false},
+              {"requested_phase", motion_task_phase_name(request.phase)},
+              {"failure_before_collision_check", true}}},
+          {"primitives", [&request]() {
+              auto primitives = nlohmann::json::array();
+              for (const auto & primitive : request.non_target_occupancy) {
+                primitives.push_back(
+                  {{"occupancy_class",
+                    occupancy_class_name(primitive.occupancy_class)}});
+              }
+              return primitives;
+            }()}}}};
     set_pending_motion_planning_evidence(
       request.motion_goal_uuid, request.task_type.value, evidence.dump());
     return false;
@@ -3462,9 +3591,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       std::chrono::steady_clock::now() - latest_state_receipt_ > kStateFreshness ||
       !extract_arm_positions(*latest_joint_state_, latest_measured_start))
     {
-      RCLCPP_WARN(node_->get_logger(),
-                  "Motion planning cannot continue because the latest measured "
-                  "joint state is missing or stale");
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "Motion planning cannot continue because the latest measured "
+        "joint state is missing or stale");
       return false;
     }
   }
@@ -3510,10 +3640,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   for (const auto & joint_name : arm_joint_names_) {
     const auto * joint_model = robot_model->getJointModel(joint_name);
     if (!joint_model || joint_model->getVariableBounds().empty()) {
-      RCLCPP_WARN(node_->get_logger(),
-                  "motion diagnostic missing continuity bounds for %s"
-                  "",
-                  joint_name.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "motion diagnostic missing continuity bounds for %s"
+        "",
+        joint_name.c_str());
       return false;
     }
     const auto & bounds = joint_model->getVariableBounds().front();
@@ -3528,10 +3659,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   for (const auto & joint_name : arm_joint_names_) {
     const auto * joint_model = robot_model->getJointModel(joint_name);
     if (!joint_model || joint_model->getVariableBounds().empty()) {
-      RCLCPP_WARN(node_->get_logger(),
-                  "motion diagnostic missing executable velocity bounds for %s"
-                  "",
-                  joint_name.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "motion diagnostic missing executable velocity bounds for %s"
+        "",
+        joint_name.c_str());
       return false;
     }
     trajectory_velocity_limits.push_back(joint_model->getVariableBounds().front().max_velocity_);
@@ -3594,7 +3726,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         evidence["dimensions"] = primitive.shape.dimensions;
       } else if (primitive.shape_type == Primitive::CONVEX_TOP) {
         auto vertices = nlohmann::json::array();
-        for (const auto & v : primitive.top_vertices) {vertices.push_back({v.x, v.y, v.z});}
+        for (const auto & v : primitive.top_vertices) {
+          vertices.push_back({v.x, v.y, v.z});
+        }
         evidence["top_vertices"] = std::move(vertices);
         evidence["bottom_height_m"] = primitive.bottom_height_m;
       }
@@ -3784,9 +3918,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         set_pending_motion_planning_evidence(
           request.motion_goal_uuid, request.task_type.value, combined);
       }
-      RCLCPP_WARN(node_->get_logger(),
-                  "PICK Cartesian descent rejected because measured Approach "
-                  "is not above Grasp");
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "PICK Cartesian descent rejected because measured Approach "
+        "is not above Grasp");
       restore_grasp_contact_policy();
       return false;
     }
@@ -3857,7 +3992,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           return true;
         }
         if (!state_validity_client_ ||
-          !state_validity_client_->wait_for_service(std::chrono::milliseconds(200))) {
+          !state_validity_client_->wait_for_service(std::chrono::milliseconds(200)))
+        {
           reason = "state validity service unavailable";
           return false;
         }
@@ -3878,15 +4014,16 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             if (request.task_type.value ==
               arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK)
             {
-              observed_contacts.push_back(PickCollisionContact{
-                  contact.contact_body_1, contact.contact_body_2,
-                  sample_index == kNoPathSampleIndex ?
-                  "final_grasp_target_state_validity" :
-                  "final_cartesian_path_validation",
-                  sample_index != kNoPathSampleIndex,
-                  sample_index == kNoPathSampleIndex ? 0U : sample_index,
-                  cartesian_collision_source_candidate,
-                  cartesian_collision_source_seed_attempt});
+              observed_contacts.push_back(
+                PickCollisionContact{
+                contact.contact_body_1, contact.contact_body_2,
+                sample_index == kNoPathSampleIndex ?
+                "final_grasp_target_state_validity" :
+                "final_cartesian_path_validation",
+                sample_index != kNoPathSampleIndex,
+                sample_index == kNoPathSampleIndex ? 0U : sample_index,
+                cartesian_collision_source_candidate,
+                cartesian_collision_source_seed_attempt});
             }
           }
           record_pick_collision_feedback(observed_contacts);
@@ -3988,8 +4125,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
               {"applied", static_cast<bool>(retract_validation_scene)},
               {"context_result", retract_exception_context_result},
               {"allowed_pairs", {
-                {kPickRetractTrayAllowedLinks[0], kPickRetractTrayCollisionObject},
-                {kPickRetractTrayAllowedLinks[1], kPickRetractTrayCollisionObject}}}};
+                  {kPickRetractTrayAllowedLinks[0], kPickRetractTrayCollisionObject},
+                  {kPickRetractTrayAllowedLinks[1], kPickRetractTrayCollisionObject}}}};
             serialized = record.dump();
           }
         }
@@ -4001,7 +4138,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           std::lock_guard<std::mutex> lock(mutex_);
           pick_candidate_evaluation_ = evidence;
         }
-        set_pending_motion_planning_evidence(request.motion_goal_uuid, request.task_type.value, evidence);
+        set_pending_motion_planning_evidence(
+          request.motion_goal_uuid, request.task_type.value,
+          evidence);
         if (planning_diagnostic_capture_) {
           planning_diagnostic_capture_->enqueue_progress(
             request.motion_goal_uuid, motion_task_type_name(request.task_type.value), evidence,
@@ -4028,14 +4167,14 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         descent = reusable_pick_descent_trajectory_;
       }
       generated.trajectory = reverse_joint_trajectory(descent);
-      if (generated.trajectory.points.empty())
-      {
+      if (generated.trajectory.points.empty()) {
         {
           std::lock_guard<std::mutex> result_lock(mutex_);
           normalized_failure_result_ =
             arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
         }
-        set_pending_motion_planning_evidence(request.motion_goal_uuid,
+        set_pending_motion_planning_evidence(
+          request.motion_goal_uuid,
           request.task_type.value, nlohmann::json{
             {"motion_goal_uuid", request.motion_goal_uuid},
             {"stage", "cartesian_retract_path_reuse"},
@@ -4051,7 +4190,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           normalized_failure_result_ =
             arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
         }
-        set_pending_motion_planning_evidence(request.motion_goal_uuid,
+        set_pending_motion_planning_evidence(
+          request.motion_goal_uuid,
           request.task_type.value, nlohmann::json{
             {"motion_goal_uuid", request.motion_goal_uuid},
             {"stage", "cartesian_retract_path_reuse"},
@@ -4151,7 +4291,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                  reason.find("state validity request timed out") != std::string::npos;
         };
       const bool path_validity_unavailable =
-        unavailable_validity_evidence(generated.valid ? cartesian_validation_failure :
+        unavailable_validity_evidence(
+        generated.valid ? cartesian_validation_failure :
         generated.failure.reason);
       const auto fallback_limit = request.task_type.value ==
         arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ?
@@ -4243,8 +4384,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           const int32_t code = attempt.value("moveit_error_code", 0);
           using Code = moveit_msgs::msg::MoveItErrorCodes;
           return code != Code::SUCCESS && code != Code::PLANNING_FAILED &&
-                 code != Code::TIMED_OUT && code != Code::GOAL_IN_COLLISION &&
-                 code != Code::START_STATE_IN_COLLISION;
+          code != Code::TIMED_OUT && code != Code::GOAL_IN_COLLISION &&
+          code != Code::START_STATE_IN_COLLISION;
         });
       const bool default_route_failure = fallback_goal_reason == "collision/contact" ||
         generated.failure.reason == "collision/contact" ||
@@ -4307,8 +4448,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             {"applied", static_cast<bool>(retract_validation_scene)},
             {"context_result", retract_exception_context_result},
             {"allowed_pairs", {
-              {kPickRetractTrayAllowedLinks[0], kPickRetractTrayCollisionObject},
-              {kPickRetractTrayAllowedLinks[1], kPickRetractTrayCollisionObject}}}};
+                {kPickRetractTrayAllowedLinks[0], kPickRetractTrayCollisionObject},
+                {kPickRetractTrayAllowedLinks[1], kPickRetractTrayCollisionObject}}}};
         }
         stage["final_planning_result"] = planning_succeeded ? "SUCCESS" : "FAILED";
         stage["selected_strategy"] = planning_succeeded ?
@@ -4324,7 +4465,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           std::lock_guard<std::mutex> lock(planning_diagnostic_mutex_);
           evidence = pending_motion_planning_evidence_;
         }
-        auto final_evidence = nlohmann::json::parse(evidence.empty() ? "{}" : evidence,
+        auto final_evidence = nlohmann::json::parse(
+          evidence.empty() ? "{}" : evidence,
           nullptr, false);
         if (!final_evidence.is_object()) {final_evidence = nlohmann::json::object();}
         final_evidence["vision_occupancy_evidence"] = occupancy_evidence;
@@ -4413,10 +4555,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             request.motion_goal_uuid, request.task_type.value, evidence.str());
         }
         restore_grasp_contact_policy();
-        RCLCPP_WARN(node_->get_logger(),
-                    "PLACE planning failed because no valid object pose or IK "
-                    "seed was available"
-                    "");
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "PLACE planning failed because no valid object pose or IK "
+          "seed was available"
+          "");
         return false;
       }
 
@@ -4665,7 +4808,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             evidence << evaluated_candidate_indices[evaluated_rank[index]];
           }
           evidence << "],\"planner_submission_order\":[";
-          for (std::size_t index = 0; !qualify_place_target && index < result.attempts.size(); ++index) {
+          for (std::size_t index = 0; !qualify_place_target && index < result.attempts.size();
+            ++index)
+          {
             if (index != 0U) {evidence << ',';}
             evidence << result.attempts[index].candidate_index;
           }
@@ -4688,10 +4833,12 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             evidence << ",\"planning_duration_s\":";
             append_json_number(evidence, attempt.planning_duration_s);
             evidence << ",\"planner_result_code\":";
-            if (attempt.planner_invoked) {evidence << attempt.result_code;} else {evidence << "null";}
+            if (attempt.planner_invoked) {evidence << attempt.result_code;} else {
+              evidence << "null";
+            }
             evidence << ",\"planner_result_name\":\""
                      << (attempt.planner_invoked ? moveit_error_code_name(attempt.result_code) :
-              "NOT_INVOKED") << '\"'
+            "NOT_INVOKED") << '\"'
                      << ",\"waypoint_retryable\":"
                      << (attempt.waypoint_retryable ? "true" : "false")
                      << ",\"infrastructure_failure\":"
@@ -4720,7 +4867,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                 name_index < target_state.group_variable_names.size(); ++name_index)
               {
                 if (name_index != 0U) {evidence << ',';}
-                evidence << '"' << json_escape(target_state.group_variable_names[name_index]) << '"';
+                evidence << '"' << json_escape(target_state.group_variable_names[name_index]) <<
+                  '"';
               }
               evidence << "],\"group_contract_matches\":"
                        << (target_state.group_contract_matches ? "true" : "false")
@@ -4776,9 +4924,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           PlaceApproachPlanResult{},
           "no_recipe_compliant_pose_and_seed_candidates_generated");
         restore_grasp_contact_policy();
-        RCLCPP_WARN(node_->get_logger(),
-                    "PLACE planning failed because no pose candidate passed "
-                    "reachability and state validity checks");
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "PLACE planning failed because no pose candidate passed "
+          "reachability and state validity checks");
         return false;
       }
 
@@ -4896,7 +5045,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
           if (!evaluated.endpoint_state_valid) {
             observation.waypoint_retryable = true;
-            reject("STATE_VALIDITY", evaluated.contact_bodies.empty() ?
+            reject(
+              "STATE_VALIDITY", evaluated.contact_bodies.empty() ?
               "STATE_VALIDITY_FAILED" : "COLLISION_CONTACT");
             return observation;
           }
@@ -5038,7 +5188,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       if (qualify_place_target) {
         auto target_indices = planning_candidate_indices;
         if (bounded_place_orientation) {
-          target_indices.insert(target_indices.end(),
+          target_indices.insert(
+            target_indices.end(),
             fallback_position_candidates.begin(), fallback_position_candidates.end());
         } else if (target_indices.size() > ik_policy.max_candidates) {
           target_indices.resize(ik_policy.max_candidates);
@@ -5069,7 +5220,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
           if (observed.terminal) {qualification.terminal = true; break;}
         }
-        capture_place_plan_evaluation(qualification, qualification.success ?
+        capture_place_plan_evaluation(
+          qualification, qualification.success ?
           "valid_recipe_target_candidate_found" : "no_valid_target_within_search_budget");
         if (discard_if_interrupted()) {return false;}
         if (!qualification.success) {
@@ -5100,10 +5252,12 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       // provide a better measured start for a fresh PLACE search.
       place_recovery_eligible_ = !place_plan_result.success && !place_plan_result.terminal &&
         !place_plan_result.attempts.empty() &&
-        std::any_of(place_plan_result.attempts.begin(), place_plan_result.attempts.end(),
-          [](const PlaceApproachPlanAttempt & attempt) {return attempt.waypoint_retryable;}) &&
-        std::none_of(place_plan_result.attempts.begin(), place_plan_result.attempts.end(),
-          [](const PlaceApproachPlanAttempt & attempt) {return attempt.infrastructure_failure;});
+        std::any_of(
+        place_plan_result.attempts.begin(), place_plan_result.attempts.end(),
+        [](const PlaceApproachPlanAttempt & attempt) {return attempt.waypoint_retryable;}) &&
+        std::none_of(
+        place_plan_result.attempts.begin(), place_plan_result.attempts.end(),
+        [](const PlaceApproachPlanAttempt & attempt) {return attempt.infrastructure_failure;});
       const bool planner_invoked = std::any_of(
         place_plan_result.attempts.begin(), place_plan_result.attempts.end(),
         [](const auto & attempt) {return attempt.planner_invoked;});
@@ -5144,10 +5298,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         auto selected_plan_iterator = candidate_plans.find(selected_candidate_index);
         if (selected_plan_iterator == candidate_plans.end()) {
           restore_grasp_contact_policy();
-          RCLCPP_WARN(node_->get_logger(),
-                      "PLACE planning failed because the selected trajectory "
-                      "was not retained"
-                      "");
+          RCLCPP_WARN(
+            node_->get_logger(),
+            "PLACE planning failed because the selected trajectory "
+            "was not retained"
+            "");
           return false;
         }
         plan = std::move(selected_plan_iterator->second);
@@ -5177,14 +5332,16 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           node_->get_logger(),
           "PLACE approach planning found a valid trajectory among the available candidates");
       } else {
-        RCLCPP_WARN(node_->get_logger(),
-                    "PLACE approach planning failed because no candidate "
-                    "produced a valid trajectory");
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "PLACE approach planning failed because no candidate "
+          "produced a valid trajectory");
       }
     } else if (request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING) {
       PickPlanningDiagnostics pick_diagnostics;
       std::vector<PickCollisionContact> latest_pick_collision_contacts;
-      auto & all_pick_collision_contacts = pick_diagnostics.legacy_output().all_pick_collision_contacts;
+      auto & all_pick_collision_contacts =
+        pick_diagnostics.legacy_output().all_pick_collision_contacts;
       std::size_t collision_source_candidate = 0U;
       std::size_t collision_source_seed_attempt = 0U;
       std::string state_validation_stage = "approach_candidate_state";
@@ -5214,10 +5371,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             if (collision.collision) {
               std::vector<PickCollisionContact> observed_contacts;
               for (const auto & contact_pair : collision.contacts) {
-                observed_contacts.push_back(PickCollisionContact{
-                    contact_pair.first, contact_pair.second,
-                    state_validation_stage, false, 0U,
-                    collision_source_candidate, collision_source_seed_attempt});
+                observed_contacts.push_back(
+                  PickCollisionContact{
+                  contact_pair.first, contact_pair.second,
+                  state_validation_stage, false, 0U,
+                  collision_source_candidate, collision_source_seed_attempt});
               }
               if (!observed_contacts.empty()) {
                 latest_pick_collision_contacts = observed_contacts;
@@ -5260,10 +5418,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           if (!validity->valid) {
             std::vector<PickCollisionContact> observed_contacts;
             for (const auto & contact : validity->contacts) {
-              observed_contacts.push_back(PickCollisionContact{
-                  contact.contact_body_1, contact.contact_body_2,
-                  state_validation_stage, false, 0U,
-                  collision_source_candidate, collision_source_seed_attempt});
+              observed_contacts.push_back(
+                PickCollisionContact{
+                contact.contact_body_1, contact.contact_body_2,
+                state_validation_stage, false, 0U,
+                collision_source_candidate, collision_source_seed_attempt});
             }
             if (!observed_contacts.empty()) {
               latest_pick_collision_contacts = observed_contacts;
@@ -5295,21 +5454,12 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         request.estimated_object_height_m);
       const bool rectangle_geometry_available =
         rectangle_geometry_status == RectangleGeometryStatus::AVAILABLE;
-      std::chrono::steady_clock::time_point pick_search_start;
-      std::chrono::steady_clock::time_point candidate_search_start;
-      {
-        std::lock_guard<std::mutex> budget_lock(pick_search_budget_mutex_);
-        candidate_search_start = pick_candidate_search_started_at_;
-        pick_search_start = pick_search_started_at_ == std::chrono::steady_clock::time_point{} ?
-          std::chrono::steady_clock::now() : pick_search_started_at_;
-      }
-      const PickSearchBudget pick_search_budget(
-        pick_search_budget_s_, pick_search_start, pick_candidate_search_budget_s_,
-        candidate_search_start == std::chrono::steady_clock::time_point{} ?
-        pick_search_start : candidate_search_start);
-      auto & pick_search_budget_exhausted = pick_diagnostics.legacy_output().pick_search_budget_exhausted;
+      const PickSearchBudget pick_search_budget;
+      auto & pick_search_budget_exhausted =
+        pick_diagnostics.legacy_output().pick_search_budget_exhausted;
       pick_search_budget_exhausted = false;
-      auto & pick_search_termination_reason = pick_diagnostics.legacy_output().pick_search_termination_reason;
+      auto & pick_search_termination_reason =
+        pick_diagnostics.legacy_output().pick_search_termination_reason;
       pick_search_termination_reason = "SEARCHING";
       std::size_t starting_grasp_pose_candidate = 0U;
       if (pick_approach) {
@@ -5355,7 +5505,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           kFullyOpenWidthMm,
           PickGraspSearchSampling{
             pick_max_withdrawal_tilt_deg_, pick_position_range_half_length_fraction_,
-            pick_position_offset_samples_per_tangent_axis_, pick_orientation_samples_per_closing_axis_,
+            pick_position_offset_samples_per_tangent_axis_,
+            pick_orientation_samples_per_closing_axis_,
             std::min(pick_grasp_pose_candidate_limit_, action_grasp_pose_budget_remaining),
             pick_max_downward_position_offset_m_});
       } else if (pick_approach &&
@@ -5412,14 +5563,18 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       evaluated_candidate_count = 0U;
       std::vector<PickOrientationCandidate> feasible_candidates;
       auto & candidate_results = pick_diagnostics.legacy_output().candidate_results;
-      auto & candidate_transition_reasons = pick_diagnostics.legacy_output().candidate_transition_reasons;
+      auto & candidate_transition_reasons =
+        pick_diagnostics.legacy_output().candidate_transition_reasons;
       auto & candidate_plan_status = pick_diagnostics.legacy_output().candidate_plan_status;
       auto & candidate_plan_elapsed_s = pick_diagnostics.legacy_output().candidate_plan_elapsed_s;
       auto & candidate_joint_distance = pick_diagnostics.legacy_output().candidate_joint_distance;
-      auto & candidate_moveit_error_code = pick_diagnostics.legacy_output().candidate_moveit_error_code;
-      auto & candidate_trajectory_points = pick_diagnostics.legacy_output().candidate_trajectory_points;
+      auto & candidate_moveit_error_code =
+        pick_diagnostics.legacy_output().candidate_moveit_error_code;
+      auto & candidate_trajectory_points =
+        pick_diagnostics.legacy_output().candidate_trajectory_points;
       auto & candidate_finalize_reason = pick_diagnostics.legacy_output().candidate_finalize_reason;
-      auto & tcp_orientation_candidates = pick_diagnostics.legacy_output().tcp_orientation_candidates;
+      auto & tcp_orientation_candidates =
+        pick_diagnostics.legacy_output().tcp_orientation_candidates;
       auto & expected_width_candidates = pick_diagnostics.legacy_output().expected_width_candidates;
       std::string capture_reference_source{"not_selected"};
       std::string capture_reference_status{"not_attempted"};
@@ -5452,9 +5607,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       approach_ik_elapsed_s = 0.0;
       auto & approach_ik_calls = pick_diagnostics.legacy_output().approach_ik_calls;
       approach_ik_calls = 0U;
-      auto & pick_global_planning_calls = pick_diagnostics.legacy_output().pick_global_planning_calls;
+      auto & pick_global_planning_calls =
+        pick_diagnostics.legacy_output().pick_global_planning_calls;
       pick_global_planning_calls = 0U;
-      auto & pick_global_planning_elapsed_s = pick_diagnostics.legacy_output().pick_global_planning_elapsed_s;
+      auto & pick_global_planning_elapsed_s =
+        pick_diagnostics.legacy_output().pick_global_planning_elapsed_s;
       pick_global_planning_elapsed_s = 0.0;
       auto & ik_validation_elapsed_s = pick_diagnostics.legacy_output().ik_validation_elapsed_s;
       ik_validation_elapsed_s = 0.0;
@@ -5472,8 +5629,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           {
             error.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
           } else if (positions.size() != measured_start.size() ||
-            !std::all_of(positions.begin(), positions.end(),
-            [](double joint) {return std::isfinite(joint);}))
+            !std::all_of(
+              positions.begin(), positions.end(),
+              [](double joint) {return std::isfinite(joint);}))
           {
             ++bounds_rejected;
             last_ik_rejection = "nonfinite_or_joint_count";
@@ -5495,7 +5653,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           const auto expected_axis = rectangle_geometry_available &&
             pick_search.pose_index() < grasp_pose_candidates.size() &&
             grasp_pose_candidates[pick_search.pose_index()].contact ?
-            std::optional<std::size_t>(grasp_pose_candidates[
+            std::optional<std::size_t>(
+            grasp_pose_candidates[
               pick_search.pose_index()].contact->closing_axis) : std::nullopt;
           if (rectangle_geometry_available && !expected_axis) {
             ++geometry_rejected;
@@ -5576,7 +5735,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                 target, request.pick_approach_axis, request.insertion_axis_tcp,
                 request.approach_distance_m);
             }
-            feasible_candidates.push_back(PickOrientationCandidate{
+            feasible_candidates.push_back(
+              PickOrientationCandidate{
               request.object_pose, target, approach_pose, selected.selected_goal, positions,
               std::sqrt(new_distance), contact ? contact->width_mm : 0.0,
               contact ? contact->closing_axis : 0U,
@@ -5609,8 +5769,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                   << "\",\"ik_timeout_s\":" << pick_ik_timeout_s_
                   << ",\"grasp_ik_timeout_s\":" << pick_grasp_ik_timeout_s_
                   << ",\"approach_ik_timeout_s\":" << pick_approach_ik_timeout_s_
-                  << ",\"pick_candidate_search_budget_s\":" << pick_candidate_search_budget_s_
-                  << ",\"pick_search_budget_s\":" << pick_search_budget_s_
                   << ",\"ik_search_elapsed_s\":" << ik_api_elapsed_s
                   << ",\"ik_api_elapsed_s\":" << ik_api_elapsed_s
                   << ",\"ik_callback_elapsed_s\":" << ik_callback_elapsed_s
@@ -5618,7 +5776,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                   << ",\"approach_ik_calls\":" << approach_ik_calls
                   << ",\"approach_ik_elapsed_s\":" << approach_ik_elapsed_s
                   << ",\"candidate_search_elapsed_s\":" << pick_search_budget.elapsed_s()
-                  << ",\"candidate_search_remaining_s\":" << pick_search_budget.remaining_s()
                   << ",\"candidate_search_budget_exhausted\":"
                   << (pick_search_budget_exhausted ? "true" : "false")
                   << ",\"candidate_search_termination_reason\":\""
@@ -5667,7 +5824,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
           return distance;
         };
-      std::sort(raw_ik_solutions.begin(), raw_ik_solutions.end(),
+      std::sort(
+        raw_ik_solutions.begin(), raw_ik_solutions.end(),
         [&](const auto & lhs, const auto & rhs) {
           return raw_distance(lhs) < raw_distance(rhs);
         });
@@ -5730,16 +5888,12 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                  << ",\"ik_timeout_s\":" << pick_ik_timeout_s_
                  << ",\"grasp_ik_timeout_s\":" << pick_grasp_ik_timeout_s_
                  << ",\"approach_ik_timeout_s\":" << pick_approach_ik_timeout_s_
-                 << ",\"pick_candidate_search_budget_s\":" << pick_candidate_search_budget_s_
-                 << ",\"pick_search_budget_s\":" << pick_search_budget_s_
                  << ",\"grasp_pose_candidate_limit\":" <<
             pick_grasp_pose_candidate_limit_
                  << ",\"ik_seed_attempts_per_candidate\":" <<
             pick_ik_seed_attempts_per_grasp_pose_
                  << ",\"ik_search_elapsed_s\":" << ik_search_elapsed_s
-                 << ",\"candidate_search_elapsed_s\":" << std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - pick_search_start).count()
-                 << ",\"candidate_search_remaining_s\":" << pick_search_budget.remaining_s()
+                 << ",\"candidate_search_elapsed_s\":" << pick_search_budget.elapsed_s()
                  << ",\"candidate_search_budget_exhausted\":"
                  << (pick_search_budget_exhausted ? "true" : "false")
                  << ",\"candidate_search_termination_reason\":\""
@@ -5777,7 +5931,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           record << "],\"ik_seed_joint_positions\":";
           append_json_numbers(record, measured_start);
           record << ",\"ik_goal_approach\":";
-          append_json_pose(record,
+          append_json_pose(
+            record,
             pick_approach && !planning_context->attempt.executed_stages.empty() ?
             pick_diagnostics.summary().candidate_approach : candidate_approach);
           record << ",\"ik_attempts\":" << ik_attempts
@@ -5795,8 +5950,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           record << ",\"selected_joint_goal\":";
           if (selected >= 0 && diagnostic_candidate != feasible_candidates.end()) {
             append_json_numbers(record, diagnostic_candidate->joint_goal);
-          }
-          else {record << "null";}
+          } else {record << "null";}
           record << ",\"selected_grasp_pose\":";
           if (selected >= 0 && diagnostic_candidate != feasible_candidates.end()) {
             append_json_pose(record, diagnostic_candidate->target_pose);
@@ -5829,8 +5983,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           } else {record << "null";}
           record << ",\"face_evidence\":\""
                  << (diagnostic_candidate != feasible_candidates.end() &&
-            diagnostic_candidate->closing_axis_index == 2U ?
-            "observed_top_inferred_bottom" : "inferred_side_pair")
+          diagnostic_candidate->closing_axis_index == 2U ?
+          "observed_top_inferred_bottom" : "inferred_side_pair")
                  << "\",\"capture_reference\":"
                  << capture_reference_diagnostic_json(
             CaptureReferenceContactWidth{capture_reference_source, capture_reference_status,
@@ -5860,7 +6014,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             grasp_pose.pose.position.x += offset_base.x();
             grasp_pose.pose.position.y += offset_base.y();
             grasp_pose.pose.position.z += offset_base.z();
-            grasp_pose = shallower_pick_grasp(grasp_pose, request.insertion_axis_tcp, request.pick_grasp_backoff_m);
+            grasp_pose = shallower_pick_grasp(
+              grasp_pose, request.insertion_axis_tcp,
+              request.pick_grasp_backoff_m);
             const auto approach_pose = pick_approach_pose(
               grasp_pose, request.pick_approach_axis, request.insertion_axis_tcp,
               request.approach_distance_m);
@@ -5896,8 +6052,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             record << ",\"contact_surface\":\"";
             if (grasp_pose_candidates[index].contact) {
               record << (grasp_pose_candidates[index].contact->face_evidence ==
-                BoxFaceEvidence::OBSERVED_TOP_INFERRED_BOTTOM ?
-                "observed_top_inferred_bottom" : "inferred_side_pair");
+              BoxFaceEvidence::OBSERVED_TOP_INFERRED_BOTTOM ?
+              "observed_top_inferred_bottom" : "inferred_side_pair");
             } else {
               record << "unavailable";
             }
@@ -5917,8 +6073,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
                    << "\",\"source_pose_candidate\":" << contact.pose_candidate
                    << ",\"source_ik_seed_attempt\":" << contact.seed_attempt
                    << ",\"sample_index\":";
-            if (contact.sample_index_available) {record << contact.sample_index;}
-            else {record << "null";}
+            if (contact.sample_index_available) {record << contact.sample_index;} else {
+              record << "null";
+            }
             record << '}';
           }
           record << "],\"active_candidate\":" << active
@@ -5946,7 +6103,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       std::vector<double> selected_goal;
       auto & planning_failed = pick_diagnostics.legacy_output().planning_failed;
       planning_failed = 0U;
-      auto & trajectory_finalize_failed = pick_diagnostics.legacy_output().trajectory_finalize_failed;
+      auto & trajectory_finalize_failed =
+        pick_diagnostics.legacy_output().trajectory_finalize_failed;
       trajectory_finalize_failed = 0U;
       auto & planned_candidate_count = pick_diagnostics.legacy_output().planned_candidate_count;
       planned_candidate_count = 0U;
@@ -5985,8 +6143,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         planning_context->attempted_solutions.resize(grasp_pose_candidates.size());
         planning_context->record_attempt_outcome = [&pick_diagnostics, &planning_context,
             &feasible_candidates, &refresh_candidate_diagnostics, &save_candidate_evaluation,
-            &record_pick_collision_feedback, this](std::size_t, std::size_t, PickSearchEvaluation, const std::string &, const std::string &) {
-            pick_diagnostics.collect(planning_context->attempt, planning_context->result,
+            &record_pick_collision_feedback, this](std::size_t, std::size_t, PickSearchEvaluation,
+            const std::string &, const std::string &) {
+            pick_diagnostics.collect(
+              planning_context->attempt, planning_context->result,
               PickPlanningDiagnosticMetadata{planning_context->search_controller->attempt_count(),
                 pick_ik_seed_attempts_per_grasp_pose_, planning_context->diagnostic_evidence,
                 planning_context->latest_collision_contacts});
@@ -6008,14 +6168,18 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         {
           std::lock_guard<std::mutex> lock(pick_search_budget_mutex_);
           pick_candidate_grasp_pose_candidates_remaining_ -= std::min(
-            pick_candidate_grasp_pose_candidates_remaining_, planning_context->visited_poses.size());
+            pick_candidate_grasp_pose_candidates_remaining_,
+            planning_context->visited_poses.size());
         }
         if (discard_if_interrupted()) {restore_grasp_contact_policy(); return false;}
         pick_diagnostics.finish(planning_context->result);
         if (status == BT::NodeStatus::SUCCESS && planning_context->result.selected) {
-          const auto selected = std::find_if(feasible_candidates.begin(), feasible_candidates.end(),
-            [&](const auto & value) {return value.sample_index == planning_context->attempt.current_pose_index &&
-              value.joint_goal == planning_context->attempt.selected_joint_goal;});
+          const auto selected = std::find_if(
+            feasible_candidates.begin(), feasible_candidates.end(),
+            [&](const auto & value) {
+              return value.sample_index == planning_context->attempt.current_pose_index &&
+              value.joint_goal == planning_context->attempt.selected_joint_goal;
+            });
           if (selected != feasible_candidates.end()) {
             selected_candidate_found = true;
             selected_candidate_index = std::distance(feasible_candidates.begin(), selected);
@@ -6026,11 +6190,13 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         }
         if (pick_search.status() == PickSearchStatus::BACKEND_ERROR) {
           std::lock_guard<std::mutex> lock(mutex_);
-          normalized_failure_result_ = arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+          normalized_failure_result_ =
+            arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
           return false;
         }
         refresh_candidate_diagnostics();
-        save_candidate_evaluation(-1, selected_candidate_found ?
+        save_candidate_evaluation(
+          -1, selected_candidate_found ?
           static_cast<int>(planning_context->attempt.current_pose_index) : -1);
       }
       while (!pick_approach && !selected_candidate_found) {
@@ -6056,7 +6222,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             restore_grasp_contact_policy();
             return false;
           }
-          std::sort(raw_ik_solutions.begin() + previous_count, raw_ik_solutions.end(),
+          std::sort(
+            raw_ik_solutions.begin() + previous_count, raw_ik_solutions.end(),
             [&](const auto & lhs, const auto & rhs) {
               return raw_distance(lhs) < raw_distance(rhs);
             });
@@ -6082,7 +6249,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           return false;
         }
         refresh_candidate_diagnostics();
-        std::sort(feasible_candidates.begin(), feasible_candidates.end(),
+        std::sort(
+          feasible_candidates.begin(), feasible_candidates.end(),
           [](const auto & lhs, const auto & rhs) {
             return lhs.joint_distance < rhs.joint_distance;
           });
@@ -6235,16 +6403,16 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         restore_grasp_contact_policy();
         if (pick_approach) {
           RCLCPP_ERROR(
-              node_->get_logger(),
-              "PICK approach failed after grasp_pose_candidates=%zu/%zu "
-              "final_stage=%s final_reason=%s",
-              pick_search.pose_index(), grasp_pose_candidates.size(),
-              final_pick_failure_stage.c_str(),
-              final_pick_failure_reason.c_str());
+            node_->get_logger(),
+            "PICK approach failed after grasp_pose_candidates=%zu/%zu "
+            "final_stage=%s final_reason=%s",
+            pick_search.pose_index(), grasp_pose_candidates.size(),
+            final_pick_failure_stage.c_str(),
+            final_pick_failure_reason.c_str());
         } else {
           RCLCPP_WARN(
-              node_->get_logger(),
-              "PLACE approach planning failed: no executable grasp candidate");
+            node_->get_logger(),
+            "PLACE approach planning failed: no executable grasp candidate");
         }
         return false;
       }
@@ -6300,7 +6468,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         selected_candidate.expected_contact_width_mm = resolution.width_mm;
         expected_width_candidates[selected_candidate.sample_index] = resolution.width_mm;
         if (resolution.source == "validation_fixture" && resolution.status == "failed") {
-          RCLCPP_WARN(node_->get_logger(),
+          RCLCPP_WARN(
+            node_->get_logger(),
             "PICK Capture Reference fixture resolution failed: %s",
             resolution.failure_reason.c_str());
         }
@@ -6367,10 +6536,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       }
     } else if (!move_group_state_->move_group->setPoseTarget(request.tcp_target, "sf_grasp_tcp")) {
       restore_grasp_contact_policy();
-      RCLCPP_WARN(node_->get_logger(),
-                  "motion diagnostic normalized submit rejected: MoveGroup "
-                  "setPoseTarget failed"
-                  "");
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "motion diagnostic normalized submit rejected: MoveGroup "
+        "setPoseTarget failed"
+        "");
       return false;
     }
     if (place_clearance) {
@@ -6434,18 +6604,20 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         const auto finalized = finalize_raw_trajectory(plan.trajectory_);
         planning_succeeded = finalized.success;
         if (!finalized.success) {
-          RCLCPP_WARN(node_->get_logger(),
-                      "motion diagnostic MoveGroup finalize rejected: %s"
-                      "",
-                      finalized.reason.c_str());
+          RCLCPP_WARN(
+            node_->get_logger(),
+            "motion diagnostic MoveGroup finalize rejected: %s"
+            "",
+            finalized.reason.c_str());
         }
       }
     }
   }
   if (!restore_grasp_contact_policy()) {
-    RCLCPP_WARN(node_->get_logger(),
-                "[Motion validation] grasp contact policy restore failed"
-                "");
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "[Motion validation] grasp contact policy restore failed"
+      "");
     return false;
   }
   if (discard_if_interrupted()) {return false;}
@@ -6458,10 +6630,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     plan.trajectory_.joint_trajectory.joint_names != arm_joint_names_)
   {
     if (waypoint) {place_recovery_waypoint_reason_ = "trajectory_joint_name_order_mismatch";}
-    RCLCPP_WARN(node_->get_logger(),
-                "motion diagnostic JOINT_NAME_ORDER_MISMATCH trajectory vs "
-                "configured arm order"
-                "");
+    RCLCPP_WARN(
+      node_->get_logger(),
+      "motion diagnostic JOINT_NAME_ORDER_MISMATCH trajectory vs "
+      "configured arm order"
+      "");
     if (planning_max_acceleration_rad_s2_ > 0.0) {
       return false;
     }
@@ -6477,21 +6650,22 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     if (!continuity.valid) {
       if (waypoint) {place_recovery_waypoint_reason_ = continuity.reason;}
       RCLCPP_WARN(
-          node_->get_logger(),
-          "motion diagnostic GLOBAL APPROACH trajectory continuity rejected: %s"
-          "",
-          continuity.reason.c_str());
+        node_->get_logger(),
+        "motion diagnostic GLOBAL APPROACH trajectory continuity rejected: %s"
+        "",
+        continuity.reason.c_str());
       return false;
     }
     const auto & planned_endpoint = plan.trajectory_.joint_trajectory.points.back().positions;
     for (std::size_t index = 0; index < selected_global_goal.size(); ++index) {
       const auto delta = planned_endpoint[index] - selected_global_goal[index];
       if (std::abs(delta) > 1e-3) {
-        RCLCPP_WARN(node_->get_logger(),
-                    "Motion rejected the approach trajectory because its "
-                    "endpoint differs from the selected joint goal joint=%s"
-                    "",
-                    arm_joint_names_[index].c_str());
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "Motion rejected the approach trajectory because its "
+          "endpoint differs from the selected joint goal joint=%s"
+          "",
+          arm_joint_names_[index].c_str());
         return false;
       }
     }
@@ -6500,10 +6674,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       plan.trajectory_.joint_trajectory, measured_start, continuity_limits);
     if (!continuity.valid) {
       if (waypoint) {place_recovery_waypoint_reason_ = continuity.reason;}
-      RCLCPP_WARN(node_->get_logger(),
-                  "motion diagnostic joint continuity validation rejected: %s"
-                  "",
-                  continuity.reason.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "motion diagnostic joint continuity validation rejected: %s"
+        "",
+        continuity.reason.c_str());
       return false;
     }
   }
@@ -6543,7 +6718,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         plan_output->trajectory.joint_names.end(), joint_name);
       if (trajectory_joint == plan_output->trajectory.joint_names.end()) {return false;}
       const auto index = static_cast<std::size_t>(std::distance(
-        plan_output->trajectory.joint_names.begin(), trajectory_joint));
+          plan_output->trajectory.joint_names.begin(), trajectory_joint));
       if (index >= final_point.positions.size()) {return false;}
       plan_output->end_state.position.push_back(final_point.positions[index]);
     }
@@ -6567,10 +6742,11 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
       if (place_recovery_waypoint) {
         place_recovery_waypoint_reason_ = trajectory_sampler_configuration_error_;
       }
-      RCLCPP_WARN(node_->get_logger(),
-                  "motion diagnostic trajectory execution rejected: %s"
-                  "",
-                  trajectory_sampler_configuration_error_.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "motion diagnostic trajectory execution rejected: %s"
+        "",
+        trajectory_sampler_configuration_error_.c_str());
       return false;
     }
     double start_simulation_time = 0.0;
@@ -6580,10 +6756,11 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
         if (place_recovery_waypoint) {
           place_recovery_waypoint_reason_ = "simulation_clock_unavailable";
         }
-        RCLCPP_WARN(node_->get_logger(),
-                    "motion diagnostic trajectory execution rejected: Isaac "
-                    "simulation clock unavailable"
-                    "");
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "motion diagnostic trajectory execution rejected: Isaac "
+          "simulation clock unavailable"
+          "");
         return false;
       }
       start_simulation_time = latest_simulation_time_;
@@ -6593,10 +6770,11 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
     for (const auto & joint_name : arm_joint_names_) {
       const auto * joint_model = robot_model->getJointModel(joint_name);
       if (!joint_model || joint_model->getVariableBounds().empty()) {
-        RCLCPP_WARN(node_->get_logger(),
-                    "motion diagnostic missing velocity bounds for %s"
-                    "",
-                    joint_name.c_str());
+        RCLCPP_WARN(
+          node_->get_logger(),
+          "motion diagnostic missing velocity bounds for %s"
+          "",
+          joint_name.c_str());
         return false;
       }
       velocity_limits.push_back(joint_model->getVariableBounds().front().max_velocity_);
@@ -6611,10 +6789,11 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
       validation.valid ? "passed" : "failed", validation.reason.c_str());
     if (!validation.valid) {
       if (place_recovery_waypoint) {place_recovery_waypoint_reason_ = validation.reason;}
-      RCLCPP_WARN(node_->get_logger(),
-                  "Motion rejected the executable trajectory cause=%s"
-                  "",
-                  validation.reason.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "Motion rejected the executable trajectory cause=%s"
+        "",
+        validation.reason.c_str());
       return false;
     }
     const auto expected_duration =
@@ -6679,10 +6858,11 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
       if (tracks_pick_insertion) {pick_grasp_insertion_started_ = false;}
       timed_trajectory_active_ = false;
       if (place_recovery_waypoint) {place_recovery_waypoint_reason_ = worker_start.reason;}
-      RCLCPP_WARN(node_->get_logger(),
-                  "motion diagnostic trajectory worker rejected plan: %s"
-                  "",
-                  worker_start.reason.c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "motion diagnostic trajectory worker rejected plan: %s"
+        "",
+        worker_start.reason.c_str());
       return false;
     }
     {
@@ -6702,7 +6882,8 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
     // owning Action's interruption remains latched even after Safety is SAFE.
     if (discard_if_interrupted()) {
       if (normalized_failure_result() ==
-        arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED) {
+        arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED)
+      {
         // StopMotion can race trajectory start; this hold overrides only the
         // command submitted after the first stop dispatch.
         reassert_hold_after_raced_motion_command();
@@ -6741,7 +6922,8 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
   }
   if (discard_if_interrupted()) {
     if (normalized_failure_result() ==
-      arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED) {
+      arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED)
+    {
       // StopMotion can race the direct command; this hold overrides only that
       // later command and preserves the original stop confirmation contract.
       reassert_hold_after_raced_motion_command();
@@ -6840,11 +7022,12 @@ void IsaacRosMotionTransport::record_task_accuracy(
         if (joint_accuracy) {
           final_joint_position_errors = nlohmann::json::array();
           for (const auto & joint : joint_accuracy->joints) {
-            final_joint_position_errors.push_back({
-              {"joint", joint.name},
-              {"target_position_rad", joint.target_position_rad},
-              {"actual_position_rad", joint.actual_position_rad},
-              {"position_error_rad", joint.position_error_rad}});
+            final_joint_position_errors.push_back(
+              {
+                {"joint", joint.name},
+                {"target_position_rad", joint.target_position_rad},
+                {"actual_position_rad", joint.actual_position_rad},
+                {"position_error_rad", joint.position_error_rad}});
           }
           final_joint_position_error_max_rad = joint_accuracy->maximum_position_error_rad;
         }
@@ -6985,9 +7168,10 @@ void IsaacRosMotionTransport::record_task_accuracy(
           accuracy["tcp_position_error_mm"] = recipe_position_error_m * 1000.0;
           accuracy["tcp_orientation_error_rad"] = recipe_orientation_error_rad;
           accuracy["within_recipe_tolerance"] = tolerance_defined ?
-            nlohmann::json(recipe_position_error_m <= position_tolerance &&
-              (!orientation_constrained ||
-              recipe_orientation_error_rad <= orientation_tolerance)) : nlohmann::json(nullptr);
+            nlohmann::json(
+            recipe_position_error_m <= position_tolerance &&
+            (!orientation_constrained ||
+            recipe_orientation_error_rad <= orientation_tolerance)) : nlohmann::json(nullptr);
           accuracy["measurement_status"] = "AVAILABLE";
           if (!tolerance_defined) {
             accuracy["tolerance_status"] = "UNAVAILABLE";
@@ -7145,10 +7329,11 @@ MotionCompletionOutcome IsaacRosMotionTransport::wait_for_motion_completion_unti
     }
     if (trajectory_worker_ && trajectory_worker_->failed()) {
       const auto diagnostics = trajectory_worker_->diagnostics();
-      RCLCPP_WARN(node_->get_logger(),
-                  "Motion trajectory execution failed before final target "
-                  "completion reason=%s",
-                  trajectory_worker_->failure_reason().c_str());
+      RCLCPP_WARN(
+        node_->get_logger(),
+        "Motion trajectory execution failed before final target "
+        "completion reason=%s",
+        trajectory_worker_->failure_reason().c_str());
       finish_global_profile_capture("trajectory_execution_failed", false);
       motion_progress_watchdog_active_ = false;
       return MotionCompletionOutcome::TRANSPORT_UNAVAILABLE;
@@ -7235,7 +7420,7 @@ MotionCompletionOutcome IsaacRosMotionTransport::wait_for_motion_completion_unti
         "Motion joint feedback observation gap elapsed_ms=%lld task_type=%s phase=%s",
         static_cast<long long>(
           std::chrono::duration_cast<std::chrono::milliseconds>(
-          feedback_gap_duration).count()),
+            feedback_gap_duration).count()),
         motion_task_type_name(active_motion_task_type_), phase);
       feedback_gap_warned = true;
     }
@@ -7279,7 +7464,8 @@ MotionCompletionOutcome IsaacRosMotionTransport::wait_for_motion_completion_unti
           node_->get_logger(), "Motion trajectory execution failed: joint progress stalled");
         trajectory_worker_->cancel("joint_progress_stalled");
       } else {
-        RCLCPP_WARN(node_->get_logger(), "Motion execution timed out reason=%s", failure_reason.c_str());
+        RCLCPP_WARN(
+          node_->get_logger(), "Motion execution timed out reason=%s", failure_reason.c_str());
       }
       log_motion_state_locked(failure_reason);
       finish_global_profile_capture("motion_progress_stalled", false);
@@ -7834,10 +8020,11 @@ bool IsaacRosMotionTransport::measured_target_reached_locked() const
 
 void IsaacRosMotionTransport::log_motion_state_locked(const std::string & event) const
 {
-  RCLCPP_DEBUG(node_->get_logger(),
-               "Motion state changed event=%s active=%s backend_inactive=%s",
-               event.c_str(), execution_active_ ? "true" : "false",
-               inactivity_confirmed_ ? "true" : "false");
+  RCLCPP_DEBUG(
+    node_->get_logger(),
+    "Motion state changed event=%s active=%s backend_inactive=%s",
+    event.c_str(), execution_active_ ? "true" : "false",
+    inactivity_confirmed_ ? "true" : "false");
 }
 
 void IsaacRosMotionTransport::cancel()
@@ -7914,7 +8101,8 @@ std::string IsaacRosMotionTransport::inactivity_diagnostic() const
              ";" + reason;
     };
   if (!execution_active_ && inactivity_confirmed_) {
-    return report(stop_observation_diagnostic_.empty() ?
+    return report(
+      stop_observation_diagnostic_.empty() ?
       "stop_hold_delivered" : stop_observation_diagnostic_);
   }
   if (!stop_requested_) {
@@ -7947,9 +8135,10 @@ std::string IsaacRosMotionTransport::inactivity_diagnostic() const
   if (joint_state_generation_ <= stop_command_generation_) {
     return report("awaiting_post_stop_joint_feedback");
   }
-  return report(stop_observation_diagnostic_.empty() ?
-         "stop_hold_not_confirmed" :
-         stop_observation_diagnostic_);
+  return report(
+    stop_observation_diagnostic_.empty() ?
+    "stop_hold_not_confirmed" :
+    stop_observation_diagnostic_);
 }
 
 bool IsaacRosMotionTransport::measured_joint_state(sensor_msgs::msg::JointState & state) const

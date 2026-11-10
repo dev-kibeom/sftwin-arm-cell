@@ -132,11 +132,14 @@ TEST(IsaacMotionBackendTest, TCPAccuracyDoesNotGateGripperAndHeldConfirmationSti
   goal.orientation_symmetry_order =
     arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNIQUE;
   goal.vision_acquisition_id = "grasp-validation-test";
+  goal.has_estimated_object_height = true;
+  goal.estimated_object_height_m = 0.07;
   goal.pick_approach_distance_m = 0.15;
   goal.pick_grasp_position_tolerance_m = 0.01;
   goal.pick_grasp_orientation_tolerance_rad = 0.08726646259971647;
 
-  EXPECT_EQ(executor.execute(goal),
+  EXPECT_EQ(
+    executor.execute(goal),
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
   EXPECT_EQ(transport->task_accuracy_record_calls, 2);
   EXPECT_EQ(transport->close_command_calls, 1);
@@ -156,7 +159,9 @@ TEST(IsaacGripperPortTest, MissingTransportFailsClosed)
 {
   IsaacGripperPort gripper(nullptr);
 
-  EXPECT_EQ(gripper.close(), arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE);
+  EXPECT_EQ(
+    gripper.close(),
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE);
 }
 
 TEST(IsaacMotionBackendTest, AvailabilityQueryReturnsPromptlyForReadyAndUnavailableTransport)

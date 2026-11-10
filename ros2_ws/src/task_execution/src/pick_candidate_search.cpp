@@ -23,7 +23,7 @@ std::uint8_t PickCandidateSearch::prepare(
   state_.ordered_candidates.clear();
   state_.attempts.clear();
   state_.candidate_cursor.reset({});
-  state_.recording_enabled = !goal.material_candidates.empty();
+  state_.recording_enabled = true;
   state_.direct_pick_pending = goal.material_candidates.empty();
   report.result_code =
     MotionTaskResultCode::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED;
@@ -95,7 +95,7 @@ std::uint8_t PickCandidateSearch::prepare(
       state_.attempts.push_back(
         MaterialCandidateSearchAttempt{
           candidate.candidate_id, MotionTaskResultCode::TASK_RESULT_INVALID_GOAL,
-          "validation:" + invalid_reason, false, false});
+          "validation:" + invalid_reason, false, false, candidate.acquisition_id});
     }
   }
   if (state_.ordered_candidates.empty()) {
@@ -113,9 +113,10 @@ std::uint8_t PickCandidateSearch::prepare(
   priorities.reserve(state_.ordered_candidates.size());
   for (std::size_t index = 0; index < state_.ordered_candidates.size(); ++index) {
     const auto & candidate = state_.ordered_candidates[index];
-    priorities.push_back({
-      index, candidate.target_pose.pose.position.y,
-      candidate.target_pose.pose.position.z, candidate.candidate_id});
+    priorities.push_back(
+      {
+        index, candidate.target_pose.pose.position.y,
+        candidate.target_pose.pose.position.z, candidate.candidate_id});
   }
   state_.candidate_cursor.reset(order_candidate_indices(priorities, priority_policy_));
   return MotionTaskResultCode::TASK_RESULT_SUCCESS;
@@ -150,6 +151,7 @@ bool PickCandidateSearch::select_next(
     state_.outcome_material_candidate_id = candidate.candidate_id;
     validated = true;
   }
+  state_.candidate_started_at = std::chrono::steady_clock::now();
   state_.candidate_active = true;
   support_.motion_port()->beginPickCandidateSearch();
   blackboard.set("pick_candidate_goal", state_.selected_goal);
@@ -163,7 +165,10 @@ void PickCandidateSearch::record_attempt(
   if (!state_.candidate_active) {return;}
   state_.attempts.push_back(
     MaterialCandidateSearchAttempt{
-      state_.selected_goal.vision_candidate_id, result, failure_stage, insertion_started});
+      state_.selected_goal.vision_candidate_id, result, failure_stage, insertion_started, true,
+      state_.selected_goal.vision_acquisition_id,
+      std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - state_.candidate_started_at).count()});
   state_.last_result = result;
   state_.candidate_active = false;
 }
@@ -180,6 +185,12 @@ bool PickCandidateSearch::transition_allowed() const
 void PickCandidateSearch::record_search()
 {
   if (state_.recording_enabled) {
+    // Exceptions can leave the selected candidate active before its transition callback runs.
+    if (state_.candidate_active && report_) {
+      record_attempt(
+        report_->result_code, report_->failure_stage,
+        support_.motion_port()->pickGraspInsertionStarted());
+    }
     support_.motion_port()->recordMaterialCandidateSearch(
       state_.attempts, state_.outcome_material_candidate_id);
   }

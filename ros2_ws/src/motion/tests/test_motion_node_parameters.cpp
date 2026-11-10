@@ -29,7 +29,6 @@ TEST(MotionNodeParameters, ValidatesRuntimeTuningAndRejectsStaticParameters)
   EXPECT_DOUBLE_EQ(node->get_parameter("pick_ik_timeout_s").as_double(), 1.0);
   EXPECT_DOUBLE_EQ(node->get_parameter("pick_grasp_ik_timeout_s").as_double(), 1.0);
   EXPECT_DOUBLE_EQ(node->get_parameter("pick_approach_ik_timeout_s").as_double(), 1.0);
-  EXPECT_DOUBLE_EQ(node->get_parameter("pick_search_budget_s").as_double(), 100.0);
   EXPECT_DOUBLE_EQ(node->get_parameter("pick_max_withdrawal_tilt_deg").as_double(), 90.0);
   EXPECT_EQ(
     node->get_parameter("pick_grasp_pose_order_policy").as_string(), "distance_then_tilt");
@@ -55,7 +54,7 @@ TEST(MotionNodeParameters, ValidatesRuntimeTuningAndRejectsStaticParameters)
       rclcpp::Parameter("pick_grasp_pose_candidate_limit", 4)).successful);
   EXPECT_FALSE(
     node->set_parameter(
-    rclcpp::Parameter("pick_grasp_pose_order_policy", "distance_then_diversity")).successful);
+      rclcpp::Parameter("pick_grasp_pose_order_policy", "distance_then_diversity")).successful);
   EXPECT_FALSE(
     node->set_parameter(
       rclcpp::Parameter("pick_ik_seed_attempts_per_grasp_pose", 3)).successful);
@@ -68,10 +67,9 @@ TEST(MotionNodeParameters, ValidatesRuntimeTuningAndRejectsStaticParameters)
   EXPECT_FALSE(
     node->set_parameter(
       rclcpp::Parameter(
-    "pick_ik_solver", "kdl_kinematics_plugin/KDLKinematicsPlugin")).successful);
+        "pick_ik_solver", "kdl_kinematics_plugin/KDLKinematicsPlugin")).successful);
   EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("pick_ik_solve_type", "Speed")).successful);
   EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("pick_ik_timeout_s", 0.5)).successful);
-  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("pick_search_budget_s", 90.0)).successful);
 
   node.reset();
   rclcpp::shutdown();
@@ -86,7 +84,9 @@ TEST(MotionNodeParameters, LoadsPlaceWaypointBoundaryDirectionAndFixedTarget)
     rclcpp::Parameter("place_waypoint_clearance_y_boundary_m", -0.926),
     rclcpp::Parameter("place_waypoint_clearance_direction", "POSITIVE_Y"),
     rclcpp::Parameter("place_waypoint_approach_distance_m", 0.015),
-    rclcpp::Parameter("place_waypoint_approach_direction_object", std::vector<double>{0.0, 0.0, 1.0}),
+    rclcpp::Parameter(
+      "place_waypoint_approach_direction_object", std::vector<double>{0.0, 0.0,
+        1.0}),
     rclcpp::Parameter(
       "place_waypoint_target_pose_xyzw",
       std::vector<double>{0.5, 0.25, 0.3675, 0.7071067811865476, 0.0, 0.0, 0.7071067811865476})});
@@ -112,9 +112,9 @@ TEST(MotionNodeParameters, RejectsPlanningFallbackLimitsOutsideSupportedRange)
 {
   if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
   for (const auto & parameter : std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("place_max_pose_candidates", 101),
-      rclcpp::Parameter("pick_approach_global_max_requests", 0),
-      rclcpp::Parameter("place_final_global_fallback_max_requests", 21)})
+    rclcpp::Parameter("place_max_pose_candidates", 101),
+    rclcpp::Parameter("pick_approach_global_max_requests", 0),
+    rclcpp::Parameter("place_final_global_fallback_max_requests", 21)})
   {
     rclcpp::NodeOptions options;
     options.parameter_overrides({parameter});
@@ -134,7 +134,7 @@ TEST(MotionNodeParameters, RejectsGraspPoseCapThatWouldEvictLegacyCenterGroup)
   rclcpp::NodeOptions options;
   options.parameter_overrides(
   {
-      rclcpp::Parameter("pick_grasp_pose_candidate_limit", 2)});
+    rclcpp::Parameter("pick_grasp_pose_candidate_limit", 2)});
   EXPECT_THROW(
     std::make_shared<arm_cell_motion::MotionNode>(
       std::make_shared<arm_cell_motion::FakeMotionBackend>(), options),
@@ -142,14 +142,12 @@ TEST(MotionNodeParameters, RejectsGraspPoseCapThatWouldEvictLegacyCenterGroup)
   rclcpp::shutdown();
 }
 
-TEST(MotionNodeParameters, RejectsInvalidPickSearchBudgetsAndIkTimeouts)
+TEST(MotionNodeParameters, RejectsInvalidPickIkTimeouts)
 {
   if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
   for (const auto & parameter : std::vector<rclcpp::Parameter>{
-      rclcpp::Parameter("pick_search_budget_s", 0.0),
-      rclcpp::Parameter("pick_search_budget_s", 601.0),
-      rclcpp::Parameter("pick_grasp_ik_timeout_s", 0.0),
-      rclcpp::Parameter("pick_approach_ik_timeout_s", 31.0)})
+    rclcpp::Parameter("pick_grasp_ik_timeout_s", 0.0),
+    rclcpp::Parameter("pick_approach_ik_timeout_s", 31.0)})
   {
     rclcpp::NodeOptions options;
     options.parameter_overrides({parameter});
@@ -169,7 +167,7 @@ TEST(MotionNodeParameters, RejectsIkSeedAttemptLimitBelowOne)
   rclcpp::NodeOptions options;
   options.parameter_overrides(
   {
-      rclcpp::Parameter("pick_ik_seed_attempts_per_grasp_pose", 0)});
+    rclcpp::Parameter("pick_ik_seed_attempts_per_grasp_pose", 0)});
   EXPECT_THROW(
     std::make_shared<arm_cell_motion::MotionNode>(
       std::make_shared<arm_cell_motion::FakeMotionBackend>(), options),
@@ -236,9 +234,9 @@ TEST(MotionNodeParameters, GraspOccupancyProfileModesAndDimensionsAreValidatedAt
     rclcpp::NodeOptions options;
     options.parameter_overrides(
       {rclcpp::Parameter("grasp_occupancy_mode", mode),
-      rclcpp::Parameter("finger_clearance_radius_m", 0.015),
-      rclcpp::Parameter("finger_contact_span_m", 0.030),
-      rclcpp::Parameter("finger_clearance_depth_m", 0.040)});
+        rclcpp::Parameter("finger_clearance_radius_m", 0.015),
+        rclcpp::Parameter("finger_contact_span_m", 0.030),
+        rclcpp::Parameter("finger_clearance_depth_m", 0.040)});
     auto node = std::make_shared<arm_cell_motion::MotionNode>(
       std::make_shared<arm_cell_motion::FakeMotionBackend>(), options);
     EXPECT_EQ(node->get_parameter("grasp_occupancy_mode").as_string(), mode);
@@ -249,7 +247,7 @@ TEST(MotionNodeParameters, GraspOccupancyProfileModesAndDimensionsAreValidatedAt
   bad_mode.parameter_overrides({rclcpp::Parameter("grasp_occupancy_mode", "unknown")});
   EXPECT_THROW(
     std::make_shared<arm_cell_motion::MotionNode>(
-    std::make_shared<arm_cell_motion::FakeMotionBackend>(), bad_mode), std::invalid_argument);
+      std::make_shared<arm_cell_motion::FakeMotionBackend>(), bad_mode), std::invalid_argument);
   for (const auto & name : {"finger_clearance_radius_m", "finger_contact_span_m",
       "finger_clearance_depth_m"})
   {
@@ -258,7 +256,7 @@ TEST(MotionNodeParameters, GraspOccupancyProfileModesAndDimensionsAreValidatedAt
       options.parameter_overrides({rclcpp::Parameter(name, value)});
       EXPECT_THROW(
         std::make_shared<arm_cell_motion::MotionNode>(
-        std::make_shared<arm_cell_motion::FakeMotionBackend>(), options), std::invalid_argument);
+          std::make_shared<arm_cell_motion::FakeMotionBackend>(), options), std::invalid_argument);
     }
   }
 }

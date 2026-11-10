@@ -162,3 +162,9 @@ Implement as small sequential outcomes:
 2. **Isaac 증거 PR:** 기존 Camera·Time 경계를 검증한 뒤 연결된 Camera 관측 Snapshot과 Terminal Motion Endpoint 기록만 추가한다. Material Supply·Mission 결과 산출물과 Recorder 소속 관계를 각 생산자 경계에서 정확히 등록한다. 유계 Capture와 결정·RTF·Bridge 동등성을 검증한다.
 3. **오프라인 비교·보고서 PR:** 보수적 비교 Helper, `UNAVAILABLE`·`UNRESOLVED` 동작, 보고서 A~G절, 묶은 Timeline, 요약·실패 분석을 추가한다. 기존 Fixture를 재사용하고 원본 산출물을 보존한다.
 4. **라이브 검증:** 종료된 복수 Delivery 세션 보고서를 생성·검토하고 Stop·Reset·다음 Play를 시험해 Capture 비용을 측정한다. 대표 종료 세션이 없으면 런타임 검증 미완료를 별도로 보고하고 완료로 주장하지 않는다.
+
+### PICK 계획 기록의 실행 범위
+
+PICK의 Terminal Diagnostic 확정은 개별 Motion Segment나 물체 후보의 계획 실패가 아니라 TaskExecution의 전체 PICK 종료 시 수행한다. 물체별 계획 실패 이후에도 같은 실행·Acquisition 식별자와 이전 물체의 계획 근거를 유지한다. 최종 요약의 `task_executor_elapsed_s`는 전체 PICK 시간이며 `material_candidate_search.attempts`에는 실제 물체 방문 순서, 결과, 평가 자세·Pose/Seed 평가 시도 수, 물체별 탐색 시간과 마지막 계획 실패 근거를 기록한다. 안전·취소·예외 종료도 완료된 시도와 현재 시도를 보존한다.
+
+상세 파일은 `motion_planning_details/<goal>_candidate_<local-pose-number>_material_<hex-material-id>.json`으로 구분한다. Material ID의 UTF-8 바이트를 Hex로 인코딩하여 서로 다른 ID가 파일명 정규화로 합쳐지지 않게 한다. Material ID가 없는 기존 기록의 `<goal>_candidate_NNN.json` 형식은 유지한다. Acquisition·Material·Pose·Seed 식별자는 상세 내용에 유지하며, 요약의 상세 참조와 Revision Coverage는 이 파일 경로를 사용한다. 물체 전환이나 더 앞선 정렬 ID의 방문으로 기존 물체의 상세 파일을 덮어쓰지 않는다. `last_evaluated_candidate_number`는 시간순 마지막 Pose/Seed 시도의 물체 내부 자세 번호이고 `last_evaluated_material_candidate_id`와 함께 읽는다. 병합 배열의 정렬 위치를 실제 평가 순서나 자세 번호로 사용하지 않는다. 저장 한도·누락 표시는 기존 유계 Writer 정책을 따른다.
