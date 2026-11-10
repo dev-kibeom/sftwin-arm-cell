@@ -49,6 +49,7 @@
 #include <Eigen/Geometry>
 #include <exception>
 #include <future>
+#include <geometric_shapes/shapes.h>
 #include <functional>
 #include <iomanip>
 #include <condition_variable>
@@ -5523,6 +5524,72 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       const auto pick_order_policy =
         parse_pick_grasp_pose_order_policy(pick_grasp_pose_order_policy_);
       order_pick_grasp_search_candidates(grasp_pose_candidates, pick_order_policy);
+      std::size_t preferred_pose_end = 0U;
+      if (pick_approach && grasp_occupancy_mode_ == GraspOccupancyMode::FINGER_CLEARANCE) {
+        auto clearance_occupancy = request.non_target_occupancy;
+        if (request_validation_scene &&
+          request.target_pose.header.frame_id == request_validation_scene->getPlanningFrame())
+        {
+          const auto & world = request_validation_scene->getWorld();
+          for (const auto * rail_id : {"amr_tray_rail_left", "amr_tray_rail_right",
+              "amr_tray_rail_front", "amr_tray_rail_rear"})
+          {
+            const auto rail = world->getObject(rail_id);
+            if (!rail) {continue;}
+            for (std::size_t i = 0; i < rail->shapes_.size(); ++i) {
+              if (rail->shapes_[i]->type != shapes::BOX) {continue;}
+              const auto & box = static_cast<const shapes::Box &>(*rail->shapes_[i]);
+              const auto & transform = rail->global_shape_poses_[i];
+              arm_cell_interfaces::msg::CollisionPrimitive primitive;
+              primitive.shape_type =
+                arm_cell_interfaces::msg::CollisionPrimitive::SOLID_PRIMITIVE;
+              primitive.shape.type = shape_msgs::msg::SolidPrimitive::BOX;
+              primitive.shape.dimensions.assign(box.size, box.size + 3);
+              primitive.pose.position.x = transform.translation().x();
+              primitive.pose.position.y = transform.translation().y();
+              primitive.pose.position.z = transform.translation().z();
+              primitive.pose.orientation = quaternion_message(
+                Eigen::Quaterniond(transform.linear()));
+              clearance_occupancy.push_back(std::move(primitive));
+            }
+          }
+        }
+        const auto & position = request.object_pose.pose.position;
+        const Eigen::Vector3d object_center(position.x, position.y, position.z);
+        // Preserve geometric order within each group and retain deferred poses
+        // for the existing fallback search when nominal clearance is misleading.
+        const auto first_deferred = std::stable_partition(
+          grasp_pose_candidates.begin(), grasp_pose_candidates.end(),
+          [&](const PickGraspPoseCandidate & candidate) {
+            if (!candidate.contact) {return false;}
+            auto goal = request.target_pose;
+            goal.pose.orientation = quaternion_message(candidate.tcp_orientation);
+            const Eigen::Vector3d offset =
+              object_orientation.normalized() * candidate.grasp_position_offset_object;
+            goal.pose.position.x += offset.x();
+            goal.pose.position.y += offset.y();
+            goal.pose.position.z += offset.z();
+            goal = shallower_pick_grasp(
+              goal, request.insertion_axis_tcp, request.pick_grasp_backoff_m);
+            Eigen::Isometry3d tcp = Eigen::Isometry3d::Identity();
+            tcp.linear() = candidate.tcp_orientation.normalized().toRotationMatrix();
+            tcp.translation() = Eigen::Vector3d(
+              goal.pose.position.x, goal.pose.position.y, goal.pose.position.z);
+            Eigen::Vector3d insertion(
+              request.insertion_axis_tcp.x, request.insertion_axis_tcp.y,
+              request.insertion_axis_tcp.z);
+            if (request.pick_approach_axis == PickApproachAxis::PLANNING_FRAME_VERTICAL) {
+              insertion = tcp.linear().transpose() * -Eigen::Vector3d::UnitZ();
+            }
+            const auto clearance = evaluate_finger_occupancy(
+              tcp, object_center, object_orientation, candidate.contact, insertion,
+              clearance_occupancy, finger_clearance_);
+            return clearance.valid && clearance.allowed;
+          });
+        constexpr std::size_t preferred_pose_limit = 10U;
+        preferred_pose_end = std::min(preferred_pose_limit, static_cast<std::size_t>(
+            first_deferred - grasp_pose_candidates.begin()));
+      }
       auto planning_context = std::make_shared<PlanningContext>();
       planning_context->operation_identity = request.motion_goal_uuid;
       planning_context->robot_state = current_state;
@@ -5539,7 +5606,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       planning_context->grasp_candidates = grasp_pose_candidates;
       planning_context->search_controller = std::make_unique<PickSearchController>(
         grasp_pose_candidates.size(), pick_ik_seed_attempts_per_grasp_pose_,
-        starting_grasp_pose_candidate);
+        starting_grasp_pose_candidate, preferred_pose_end);
       auto & pick_search = *planning_context->search_controller;
       planning_context->expected_joint_count = measured_start.size();
       planning_context->grasp_occupancy_mode = grasp_occupancy_mode_;

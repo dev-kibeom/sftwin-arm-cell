@@ -442,3 +442,35 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
         "sf_twin:observes": "amr_tray_and_workpiece",
     }
     assert extrinsic_calls == [(extrinsic_calls[0][0], camera_prim, "/D455")]
+
+
+def test_overhead_camera_calibration_covers_tray_and_rawpart_tops():
+    """Project the configured tray corners with the shipped Isaac calibration."""
+    import itertools
+    from pathlib import Path
+
+    import yaml
+
+    repo = next(parent for parent in Path(__file__).resolve().parents if (parent / "ros2_ws").is_dir())
+    config = repo / "ros2_ws/src/bringup/config"
+    profile = yaml.safe_load((config / "operational_profile.yaml").read_text())
+    calibration_text = (config.parent / profile["vision"]["calibration_file"]).read_text()
+    calibration = yaml.safe_load(calibration_text.split("\n", 1)[1])
+    tray = profile["vision"]["detector_profiles"]["RawPart"]["tray_roi_m"]
+    transform = calibration["tray_T_camera"]
+    x, y, z, w = transform["quaternion_xyzw"]
+    rotation = np.array([
+        [1 - 2 * (y*y + z*z), 2 * (x*y - z*w), 2 * (x*z + y*w)],
+        [2 * (x*y + z*w), 1 - 2 * (x*x + z*z), 2 * (y*z - x*w)],
+        [2 * (x*z - y*w), 2 * (y*z + x*w), 1 - 2 * (x*x + y*y)],
+    ])
+    info = calibration["camera_info"]
+    intrinsic = np.array(info["k"]).reshape(3, 3)
+    assert intrinsic[0, 0] == pytest.approx(
+        CAMERA_SENSOR_FOCAL_LENGTH * info["width"] / 20.954999923706055
+    )
+    for corner in itertools.product(tray["x"], tray["y"], (0.0, 0.08)):
+        optical = rotation.T @ (np.array(corner) - transform["translation"])
+        pixel = intrinsic @ optical / optical[2]
+        assert 20 <= pixel[0] < info["width"] - 20
+        assert 10 <= pixel[1] < info["height"] - 10

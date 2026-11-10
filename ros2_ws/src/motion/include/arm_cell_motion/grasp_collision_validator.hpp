@@ -32,6 +32,13 @@ struct GraspCollisionValidationResult
   std::string reason{"NOT_RUN"};
 };
 
+GraspCollisionValidationResult evaluate_finger_occupancy(
+  const Eigen::Isometry3d & tcp, const Eigen::Vector3d & object_center,
+  const Eigen::Quaterniond & object_orientation, const std::optional<BoxGraspContact> & contact,
+  const Eigen::Vector3d & insertion_axis_tcp,
+  const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy,
+  const FingerClearanceParameters & parameters);
+
 // The leaf supplies immutable request scenes and already-validated contact
 // geometry. Strategy selection/calculation stay here, independent of BT search.
 GraspCollisionValidationResult validate_grasp_collision(

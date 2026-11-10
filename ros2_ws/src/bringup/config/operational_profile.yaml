@@ -47,7 +47,7 @@ vision:
   rgb_topic: /camera/color/image_raw
   depth_topic: /camera/aligned_depth_to_color/image_raw
   camera_info_topic: /camera/color/camera_info
-  calibration_file: config/calibration/arm_cell_camera_20261014T102524.894Z.yaml
+  calibration_file: config/calibration/isaac_overhead_wide.yaml
   tray_aligned_depth_resolution_m: 0.002
   scene_stability:
     stable_observation_count: 5

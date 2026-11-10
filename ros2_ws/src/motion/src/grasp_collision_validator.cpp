@@ -51,6 +51,22 @@ GraspCollisionValidationResult validate_grasp_collision(
     result.reason = "NONE";
     return result;
   }
+  auto finger_result = evaluate_finger_occupancy(
+    tcp, object_center, object_orientation, contact, insertion_axis_tcp, occupancy, parameters);
+  finger_result.common = result.common;
+  return finger_result;
+}
+
+GraspCollisionValidationResult evaluate_finger_occupancy(
+  const Eigen::Isometry3d & tcp, const Eigen::Vector3d & object_center,
+  const Eigen::Quaterniond & object_orientation, const std::optional<BoxGraspContact> & contact,
+  const Eigen::Vector3d & insertion_axis_tcp,
+  const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy,
+  const FingerClearanceParameters & parameters)
+{
+  GraspCollisionValidationResult result;
+  result.mode = GraspOccupancyMode::FINGER_CLEARANCE;
+  result.evaluated = true;
   try {
     if (!contact) {throw std::invalid_argument("FINGER_CONTACT_UNAVAILABLE");}
     result.finger_volumes = make_finger_protection_volumes(

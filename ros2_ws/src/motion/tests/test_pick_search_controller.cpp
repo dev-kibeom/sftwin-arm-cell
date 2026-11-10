@@ -96,5 +96,16 @@ TEST(PickSearchController, InterruptionAndBackendFailureStopPendingRounds)
   backend.evaluate(Evaluation::BACKEND_ERROR);
   EXPECT_EQ(backend.next(1.0), Status::BACKEND_ERROR);
 }
+
+TEST(PickSearchController, PreferredPosesUseBothSeedsBeforeFallbackExpandsSearch)
+{
+  PickSearchController search(4U, 2U, 0U, 2U);
+  for (const auto pose : {0U, 1U, 0U, 1U, 2U, 3U, 2U, 3U}) {
+    ASSERT_EQ(search.next(10.0), PickSearchStatus::SEARCHING);
+    EXPECT_EQ(search.pose_index(), pose);
+    search.evaluate(PickSearchEvaluation::GRASP_IK_NO_SOLUTION);
+  }
+  EXPECT_EQ(search.next(10.0), PickSearchStatus::ALL_CANDIDATES_EXHAUSTED);
+}
 }  // namespace
 }  // namespace arm_cell_motion

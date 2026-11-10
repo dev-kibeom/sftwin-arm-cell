@@ -4,7 +4,7 @@ from scene_builder.camera_extrinsic import author_camera_sensor_from_d455_color
 
 
 CAMERA_SENSOR_RELATIVE_PATH = "/Vision/Camera_Sensor"
-CAMERA_SENSOR_FOCAL_LENGTH = 24.0
+CAMERA_SENSOR_FOCAL_LENGTH = 17.0
 CAMERA_SENSOR_CLIPPING_RANGE_M = (0.10, 10.0)
 CAMERA_SENSOR_RESOLUTION = (1280, 720)
 CAMERA_SENSOR_ROLE = "amr_pickup_overhead_camera"
