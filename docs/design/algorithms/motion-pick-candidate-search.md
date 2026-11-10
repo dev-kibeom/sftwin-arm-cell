@@ -44,7 +44,7 @@ flowchart TD
     M -- 아니요 --> N[후보 소진 근거 반환]
 ```
 
-Motion은 선택된 후보에 대한 계산상 Planning 근거를 반환한다. 계산 실패를 다음 Material Candidate로 전환할지는 Task Execution이 기존 eligibility와 Action-local budget에 따라 결정한다. Grasp 삽입 시작 이후 실제 실행 실패, Scene·Backend·Safety·Gripper/Holding 실패 또는 불확실 결과는 후보 전환을 허가하지 않는다. 최종 Cartesian Descent 실행은 Task Execution이 순서를 정하고 Motion이 계획·실행한다.
+Motion은 선택된 후보에 대한 계산상 Planning 근거를 반환한다. 계산 실패를 다음 Material Candidate로 전환할지는 Task Execution이 기존 eligibility와 유한 후보·Seed 한도에 따라 결정한다. Grasp 삽입 시작 이후 실제 실행 실패, Scene·Backend·Safety·Gripper/Holding 실패 또는 불확실 결과는 후보 전환을 허가하지 않는다. 최종 Cartesian Descent 실행은 Task Execution이 순서를 정하고 Motion이 계획·실행한다.
 
 ## 핵심 계산과 판단
 
@@ -133,22 +133,22 @@ Pose·Seed 탐색 진행 책임은 이미 선정·정렬된 Pose를 순차 방�
 
 #### 실패 원인별 Pose·Seed 탐색
 
-Pose 다양성은 TCP 위치·방향을 바꾸고 Seed 다양성은 같은 TCP Pose의 다른 관절 해에 기회를 준다. 탐색은 Pose별 사용·잔여 Seed, 즉시 재시도, 보류와 재방문, 소진·선택·중단을 이 Algorithm의 규칙에 따라 수행한다. Motion은 Solver와 검증에서 확인한 실패 근거를 사용하며 진단 문구로 전환을 결정하지 않는다.
+Pose 다양성은 TCP 위치·방향을 바꾸고 Seed 다양성은 같은 TCP Pose의 다른 관절 해에 기회를 준다. 탐색은 Pose별 사용·잔여 Seed, 순회와 재방문, 소진·선택·중단을 이 Algorithm의 규칙에 따라 수행한다. Motion은 Solver와 검증에서 확인한 실패 근거를 사용하며 진단 문구로 전환을 결정하지 않는다.
 
 | 실제 평가 근거 | 다음 탐색 대상 |
 |---|---|
 | Grasp IK `NO_IK_SOLUTION` | 다음 Pose의 측정 Seed를 우선하고 현재 Pose의 남은 Seed를 보류 |
-| Grasp 해의 실제 충돌 | 같은 Pose의 남은 다양화 Seed를 즉시 시도 |
-| 유효 Grasp 이후 Approach IK 실패 | 같은 Pose의 남은 다양화 Seed를 즉시 시도 |
+| Grasp 해의 실제 충돌 | 모든 Pose의 현재 Seed 순회 후 같은 Pose의 남은 다양화 Seed를 시도 |
+| 유효 Grasp 이후 Approach IK 실패 | 모든 Pose의 현재 Seed 순회 후 같은 Pose의 남은 다양화 Seed를 시도 |
 | 기하학적 Contact 불일치 | 현재 Pose를 종료하고 다음 Pose; 다른 위치·방향은 배제하지 않음 |
 | Global Planning 실패 | 기존대로 현재 Pose를 종료하고 다음 Pose |
-| 기타 Grasp IK 실패·Joint Limit·FK·Approach 상태 검증 실패 | 원인을 구별해 보존하며 기존의 같은 Pose 잔여 Seed 재시도 유지; `NO_SOLUTION`이나 실제 충돌로 추정하지 않음 |
+| 기타 Grasp IK 실패·Joint Limit·FK·Approach 상태 검증 실패 | 원인을 구별해 보존하며 전체 Pose 순회 후 같은 Pose 잔여 Seed 재시도; `NO_SOLUTION`이나 실제 충돌로 추정하지 않음 |
 | 실행 가능한 Approach 계획 | 즉시 선택하고 탐색 종료 |
 | Backend·Scene 오류 또는 Safety·Cancel 중단 | 기존 오류·중단 처리; 후보 재시도 없음 |
 
-1차 탐색은 확정된 Pose 우선순위를 그대로 따른다. 각 Pose의 첫 시도는 현재 측정 관절 Seed다. 즉시 재시도 대상이면 그 Pose의 두 번째 Seed를 사용하고 완료·소진한다. `NO_SOLUTION`은 해당 Seed에서 해를 얻지 못했다는 뜻이며 Pose 전체의 불가능성 증명이 아니다.
+1차 탐색은 확정된 Pose 우선순위를 그대로 따른다. 각 Pose의 첫 시도는 현재 측정 관절 Seed다. 실패한 Pose의 재시도가 가능하면 보류하고 다음 Pose를 먼저 평가한다. `NO_SOLUTION`은 해당 Seed에서 해를 얻지 못했다는 뜻이며 Pose 전체의 불가능성 증명이 아니다.
 
-1차에서 실행 가능한 계획을 찾지 못하면 보류 Pose만 원래 우선순위대로 재방문한다. 사용하지 않은 다양화 Seed만 시도하고 같은 Pose·Seed 기회를 반복하지 않는다. 두 Seed를 사용했거나 Contact·Planning 정책으로 종료한 Pose는 재방문하지 않는다. 두 번째 시도는 동일한 IK·FK·Contact·Collision·Approach·Planning 검증을 모두 거친다. 이 과정은 동일 PICK 탐색의 연속이며 새 Action이나 Acquisition이 아니다. Pose당 최대 2회이며 PICK Action 공통 탐색 예산 100초와 Material Candidate별 탐색 예산 기본 15초를 함께 적용한다. Pose·Seed 보류 및 재방문은 해당 Material Candidate 예산을 초기화하지 않는다. 다음 Material Candidate로 전환할 때 후보별 예산만 초기화하고 Action 공통 예산은 유지한다. 실제 IK·Planning 호출 한도는 설정된 호출 한도와 두 잔여 예산 중 가장 짧은 값으로 제한한다. 시간 검사는 호출 경계에서 협력적으로 수행하며 Solver를 강제로 중단하지 않는다. 예산 소진은 보류 후보가 남아 있어도 탐색을 종료하며 정상 후보 소진과 구별한다.
+1차에서 실행 가능한 계획을 찾지 못하면 재시도 가능한 Pose만 원래 우선순위대로 다음 다양화 Seed로 평가한다. 각 순회는 모든 대상 Pose를 한 번씩 방문한 뒤 다음 Seed 순회로 진행한다. `pick_ik_seed_attempts_per_grasp_pose`가 자세별 최대 시도 횟수(기본 2)를 정하며 1 또는 3 이상도 같은 규칙을 적용한다. Contact·Planning 정책으로 종료한 Pose는 재방문하지 않는다. 매 시도는 기존 IK·FK·Contact·Collision·Approach·Planning 검증을 모두 거친다. `pick_grasp_pose_candidate_limit`는 물체별 선정 자세 상한(기본 48)이다. 탐색 전체나 Material Candidate별 시간 deadline은 적용하지 않는다. 개별 IK 호출 timeout과 Approach 경로 계획 호출 한도는 유지한다. 첫 실행 가능 계획, 모든 허용 Pose·Seed 소진, 중단 또는 Backend 오류가 탐색을 끝낸다.
 
 두 번째 Seed는 기존 Randomized Seed와 충돌 관절 중심 다양화를 사용한다. 실제 접촉이 확인되고 같은 Pose의 직전 실패에 관련된 충돌 관절만 힌트로 사용할 수 있다. Approach IK 실패처럼 접촉 근거가 없거나 출처·관련성이 불명확하면 일반 Randomized Seed를 사용한다. 이전 Pose·실행 구간의 충돌을 현재 실패의 근거로 사용하지 않는다. 힌트는 거부 조건이 아니며 Seed 분포와 Solver 자체는 바꾸지 않는다.
 
@@ -224,9 +224,9 @@ Convex Mesh도 실제 형상과 보호 체적의 내부 교차를 검사하며 �
 | `VR-ALGO-PICK-02` | 통합 후보의 기하학적 적격성 | Recipe·Contact·Gripper 폭, Closing Axis 정렬, 객체 좌표 변환, Tilt 90° 경계와 음의 Normal Offset 제한을 유지하고 동등 TCP Pose를 중복 제거한다. 추가 Reachability·접촉면적·Edge·Sweep Gate를 도입하지 않는다. |
 | `VR-ALGO-PICK-03` | 결정적 다양성 선정 | 최대 48개 안에서 적격 축의 공칭 위치·방향을 보존하고 서로 다른 방향과 내부·외부 반경·접선 Offset에 기회를 배분한다. 특정 방향의 Offset 또는 공칭 위치만으로 후보를 독점하지 않는다. 동일 입력은 같은 집합을 만들고 전체 조합 IK나 무제한 조합 물질화를 하지 않는다. |
 | `VR-ALGO-PICK-04` | 평가 순서·실행 연계 | 같은 선정 집합에서 `distance_then_diversity`는 거리→방향 반복 분산→축별 방향 샘플→Tilt 순서를 유지하고, 기본 `distance_then_tilt`는 거리→Tilt→방향 반복 분산→축별 방향 샘플 순서를 적용한다. 두 정책은 선정 후보 집합을 바꾸지 않으며 수평 90° 후보를 유지한다. 선정된 먼 Pose는 앞선 실패 이후 평가 가능하며 기존 Seed·예산·Safety·Backend·Planning 검증과 첫 실행 가능 계획 선택을 보존한다. 다른 Pose의 실패를 정확히 동일한 계산 조건 없이 재사용해 제외하지 않는다. |
-| `VR-ALGO-PICK-05` | 실패별 Seed·Pose 우선순위 | Grasp `NO_IK_SOLUTION`이면 후속 Pose 첫 Seed가 보류 Seed보다 먼저다. 실제 Grasp 충돌과 Approach IK 실패는 같은 Pose 두 번째 Seed가 먼저다. Contact 불일치와 Global Planning 실패는 다음 Pose로 전환하고 남은 Seed를 재방문하지 않는다. 기타 검증 실패·실제 Solver 오류와 Backend 오류를 혼동하지 않는다. |
-| `VR-ALGO-PICK-06` | 보류 재방문·한도·종료 | 1차 실패 후 보류 Pose를 원래 순위대로 남은 Seed만 방문한다. 동일 Pose·Seed를 중복 시도하지 않고 두 Seed 사용 Pose는 제외한다. 같은 입력·평가 결과는 같은 방문 순서다. 두 순회는 PICK Action 공통 100초와 동일 Material Candidate의 기본 15초 예산을 초기화 없이 공유하고 예산·중단·Backend 오류 또는 첫 실행 가능 계획에서 남은 후보와 무관하게 종료한다. |
-| `VR-ALGO-PICK-07` | 실패 근거와 실행 경계 | Transport의 실제 Solver 오류·Grasp 검증·Contact·충돌·Approach IK·상태 검증·Global Planning 단계에서 탐색 분류를 전달한다. 같은 Pose 직전 충돌만 관절 다양화 힌트로 사용하고 근거가 없으면 일반 Randomized Seed다. 다른 Pose의 실패·같은 관절 해로 독립 Pose를 배제하지 않으며 IK·Planning·외부 Result 계약을 보존한다. |
+| `VR-ALGO-PICK-05` | 실패별 Seed·Pose 우선순위 | Grasp `NO_IK_SOLUTION`이면 후속 Pose 첫 Seed가 보류 Seed보다 먼저다. 실제 Grasp 충돌과 Approach IK 실패도 후속 Pose 첫 Seed를 우선한 뒤 같은 Pose의 다음 Seed를 평가한다. Contact 불일치와 Global Planning 실패는 다음 Pose로 전환하고 남은 Seed를 재방문하지 않는다. 기타 검증 실패·실제 Solver 오류와 Backend 오류를 혼동하지 않는다. |
+| `VR-ALGO-PICK-06` | 보류 재방문·한도·종료 | 1차 실패 후 보류 Pose를 원래 순위대로 남은 Seed만 방문한다. 동일 Pose·Seed를 중복 시도하지 않고 설정된 Seed 한도를 소진한 Pose는 제외한다. 같은 입력·평가 결과는 같은 방문 순서다. 모든 순회는 설정된 Pose·Seed 한도를 지키며 중단·Backend 오류 또는 첫 실행 가능 계획에서 남은 후보와 무관하게 종료한다. 시간 경과만으로 미평가 Pose를 생략하지 않는다. |
+| `VR-ALGO-PICK-07` | 실패 근거와 실행 경계 | Transport의 실제 Solver 오류·Grasp 검증·Contact·충돌·Approach IK·상태 검증·Global Planning 단계에서 탐색 분류를 전달한다. 같은 Pose의 이전 Seed 충돌만 관절 다양화 힌트로 사용하고 근거가 없으면 일반 Randomized Seed다. 다른 Pose의 실패·같은 관절 해로 독립 Pose를 배제하지 않으며 IK·Planning·외부 Result 계약을 보존한다. |
 | `VR-ALGO-PICK-08` | Target별 Occupancy 구성 및 재사용 | 동일 Acquisition 후보 집합과 선택 ID에서 선택 후보만 제외하고 다른 유효 반환 후보의 BOX Occupancy를 구성한다. LOW·미해결 영역 또는 UNKNOWN Occupancy를 맵에 만들지 않고 Empty map을 미해결 공간이 비었다는 근거로 해석하지 않는다. 한 target attempt의 모든 Pose·Seed에는 같은 맵을 사용하고 다음 Candidate attempt에는 맵을 승계하지 않는다. Planning map과 Snapshot의 일치는 `VR-MOT-EXEC-09`에서 검증한다. |
 
 

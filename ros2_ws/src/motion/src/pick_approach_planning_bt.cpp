@@ -121,6 +121,8 @@ BT::NodeStatus SearchPoseSeed::tick()
         context->visited_poses.end()) {context->visited_poses.push_back(controller.pose_index());}
       context->attempt.seed_index = controller.seed_attempt();
       context->attempt.seed_source = controller.seed_source();
+      context->latest_collision_contacts =
+        context->collision_contacts_by_pose[controller.pose_index()];
       context->result = PickPlanningResult();
       attempt_started_ = true;
     }
@@ -136,6 +138,9 @@ BT::NodeStatus SearchPoseSeed::tick()
     } else if (context->result.selected && status == BT::NodeStatus::SUCCESS) {
       context->attempt.attempt_evaluation = PickSearchEvaluation::EXECUTABLE_APPROACH_SELECTED;
     }
+    // Replace this pose's feedback, including an empty result after no collision.
+    context->collision_contacts_by_pose[context->attempt.current_pose_index] =
+      context->latest_collision_contacts;
     // Diagnostics consume the completed attempt before controller transition.
     if (context->record_attempt_outcome) {
       context->record_attempt_outcome(
@@ -432,7 +437,8 @@ BT::NodeStatus ValidateGraspContact::execute(PlanningContext & context)
 BT::NodeStatus ValidateGraspCollision::execute(PlanningContext & context)
 {
   if (!context.grasp_scene || !context.common_grasp_scene ||
-    !context.attempt.grasp_validation_result) {
+    !context.attempt.grasp_validation_result)
+  {
     context.attempt.failure_stage = "GRASP_COLLISION";
     context.attempt.failure_reason = "GRASP_SCENE_OR_KINEMATICS_UNAVAILABLE";
     context.attempt.attempt_evaluation = PickSearchEvaluation::BACKEND_ERROR;
@@ -441,7 +447,8 @@ BT::NodeStatus ValidateGraspCollision::execute(PlanningContext & context)
   const auto & goal = context.attempt.current_grasp_goal.pose;
   Eigen::Isometry3d tcp = Eigen::Isometry3d::Identity();
   tcp.translation() = Eigen::Vector3d(goal.position.x, goal.position.y, goal.position.z);
-  tcp.linear() = Eigen::Quaterniond(goal.orientation.w, goal.orientation.x,
+  tcp.linear() = Eigen::Quaterniond(
+    goal.orientation.w, goal.orientation.x,
     goal.orientation.y, goal.orientation.z).normalized().toRotationMatrix();
   const auto & center = context.object_pose.pose.position;
   Eigen::Vector3d insertion(context.insertion_axis_tcp.x,
@@ -697,7 +704,7 @@ BT::NodeStatus PlanApproachPath::execute(PlanningContext & context)
       {"moveit_error_code", result.val},
       {"elapsed_s", std::chrono::duration<double>(
           std::chrono::steady_clock::now() - call_started).count()},
-      {"planning_timeout_limit_s", timeout}, {"planning_time_remaining_s", remaining},
+      {"planning_timeout_limit_s", timeout}, {"planning_time_remaining_s", timeout},
       {"trajectory_points", attempt.current_plan.trajectory_.joint_trajectory.points.size()},
       {"result", valid ? "SUCCESS" : "PLANNING_FAILED"}};
     if (!valid) {evidence["collision_feedback"] = "NOT_RETURNED_BY_PLANNER";}

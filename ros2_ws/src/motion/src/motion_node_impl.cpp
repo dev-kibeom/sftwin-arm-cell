@@ -67,10 +67,13 @@ MotionGeometry read_motion_geometry(rclcpp::Node & node)
     std::all_of(
       place_waypoint_target.begin(), place_waypoint_target.end(),
       [](double value) {return std::isfinite(value);}) &&
-    std::all_of(place_waypoint_direction.begin(), place_waypoint_direction.end(),
+    std::all_of(
+      place_waypoint_direction.begin(), place_waypoint_direction.end(),
       [](double value) {return std::isfinite(value);}) &&
-    std::abs(std::hypot(place_waypoint_direction[0], place_waypoint_direction[1],
-      place_waypoint_direction[2]) - 1.0) < 1.0e-6)
+    std::abs(
+      std::hypot(
+        place_waypoint_direction[0], place_waypoint_direction[1],
+        place_waypoint_direction[2]) - 1.0) < 1.0e-6)
   {
     auto & pose = geometry.place_waypoint_target_pose;
     pose.header.frame_id = "base_link";
@@ -224,17 +227,15 @@ MotionNode::MotionNode(
   const auto pick_grasp_ik_timeout_s = declare_parameter<double>("pick_grasp_ik_timeout_s", 1.0);
   const auto pick_approach_ik_timeout_s = declare_parameter<double>(
     "pick_approach_ik_timeout_s", 1.0);
-  const auto pick_search_budget_s = declare_parameter<double>("pick_search_budget_s", 100.0);
   const auto pick_ik_timeout_s = declare_parameter<double>("pick_ik_timeout_s", 1.0);
   if (!std::isfinite(pick_grasp_ik_timeout_s) || pick_grasp_ik_timeout_s <= 0.0 ||
     pick_grasp_ik_timeout_s > 30.0 || !std::isfinite(pick_approach_ik_timeout_s) ||
     pick_approach_ik_timeout_s <= 0.0 || pick_approach_ik_timeout_s > 30.0 ||
-    !std::isfinite(pick_search_budget_s) || pick_search_budget_s <= 0.0 ||
-    pick_search_budget_s > 600.0 || !std::isfinite(pick_ik_timeout_s) ||
+    !std::isfinite(pick_ik_timeout_s) ||
     pick_ik_timeout_s <= 0.0 || pick_ik_timeout_s > 30.0)
   {
     throw std::invalid_argument(
-            "PICK IK timeouts must be in (0, 30] s and search budget in (0, 600] s");
+            "PICK IK timeouts must be in (0, 30] s");
   }
   const auto pick_max_withdrawal_tilt_deg = declare_parameter<double>(
     "pick_max_withdrawal_tilt_deg", 90.0);
@@ -390,7 +391,7 @@ MotionNode::MotionNode(
           place_tray_return_joint_positions.end(), [](double value) {return std::isfinite(value);}))
       {
         throw std::invalid_argument(
-          "place_tray_return_joint_positions must contain one finite value per arm_joint_name");
+                "place_tray_return_joint_positions must contain one finite value per arm_joint_name");
       }
       const auto validation_grasp_contact_policy_enabled = declare_parameter<bool>(
         "validation_grasp_contact_policy_enabled", false);
@@ -440,7 +441,6 @@ MotionNode::MotionNode(
       backend_parameters.emplace_back("finger_contact_span_m", finger_clearance.contact_span_m);
       backend_parameters.emplace_back("finger_clearance_depth_m", finger_clearance.depth_m);
       backend_parameters.emplace_back("pick_approach_ik_timeout_s", pick_approach_ik_timeout_s);
-      backend_parameters.emplace_back("pick_search_budget_s", pick_search_budget_s);
       backend_parameters.emplace_back("pick_ik_timeout_s", pick_ik_timeout_s);
       backend_parameters.emplace_back(
         "pick_max_withdrawal_tilt_deg", pick_max_withdrawal_tilt_deg);
@@ -532,13 +532,13 @@ MotionNode::MotionNode(
       bool idle_mutable_update = false;
       bool strategy_declaration = false;
       auto set_double = [&](const rclcpp::Parameter & parameter, double & destination) {
-          if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) {
-            result.reason = parameter.get_name() + " must be a double";
-            return false;
-          }
-          destination = parameter.as_double();
-          return true;
-        };
+        if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) {
+          result.reason = parameter.get_name() + " must be a double";
+          return false;
+        }
+        destination = parameter.as_double();
+        return true;
+      };
       for (const auto & parameter : parameters) {
         const auto & name = parameter.get_name();
         if (name == "pick_strategy" || name == "place_strategy") {
@@ -598,31 +598,31 @@ MotionNode::MotionNode(
       if (strategy_declaration) {
         result.successful = parameters.size() == 1;
         result.reason = result.successful ? "startup strategy declaration accepted" :
-          "strategy declaration cannot be combined with runtime tuning";
+        "strategy declaration cannot be combined with runtime tuning";
         return result;
       }
       const auto in_range = [](double value, double minimum, double maximum) {
-          return std::isfinite(value) && value >= minimum && value <= maximum;
-        };
+        return std::isfinite(value) && value >= minimum && value <= maximum;
+      };
       if (!in_range(tuning.planning_time_s, 0.05, 300.0) ||
-        !in_range(tuning.place_candidate_planning_time_s, 0.05, 60.0) ||
-        !in_range(tuning.place_total_planning_time_s, 0.05, 300.0) ||
-        tuning.place_total_planning_time_s < tuning.place_candidate_planning_time_s ||
-        !in_range(tuning.planning_velocity_scaling_factor, 1.0e-4, 1.0) ||
-        !in_range(tuning.planning_acceleration_scaling_factor, 1.0e-4, 1.0) ||
-        !in_range(tuning.disturbance_push_distance_m, 0.001, 0.1) ||
-        !in_range(tuning.disturbance_approach_clearance_m, 0.001, 0.1) ||
-        !in_range(tuning.disturbance_speed_fraction, 1.0e-3, 1.0) ||
-        !in_range(tuning.motion_progress_stall_timeout_s, 0.1, 600.0) ||
-        !in_range(tuning.cartesian_tcp_orientation_tolerance_rad, 1.0e-5, 0.5) ||
-        !in_range(tuning.trajectory_goal_tolerance_rad, 1.0e-5, 1.0) ||
-        !in_range(geometry.pick_retract_distance_m, 1.0e-4, 0.5))
+      !in_range(tuning.place_candidate_planning_time_s, 0.05, 60.0) ||
+      !in_range(tuning.place_total_planning_time_s, 0.05, 300.0) ||
+      tuning.place_total_planning_time_s < tuning.place_candidate_planning_time_s ||
+      !in_range(tuning.planning_velocity_scaling_factor, 1.0e-4, 1.0) ||
+      !in_range(tuning.planning_acceleration_scaling_factor, 1.0e-4, 1.0) ||
+      !in_range(tuning.disturbance_push_distance_m, 0.001, 0.1) ||
+      !in_range(tuning.disturbance_approach_clearance_m, 0.001, 0.1) ||
+      !in_range(tuning.disturbance_speed_fraction, 1.0e-3, 1.0) ||
+      !in_range(tuning.motion_progress_stall_timeout_s, 0.1, 600.0) ||
+      !in_range(tuning.cartesian_tcp_orientation_tolerance_rad, 1.0e-5, 0.5) ||
+      !in_range(tuning.trajectory_goal_tolerance_rad, 1.0e-5, 1.0) ||
+      !in_range(geometry.pick_retract_distance_m, 1.0e-4, 0.5))
       {
         result.reason = "Motion tuning value is outside its finite supported range";
         return result;
       }
       if (!core_->set_runtime_tuning(
-          tuning, geometry, holding_timeout, idle_mutable_update))
+        tuning, geometry, holding_timeout, idle_mutable_update))
       {
         result.reason = "idle-mutable Motion tuning requires Motion to be idle";
         return result;
@@ -666,7 +666,7 @@ MotionNode::MotionNode(
   place_waypoint_generate_service_ = create_service<std_srvs::srv::Trigger>(
     "/motion/generate_place_waypoint_trajectory",
     [this, place_waypoint_trajectory_file](const std_srvs::srv::Trigger::Request::SharedPtr,
-      std_srvs::srv::Trigger::Response::SharedPtr response) {
+    std_srvs::srv::Trigger::Response::SharedPtr response) {
       std::string detail;
       response->success = core_->generatePlaceWaypointApproach(
         place_waypoint_trajectory_file, detail);

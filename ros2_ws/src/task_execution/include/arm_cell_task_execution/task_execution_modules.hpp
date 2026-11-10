@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -41,6 +42,7 @@ private:
     bool direct_pick_pending{false};
     bool recording_enabled{false};
     bool candidate_active{false};
+    std::chrono::steady_clock::time_point candidate_started_at{};
   };
 
   std::uint8_t prepare(

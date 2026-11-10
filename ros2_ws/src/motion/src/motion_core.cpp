@@ -381,9 +381,9 @@ uint8_t MotionCore::accept_goal_impl(
   if (execution_result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
     RCLCPP_DEBUG(
       rclcpp::get_logger("motion_core"),
-                 "%s returned terminal failure result_code=%s",
-                 "MotionPort",
-                 motion_result_code_name(execution_result));
+      "%s returned terminal failure result_code=%s",
+      "MotionPort",
+      motion_result_code_name(execution_result));
     std::lock_guard<std::mutex> lock(mutex_);
     const auto final_result = interruption_result_locked(execution_result);
     const auto failed_backend_envelope = backend_->applied_motion_envelope();
@@ -1094,7 +1094,7 @@ MotionPortResult MotionCore::executePlannedMotion(const MotionPlan & plan)
 }
 
 MotionPortResult MotionCore::finish_planned_operation(
-  const MotionPlan & plan, const NormalizedTrajectoryPlan &,
+  const MotionPlan & plan, const NormalizedTrajectoryPlan & backend_plan,
   std::uint8_t execution_result, double elapsed_s, bool finalize_diagnostic)
 {
   MotionPortResult result;
@@ -1192,7 +1192,10 @@ MotionPortResult MotionCore::finish_planned_operation(
   }
   const auto diagnostic_stage = result.failure_stage;
   const auto diagnostic_detail = result.diagnostic_detail;
-  if (finalize_diagnostic) {
+  // TaskExecution owns the terminal PICK record across all material candidates and segments.
+  if (finalize_diagnostic &&
+    backend_plan.request.task_type.value != MotionTaskType::TASK_TYPE_PICK)
+  {
     try {
       backend_->finalize_motion_planning_diagnostic(
         result.result_code, elapsed_s, diagnostic_stage, diagnostic_detail);

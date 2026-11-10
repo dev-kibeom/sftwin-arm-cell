@@ -187,7 +187,17 @@ MotionBtExecutionResult MotionBtExecutor::execute(
       rclcpp::get_logger("arm_cell_task_execution"),
       "Groot MotionTask monitor unavailable; task will continue: %s", error.what());
   }
-  (void)tree.tickRoot();
+  try {
+    (void)tree.tickRoot();
+  } catch (...) {
+    report.result_code = MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+    report.failure_stage = "execution_worker:exception";
+    try {
+      candidate_search.record_search();
+    } catch (...) {
+    }
+    throw;
+  }
 
   candidate_search.record_search();
   execution.attempted_material_candidate_ids = candidate_search.attempted_candidate_ids();

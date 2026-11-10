@@ -97,7 +97,7 @@ lifecycle 계약을 그대로 따른다.
 Trajectory를 제출하고, 앞 구간이 해당 작업의 실행 완료 계약을 충족한 뒤 다음 구간을 실행한다.
 PnP 조합 API도 같은 계획·실행 기능을 한 예약 아래 사용한다.
 
-Motion은 PICK 계획·탐색에서 Material Candidate별 탐색 deadline을 적용하되 PICK Action 공통 deadline을 초과하지 않는다. 기본 후보별 예산은 15초(`pick_candidate_search_budget_s`), 공통 예산은 100초이며 세부 호출 한도·예산 적용 규칙은 [PICK Candidate Algorithm](../../algorithms/motion-pick-candidate-search.md)을 따른다. 시간 검사는 호출 경계에서 협력적으로 수행하며 독립적인 강제 Solver 중단 Watchdog은 제공하지 않는다.
+Motion은 PICK 계획·탐색에서 물체별 자세 후보 수와 자세별 Seed 시도 횟수로 탐색을 제한하며 전체·물체별 시간 deadline은 적용하지 않는다. 개별 IK·경로 계획 호출 timeout, 안전·취소 중단은 유지하고 첫 실행 가능 계획에서 탐색을 종료한다. 세부 규칙은 [PICK Candidate Algorithm](../../algorithms/motion-pick-candidate-search.md)을 따른다.
 
 ## Planning 탐색과 요청 수명
 

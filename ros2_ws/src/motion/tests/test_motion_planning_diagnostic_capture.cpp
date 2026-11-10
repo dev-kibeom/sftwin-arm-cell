@@ -33,21 +33,26 @@ TEST(MotionPlanningDiagnosticCaptureTest, SnapshotCanBeSavedWithoutDetailedDiagn
   {
     MotionPlanningDiagnosticCapture capture((root / "diagnostic_records").string(), logger,
       snapshots.string());
-    EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "vision-run-acq-1", "candidate-a", {}, first_path));
+    EXPECT_TRUE(
+      capture.enqueue_occupancy_snapshot(
+        "goal", "vision-run-acq-1", "candidate-a", {}, first_path));
     std::string duplicate_path;
-    EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "vision-run-acq-1", "candidate-a", {}, duplicate_path));
+    EXPECT_TRUE(
+      capture.enqueue_occupancy_snapshot(
+        "goal", "vision-run-acq-1", "candidate-a", {}, duplicate_path));
     EXPECT_EQ(first_path, duplicate_path);
     std::string candidate_path;
-    EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "vision-run-acq-1", "candidate-b", {}, candidate_path));
+    EXPECT_TRUE(
+      capture.enqueue_occupancy_snapshot(
+        "goal", "vision-run-acq-1", "candidate-b", {}, candidate_path));
     std::string other_acquisition_path;
-    EXPECT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "vision-run-acq-2", "candidate-a", {}, other_acquisition_path));
+    EXPECT_TRUE(
+      capture.enqueue_occupancy_snapshot(
+        "goal", "vision-run-acq-2", "candidate-a", {}, other_acquisition_path));
     EXPECT_NE(first_path, candidate_path);
     EXPECT_NE(first_path, other_acquisition_path);
-    EXPECT_NE(first_path.find(
+    EXPECT_NE(
+      first_path.find(
         "snapshots/01/occupancy-01.png"),
       std::string::npos);
   }
@@ -60,11 +65,14 @@ TEST(MotionPlanningDiagnosticCaptureTest, SnapshotCanBeSavedWithoutDetailedDiagn
     }
   }
   EXPECT_EQ(png_count, 3U);
-  EXPECT_TRUE(std::filesystem::exists(
+  EXPECT_TRUE(
+    std::filesystem::exists(
       snapshots / "01" / "occupancy-01.png"));
-  EXPECT_TRUE(std::filesystem::exists(
+  EXPECT_TRUE(
+    std::filesystem::exists(
       snapshots / "01" / "occupancy-02.png"));
-  EXPECT_TRUE(std::filesystem::exists(
+  EXPECT_TRUE(
+    std::filesystem::exists(
       snapshots / "02" / "occupancy-01.png"));
   EXPECT_FALSE(std::filesystem::exists(root / "diagnostic_records"));
   std::filesystem::remove_all(root);
@@ -80,16 +88,22 @@ TEST(MotionPlanningDiagnosticCaptureTest, OccupancySnapshotReferenceResolvesInDi
   {
     MotionPlanningDiagnosticCapture capture((root / "diagnostic_records").string(),
       rclcpp::get_logger("motion_snapshot_reference_test"), (root / "snapshots").string());
-    ASSERT_TRUE(capture.enqueue_occupancy_snapshot(
-      "goal", "vision-run-acq-1", "candidate-a", {}, image_reference));
-    ASSERT_TRUE(capture.enqueue("goal", "TASK_TYPE_PICK", 0U,
-      nlohmann::json{{"occupancy_snapshot", {{"path", image_reference}}}}.dump(), "vision-run-acq-1"));
+    ASSERT_TRUE(
+      capture.enqueue_occupancy_snapshot(
+        "goal", "vision-run-acq-1", "candidate-a", {}, image_reference));
+    ASSERT_TRUE(
+      capture.enqueue(
+        "goal", "TASK_TYPE_PICK", 0U,
+        nlohmann::json{{"occupancy_snapshot", {{"path", image_reference}}}}.dump(),
+        "vision-run-acq-1"));
   }
   std::ifstream record(root / "diagnostic_records" / "goal.json");
   ASSERT_TRUE(record.good());
-  const auto saved_record = nlohmann::json::parse(std::string(
+  const auto saved_record = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(record)), std::istreambuf_iterator<char>()));
-  EXPECT_EQ(saved_record.at("planning_evidence").at("occupancy_snapshot").at("path"),
+  EXPECT_EQ(
+    saved_record.at("planning_evidence").at("occupancy_snapshot").at("path"),
     image_reference);
   EXPECT_TRUE(std::filesystem::is_regular_file(root / image_reference));
   std::filesystem::remove_all(root);
@@ -105,24 +119,27 @@ TEST(MotionPlanningDiagnosticCaptureTest, TerminalSummaryPreservesActualFailure)
     {"final_failure_stage", "GLOBAL_PLANNING"},
     {"final_failure_reason", "APPROACH_ROUTE_NOT_FOUND"},
     {"vision_acquisition_id", "acquisition-terminal"},
-    {"material_candidate_attempts", nlohmann::json::array({
-      {{"attempt_order", 1}, {"candidate_id", "candidate-a"},
-        {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "approach"}},
-      {{"attempt_order", 2}, {"candidate_id", "candidate-b"},
-        {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "grasp_motion"}},
-      {{"attempt_order", 3}, {"candidate_id", "candidate-c"},
-        {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "approach"}}})},
+    {"material_candidate_attempts", nlohmann::json::array(
+        {
+          {{"attempt_order", 1}, {"candidate_id", "candidate-a"},
+            {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "approach"}},
+          {{"attempt_order", 2}, {"candidate_id", "candidate-b"},
+            {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "grasp_motion"}},
+          {{"attempt_order", 3}, {"candidate_id", "candidate-c"},
+            {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "approach"}}})},
     {"outcome_material_candidate_id", "candidate-c"}};
   const auto logger = rclcpp::get_logger("motion_pick_terminal_summary_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "terminal-pick", "acquisition-terminal", Result::TASK_RESULT_PATH_OBSTRUCTED,
-      false, evidence.dump(), 0U));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "terminal-pick", "acquisition-terminal", Result::TASK_RESULT_PATH_OBSTRUCTED,
+        false, evidence.dump(), 0U));
   }
   std::ifstream input(directory / "motion_planning_summaries" / "terminal-pick.json");
   ASSERT_TRUE(input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("final_failure_reason"), evidence.at("final_failure_reason"));
   EXPECT_EQ(summary.at("task_executor_result_code_value"), Result::TASK_RESULT_PATH_OBSTRUCTED);
@@ -146,25 +163,28 @@ TEST(MotionPlanningDiagnosticCaptureTest, SuccessfulCandidateMatchesFinalActionR
   using Result = arm_cell_interfaces::msg::MotionTaskResultCode;
   const nlohmann::json evidence = {
     {"vision_acquisition_id", "acquisition-success"},
-    {"material_candidate_attempts", nlohmann::json::array({
-      {{"attempt_order", 1}, {"candidate_id", "candidate-a"},
-        {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "approach"}},
-      {{"attempt_order", 2}, {"candidate_id", "candidate-b"},
-        {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "grasp_motion"}},
-      {{"attempt_order", 3}, {"candidate_id", "candidate-c"},
-        {"result", "TASK_RESULT_SUCCESS"}, {"failure_stage", ""}}})},
+    {"material_candidate_attempts", nlohmann::json::array(
+        {
+          {{"attempt_order", 1}, {"candidate_id", "candidate-a"},
+            {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "approach"}},
+          {{"attempt_order", 2}, {"candidate_id", "candidate-b"},
+            {"result", "TASK_RESULT_PATH_OBSTRUCTED"}, {"failure_stage", "grasp_motion"}},
+          {{"attempt_order", 3}, {"candidate_id", "candidate-c"},
+            {"result", "TASK_RESULT_SUCCESS"}, {"failure_stage", ""}}})},
     {"outcome_material_candidate_id", "candidate-c"}};
   const auto logger = rclcpp::get_logger("motion_pick_terminal_success_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "successful-pick", "acquisition-success", Result::TASK_RESULT_SUCCESS,
-      true, evidence.dump(), 0U));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "successful-pick", "acquisition-success", Result::TASK_RESULT_SUCCESS,
+        true, evidence.dump(), 0U));
   }
   std::ifstream input(
     directory / "motion_planning_summaries" / "successful-pick.json", std::ios::binary);
   ASSERT_TRUE(input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_SUCCESS");
   EXPECT_EQ(summary.at("task_executor_result_code_value"), Result::TASK_RESULT_SUCCESS);
@@ -185,13 +205,14 @@ TEST(MotionPlanningDiagnosticCaptureTest, OversizedMaterialCandidateHistoryStays
   using Result = arm_cell_interfaces::msg::MotionTaskResultCode;
   nlohmann::json attempts = nlohmann::json::array();
   for (std::size_t index = 0; index < 700U; ++index) {
-    attempts.push_back({
-      {"attempt_order", index + 1U},
-      {"candidate_id", "material-candidate-" + std::to_string(index) + std::string(96U, 'x')},
-      {"result", "TASK_RESULT_PATH_OBSTRUCTED"},
-      {"failure_stage", "approach"},
-      {"pick_grasp_insertion_started", false},
-      {"redundant_detail", std::string(256U, 'd')}});
+    attempts.push_back(
+      {
+        {"attempt_order", index + 1U},
+        {"candidate_id", "material-candidate-" + std::to_string(index) + std::string(96U, 'x')},
+        {"result", "TASK_RESULT_PATH_OBSTRUCTED"},
+        {"failure_stage", "approach"},
+        {"pick_grasp_insertion_started", false},
+        {"redundant_detail", std::string(256U, 'd')}});
   }
   const nlohmann::json evidence = {
     {"vision_acquisition_id", "acquisition-oversized"},
@@ -202,16 +223,18 @@ TEST(MotionPlanningDiagnosticCaptureTest, OversizedMaterialCandidateHistoryStays
   const auto logger = rclcpp::get_logger("motion_pick_material_summary_limit_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "oversized-material-pick", "acquisition-oversized",
-      Result::TASK_RESULT_PATH_OBSTRUCTED, false, evidence.dump(), 0U));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "oversized-material-pick", "acquisition-oversized",
+        Result::TASK_RESULT_PATH_OBSTRUCTED, false, evidence.dump(), 0U));
   }
   const auto path = directory / "motion_planning_summaries" / "oversized-material-pick.json";
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
   EXPECT_LE(std::filesystem::file_size(path), 64U * 1024U);
   std::ifstream input(path, std::ios::binary);
   ASSERT_TRUE(input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_PATH_OBSTRUCTED");
   EXPECT_EQ(summary.at("final_failure_reason"), "APPROACH_ROUTE_NOT_FOUND");
@@ -220,7 +243,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, OversizedMaterialCandidateHistoryStays
   ASSERT_TRUE(material.contains("omitted_attempts"));
   EXPECT_GT(material.at("omitted_attempts").at("count").get<std::size_t>(), 0U);
   EXPECT_EQ(material.at("omitted_attempts").at("reason"), "summary_byte_limit");
-  EXPECT_EQ(material.at("omitted_attempts").at("failure_counts_by_result_and_stage")
+  EXPECT_EQ(
+    material.at("omitted_attempts").at("failure_counts_by_result_and_stage")
     .at("TASK_RESULT_PATH_OBSTRUCTED:approach"),
     material.at("omitted_attempts").at("count"));
   ASSERT_FALSE(material.at("attempts").empty());
@@ -264,7 +288,7 @@ TEST(MotionPlanningDiagnosticCaptureTest, PersistsBoundedEvidenceAndTerminalResu
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     ASSERT_TRUE(
       capture.enqueue_progress(
-      uuid, "PICK",
+        uuid, "PICK",
         "{\"active_candidate\":2,\"best_candidate_so_far\":1,"
         "\"candidate_stage\":\"before_plan\"}", "vision-acq-pick-1"));
     ASSERT_TRUE(capture.enqueue(uuid, "PICK", 9, evidence, "vision-acq-pick-1"));
@@ -283,7 +307,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, PersistsBoundedEvidenceAndTerminalResu
   EXPECT_EQ(parsed.at("planning_evidence").at("ik_solve_type"), "Distance");
   EXPECT_EQ(parsed.at("planning_evidence").at("motion_goal_uuid"), "test-pick-goal");
   EXPECT_EQ(parsed.at("vision_acquisition_id"), "vision-acq-pick-1");
-  EXPECT_EQ(parsed.at("planning_evidence").at("cartesian_descent").at("stage"),
+  EXPECT_EQ(
+    parsed.at("planning_evidence").at("cartesian_descent").at("stage"),
     "cartesian_descent");
   EXPECT_EQ(parsed.at("planning_evidence").at("cartesian_descent").at("path_fraction"), 0.5);
   EXPECT_EQ(
@@ -316,7 +341,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, PersistsBoundedEvidenceAndTerminalResu
   const auto next_path = directory / "test-next-goal.json";
   ASSERT_TRUE(std::filesystem::exists(next_path));
   std::ifstream next_input(next_path, std::ios::binary);
-  const auto next = nlohmann::json::parse(std::string(
+  const auto next = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(next_input)), std::istreambuf_iterator<char>()));
   EXPECT_TRUE(next.at("vision_acquisition_id").is_null());
   std::filesystem::remove_all(directory);
@@ -330,9 +356,10 @@ TEST(MotionPlanningDiagnosticCaptureTest, TerminalSnapshotKeepsDeferredRevisitHi
   nlohmann::json evidence = {
     {"material_candidate_id", "material-a"},
     {"candidate_search_termination_reason", "SEARCHING"},
-    {"pick_attempts", nlohmann::json::array({
-      {{"attempt", 1}, {"grasp_pose_candidate", 1}, {"ik_seed_attempt", 1}},
-      {{"attempt", 2}, {"grasp_pose_candidate", 2}, {"ik_seed_attempt", 1}}})}};
+    {"pick_attempts", nlohmann::json::array(
+        {
+          {{"attempt", 1}, {"grasp_pose_candidate", 1}, {"ik_seed_attempt", 1}},
+          {{"attempt", 2}, {"grasp_pose_candidate", 2}, {"ik_seed_attempt", 1}}})}};
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), rclcpp::get_logger("pick_history"));
     ASSERT_TRUE(capture.enqueue_progress("pick-history", "TASK_TYPE_PICK", evidence.dump(), "acq"));
@@ -340,9 +367,11 @@ TEST(MotionPlanningDiagnosticCaptureTest, TerminalSnapshotKeepsDeferredRevisitHi
       {{"attempt", 3}, {"grasp_pose_candidate", 1}, {"ik_seed_attempt", 2}});
     evidence["candidate_search_termination_reason"] = "SEARCH_BUDGET_EXHAUSTED";
     ASSERT_TRUE(capture.enqueue_progress("pick-history", "TASK_TYPE_PICK", evidence.dump(), "acq"));
-    ASSERT_TRUE(capture.enqueue("pick-history", "TASK_TYPE_PICK",
-      arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED,
-      evidence.dump(), "acq"));
+    ASSERT_TRUE(
+      capture.enqueue(
+        "pick-history", "TASK_TYPE_PICK",
+        arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED,
+        evidence.dump(), "acq"));
   }
   std::ifstream input(directory / "pick-history.json");
   ASSERT_TRUE(input.good());
@@ -361,30 +390,41 @@ TEST(MotionPlanningDiagnosticCaptureTest, KeepsMaterialCandidatesSeparateFromGra
     ("motion_pick_material_candidate_details_" + std::to_string(
       std::chrono::steady_clock::now().time_since_epoch().count()));
   const nlohmann::json evidence = {
-    {"candidate_attempt_history", nlohmann::json::array({
-      {{"material_candidate_id", "material-a"}, {"grasp_pose_candidates", nlohmann::json::array({
-        {{"candidate", 1}, {"result", "IK_FAILED"}}})},
-        {"pick_attempts", nlohmann::json::array({
-          {{"grasp_pose_candidate", 1}, {"attempt", 1}, {"reason", "IK_FAILED"}}})}},
-      {{"material_candidate_id", "material-b"}, {"grasp_pose_candidates", nlohmann::json::array({
-        {{"candidate", 1}, {"result", "SUCCESS"}}})},
-        {"pick_attempts", nlohmann::json::array({
-          {{"grasp_pose_candidate", 1}, {"attempt", 1}, {"reason", "SUCCESS"}}})}}})}};
+    {"candidate_attempt_history", nlohmann::json::array(
+        {
+          {{"material_candidate_id", "material-a"}, {"grasp_pose_candidates", nlohmann::json::array(
+              {
+                {{"candidate", 1}, {"result", "IK_FAILED"}}})},
+            {"pick_attempts", nlohmann::json::array(
+              {
+                {{"grasp_pose_candidate", 1}, {"attempt", 1}, {"reason", "IK_FAILED"}}})}},
+          {{"material_candidate_id", "material-b"}, {"grasp_pose_candidates", nlohmann::json::array(
+              {
+                {{"candidate", 1}, {"result", "SUCCESS"}}})},
+            {"pick_attempts", nlohmann::json::array(
+              {
+                {{"grasp_pose_candidate", 1}, {"attempt", 1}, {"reason", "SUCCESS"}}})}}})}};
   const auto logger = rclcpp::get_logger("motion_pick_material_candidate_details_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
-    EXPECT_EQ(capture.enqueue_pick_details("material-pick", "acquisition-material",
-      evidence.dump()), 2U);
+    EXPECT_EQ(
+      capture.enqueue_pick_details(
+        "material-pick", "acquisition-material",
+        evidence.dump()), 2U);
   }
-  const auto first_path = directory / "motion_planning_details" / "material-pick_candidate_001.json";
-  const auto second_path = directory / "motion_planning_details" / "material-pick_candidate_002.json";
+  const auto first_path = directory / "motion_planning_details" /
+    "material-pick_candidate_001_material_6d6174657269616c2d61.json";
+  const auto second_path = directory / "motion_planning_details" /
+    "material-pick_candidate_001_material_6d6174657269616c2d62.json";
   ASSERT_TRUE(std::filesystem::exists(first_path));
   ASSERT_TRUE(std::filesystem::exists(second_path));
   std::ifstream first_input(first_path);
   std::ifstream second_input(second_path);
-  const auto first = nlohmann::json::parse(std::string(
+  const auto first = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(first_input)), std::istreambuf_iterator<char>()));
-  const auto second = nlohmann::json::parse(std::string(
+  const auto second = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(second_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(first.at("material_candidate_id"), "material-a");
   EXPECT_EQ(first.at("grasp_pose_candidate_number"), 1U);
@@ -392,6 +432,83 @@ TEST(MotionPlanningDiagnosticCaptureTest, KeepsMaterialCandidatesSeparateFromGra
   EXPECT_EQ(second.at("material_candidate_id"), "material-b");
   EXPECT_EQ(second.at("grasp_pose_candidate_number"), 1U);
   EXPECT_EQ(second.at("attempts").at(0).at("material_candidate_id"), "material-b");
+  std::filesystem::remove_all(directory);
+}
+
+TEST(MotionPlanningDiagnosticCaptureTest, MaterialDetailReferencesRemainStableWhenEarlierIdsArrive)
+{
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("motion_stable_material_details_" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  const auto material = [](const std::string & id) {
+      return nlohmann::json{{"material_candidate_id", id},
+      {"grasp_pose_candidates", nlohmann::json::array(
+          {
+            {{"candidate", 1}, {"result", "IK_FAILED"}}})},
+      {"pick_attempts", nlohmann::json::array(
+          {
+            {{"grasp_pose_candidate", 1}, {"ik_seed_attempt", 1}, {"reason", "IK_FAILED"}}})}};
+    };
+  {
+    MotionPlanningDiagnosticCapture capture(directory.string(), rclcpp::get_logger(
+        "stable_material"));
+    ASSERT_EQ(capture.enqueue_pick_details("pick", "acq", material("b").dump()), 1U);
+    const nlohmann::json both = {{"candidate_attempt_history",
+      nlohmann::json::array({material("b"), material("a")})}};
+    ASSERT_EQ(capture.enqueue_pick_details("pick", "acq", both.dump()), 2U);
+    ASSERT_TRUE(capture.enqueue_pick_summary("pick", "acq", 3U, false, both.dump(), 2U));
+  }
+  const auto details = directory / "motion_planning_details";
+  // Material IDs are byte-encoded, so distinct IDs cannot alias through sanitization.
+  for (const auto & id : {"61", "62"}) {
+    std::ifstream input(details / (std::string("pick_candidate_001_material_") + id + ".json"));
+    ASSERT_TRUE(input.good());
+    const auto detail = nlohmann::json::parse(input);
+    EXPECT_EQ(detail.at("grasp_pose_candidate_number"), 1U);
+    EXPECT_EQ(detail.at("attempts").size(), 1U);
+  }
+  std::ifstream summary_input(directory / "motion_planning_summaries/pick.json");
+  const auto summary = nlohmann::json::parse(summary_input);
+  EXPECT_EQ(summary.at("candidate_counts").at("generated"), 2U);
+  EXPECT_EQ(summary.at("detail_coverage").at("persisted_count"), 2U);
+  std::filesystem::remove_all(directory);
+}
+
+TEST(MotionPlanningDiagnosticCaptureTest, LastEvaluationUsesChronologicalMaterialAndLocalPoseNumber)
+{
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("motion_chronological_last_pose_" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  const auto material = [](const std::string & id, bool revisited) {
+      nlohmann::json result = {{"material_candidate_id", id}, {"selected_candidate", 0},
+        {"grasp_pose_candidates", nlohmann::json::array(
+          {
+            {{"candidate", 1}, {"result", "SELECTED"}},
+            {{"candidate", 2}, {"result", "IK_FAILED"}}})},
+        {"pick_attempts", nlohmann::json::array(
+          {
+            {{"grasp_pose_candidate", 1}, {"ik_seed_attempt", 1}},
+            {{"grasp_pose_candidate", 2}, {"ik_seed_attempt", 1}}})}};
+      if (revisited) {
+        result["pick_attempts"].push_back({{"grasp_pose_candidate", 1}, {"ik_seed_attempt", 2}});
+      }
+      return result;
+    };
+  auto evidence = material("a", true);
+  evidence["outcome_material_candidate_id"] = "a";
+  evidence["candidate_attempt_history"] = nlohmann::json::array({material("b", false)});
+  {
+    MotionPlanningDiagnosticCapture capture(directory.string(), rclcpp::get_logger("last_pose"));
+    const auto accepted = capture.enqueue_pick_details("pick", "acq", evidence.dump());
+    ASSERT_TRUE(capture.enqueue_pick_summary("pick", "acq", 0U, false, evidence.dump(), accepted));
+  }
+  std::ifstream input(directory / "motion_planning_summaries/pick.json");
+  const auto summary = nlohmann::json::parse(input);
+  EXPECT_EQ(summary.at("last_evaluated_candidate_number"), 1U);
+  EXPECT_EQ(summary.at("last_evaluated_candidate"), 0);
+  EXPECT_EQ(summary.at("last_evaluated_material_candidate_id"), "a");
+  EXPECT_EQ(summary.at("selected_candidate_number"), 1U);
+  EXPECT_EQ(summary.at("selected_material_candidate_id"), "a");
   std::filesystem::remove_all(directory);
 }
 
@@ -408,45 +525,50 @@ TEST(MotionPlanningDiagnosticCaptureTest, SplitsAllPickCandidatesAndKeepsSummary
   evidence["active_candidate"] = 6;
   evidence["final_failure_stage"] = "CARTESIAN_GRASP";
   evidence["final_failure_reason"] = "NO_VALID_CARTESIAN_PATH";
-  evidence["task_accuracy"] = nlohmann::json::array({
-    {{"segment", "APPROACH"}, {"execution_result", "TASK_RESULT_SUCCESS"},
-      {"measurement_status", "AVAILABLE"}, {"path_strategy", "GLOBAL"}},
-    {{"segment", "APPROACH"}, {"execution_result", "TASK_RESULT_BACKEND_ERROR"},
-      {"measurement_status", "UNAVAILABLE"}, {"path_strategy", "GLOBAL"}}});
+  evidence["task_accuracy"] = nlohmann::json::array(
+    {
+      {{"segment", "APPROACH"}, {"execution_result", "TASK_RESULT_SUCCESS"},
+        {"measurement_status", "AVAILABLE"}, {"path_strategy", "GLOBAL"}},
+      {{"segment", "APPROACH"}, {"execution_result", "TASK_RESULT_BACKEND_ERROR"},
+        {"measurement_status", "UNAVAILABLE"}, {"path_strategy", "GLOBAL"}}});
   evidence["final_segment_planning"] = {
     {"cartesian_result", "FAILED"},
     {"cartesian_attempts", {{{"result", "FAILED"}, {"failure_reason", "collision"}}}},
     {"global_fallback_attempts", {
-      {{"result", "PLANNING_FAILED"}, {"moveit_error_code", -1}},
-      {{"result", "TRAJECTORY_INVALID"}, {"finalization_reason", "invalid_timing"}}}},
+        {{"result", "PLANNING_FAILED"}, {"moveit_error_code", -1}},
+        {{"result", "TRAJECTORY_INVALID"}, {"finalization_reason", "invalid_timing"}}}},
     {"final_planning_result", "FAILED"}, {"cartesian_failure_reason", "collision"}};
   for (std::size_t index = 0; index < 48; ++index) {
-    evidence["grasp_pose_candidates"].push_back({
-      {"candidate", index + 1}, {"tcp_pose", {{"position_xyz", {0, 0, 0.1}}}},
-      {"search_group", index == 5U ? "VERTICAL_DESCENT" : "CENTER"},
-      {"result", index < 6 ? "IK_SEED_ATTEMPTS_EXHAUSTED" : "NOT_EVALUATED"},
-      {"planning_status", "NOT_ATTEMPTED"},
-      {"transition_reason", index < 6 ? "TRAC_IK_NO_SOLUTION" : "SEARCH_STOPPED"}});
+    evidence["grasp_pose_candidates"].push_back(
+      {
+        {"candidate", index + 1}, {"tcp_pose", {{"position_xyz", {0, 0, 0.1}}}},
+        {"search_group", index == 5U ? "VERTICAL_DESCENT" : "CENTER"},
+        {"result", index < 6 ? "IK_SEED_ATTEMPTS_EXHAUSTED" : "NOT_EVALUATED"},
+        {"planning_status", "NOT_ATTEMPTED"},
+        {"transition_reason", index < 6 ? "TRAC_IK_NO_SOLUTION" : "SEARCH_STOPPED"}});
   }
   // New records carry pose metrics; keep candidate 6 above as a historical
   // group-bearing fixture to check both payload generations in the same writer.
   evidence["grasp_pose_candidates"][6].erase("search_group");
   evidence["grasp_pose_candidates"][6]["reference_grasp_tcp_distance_m"] = 0.012;
   evidence["grasp_pose_candidates"][6]["withdrawal_tilt_rad"] = 0.7;
-  evidence["pick_attempts"].push_back({
-    {"grasp_pose_candidate", 6}, {"attempt", 1}, {"stage", "IK"},
-    {"reason", "TRAC_IK_NO_SOLUTION"}, {"grasp_ik", {{"reason", "TRAC_IK_NO_SOLUTION"}}}});
-  evidence["pick_attempts"].push_back({
-    {"grasp_pose_candidate", 7}, {"attempt", 1}, {"stage", "GRASP_VALIDATION"},
-    {"reason", "final_grasp_state_collision"}, {"collision", true}});
+  evidence["pick_attempts"].push_back(
+    {
+      {"grasp_pose_candidate", 6}, {"attempt", 1}, {"stage", "IK"},
+      {"reason", "TRAC_IK_NO_SOLUTION"}, {"grasp_ik", {{"reason", "TRAC_IK_NO_SOLUTION"}}}});
+  evidence["pick_attempts"].push_back(
+    {
+      {"grasp_pose_candidate", 7}, {"attempt", 1}, {"stage", "GRASP_VALIDATION"},
+      {"reason", "final_grasp_state_collision"}, {"collision", true}});
   const auto logger = rclcpp::get_logger("motion_pick_detail_split_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     const auto accepted = capture.enqueue_pick_details(
       "pick-48", "acquisition-1", evidence.dump());
     ASSERT_EQ(accepted, 48U);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "pick-48", "acquisition-1", 7, false, evidence.dump(), accepted));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "pick-48", "acquisition-1", 7, false, evidence.dump(), accepted));
   }
   const auto details = directory / "motion_planning_details";
   ASSERT_TRUE(std::filesystem::exists(details / "pick-48_candidate_048.json"));
@@ -458,7 +580,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, SplitsAllPickCandidatesAndKeepsSummary
   std::ifstream summary_input(
     directory / "motion_planning_summaries" / "pick-48.json", std::ios::binary);
   ASSERT_TRUE(summary_input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("motion_goal_uuid"), "pick-48");
   EXPECT_EQ(summary.at("candidate_counts").at("generated"), 48);
@@ -467,7 +590,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, SplitsAllPickCandidatesAndKeepsSummary
   EXPECT_EQ(summary.at("approach_attempt_count"), 18);
   EXPECT_EQ(summary.at("approach_execution_count"), 2);
   ASSERT_EQ(summary.at("approach_execution_results").size(), 2U);
-  EXPECT_EQ(summary.at("approach_execution_results").at(1).at("execution_result"),
+  EXPECT_EQ(
+    summary.at("approach_execution_results").at(1).at("execution_result"),
     "TASK_RESULT_BACKEND_ERROR");
   EXPECT_EQ(summary.at("final_failure_stage"), "GLOBAL_FALLBACK");
   EXPECT_EQ(summary.at("final_segment_planning").at("cartesian_attempts").size(), 1U);
@@ -479,16 +603,19 @@ TEST(MotionPlanningDiagnosticCaptureTest, SplitsAllPickCandidatesAndKeepsSummary
   EXPECT_EQ(summary.at("detail_coverage").at("missing_count"), 0U);
   std::ifstream vertical_input(details / "pick-48_candidate_006.json", std::ios::binary);
   ASSERT_TRUE(vertical_input.good());
-  const auto vertical = nlohmann::json::parse(std::string(
+  const auto vertical = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(vertical_input)), std::istreambuf_iterator<char>()));
-  EXPECT_EQ(summary.at("detail_coverage").at("expected_detail_revisions")
+  EXPECT_EQ(
+    summary.at("detail_coverage").at("expected_detail_revisions")
     .at("motion_planning_details/pick-48_candidate_006.json"),
     vertical.at("detail_revision"));
   EXPECT_EQ(vertical.at("candidate").at("search_group"), "VERTICAL_DESCENT");
   EXPECT_EQ(vertical.at("attempts").at(0).at("grasp_ik").at("reason"), "TRAC_IK_NO_SOLUTION");
   std::ifstream collision_input(details / "pick-48_candidate_007.json", std::ios::binary);
   ASSERT_TRUE(collision_input.good());
-  const auto collision = nlohmann::json::parse(std::string(
+  const auto collision = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(collision_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(collision.at("attempts").at(0).at("reason"), "final_grasp_state_collision");
   EXPECT_FALSE(collision.at("candidate").contains("search_group"));
@@ -506,33 +633,39 @@ TEST(MotionPlanningDiagnosticCaptureTest, ProgressBacklogDoesNotDelayOrSuppressT
   const auto progress = nlohmann::json{
     {"planning_evidence", std::string(48U * 1024U, 'p')}}.dump();
   const auto evidence = nlohmann::json{
-    {"grasp_pose_candidates", nlohmann::json::array({
-      {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
-    {"pick_attempts", nlohmann::json::array({{
-      {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
-      {"reason", "NO_IK_SOLUTION"}}})}};
+    {"grasp_pose_candidates", nlohmann::json::array(
+        {
+          {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
+    {"pick_attempts", nlohmann::json::array(
+        {{
+          {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
+          {"reason", "NO_IK_SOLUTION"}}})}};
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     for (std::size_t index = 0; index < 16U; ++index) {
-      ASSERT_TRUE(capture.enqueue_progress(
-        "progress-backlog-" + std::to_string(index), "TASK_TYPE_PLACE", progress));
+      ASSERT_TRUE(
+        capture.enqueue_progress(
+          "progress-backlog-" + std::to_string(index), "TASK_TYPE_PLACE", progress));
     }
     const auto accepted = capture.enqueue_pick_details(
       "pick-after-backlog", "acquisition-backlog", evidence.dump());
     ASSERT_EQ(accepted, 1U);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "pick-after-backlog", "acquisition-backlog", 3, false, evidence.dump(), accepted));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "pick-after-backlog", "acquisition-backlog", 3, false, evidence.dump(), accepted));
   }
   std::ifstream summary_input(
     directory / "motion_planning_summaries" / "pick-after-backlog.json");
   ASSERT_TRUE(summary_input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_PATH_OBSTRUCTED");
   EXPECT_EQ(summary.at("detail_coverage").at("status"), "persisted");
   EXPECT_EQ(summary.at("detail_coverage").at("persisted_count"), 1U);
-  EXPECT_TRUE(std::filesystem::is_regular_file(
-    directory / "motion_planning_details" / "pick-after-backlog_candidate_001.json"));
+  EXPECT_TRUE(
+    std::filesystem::is_regular_file(
+      directory / "motion_planning_details" / "pick-after-backlog_candidate_001.json"));
   std::filesystem::remove_all(directory);
 }
 
@@ -544,9 +677,10 @@ TEST(MotionPlanningDiagnosticCaptureTest, IdenticalProgressDoesNotRewritePersist
   auto evidence = nlohmann::json::object();
   evidence["grasp_pose_candidates"] = nlohmann::json::array();
   for (std::size_t index = 0; index < 48U; ++index) {
-    evidence["grasp_pose_candidates"].push_back({
-      {"candidate", index + 1U}, {"result", "NOT_EVALUATED"},
-      {"transition_reason", "SEARCH_BUDGET_EXHAUSTED"}});
+    evidence["grasp_pose_candidates"].push_back(
+      {
+        {"candidate", index + 1U}, {"result", "NOT_EVALUATED"},
+        {"transition_reason", "SEARCH_BUDGET_EXHAUSTED"}});
   }
   const auto logger = rclcpp::get_logger("motion_pick_detail_dedup_test");
   const auto detail_path = directory / "motion_planning_details" /
@@ -580,27 +714,32 @@ TEST(MotionPlanningDiagnosticCaptureTest, OversizedDetailDoesNotPreventSummary)
     ("motion_pick_detail_limit_" + std::to_string(
       std::chrono::steady_clock::now().time_since_epoch().count()));
   auto evidence = nlohmann::json::object();
-  evidence["grasp_pose_candidates"] = nlohmann::json::array({
-    {{"candidate", 1}, {"result", "NOT_EVALUATED"}},
-    {{"candidate", 2}, {"result", "NOT_EVALUATED"},
-      {"diagnostic_padding", std::string(70U * 1024U, 'x')}}});
+  evidence["grasp_pose_candidates"] = nlohmann::json::array(
+    {
+      {{"candidate", 1}, {"result", "NOT_EVALUATED"}},
+      {{"candidate", 2}, {"result", "NOT_EVALUATED"},
+        {"diagnostic_padding", std::string(70U * 1024U, 'x')}}});
   const auto logger = rclcpp::get_logger("motion_pick_detail_limit_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     const auto accepted = capture.enqueue_pick_details(
       "pick-limit", "acquisition-2", evidence.dump());
     EXPECT_EQ(accepted, 1U);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "pick-limit", "acquisition-2", 8, false, evidence.dump(), accepted));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "pick-limit", "acquisition-2", 8, false, evidence.dump(), accepted));
   }
-  EXPECT_TRUE(std::filesystem::exists(
-    directory / "motion_planning_details" / "pick-limit_candidate_001.json"));
-  EXPECT_FALSE(std::filesystem::exists(
-    directory / "motion_planning_details" / "pick-limit_candidate_002.json"));
+  EXPECT_TRUE(
+    std::filesystem::exists(
+      directory / "motion_planning_details" / "pick-limit_candidate_001.json"));
+  EXPECT_FALSE(
+    std::filesystem::exists(
+      directory / "motion_planning_details" / "pick-limit_candidate_002.json"));
   std::ifstream summary_input(
     directory / "motion_planning_summaries" / "pick-limit.json", std::ios::binary);
   ASSERT_TRUE(summary_input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("detail_coverage").at("missing_count"), 1);
   EXPECT_EQ(summary.at("detail_coverage").at("status"), "missing");
@@ -614,39 +753,46 @@ TEST(MotionPlanningDiagnosticCaptureTest, CandidateTransitionMergesPriorFailureE
     ("motion_pick_history_" + std::to_string(
       std::chrono::steady_clock::now().time_since_epoch().count()));
   const auto evidence = nlohmann::json{
-    {"candidate_attempt_history", nlohmann::json::array({{
-      {"generated_candidate_count", 2}, {"evaluated_candidate_count", 1},
-      {"approach_global_planning_call_count", 8},
-      {"rejections", {{"fk", 2}, {"collision_or_validity", 3}}},
-      {"grasp_pose_candidates", nlohmann::json::array({
-        {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"},
-          {"transition_reason", "TRAC_IK_NO_SOLUTION"}},
-        {{"candidate", 2}, {"result", "NOT_EVALUATED"}}})},
-      {"pick_attempts", nlohmann::json::array({{
-        {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
-        {"reason", "TRAC_IK_NO_SOLUTION"}}})}}})},
+    {"candidate_attempt_history", nlohmann::json::array(
+        {{
+          {"generated_candidate_count", 2}, {"evaluated_candidate_count", 1},
+          {"approach_global_planning_call_count", 8},
+          {"rejections", {{"fk", 2}, {"collision_or_validity", 3}}},
+          {"grasp_pose_candidates", nlohmann::json::array(
+              {
+                {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"},
+                  {"transition_reason", "TRAC_IK_NO_SOLUTION"}},
+                {{"candidate", 2}, {"result", "NOT_EVALUATED"}}})},
+          {"pick_attempts", nlohmann::json::array(
+              {{
+                {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
+                {"reason", "TRAC_IK_NO_SOLUTION"}}})}}})},
     {"approach_global_planning_call_count", 10},
     {"rejections", {{"fk", 1}, {"collision_or_validity", 4}}},
-    {"grasp_pose_candidates", nlohmann::json::array({
-      {{"candidate", 1}, {"result", "NOT_EVALUATED"}},
-      {{"candidate", 2}, {"result", "APPROACH_PLANNING_FAILED"},
-        {"transition_reason", "APPROACH_NO_PATH"}}})},
-    {"pick_attempts", nlohmann::json::array({{
-      {"grasp_pose_candidate", 2}, {"attempt", 1}, {"stage", "APPROACH"},
-      {"reason", "APPROACH_NO_PATH"}}})}};
+    {"grasp_pose_candidates", nlohmann::json::array(
+        {
+          {{"candidate", 1}, {"result", "NOT_EVALUATED"}},
+          {{"candidate", 2}, {"result", "APPROACH_PLANNING_FAILED"},
+            {"transition_reason", "APPROACH_NO_PATH"}}})},
+    {"pick_attempts", nlohmann::json::array(
+        {{
+          {"grasp_pose_candidate", 2}, {"attempt", 1}, {"stage", "APPROACH"},
+          {"reason", "APPROACH_NO_PATH"}}})}};
   const auto logger = rclcpp::get_logger("motion_pick_history_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     const auto accepted = capture.enqueue_pick_details(
       "pick-history", "acquisition-history", evidence.dump());
     ASSERT_EQ(accepted, 2U);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "pick-history", "acquisition-history", 3, false, evidence.dump(), accepted));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "pick-history", "acquisition-history", 3, false, evidence.dump(), accepted));
   }
   std::ifstream prior_detail_input(
     directory / "motion_planning_details" / "pick-history_candidate_001.json");
   ASSERT_TRUE(prior_detail_input.good());
-  const auto prior_detail = nlohmann::json::parse(std::string(
+  const auto prior_detail = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(prior_detail_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(prior_detail.at("candidate").at("result"), "IK_SEED_ATTEMPTS_EXHAUSTED");
   ASSERT_EQ(prior_detail.at("attempts").size(), 1U);
@@ -654,7 +800,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, CandidateTransitionMergesPriorFailureE
   std::ifstream summary_input(
     directory / "motion_planning_summaries" / "pick-history.json");
   ASSERT_TRUE(summary_input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("candidate_counts").at("evaluated"), 2U);
   EXPECT_EQ(summary.at("approach_attempt_count"), 18U);
@@ -665,7 +812,9 @@ TEST(MotionPlanningDiagnosticCaptureTest, CandidateTransitionMergesPriorFailureE
   std::filesystem::remove_all(directory);
 }
 
-TEST(MotionPlanningDiagnosticCaptureTest, CandidateReevaluationKeepsNewAttemptAndAvoidsSnapshotDoubleCount)
+TEST(
+  MotionPlanningDiagnosticCaptureTest,
+  CandidateReevaluationKeepsNewAttemptAndAvoidsSnapshotDoubleCount)
 {
   const auto directory = std::filesystem::temp_directory_path() /
     ("motion_pick_reevaluation_" + std::to_string(
@@ -673,35 +822,42 @@ TEST(MotionPlanningDiagnosticCaptureTest, CandidateReevaluationKeepsNewAttemptAn
   const auto first_evaluation = nlohmann::json{
     {"evaluation_sequence", 1}, {"generated_candidate_count", 1},
     {"evaluated_candidate_count", 1}, {"approach_global_planning_call_count", 18},
-    {"grasp_pose_candidates", nlohmann::json::array({
-      {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
-    {"pick_attempts", nlohmann::json::array({{
-      {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
-      {"reason", "TRAC_IK_NO_SOLUTION"}}})}};
+    {"grasp_pose_candidates", nlohmann::json::array(
+        {
+          {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
+    {"pick_attempts", nlohmann::json::array(
+        {{
+          {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
+          {"reason", "TRAC_IK_NO_SOLUTION"}}})}};
   const auto second_evaluation = nlohmann::json{
     {"evaluation_sequence", 2}, {"generated_candidate_count", 1},
     {"evaluated_candidate_count", 1}, {"approach_global_planning_call_count", 18},
-    {"grasp_pose_candidates", nlohmann::json::array({
-      {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
-    {"pick_attempts", nlohmann::json::array({{
-      {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
-      {"reason", "TRAC_IK_NO_SOLUTION"}}})}};
+    {"grasp_pose_candidates", nlohmann::json::array(
+        {
+          {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
+    {"pick_attempts", nlohmann::json::array(
+        {{
+          {"grasp_pose_candidate", 1}, {"attempt", 1}, {"stage", "IK"},
+          {"reason", "TRAC_IK_NO_SOLUTION"}}})}};
   auto evidence = second_evaluation;
-  evidence["candidate_attempt_history"] = nlohmann::json::array({
-    first_evaluation, first_evaluation});
+  evidence["candidate_attempt_history"] = nlohmann::json::array(
+    {
+      first_evaluation, first_evaluation});
   const auto logger = rclcpp::get_logger("motion_pick_reevaluation_test");
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     const auto accepted = capture.enqueue_pick_details(
       "pick-reevaluated", "acquisition-reevaluation", evidence.dump());
     ASSERT_EQ(accepted, 1U);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "pick-reevaluated", "acquisition-reevaluation", 3, false, evidence.dump(), accepted));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "pick-reevaluated", "acquisition-reevaluation", 3, false, evidence.dump(), accepted));
   }
   std::ifstream detail_input(
     directory / "motion_planning_details" / "pick-reevaluated_candidate_001.json");
   ASSERT_TRUE(detail_input.good());
-  const auto detail = nlohmann::json::parse(std::string(
+  const auto detail = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(detail_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(detail.at("detail_revision"), 1U);
   ASSERT_EQ(detail.at("attempts").size(), 2U);
@@ -710,7 +866,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, CandidateReevaluationKeepsNewAttemptAn
   std::ifstream summary_input(
     directory / "motion_planning_summaries" / "pick-reevaluated.json");
   ASSERT_TRUE(summary_input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("candidate_counts").at("generated"), 1U);
   EXPECT_EQ(summary.at("candidate_counts").at("evaluated"), 1U);
@@ -728,9 +885,10 @@ TEST(MotionPlanningDiagnosticCaptureTest, FullDetailQueueLeavesTerminalSummaryAv
   auto evidence = nlohmann::json::object();
   evidence["grasp_pose_candidates"] = nlohmann::json::array();
   for (std::size_t index = 0; index < 130U; ++index) {
-    evidence["grasp_pose_candidates"].push_back({
-      {"candidate", index + 1U}, {"result", "NOT_EVALUATED"},
-      {"transition_reason", "SEARCH_BUDGET_EXHAUSTED"}});
+    evidence["grasp_pose_candidates"].push_back(
+      {
+        {"candidate", index + 1U}, {"result", "NOT_EVALUATED"},
+        {"transition_reason", "SEARCH_BUDGET_EXHAUSTED"}});
   }
   const auto logger = rclcpp::get_logger("motion_pick_queue_full_test");
   {
@@ -738,13 +896,15 @@ TEST(MotionPlanningDiagnosticCaptureTest, FullDetailQueueLeavesTerminalSummaryAv
     const auto accepted = capture.enqueue_pick_details(
       "pick-queue", "acquisition-queue", evidence.dump());
     EXPECT_LT(accepted, 130U);
-    ASSERT_TRUE(capture.enqueue_pick_summary(
-      "pick-queue", "acquisition-queue", 5, false, evidence.dump(), accepted));
+    ASSERT_TRUE(
+      capture.enqueue_pick_summary(
+        "pick-queue", "acquisition-queue", 5, false, evidence.dump(), accepted));
   }
   std::ifstream summary_input(
     directory / "motion_planning_summaries" / "pick-queue.json", std::ios::binary);
   ASSERT_TRUE(summary_input.good());
-  const auto summary = nlohmann::json::parse(std::string(
+  const auto summary = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_CANCELED");
   EXPECT_EQ(summary.at("candidate_counts").at("generated"), 130);
@@ -754,7 +914,9 @@ TEST(MotionPlanningDiagnosticCaptureTest, FullDetailQueueLeavesTerminalSummaryAv
   std::filesystem::remove_all(directory);
 }
 
-TEST(MotionPlanningDiagnosticCaptureTest, TerminalOutcomesRemainDistinctAndCandidateAttemptsAreScoped)
+TEST(
+  MotionPlanningDiagnosticCaptureTest,
+  TerminalOutcomesRemainDistinctAndCandidateAttemptsAreScoped)
 {
   const auto directory = std::filesystem::temp_directory_path() /
     ("motion_pick_terminals_" + std::to_string(
@@ -767,16 +929,18 @@ TEST(MotionPlanningDiagnosticCaptureTest, TerminalOutcomesRemainDistinctAndCandi
   {
     MotionPlanningDiagnosticCapture capture(directory.string(), logger);
     for (const auto & result : results) {
-      ASSERT_TRUE(capture.enqueue_pick_summary(
-        result.first, "shared-acquisition", result.second, result.first == "safety",
-        empty, 0U));
+      ASSERT_TRUE(
+        capture.enqueue_pick_summary(
+          result.first, "shared-acquisition", result.second, result.first == "safety",
+          empty, 0U));
     }
   }
   for (const auto & result : results) {
     std::ifstream input(
       directory / "motion_planning_summaries" / (result.first + ".json"), std::ios::binary);
     ASSERT_TRUE(input.good());
-    const auto summary = nlohmann::json::parse(std::string(
+    const auto summary = nlohmann::json::parse(
+      std::string(
         (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
     EXPECT_EQ(summary.at("motion_goal_uuid"), result.first);
     EXPECT_EQ(summary.at("task_executor_result_code_value"), result.second);

@@ -54,9 +54,12 @@ class CartesianSlideIK : public kinematics::KinematicsBase
 public:
   CartesianSlideIK()
   {
-    setValues("robot_description", "arm", "base_link", std::vector<std::string>{"sf_grasp_tcp"}, 0.01);
+    setValues(
+      "robot_description", "arm", "base_link", std::vector<std::string>{"sf_grasp_tcp"},
+      0.01);
   }
-  bool getPositionIK(const geometry_msgs::msg::Pose & pose, const std::vector<double> &,
+  bool getPositionIK(
+    const geometry_msgs::msg::Pose & pose, const std::vector<double> &,
     std::vector<double> & solution, moveit_msgs::msg::MoveItErrorCodes & error,
     const kinematics::KinematicsQueryOptions &) const override
   {
@@ -64,17 +67,20 @@ public:
     error.val = moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
     return true;
   }
-  bool searchPositionIK(const geometry_msgs::msg::Pose & pose,
+  bool searchPositionIK(
+    const geometry_msgs::msg::Pose & pose,
     const std::vector<double> & seed, double, std::vector<double> & solution,
     moveit_msgs::msg::MoveItErrorCodes & error,
     const kinematics::KinematicsQueryOptions & options) const override
   {return getPositionIK(pose, seed, solution, error, options);}
-  bool searchPositionIK(const geometry_msgs::msg::Pose & pose,
+  bool searchPositionIK(
+    const geometry_msgs::msg::Pose & pose,
     const std::vector<double> & seed, double timeout, const std::vector<double> &,
     std::vector<double> & solution, moveit_msgs::msg::MoveItErrorCodes & error,
     const kinematics::KinematicsQueryOptions & options) const override
   {return searchPositionIK(pose, seed, timeout, solution, error, options);}
-  bool searchPositionIK(const geometry_msgs::msg::Pose & pose,
+  bool searchPositionIK(
+    const geometry_msgs::msg::Pose & pose,
     const std::vector<double> & seed, double timeout, std::vector<double> & solution,
     const IKCallbackFn & callback, moveit_msgs::msg::MoveItErrorCodes & error,
     const kinematics::KinematicsQueryOptions & options) const override
@@ -83,13 +89,15 @@ public:
     if (callback) {callback(pose, solution, error);}
     return error.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
   }
-  bool searchPositionIK(const geometry_msgs::msg::Pose & pose,
+  bool searchPositionIK(
+    const geometry_msgs::msg::Pose & pose,
     const std::vector<double> & seed, double timeout, const std::vector<double> &,
     std::vector<double> & solution, const IKCallbackFn & callback,
     moveit_msgs::msg::MoveItErrorCodes & error,
     const kinematics::KinematicsQueryOptions & options) const override
   {return searchPositionIK(pose, seed, timeout, solution, callback, error, options);}
-  bool getPositionFK(const std::vector<std::string> &, const std::vector<double> & joints,
+  bool getPositionFK(
+    const std::vector<std::string> &, const std::vector<double> & joints,
     std::vector<geometry_msgs::msg::Pose> & poses) const override
   {
     geometry_msgs::msg::Pose pose;
@@ -102,6 +110,7 @@ public:
   }
   const std::vector<std::string> & getJointNames() const override {return joints_;}
   const std::vector<std::string> & getLinkNames() const override {return links_;}
+
 private:
   const std::vector<std::string> joints_{
     "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"};
@@ -268,10 +277,11 @@ protected:
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
       } else {
-        pump_until([this, previous_generation]() {
-          std::lock_guard<std::mutex> lock(transport_->mutex_);
-          return transport_->joint_state_generation_ > previous_generation;
-        });
+        pump_until(
+          [this, previous_generation]() {
+            std::lock_guard<std::mutex> lock(transport_->mutex_);
+            return transport_->joint_state_generation_ > previous_generation;
+          });
       }
     } else {
       for (int index = 0; index < 20; ++index) {
@@ -395,7 +405,6 @@ protected:
   }
 
 
-
   void clear_commands()
   {
     std::lock_guard<std::mutex> lock(command_mutex_);
@@ -434,19 +443,20 @@ TEST_F(IsaacRosMotionTransportTest, StoredPlaceWaypointTrajectoryLoadsOnceAndPla
     {"schema_version", 1}, {"robot_model", "m0609_robotiq_2f85"},
     {"planning_group", "arm"}, {"joint_names", joints},
     {"planning_config", {{"planner_id", "RRTConnect"},
-      {"velocity_scaling", 0.1}, {"acceleration_scaling", 0.1},
-      {"planned_velocity_scale", 0.1}, {"planned_acceleration_scale", 0.1}}},
+        {"velocity_scaling", 0.1}, {"acceleration_scaling", 0.1},
+        {"planned_velocity_scale", 0.1}, {"planned_acceleration_scale", 0.1}}},
     {"home_joint_positions", home},
     {"object_target_pose", {0.5, 0.25, 0.3675, 0.7071067811865476, 0.0, 0.0, 0.7071067811865476}},
     {"approach_tcp_pose", {0.5, 0.25, 0.3825, 0.7071067811865476, 0.0, 0.0, 0.7071067811865476}},
-    {"points", nlohmann::json::array({
-      {{"positions", home}, {"velocities", std::vector<double>(6, 0.0)},
-       {"accelerations", std::vector<double>(6, 0.0)}, {"effort", nlohmann::json::array()},
-       {"time_sec", 0}, {"time_nanosec", 0}},
-      {{"positions", std::vector<double>(6, 0.2)},
-       {"velocities", std::vector<double>(6, 0.1)},
-       {"accelerations", std::vector<double>(6, 0.0)}, {"effort", nlohmann::json::array()},
-       {"time_sec", 2}, {"time_nanosec", 0}}})}};
+    {"points", nlohmann::json::array(
+          {
+            {{"positions", home}, {"velocities", std::vector<double>(6, 0.0)},
+              {"accelerations", std::vector<double>(6, 0.0)}, {"effort", nlohmann::json::array()},
+              {"time_sec", 0}, {"time_nanosec", 0}},
+            {{"positions", std::vector<double>(6, 0.2)},
+              {"velocities", std::vector<double>(6, 0.1)},
+              {"accelerations", std::vector<double>(6, 0.0)}, {"effort", nlohmann::json::array()},
+              {"time_sec", 2}, {"time_nanosec", 0}}})}};
   std::ofstream(path) << artifact.dump();
   auto loaded = std::make_unique<IsaacRosMotionTransport>(
     node_, joints, home, std::vector<double>(6, -0.1), false, false, "",
@@ -470,12 +480,14 @@ TEST_F(IsaacRosMotionTransportTest, StoredPlaceWaypointTrajectoryLoadsOnceAndPla
   request.approach_target.pose.position.z = 0.3825;
   for (int cycle = 0; cycle < 2; ++cycle) {
     NormalizedTrajectoryPlan plan;
-    EXPECT_EQ(loaded->plan_normalized(request, plan),
+    EXPECT_EQ(
+      loaded->plan_normalized(request, plan),
       arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS);
     ASSERT_EQ(plan.trajectory.points.size(), 2U);
     EXPECT_DOUBLE_EQ(plan.trajectory.points.back().time_from_start.sec, 2);
   }
-  EXPECT_EQ(loaded->generate_place_waypoint_approach(request, path.string()),
+  EXPECT_EQ(
+    loaded->generate_place_waypoint_approach(request, path.string()),
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
   EXPECT_EQ(nlohmann::json::parse(std::ifstream(path)), artifact);
   std::ofstream(path, std::ios::trunc) << "{broken";
@@ -485,7 +497,8 @@ TEST_F(IsaacRosMotionTransportTest, StoredPlaceWaypointTrajectoryLoadsOnceAndPla
     0.03, 0.1, 0.1, 5.0, 1.0, 5.0, false, "", "", "RRTConnect", path.string());
   EXPECT_FALSE(invalid->cached_place_waypoint_approach_.has_value());
   NormalizedTrajectoryPlan rejected;
-  EXPECT_EQ(invalid->plan_normalized(request, rejected),
+  EXPECT_EQ(
+    invalid->plan_normalized(request, rejected),
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED);
   std::filesystem::remove_all(directory);
 }
@@ -503,9 +516,11 @@ TEST_F(IsaacRosMotionTransportTest, InterruptedRequestIsDiscardedBeforePlanning)
     };
 
   EXPECT_FALSE(transport_->submit_normalized(request));
-  EXPECT_EQ(transport_->normalized_failure_result(),
+  EXPECT_EQ(
+    transport_->normalized_failure_result(),
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED);
-  EXPECT_NE(transport_->last_pick_candidate_evaluation().find(
+  EXPECT_NE(
+    transport_->last_pick_candidate_evaluation().find(
       "\"interrupted_result_discarded\":true"), std::string::npos);
 }
 
@@ -858,7 +873,8 @@ TEST_F(
   urdf += "</geometry></collision></link><joint name='tcp_fixed' type='fixed'>";
   urdf += "<parent link='link_6'/><child link='sf_grasp_tcp'/></joint></robot>";
   node_->declare_parameter<std::string>("robot_description", urdf);
-  node_->declare_parameter<std::string>("robot_description_semantic",
+  node_->declare_parameter<std::string>(
+    "robot_description_semantic",
     "<robot name='slide'><group name='arm'><chain base_link='base_link' "
     "tip_link='sf_grasp_tcp'/></group></robot>");
 
@@ -876,8 +892,8 @@ TEST_F(
       planning_requests.push_back(*goal->get_goal());
       auto result = std::make_shared<MoveGroupAction::Result>();
       result->error_code.val = goal->get_goal()->planning_options.planning_scene_diff.
-        world.collision_objects.empty() ? default_planner_code :
-        moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
+      world.collision_objects.empty() ? default_planner_code :
+      moveit_msgs::msg::MoveItErrorCodes::SUCCESS;
       result->planned_trajectory.joint_trajectory.joint_names = arm_joint_names();
       // Follow the planner's requested joint goal, including the grasp depth
       // correction, rather than returning an obsolete hard-coded endpoint.
@@ -897,7 +913,8 @@ TEST_F(
       result->planned_trajectory.joint_trajectory.points = {start, finish};
       goal->succeed(result);
     });
-  auto group_future = std::async(std::launch::async, [&]() {
+  auto group_future = std::async(
+    std::launch::async, [&]() {
       return std::make_unique<moveit::planning_interface::MoveGroupInterface>(
         node_, "arm", std::shared_ptr<tf2_ros::Buffer>(), rclcpp::Duration::from_seconds(3.0));
     });
@@ -1009,7 +1026,8 @@ TEST_F(
   request.insertion_axis_tcp.z = -1.0;
   request.pick_grasp_backoff_m = 0.019;
   const auto submit = [&]() {
-      auto submitted = std::async(std::launch::async, [&]() {
+      auto submitted = std::async(
+        std::launch::async, [&]() {
           return transport_->submit_normalized(request);
         });
       while (submitted.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
@@ -1036,7 +1054,8 @@ TEST_F(
   const auto reference = nlohmann::json::parse(capture_reference_payloads().front());
   ASSERT_TRUE(reference.contains("object_position"));
   EXPECT_DOUBLE_EQ(reference["object_position"][2], request.object_pose.pose.position.z);
-  EXPECT_NEAR(reference["position"][2].get<double>() - reference["object_position"][2].get<double>(),
+  EXPECT_NEAR(
+    reference["position"][2].get<double>() - reference["object_position"][2].get<double>(),
     request.pick_grasp_backoff_m, 1e-8);
 
   pump_until([&]() {return command_count() > 0U;});
@@ -1067,11 +1086,14 @@ TEST_F(
   const auto png_count = [&]() {
       std::size_t count = 0U;
       if (std::filesystem::exists(snapshots_directory)) {
-        for (const auto & entry : std::filesystem::recursive_directory_iterator(snapshots_directory)) {
+        for (const auto & entry :
+          std::filesystem::recursive_directory_iterator(snapshots_directory))
+        {
           if (entry.is_regular_file() && entry.path().extension() == ".png") {
             ++count;
             EXPECT_EQ(entry.path().parent_path(), snapshots_directory / "01");
-            EXPECT_TRUE(entry.path().filename() == "occupancy-01.png" ||
+            EXPECT_TRUE(
+              entry.path().filename() == "occupancy-01.png" ||
               entry.path().filename() == "occupancy-02.png");
             EXPECT_FALSE(cv::imread(entry.path().string(), cv::IMREAD_COLOR).empty());
           }
@@ -1090,9 +1112,11 @@ TEST_F(
   request.material_candidates.front().candidate_id = request.vision_candidate_id;
   EXPECT_TRUE(submit());
   pump_until([&]() {return png_count() == 2U;});
-  EXPECT_TRUE(std::filesystem::exists(
+  EXPECT_TRUE(
+    std::filesystem::exists(
       snapshots_directory / "01" / "occupancy-01.png"));
-  EXPECT_TRUE(std::filesystem::exists(
+  EXPECT_TRUE(
+    std::filesystem::exists(
       snapshots_directory / "01" / "occupancy-02.png"));
   EXPECT_FALSE(std::filesystem::exists(diagnostic_directory / "motion_planning_records"));
   if (std::filesystem::exists(diagnostic_directory)) {
@@ -1204,8 +1228,8 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
       "GRASP_IK_NO_SOLUTION", 6U, false},
     {"stale_solver_error", Codes::NO_IK_SOLUTION, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
       "GRASP_IK_NO_SOLUTION", 6U, false},
-    {"budget", Codes::NO_IK_SOLUTION, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
-      "SEARCH_BUDGET_EXHAUSTED", 2U, false},
+    {"slow_search", Codes::NO_IK_SOLUTION, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
+      "GRASP_IK_NO_SOLUTION", 6U, false},
     {"single_pose_no_solution", Codes::NO_IK_SOLUTION, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
       "GRASP_IK_NO_SOLUTION", 2U, false},
     {"timeout", Codes::TIMED_OUT, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
@@ -1220,8 +1244,8 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
       "GRASP_VALIDATION_FAILED", 2U, false},
     {"grasp_collision", Codes::SUCCESS, Codes::SUCCESS, 0, 0, 1, Codes::SUCCESS,
       "GRASP_COLLISION", 2U, false},
-      {"grasp_collision_vision", Codes::SUCCESS, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
-        "GRASP_COLLISION", 2U, false},
+    {"grasp_collision_vision", Codes::SUCCESS, Codes::SUCCESS, 0, 0, 0, Codes::SUCCESS,
+      "GRASP_COLLISION", 2U, false},
     {"approach_ik", Codes::SUCCESS, Codes::NO_IK_SOLUTION, 0, 0, 0, Codes::SUCCESS,
       "APPROACH_IK_FAILED", 2U, false},
     {"approach_fk", Codes::SUCCESS, Codes::SUCCESS, 0, 0.1, 0, Codes::SUCCESS,
@@ -1301,7 +1325,7 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
         if (solver->grasp_seeds.size() > 1U) {
           previous_snapshot = nlohmann::json::parse(transport_->last_pick_candidate_evaluation());
         }
-        if (std::string(test.name) == "budget" && solver->grasp_seeds.size() == 2U) {
+        if (std::string(test.name) == "slow_search" && solver->grasp_seeds.size() == 2U) {
           std::this_thread::sleep_for(std::chrono::milliseconds(600));
         }
       };
@@ -1314,14 +1338,15 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
     transport_->begin_pick_search();
     transport_->pick_grasp_pose_candidate_limit_ =
       std::string(test.name) == "single_pose_no_solution" ? 1U : 3U;
-    transport_->pick_search_budget_s_ = std::string(test.name) == "budget" ? 0.5 : 100.0;
     // Old same-action collision evidence must not influence an unrelated Pose.
     transport_->pick_collision_feedback_goal_uuid_ = request.motion_goal_uuid;
     transport_->pick_collision_feedback_ = {{"link_4", "old_fixture", "old_stage",
       false, 0U, 99U, 1U}};
     auto submitted = std::async(
       std::launch::async, [&]() {
-        auto shared_transport = std::shared_ptr<IsaacMotionTransport>(transport_.get(), [](auto *) {});
+        auto shared_transport = std::shared_ptr<IsaacMotionTransport>(
+          transport_.get(), [](auto *) {
+          });
         IsaacMotionBackend backend(shared_transport);
         NormalizedTrajectoryPlan plan;
         return backend.plan_normalized(request, plan);
@@ -1370,22 +1395,14 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
       continue;
     }
     ASSERT_EQ(attempts.size(), test.attempts) << record.dump();
-    if (std::string(test.name) == "budget") {
-      EXPECT_EQ(record.at("candidate_search_termination_reason"), "SEARCH_BUDGET_EXHAUSTED");
-      EXPECT_EQ(record.at("ik_termination_reason"), "SEARCH_BUDGET_EXHAUSTED");
-      EXPECT_EQ(attempts.back().at("search_evaluation"), test.evaluation);
-      EXPECT_EQ(record.at("grasp_pose_candidates")[0].at("result"), "SEED_DEFERRED");
-      EXPECT_EQ(record.at("grasp_pose_candidates")[0].at("transition_reason"),
-        "SEARCH_BUDGET_EXHAUSTED");
-      EXPECT_EQ(transport_->normalized_failure_result(),
-        arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED);
-      continue;
-    }
     EXPECT_EQ(attempts.front().at("search_evaluation"), test.evaluation);
     if (selected) {
-      EXPECT_EQ(transport_->normalized_failure_result(),
+      EXPECT_EQ(
+        transport_->normalized_failure_result(),
         arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE);
-      EXPECT_EQ(record.at("candidate_search_termination_reason"), "EXECUTABLE_APPROACH_PLAN_SELECTED");
+      EXPECT_EQ(
+        record.at(
+          "candidate_search_termination_reason"), "EXECUTABLE_APPROACH_PLAN_SELECTED");
       EXPECT_EQ(record.at("grasp_pose_candidates")[0].at("result"), "PLANNED_SELECTED");
       continue;
     }
@@ -1410,8 +1427,8 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
     if (solver->unset_error_after_first) {
       EXPECT_EQ(attempts[1].at("search_evaluation"), "GRASP_IK_FAILED");
       EXPECT_EQ(attempts[1].at("grasp_ik").at("moveit_error_code"), Codes::FAILURE);
-      const std::vector<int> expected_poses{1, 2, 2, 3, 3, 1};
-      const std::vector<int> expected_seeds{1, 1, 2, 1, 2, 2};
+      const std::vector<int> expected_poses{1, 2, 3, 1, 2, 3};
+      const std::vector<int> expected_seeds{1, 1, 1, 2, 2, 2};
       for (std::size_t i = 0; i < attempts.size(); ++i) {
         EXPECT_EQ(attempts[i].at("grasp_pose_candidate"), expected_poses[i]);
         EXPECT_EQ(attempts[i].at("ik_seed_attempt"), expected_seeds[i]);
@@ -1691,9 +1708,12 @@ TEST_F(IsaacRosMotionTransportTest, TimedPickTrajectoryStallCancelsWorkerAndPubl
   }
 
   EXPECT_EQ(completion.wait_for(std::chrono::milliseconds(50)), std::future_status::ready);
-  pump_until([this, initial_command_count]() {
-    return command_count() > initial_command_count && last_command() == std::vector<double>(6, 0.0);
-  });
+  pump_until(
+    [this, initial_command_count]() {
+      return command_count() > initial_command_count && last_command() == std::vector<double>(
+        6,
+        0.0);
+    });
   EXPECT_EQ(last_command(), measured);
 
   for (int index = 0; index < 35 &&
@@ -1737,10 +1757,11 @@ TEST_F(IsaacRosMotionTransportTest, DirectMotionFailsWhenFreshFeedbackStopsProgr
 
   ASSERT_EQ(completion.wait_for(std::chrono::seconds(1)), std::future_status::ready);
   EXPECT_EQ(completion.get(), MotionCompletionOutcome::JOINT_PROGRESS_STALLED);
-  pump_until([this, initial_command_count]() {
-    return command_count() > initial_command_count &&
-           last_command() == std::vector<double>(6, 0.0);
-  });
+  pump_until(
+    [this, initial_command_count]() {
+      return command_count() > initial_command_count &&
+      last_command() == std::vector<double>(6, 0.0);
+    });
   EXPECT_EQ(last_command(), std::vector<double>(6, 0.0));
 }
 
@@ -1804,12 +1825,12 @@ TEST_F(IsaacRosMotionTransportTest, FeedbackGapWarnsAndResumesMeasuredCompletion
     std::count_if(
       captured_logs.begin(), captured_logs.end(), [](const CapturedLog & log) {
         return log.severity == RCUTILS_LOG_SEVERITY_WARN &&
-               log.format.find("Motion joint feedback observation gap") != std::string::npos;
+        log.format.find("Motion joint feedback observation gap") != std::string::npos;
       }), 1);
   const auto gap_warning = std::find_if(
     captured_logs.begin(), captured_logs.end(), [](const CapturedLog & log) {
       return log.severity == RCUTILS_LOG_SEVERITY_WARN &&
-             log.format.find("Motion joint feedback observation gap") != std::string::npos;
+      log.format.find("Motion joint feedback observation gap") != std::string::npos;
     });
   ASSERT_NE(gap_warning, captured_logs.end());
   const auto elapsed_offset = gap_warning->format.find("elapsed_ms=");
@@ -1827,9 +1848,10 @@ TEST_F(IsaacRosMotionTransportTest, FeedbackGapWarnsAndResumesMeasuredCompletion
 
 TEST_F(IsaacRosMotionTransportTest, MissingInitialFeedbackWarnsOnceAfterExecutionWaitStarts)
 {
-  pump_until([this]() {
-    return transport_->joint_command_publisher_->get_subscription_count() > 0U;
-  });
+  pump_until(
+    [this]() {
+      return transport_->joint_command_publisher_->get_subscription_count() > 0U;
+    });
   {
     std::lock_guard<std::mutex> lock(transport_->mutex_);
     transport_->active_motion_task_type_ = MotionTaskType::TASK_TYPE_GO_HOME;
@@ -1847,12 +1869,12 @@ TEST_F(IsaacRosMotionTransportTest, MissingInitialFeedbackWarnsOnceAfterExecutio
     std::count_if(
       captured_logs.begin(), captured_logs.end(), [](const CapturedLog & log) {
         return log.severity == RCUTILS_LOG_SEVERITY_WARN &&
-               log.format.find("Motion joint feedback observation gap") != std::string::npos;
+        log.format.find("Motion joint feedback observation gap") != std::string::npos;
       }), 1);
   const auto gap_warning = std::find_if(
     captured_logs.begin(), captured_logs.end(), [](const CapturedLog & log) {
       return log.severity == RCUTILS_LOG_SEVERITY_WARN &&
-             log.format.find("Motion joint feedback observation gap") != std::string::npos;
+      log.format.find("Motion joint feedback observation gap") != std::string::npos;
     });
   ASSERT_NE(gap_warning, captured_logs.end());
   const auto elapsed_offset = gap_warning->format.find("elapsed_ms=");
@@ -2004,7 +2026,8 @@ TEST_F(IsaacRosMotionTransportTest, GripperStatusLogsOnlySemanticChangesOrReject
   EXPECT_TRUE(has_diagnostic("reason=malformed_payload"));
   EXPECT_TRUE(has_diagnostic("reason=missing_field"));
   EXPECT_TRUE(has_diagnostic("reason=non_finite_width"));
-  EXPECT_TRUE(std::all_of(
+  EXPECT_TRUE(
+    std::all_of(
       captured_logs.begin(), captured_logs.end(), [](const CapturedLog & log) {
         return log.severity != RCUTILS_LOG_SEVERITY_INFO;
       }));
@@ -2119,6 +2142,89 @@ TEST_F(IsaacRosMotionTransportTest, MissingAccuracyDoesNotChangeCompletedTraject
   EXPECT_EQ(transport_->wait_for_motion_completion(), MotionCompletionOutcome::COMPLETED);
 }
 
+TEST_F(IsaacRosMotionTransportTest, WholePickSummaryPreservesEveryMaterialAndActionElapsedTime)
+{
+  using Result = arm_cell_interfaces::msg::MotionTaskResultCode;
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("whole_pick_material_history_" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  configure_diagnostics_for_test(true, directory.string());
+  transport_->begin_pick_search("whole-pick");
+  const auto snapshot = [](const std::string & id) {
+      return nlohmann::json{{"material_candidate_id", id},
+      {"grasp_pose_candidates", nlohmann::json::array(
+            {
+              {{"candidate", 1}, {"result", "IK_SEED_ATTEMPTS_EXHAUSTED"}}})},
+      {"pick_attempts", nlohmann::json::array(
+            {
+              {{"grasp_pose_candidate", 1}, {"ik_seed_attempt", 1}, {"stage", "GRASP_IK"},
+                {"reason", "TRAC_IK_NO_SOLUTION"}}})},
+      {"final_failure_stage", "GRASP_IK"}, {"final_failure_reason", "TRAC_IK_NO_SOLUTION"}};
+    };
+  transport_->begin_pick_candidate_search();
+  transport_->pending_motion_planning_vision_acquisition_id_ = "acq-all";
+  transport_->set_pending_motion_planning_evidence(
+    "whole-pick", MotionTaskType::TASK_TYPE_PICK,
+    snapshot("candidate-b").dump());
+  transport_->begin_pick_candidate_search();
+  transport_->set_pending_motion_planning_evidence(
+    "whole-pick", MotionTaskType::TASK_TYPE_PICK,
+    snapshot("candidate-a").dump());
+  transport_->record_material_candidate_search(
+      {
+        {"candidate-b", Result::TASK_RESULT_PATH_OBSTRUCTED, "approach", false},
+        {"candidate-a", Result::TASK_RESULT_PATH_OBSTRUCTED, "approach", false}}, "candidate-a");
+  transport_->finalize_motion_planning_diagnostic(
+    Result::TASK_RESULT_PATH_OBSTRUCTED,
+    61.0, "approach", "");
+  EXPECT_TRUE(transport_->planning_candidate_history_.empty());
+  transport_.reset();
+  std::ifstream input(directory /
+    "motion_planning_records/motion_planning_summaries/whole-pick.json");
+  ASSERT_TRUE(input.good());
+  const auto summary = nlohmann::json::parse(input);
+  EXPECT_EQ(summary.at("candidate_counts").at("generated"), 2U);
+  EXPECT_EQ(summary.at("candidate_counts").at("evaluated"), 2U);
+  EXPECT_EQ(summary.at("material_candidate_search").at("attempt_count"), 2U);
+  EXPECT_TRUE(summary.at("material_candidate_search").at("candidate_switch_occurred"));
+  EXPECT_EQ(summary.at("task_executor_elapsed_s"), 61.0);
+  EXPECT_EQ(summary.at("detail_coverage").at("persisted_count"), 2U);
+  std::filesystem::remove_all(directory);
+}
+
+TEST_F(IsaacRosMotionTransportTest, PreplanningCancellationRetainsPickAndAcquisitionIdentity)
+{
+  using Result = arm_cell_interfaces::msg::MotionTaskResultCode;
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("preplanning_pick_cancel_" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  configure_diagnostics_for_test(true, directory.string());
+  transport_->begin_pick_search("cancel-before-plan");
+  transport_->begin_pick_candidate_search();
+  transport_->record_material_candidate_search(
+      {
+        {"candidate-first", Result::TASK_RESULT_CANCELED, "gripper_open", false, true, "acq-cancel",
+          0.5}},
+    "candidate-first");
+  transport_->finalize_motion_planning_diagnostic(
+    Result::TASK_RESULT_CANCELED,
+    0.5, "gripper_open", "caller cancellation");
+  transport_.reset();
+  std::ifstream input(directory /
+    "motion_planning_records/motion_planning_summaries/cancel-before-plan.json");
+  ASSERT_TRUE(input.good());
+  const auto summary = nlohmann::json::parse(input);
+  EXPECT_EQ(summary.at("vision_acquisition_id"), "acq-cancel");
+  EXPECT_EQ(summary.at("task_executor_result_code_value"), Result::TASK_RESULT_CANCELED);
+  EXPECT_EQ(summary.at("material_candidate_search").at("attempt_count"), 1U);
+  EXPECT_FALSE(summary.at("material_candidate_search").at("candidate_switch_occurred"));
+  EXPECT_EQ(
+    summary.at("material_candidate_search").at("attempts").at(0).at("search_elapsed_s"),
+    0.5);
+  EXPECT_EQ(summary.at("candidate_counts").at("generated"), 0U);
+  std::filesystem::remove_all(directory);
+}
+
 TEST_F(IsaacRosMotionTransportTest, FailedExecutionAccuracySurvivesTerminalJsonSerialization)
 {
   const auto directory = std::filesystem::temp_directory_path() /
@@ -2163,7 +2269,8 @@ TEST_F(IsaacRosMotionTransportTest, BackendFailureLinksExistingPlaceEvidenceByGo
       std::chrono::steady_clock::now().time_since_epoch().count()));
   configure_diagnostics_for_test(true, directory.string());
   const std::string goal_uuid = "place-backend-failure";
-  transport_->set_pending_motion_planning_evidence(goal_uuid, MotionTaskType::TASK_TYPE_PLACE,
+  transport_->set_pending_motion_planning_evidence(
+    goal_uuid, MotionTaskType::TASK_TYPE_PLACE,
     R"({"planning_stage":"place_approach","final_failure_stage":"GLOBAL_PLANNING","moveit_error_code":-1,"failure_reason":"PLANNING_FAILED"})");
 
   transport_->finalize_motion_planning_diagnostic(
@@ -2174,7 +2281,8 @@ TEST_F(IsaacRosMotionTransportTest, BackendFailureLinksExistingPlaceEvidenceByGo
   const auto path = directory / "motion_planning_records" / (goal_uuid + ".json");
   ASSERT_TRUE(std::filesystem::exists(path));
   std::ifstream input(path, std::ios::binary);
-  const auto record = nlohmann::json::parse(std::string(
+  const auto record = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   const auto & failure = record.at("planning_evidence").at("backend_failure");
   EXPECT_EQ(record.at("motion_goal_uuid"), goal_uuid);
@@ -2184,7 +2292,8 @@ TEST_F(IsaacRosMotionTransportTest, BackendFailureLinksExistingPlaceEvidenceByGo
   EXPECT_EQ(failure.at("reason"), "PLANNING_FAILED");
   EXPECT_EQ(failure.at("reason_source"), "planning_evidence.failure_reason");
   EXPECT_EQ(failure.at("backend_result_code"), "TASK_RESULT_BACKEND_ERROR");
-  EXPECT_EQ(failure.at("detail_reference"),
+  EXPECT_EQ(
+    failure.at("detail_reference"),
     "motion_planning_records/place-backend-failure.json#/planning_evidence");
   std::filesystem::remove_all(directory);
 }
@@ -2206,7 +2315,8 @@ TEST_F(IsaacRosMotionTransportTest, BackendFailureWithoutEvidenceReportsUnavaila
   const auto path = directory / "motion_planning_records" / "place-no-evidence.json";
   ASSERT_TRUE(std::filesystem::exists(path));
   std::ifstream input(path, std::ios::binary);
-  const auto record = nlohmann::json::parse(std::string(
+  const auto record = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   const auto & failure = record.at("planning_evidence").at("backend_failure");
   EXPECT_EQ(failure.at("reason"), "UNAVAILABLE");
@@ -2222,7 +2332,8 @@ TEST_F(IsaacRosMotionTransportTest, ExecutionExceptionIsLinkedToMotionGoalAndEvi
       std::chrono::steady_clock::now().time_since_epoch().count()));
   configure_diagnostics_for_test(true, directory.string());
   const std::string goal_uuid = "place-exception-goal";
-  transport_->set_pending_motion_planning_evidence(goal_uuid, MotionTaskType::TASK_TYPE_PLACE,
+  transport_->set_pending_motion_planning_evidence(
+    goal_uuid, MotionTaskType::TASK_TYPE_PLACE,
     R"({"execution_result":"TASK_RESULT_BACKEND_ERROR","execution_stage":"trajectory_worker"})");
 
   transport_->finalize_motion_planning_diagnostic(
@@ -2233,14 +2344,16 @@ TEST_F(IsaacRosMotionTransportTest, ExecutionExceptionIsLinkedToMotionGoalAndEvi
   const auto path = directory / "motion_planning_records" / (goal_uuid + ".json");
   ASSERT_TRUE(std::filesystem::exists(path));
   std::ifstream input(path, std::ios::binary);
-  const auto record = nlohmann::json::parse(std::string(
+  const auto record = nlohmann::json::parse(
+    std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   const auto & failure = record.at("planning_evidence").at("backend_failure");
   EXPECT_EQ(record.at("motion_goal_uuid"), goal_uuid);
   EXPECT_EQ(failure.at("stage"), "execution_worker:exception");
   EXPECT_EQ(failure.at("reason"), "trajectory controller rejected execution");
   EXPECT_EQ(failure.at("reason_source"), "task_executor_exception");
-  EXPECT_EQ(failure.at("detail_reference"),
+  EXPECT_EQ(
+    failure.at("detail_reference"),
     "motion_planning_records/place-exception-goal.json#/planning_evidence");
   std::filesystem::remove_all(directory);
 }
@@ -2354,7 +2467,9 @@ TEST_F(IsaacRosMotionTransportTest, FixedVisionSelectedReferencePreservesPoseWid
   EXPECT_FALSE(transport_->stage_pick_capture_reference(selected, 70.0, 3, "validation"));
 }
 
-TEST_F(IsaacRosMotionTransportTest, EstimatedRectangleCandidatePublishesReferenceWithoutFixtureLookup)
+TEST_F(
+  IsaacRosMotionTransportTest,
+  EstimatedRectangleCandidatePublishesReferenceWithoutFixtureLookup)
 {
   const auto geometry_status = classify_rectangle_geometry(true, true, 0.08, 0.07, 0.07);
   ASSERT_EQ(geometry_status, RectangleGeometryStatus::AVAILABLE);
@@ -2365,7 +2480,8 @@ TEST_F(IsaacRosMotionTransportTest, EstimatedRectangleCandidatePublishesReferenc
     0.08, 0.07, 0.07, 65.0, 75.0, 85.0,
     PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 48U, 0.005});
   ASSERT_GT(candidates.size(), 1U);
-  const auto selected = std::find_if(candidates.begin(), candidates.end(), [](const auto & item) {
+  const auto selected = std::find_if(
+    candidates.begin(), candidates.end(), [](const auto & item) {
       return item.grasp_position_offset_object.norm() < 1e-12 && item.contact && item.contact->width_mm == 70.0;
     });
   ASSERT_NE(selected, candidates.end());
@@ -2404,7 +2520,8 @@ TEST_F(IsaacRosMotionTransportTest, EstimatedRectangleCandidatePublishesReferenc
   selected_pose.pose.orientation.y = selected->tcp_orientation.y();
   selected_pose.pose.orientation.z = selected->tcp_orientation.z();
   selected_pose.pose.orientation.w = selected->tcp_orientation.w();
-  ASSERT_TRUE(transport_->stage_pick_capture_reference(
+  ASSERT_TRUE(
+    transport_->stage_pick_capture_reference(
       selected_pose, resolution.width_mm, 2U, "partial-acq3-transport"));
   pump_until([this]() {return !capture_reference_payloads().empty();});
   const auto reference = nlohmann::json::parse(capture_reference_payloads().front());
@@ -2557,10 +2674,11 @@ TEST_F(IsaacRosMotionTransportTest, JointTargetPublisherUsesConfiguredTrayReturn
   simulate_feedback_after_command_count_ = 1U;
   publish_feedback(std::vector<double>(6, 0.1));
   ASSERT_TRUE(transport_->publish_joint_target(transport_->place_tray_return_joint_positions_));
-  pump_until([this]() {
-    std::lock_guard<std::mutex> lock(command_mutex_);
-    return !commands_.empty();
-  });
+  pump_until(
+    [this]() {
+      std::lock_guard<std::mutex> lock(command_mutex_);
+      return !commands_.empty();
+    });
   std::lock_guard<std::mutex> lock(command_mutex_);
   ASSERT_FALSE(commands_.empty());
   EXPECT_EQ(commands_.back().name, arm_joint_names());

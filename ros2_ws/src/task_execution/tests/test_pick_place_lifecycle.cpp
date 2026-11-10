@@ -312,8 +312,8 @@ public:
     return completion_condition.wait_for(
       lock, timeout, [this, expected_total, expected_opens, expected_closes]() {
         return gripper_command_count >= expected_total &&
-               gripper_open_command_count >= expected_opens &&
-               gripper_close_command_count >= expected_closes;
+        gripper_open_command_count >= expected_opens &&
+        gripper_close_command_count >= expected_closes;
       });
   }
 
@@ -678,6 +678,26 @@ arm_cell_interfaces::action::ExecutePnp::Goal execute_pnp_goal()
 }
 }  // namespace
 
+TEST(TaskExecutorPickPlaceTest, DirectPickPreplanningCancellationRecordsCandidateIdentity)
+{
+  auto backend = std::make_shared<RecordingBackend>();
+  backend->gripper_result = MotionTaskResultCode::TASK_RESULT_CANCELED;
+  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
+    valid_geometry());
+  auto goal = pick_goal();
+  goal.vision_candidate_id = "direct-candidate";
+  const auto result = executor.execute(goal, MotionObjectState::NO_OBJECT, "direct-cancel");
+  EXPECT_EQ(result, MotionTaskResultCode::TASK_RESULT_CANCELED);
+  ASSERT_EQ(backend->material_candidate_attempts.size(), 1U);
+  const auto & attempt = backend->material_candidate_attempts.front();
+  EXPECT_EQ(attempt.candidate_id, "direct-candidate");
+  EXPECT_EQ(attempt.acquisition_id, "test-acquisition");
+  EXPECT_GT(attempt.search_elapsed_s, 0.0);
+  EXPECT_EQ(attempt.failure_stage, "gripper_open:TASK_RESULT_CANCELED");
+  EXPECT_EQ(attempt.result_code, MotionTaskResultCode::TASK_RESULT_CANCELED);
+  EXPECT_TRUE(backend->requests.empty());
+}
+
 TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturningCompleted)
 {
   auto backend = std::make_shared<RecordingBackend>();
@@ -698,7 +718,8 @@ TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturni
   EXPECT_EQ(backend->requests.back().task_type.value, MotionTaskType::TASK_TYPE_PLACE);
   EXPECT_EQ(backend->requests.back().object_pose.pose.position.z, 0.5);
   for (const auto & request : backend->requests) {
-    EXPECT_DOUBLE_EQ(request.pick_grasp_backoff_m,
+    EXPECT_DOUBLE_EQ(
+      request.pick_grasp_backoff_m,
       request.task_type.value == MotionTaskType::TASK_TYPE_PICK ? goal.pick_grasp_backoff_m : 0.0);
   }
   ASSERT_FALSE(backend->events.empty());
@@ -751,11 +772,12 @@ TEST(TaskExecutorPickPlaceTest, PlaceWaypointClearsTrayThenGoesHomeAndUsesFixedC
       place_phases.push_back(request.phase);
     }
   }
-  EXPECT_EQ(place_phases, (std::vector<std::uint8_t>{
-    arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING,
-    arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING,
-    arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING,
-    arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING}));
+  EXPECT_EQ(
+    place_phases, (std::vector<std::uint8_t>{
+      arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING,
+      arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING,
+      arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING,
+      arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING}));
   EXPECT_GE(backend->gripper_open_command_count, 1);
   const auto clearance = std::find(
     backend->waypoint_events.begin(), backend->waypoint_events.end(), "clearance");
@@ -1384,8 +1406,18 @@ TEST(TaskExecutorPickPlaceTest, UncertainInsertionSubmissionIsReportedConservati
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
     valid_geometry());
 
-  EXPECT_THROW(executor.execute(pick_goal()), std::runtime_error);
+  auto goal = pick_goal();
+  goal.vision_candidate_id = "interrupted-candidate";
+  EXPECT_THROW(executor.execute(goal), std::runtime_error);
   EXPECT_TRUE(executor.pick_grasp_insertion_started());
+  ASSERT_EQ(backend->material_candidate_attempts.size(), 1U);
+  EXPECT_EQ(backend->material_candidate_attempts.front().candidate_id, "interrupted-candidate");
+  EXPECT_EQ(
+    backend->material_candidate_attempts.front().result_code,
+    MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR);
+  EXPECT_EQ(
+    backend->material_candidate_attempts.front().failure_stage,
+    "execution_worker:exception");
 }
 
 TEST(
@@ -1433,7 +1465,7 @@ TEST(
 
   ASSERT_EQ(
     ::setenv(
-    "ARM_CELL_PICK_EXECUTION_RECORD_DIR", "/proc/arm-cell-record-write-denied", 1), 0);
+      "ARM_CELL_PICK_EXECUTION_RECORD_DIR", "/proc/arm-cell-record-write-denied", 1), 0);
   auto second_backend = std::make_shared<RecordingBackend>();
   TaskExecutor second_executor(
     second_backend, std::make_shared<RecordingGripperPort>(*second_backend), valid_geometry());
@@ -1470,7 +1502,7 @@ TEST(TaskExecutorPickPlaceTest, PickExecutionRecordKeepsCompactCandidateSummaryA
   for (std::size_t index = 0; index < 48U; ++index) {
     evidence["grasp_pose_candidates"].push_back(
       {
-      {"candidate", index + 1U}, {"diagnostic_padding", std::string(2048U, 'x')}});
+        {"candidate", index + 1U}, {"diagnostic_padding", std::string(2048U, 'x')}});
   }
   backend->pick_candidate_evaluation = evidence.dump();
   TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
@@ -1498,7 +1530,8 @@ TEST(TaskExecutorPickPlaceTest, PickExecutionRecordKeepsCompactCandidateSummaryA
   ASSERT_TRUE(record.has_value());
   EXPECT_LT(serialized.size(), 10U * 1024U);
   EXPECT_EQ(record->at("capture_diagnostic_record_status"), "saved");
-  EXPECT_EQ(record->at("capture_diagnostic_record_relative_path"),
+  EXPECT_EQ(
+    record->at("capture_diagnostic_record_relative_path"),
     "../gripper/motion-goal-compact-test.json");
   EXPECT_EQ(record->at("candidate_evaluation").at("candidate_result"), "PLANNED_SELECTED");
   EXPECT_EQ(record->at("candidate_evaluation").at("generated_candidate_count"), 48);
@@ -1590,7 +1623,8 @@ TEST(TaskExecutorPickPlaceTest, FreshReleaseInvalidatesAcceptedRelation)
 TEST(TaskExecutorPickPlaceTest, PropagatesRequestedBackoffWithoutInferringItFromThickness)
 {
   auto backend = std::make_shared<RecordingBackend>();
-  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), valid_geometry());
+  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
+    valid_geometry());
   auto goal = pick_goal();
   goal.pick_grasp_backoff_m = 0.031;
   goal.estimated_object_height_m = 0.146F;
@@ -1598,7 +1632,8 @@ TEST(TaskExecutorPickPlaceTest, PropagatesRequestedBackoffWithoutInferringItFrom
   ASSERT_FALSE(backend->requests.empty());
   for (const auto & request : backend->requests) {
     EXPECT_DOUBLE_EQ(request.pick_grasp_backoff_m, goal.pick_grasp_backoff_m);
-    EXPECT_NEAR(request.object_pose.pose.position.z,
+    EXPECT_NEAR(
+      request.object_pose.pose.position.z,
       goal.target_pose.pose.position.z - goal.estimated_object_height_m / 2.0, 1e-8);
   }
 }
@@ -1628,7 +1663,8 @@ TEST(TaskExecutorPickPlaceTest, ResolvesProfileObservationToObjectCenterBeforeTa
 TEST(TaskExecutorPickPlaceTest, KnownThicknessResolvesCenterWithoutRectangleGeometry)
 {
   auto backend = std::make_shared<RecordingBackend>();
-  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend), valid_geometry());
+  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
+    valid_geometry());
   auto goal = pick_goal();
   goal.has_observed_rectangle = false;
   goal.rectangle_long_side_m = 0.0F;
@@ -1639,9 +1675,11 @@ TEST(TaskExecutorPickPlaceTest, KnownThicknessResolvesCenterWithoutRectangleGeom
   goal.target_pose.pose.orientation.w = std::sqrt(0.5);
   ASSERT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_SUCCESS);
   ASSERT_FALSE(backend->requests.empty());
-  EXPECT_NEAR(backend->requests.front().object_pose.pose.position.x,
+  EXPECT_NEAR(
+    backend->requests.front().object_pose.pose.position.x,
     -goal.estimated_object_height_m / 2.0, 1e-8);
-  EXPECT_NEAR(backend->requests.front().object_pose.pose.position.z,
+  EXPECT_NEAR(
+    backend->requests.front().object_pose.pose.position.z,
     goal.target_pose.pose.position.z, 1e-8);
 }
 
@@ -2119,8 +2157,8 @@ TEST(TaskExecutorPickPlaceTest, GripperCommandAcknowledgementIsDiagnosticDetail)
   EXPECT_EQ(
     std::find_if(
       captured_logs.begin(), captured_logs.end(), [](const auto & entry) {
-      return entry.format.find("gripper open command issued") != std::string::npos;
-    }), captured_logs.end());
+        return entry.format.find("gripper open command issued") != std::string::npos;
+      }), captured_logs.end());
 
   auto info_pick_backend = std::make_shared<RecordingBackend>();
   TaskExecutor info_pick_executor(
@@ -2130,8 +2168,8 @@ TEST(TaskExecutorPickPlaceTest, GripperCommandAcknowledgementIsDiagnosticDetail)
   EXPECT_EQ(
     std::find_if(
       captured_logs.begin(), captured_logs.end(), [](const auto & entry) {
-      return entry.format.find("gripper close command issued") != std::string::npos;
-    }), captured_logs.end());
+        return entry.format.find("gripper close command issued") != std::string::npos;
+      }), captured_logs.end());
 
   capture.set_level(RCUTILS_LOG_SEVERITY_DEBUG);
   executor.set_object_state(MotionObjectState::ATTACHED);

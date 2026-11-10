@@ -409,4 +409,41 @@ TEST(PickApproachPlanningBT, ProductionTreeExposesEachAttemptStageAsAnOrderedLea
   }
   EXPECT_EQ(steps, expected);
 }
+
+TEST(PickApproachPlanningBT, DeferredRoundsRestoreOnlyPreviousSeedContactsOfSamePose)
+{
+  auto context = make_context(3U, 3U);
+  auto operations = std::make_shared<TestActions>();
+  std::size_t attempts = 0U;
+  operations->actions["Attempt"] = [&](PlanningContext & current) {
+      ++attempts;
+      const auto pose = current.attempt.current_pose_index;
+      const auto seed = current.attempt.seed_index;
+      const auto & contacts = current.latest_collision_contacts;
+      if (seed == 1U || pose == 1U) {
+        EXPECT_TRUE(contacts.empty());
+      } else {
+        EXPECT_EQ(contacts.size(), 1U);
+        if (contacts.empty()) {return BT::NodeStatus::FAILURE;}
+        EXPECT_EQ(contacts.front().pose_candidate, pose + 1U);
+        EXPECT_EQ(contacts.front().seed_attempt, seed - 1U);
+        EXPECT_EQ(contacts.front().body_1, "link_" + std::to_string(pose));
+      }
+      // PrepareSeed consumes the previous contacts before this attempt runs.
+      current.latest_collision_contacts.clear();
+      if (pose != 1U) {
+        current.latest_collision_contacts.push_back(
+          {"link_" + std::to_string(pose), "fixture", "grasp_target_state",
+            false, 0U, pose + 1U, seed});
+      }
+      current.attempt.attempt_evaluation = pose == 1U ?
+        PickSearchEvaluation::GRASP_IK_NO_SOLUTION : PickSearchEvaluation::GRASP_COLLISION;
+      return BT::NodeStatus::FAILURE;
+    };
+  BT::BehaviorTreeFactory factory;
+  auto tree = make_search_tree(factory, context, operations);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(attempts, 9U);
+  EXPECT_EQ(context->search_controller->status(), PickSearchStatus::ALL_CANDIDATES_EXHAUSTED);
+}
 }  // namespace arm_cell_motion

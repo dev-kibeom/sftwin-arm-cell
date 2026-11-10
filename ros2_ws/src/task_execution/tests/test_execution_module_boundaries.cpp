@@ -133,6 +133,37 @@ TEST(PickCandidateSearchModule, OwnsOrderingAndPublishesSelectedCandidate)
   EXPECT_EQ(fixture.backend->candidate_starts, 1);
 }
 
+TEST(PickCandidateSearchModule, RecordsActiveCandidateWhenExecutionStopsBeforeTransition)
+{
+  for (const auto code : {MotionTaskResultCode::TASK_RESULT_CANCELED,
+      MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED,
+      MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR})
+  {
+    Fixture fixture;
+    ExecuteTask::Goal goal;
+    goal.material_candidates = {candidate("active", 0.1)};
+    fixture.blackboard->set("goal", goal);
+    PickCandidateSearch module(fixture.support);
+    BT::BehaviorTreeFactory factory;
+    module.register_nodes(factory, fixture.blackboard, fixture.report);
+    auto tree = factory.createTreeFromText(
+      "<root main_tree_to_execute=\"Search\"><BehaviorTree ID=\"Search\">"
+      "<Sequence><PreparePickSearch/><SelectNextPickCandidate/></Sequence>"
+      "</BehaviorTree></root>", fixture.blackboard);
+    ASSERT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
+    fixture.report.result_code = code;
+    fixture.report.failure_stage = "execution_worker:exception_or_interruption";
+    module.record_search();
+    ASSERT_EQ(fixture.backend->recorded_attempts.size(), 1U);
+    EXPECT_EQ(fixture.backend->recorded_attempts.front().candidate_id, "active");
+    EXPECT_EQ(fixture.backend->recorded_attempts.front().acquisition_id, "acquisition");
+    EXPECT_EQ(fixture.backend->recorded_attempts.front().result_code, code);
+    EXPECT_EQ(fixture.backend->recorded_outcome, "active");
+    module.record_search();
+    EXPECT_EQ(fixture.backend->recorded_attempts.size(), 1U);
+  }
+}
+
 TEST(PickCandidateSearchModule, UnifiedHighMediumCandidatesUseDistanceBeforeHeight)
 {
   Fixture fixture;

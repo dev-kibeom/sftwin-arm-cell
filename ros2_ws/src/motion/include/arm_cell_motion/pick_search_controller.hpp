@@ -95,23 +95,21 @@ public:
       return;
     }
     auto & pose = poses_[pose_index_];
-    if (evaluation == PickSearchEvaluation::GRASP_IK_NO_SOLUTION) {
-      pose.deferred = pose.attempts < seed_limit_;
-    } else if (evaluation != PickSearchEvaluation::GRASP_CONTACT_MISMATCH &&
-      evaluation != PickSearchEvaluation::GLOBAL_PLANNING_FAILED &&
-      pose.attempts < seed_limit_)
-    {
-      return;  // Preserve the existing alternate-solution retry for other validation failures.
-    } else {
-      pose.deferred = false;
-    }
+    pose.deferred = evaluation != PickSearchEvaluation::GRASP_CONTACT_MISMATCH &&
+      evaluation != PickSearchEvaluation::GLOBAL_PLANNING_FAILED && pose.attempts < seed_limit_;
     ++pose_index_;
-    if (!revisiting_ && pose_index_ >= poses_.size()) {
-      revisiting_ = true;
-      pose_index_ = first_pose_;
-    }
-    if (revisiting_) {
-      while (pose_index_ < poses_.size() && !poses_[pose_index_].deferred) {++pose_index_;}
+    // Finish this seed round before revisiting any pose with another seed.
+    while (true) {
+      if (pose_index_ >= poses_.size()) {
+        pose_index_ = first_pose_;
+        bool pending = false;
+        for (std::size_t i = first_pose_; i < poses_.size(); ++i) {
+          pending = pending || poses_[i].deferred;
+        }
+        if (!pending) {pose_index_ = poses_.size(); break;}
+      }
+      if (poses_[pose_index_].attempts == 0U || poses_[pose_index_].deferred) {break;}
+      ++pose_index_;
     }
   }
 
@@ -135,7 +133,6 @@ private:
   const std::size_t first_pose_;
   std::size_t pose_index_;
   std::vector<PoseProgress> poses_;
-  bool revisiting_{false};
   std::size_t seed_attempt_{0U};
   std::size_t attempt_count_{0U};
   PickSearchStatus status_{PickSearchStatus::SEARCHING};

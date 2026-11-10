@@ -74,6 +74,8 @@ private:
   void queue_ready_summary_finalizations();
   void clear_detail_snapshots_for_goal(const std::string & goal_uuid);
   static std::string safe_goal_id(std::string value);
+  static std::string pick_detail_path(
+    const std::string & goal_uuid, const nlohmann::json & candidate, std::size_t fallback_number);
   bool enqueue_serialized(const std::string & goal_uuid, std::string serialized);
 
   static constexpr std::size_t kQueueCapacity = 16;

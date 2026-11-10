@@ -20,18 +20,22 @@ constexpr double kPi = 3.14159265358979323846;
 
 TEST(PickRectangleGeometry, EstimatedRectangleIsAvailableWithoutObservedOutline)
 {
-  EXPECT_EQ(classify_rectangle_geometry(true, true, 0.08, 0.07, 0.07),
+  EXPECT_EQ(
+    classify_rectangle_geometry(true, true, 0.08, 0.07, 0.07),
     RectangleGeometryStatus::AVAILABLE);
   EXPECT_STREQ(rectangle_geometry_status_name(RectangleGeometryStatus::AVAILABLE), "available");
 }
 
 TEST(PickRectangleGeometry, MissingAndInvalidGeometryHaveDistinctStatuses)
 {
-  EXPECT_EQ(classify_rectangle_geometry(false, false, 0.0, 0.0, 0.0),
+  EXPECT_EQ(
+    classify_rectangle_geometry(false, false, 0.0, 0.0, 0.0),
     RectangleGeometryStatus::UNAVAILABLE);
-  EXPECT_EQ(classify_rectangle_geometry(true, false, 0.08, 0.07, 0.07),
+  EXPECT_EQ(
+    classify_rectangle_geometry(true, false, 0.08, 0.07, 0.07),
     RectangleGeometryStatus::INVALID);
-  EXPECT_EQ(classify_rectangle_geometry(true, true, 0.08, 0.0, 0.07),
+  EXPECT_EQ(
+    classify_rectangle_geometry(true, true, 0.08, 0.0, 0.07),
     RectangleGeometryStatus::INVALID);
 }
 
@@ -69,7 +73,8 @@ TEST(PickOrientationCandidates, TwofoldRectangleComposesDownwardTcpOrientationOn
   const auto seed = pick_orientation_seed(
     object_orientation, target_tcp_orientation,
     arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_TWOFOLD, true);
-  ASSERT_TRUE(pick_candidate_requires_object_tcp_composition(
+  ASSERT_TRUE(
+    pick_candidate_requires_object_tcp_composition(
       arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_TWOFOLD, true));
   const auto tcp_orientation = compose_object_tcp_orientation(seed, object_to_tcp_rotation);
 
@@ -87,7 +92,8 @@ TEST(PickOrientationCandidates, UniqueRectangleUsesObjectOrientationAndComposesO
   const auto seed = pick_orientation_seed(
     object_orientation, target_tcp_orientation,
     arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNIQUE, true);
-  ASSERT_TRUE(pick_candidate_requires_object_tcp_composition(
+  ASSERT_TRUE(
+    pick_candidate_requires_object_tcp_composition(
       arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNIQUE, true));
   const auto tcp_orientation = compose_object_tcp_orientation(seed, object_to_tcp_rotation);
 
@@ -118,7 +124,8 @@ TEST(PickOrientationCandidates, FourfoldUsesObjectOrientationSeed)
     arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_FOURFOLD, false);
 
   EXPECT_NEAR(std::abs(seed.dot(object_orientation)), 1.0, 1e-12);
-  EXPECT_TRUE(pick_candidate_requires_object_tcp_composition(
+  EXPECT_TRUE(
+    pick_candidate_requires_object_tcp_composition(
       arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_FOURFOLD, false));
 }
 
@@ -130,10 +137,12 @@ TEST(PickOrientationCandidates, UniqueAndUnobservableKeepTcpSeed)
     Eigen::AngleAxisd(0.7, Eigen::Vector3d::UnitX()));
 
   for (const auto symmetry_order : {
-      arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNIQUE,
-      arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNOBSERVABLE})
+        arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNIQUE,
+        arm_cell_interfaces::action::ExecuteTask::Goal::ORIENTATION_UNOBSERVABLE})
   {
-    const auto seed = pick_orientation_seed(object_orientation, tcp_orientation, symmetry_order, false);
+    const auto seed = pick_orientation_seed(
+      object_orientation, tcp_orientation, symmetry_order,
+      false);
     EXPECT_NEAR(std::abs(seed.dot(tcp_orientation)), 1.0, 1e-12);
     EXPECT_FALSE(pick_candidate_requires_object_tcp_composition(symmetry_order, false));
   }
@@ -162,11 +171,15 @@ TEST(PickGraspPoseCandidates, EnumeratesDistinctRecipeValidBoxFacePairs)
   EXPECT_EQ(candidates[1].contact->face_evidence, BoxFaceEvidence::INFERRED_SIDE_PAIR);
   EXPECT_EQ(
     candidates[2].contact->face_evidence, BoxFaceEvidence::OBSERVED_TOP_INFERRED_BOTTOM);
-  EXPECT_NEAR(std::abs(candidates[0].tcp_orientation.dot(reference_grasp_tcp_orientation)), 1.0, 1e-12);
+  EXPECT_NEAR(
+    std::abs(
+      candidates[0].tcp_orientation.dot(
+        reference_grasp_tcp_orientation)), 1.0, 1e-12);
   EXPECT_LT(std::abs(candidates[1].tcp_orientation.dot(candidates[2].tcp_orientation)), 1.0);
   EXPECT_NEAR(
-    std::abs((candidates[2].tcp_orientation * Eigen::Vector3d::UnitZ()).dot(
-      Eigen::Vector3d::UnitZ())), 0.0, 1e-12);
+    std::abs(
+      (candidates[2].tcp_orientation * Eigen::Vector3d::UnitZ()).dot(
+        Eigen::Vector3d::UnitZ())), 0.0, 1e-12);
 }
 
 TEST(PickGraspPoseCandidates, AppliesRecipeContactWidthBoundsAndCandidateCap)
@@ -188,8 +201,10 @@ TEST(PickGraspPoseCandidates, AppliesRecipeContactWidthBoundsAndCandidateCap)
   ASSERT_TRUE(capped.front().contact.has_value());
   EXPECT_EQ(capped.front().contact->closing_axis, 0U);
 
-  EXPECT_TRUE(generate_pick_grasp_pose_candidates(
-    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 90.0, 100.0, 85.0, 5U).empty());
+  EXPECT_TRUE(
+    generate_pick_grasp_pose_candidates(
+      object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 90.0, 100.0, 85.0,
+      5U).empty());
 }
 
 TEST(PickGraspPoseCandidates, SquareKeepsDifferentAxesDespiteEqualContactWidths)
@@ -204,7 +219,9 @@ TEST(PickGraspPoseCandidates, SquareKeepsDifferentAxesDespiteEqualContactWidths)
   ASSERT_EQ(candidates.size(), 3U);
   for (std::size_t lhs = 0U; lhs < candidates.size(); ++lhs) {
     for (std::size_t rhs = lhs + 1U; rhs < candidates.size(); ++rhs) {
-      EXPECT_LT(std::abs(candidates[lhs].tcp_orientation.dot(candidates[rhs].tcp_orientation)), 1.0);
+      EXPECT_LT(
+        std::abs(candidates[lhs].tcp_orientation.dot(candidates[rhs].tcp_orientation)),
+        1.0);
     }
     ASSERT_TRUE(candidates[lhs].contact.has_value());
     EXPECT_DOUBLE_EQ(candidates[lhs].contact->width_mm, 70.0);
@@ -240,8 +257,9 @@ TEST(PickCollisionSeedPolicy, PrioritizesAncestorJointsByKinematicChain)
       return std::vector<std::string>{};
     });
 
-  EXPECT_EQ(influenced, (std::vector<std::string>{
-    "elbow_joint", "shoulder_joint", "wrist_roll"}));
+  EXPECT_EQ(
+    influenced, (std::vector<std::string>{
+        "elbow_joint", "shoulder_joint", "wrist_roll"}));
   EXPECT_EQ(
     diversify_pick_ik_seed(
       {0.0, 0.1, 0.2, 0.3}, {1.0, 1.1, 1.2, 1.3}, group_variables, influenced),
@@ -339,7 +357,9 @@ TEST(PickApproachGeometry, RotatesTcpInsertionAxisIntoThePlanningFrame)
 
 TEST(PickGraspSearch, PreservesEligibleCenterFacesWithoutPrivilegedEvaluation)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   const auto legacy = generate_pick_grasp_pose_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, 0.07, 0.06, 0.08,
     60.0, 85.0, 85.0, 3U);
@@ -364,7 +384,9 @@ TEST(PickGraspSearch, ExpandsRotationAndBothFaceTangentsWithinMeasuredBounds)
   const Eigen::Quaterniond reference_grasp_tcp_orientation =
     object * Eigen::Quaterniond(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
   const auto candidates = generate_pick_grasp_search_candidates(
-    object, reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(), Eigen::Vector3d(0.5, -0.2, 0.0),
+    object, reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(), Eigen::Vector3d(
+      0.5, -0.2,
+      0.0),
     Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
     PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 100U});
   ASSERT_GT(candidates.size(), 3U);
@@ -379,9 +401,11 @@ TEST(PickGraspSearch, ExpandsRotationAndBothFaceTangentsWithinMeasuredBounds)
     const auto a = (axis + 1U) % 3U;
     const auto b = (axis + 2U) % 3U;
     EXPECT_NEAR(candidate.grasp_position_offset_object[axis], 0.0, 1e-12);
-    EXPECT_LT(std::abs(candidate.grasp_position_offset_object[a]),
+    EXPECT_LT(
+      std::abs(candidate.grasp_position_offset_object[a]),
       lengths[a] / 2.0);
-    EXPECT_LT(std::abs(candidate.grasp_position_offset_object[b]),
+    EXPECT_LT(
+      std::abs(candidate.grasp_position_offset_object[b]),
       lengths[b] / 2.0);
     rotated |= candidate.grasp_position_offset_object.norm() < 1e-12 &&
       std::abs(candidate.tcp_orientation.dot(reference_grasp_tcp_orientation)) < 0.99;
@@ -398,7 +422,9 @@ TEST(PickGraspSearch, ExpandsRotationAndBothFaceTangentsWithinMeasuredBounds)
 
 TEST(PickGraspSearch, LimitsOnlyDownwardObjectNormalOffsets)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   auto sampling = PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 100U};
   sampling.maximum_downward_position_offset_m = 0.005;
   const auto candidates = generate_pick_grasp_search_candidates(
@@ -431,12 +457,15 @@ TEST(PickGraspSearch, DownwardLimitUsesRotatedObjectTopNormal)
   auto sampling = PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 100U};
   sampling.maximum_downward_position_offset_m = 0.005;
   const auto candidates = generate_pick_grasp_search_candidates(
-    object, reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(), Eigen::Vector3d(0.5, 0.0, 0.0),
+    object, reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(), Eigen::Vector3d(
+      0.5, 0.0,
+      0.0),
     Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.0745, 60.0, 85.0, 85.0, sampling);
   bool rotated_downward_at_limit = false;
   const Eigen::Vector3d support_normal = object * Eigen::Vector3d::UnitZ();
   for (const auto & candidate : candidates) {
-    const double normal_offset = candidate.grasp_position_offset_object.dot(Eigen::Vector3d::UnitZ());
+    const double normal_offset =
+      candidate.grasp_position_offset_object.dot(Eigen::Vector3d::UnitZ());
     EXPECT_GE(normal_offset, -0.005 - 1e-12);
     if (std::abs(normal_offset + 0.005) < 1e-12) {
       const Eigen::Vector3d base_offset = object * candidate.grasp_position_offset_object;
@@ -449,7 +478,9 @@ TEST(PickGraspSearch, DownwardLimitUsesRotatedObjectTopNormal)
 
 TEST(PickGraspSearch, FailedDownwardPositionCandidateIsClampedBelowFailureDepth)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   auto sampling = PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 100U};
   sampling.maximum_downward_position_offset_m = 0.005;
   const auto candidates = generate_pick_grasp_search_candidates(
@@ -464,7 +495,9 @@ TEST(PickGraspSearch, FailedDownwardPositionCandidateIsClampedBelowFailureDepth)
 
 TEST(PickGraspSearch, TiltBoundAppliesToEveryPose)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
@@ -480,7 +513,9 @@ TEST(PickGraspSearch, TiltBoundAppliesToEveryPose)
 
 TEST(PickGraspSearch, SelectionSpreadsFacesOrientationsAndOffsetsDeterministically)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   const auto generate = [&]() {
       return generate_pick_grasp_search_candidates(
         Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
@@ -505,10 +540,14 @@ TEST(PickGraspSearch, SelectionSpreadsFacesOrientationsAndOffsetsDeterministical
     ++orientations[pose.orientation_candidate_index];
     zero_count += pose.grasp_position_offset_object.norm() < 1e-12 ? 1U : 0U;
     outer |= pose.grasp_position_offset_object.cwiseAbs().maxCoeff() >= 0.015 - 1e-12;
-    inner |= pose.grasp_position_offset_object.norm() > 1e-12 && pose.grasp_position_offset_object.norm() < 0.01;
-    rotated_offset |= pose.axis_orientation_sample_index > 0U && pose.grasp_position_offset_object.norm() > 1e-12;
+    inner |= pose.grasp_position_offset_object.norm() > 1e-12 &&
+      pose.grasp_position_offset_object.norm() < 0.01;
+    rotated_offset |= pose.axis_orientation_sample_index > 0U &&
+      pose.grasp_position_offset_object.norm() > 1e-12;
     EXPECT_EQ(pose.orientation_candidate_index, repeated[i].orientation_candidate_index);
-    EXPECT_NEAR((pose.grasp_position_offset_object - repeated[i].grasp_position_offset_object).norm(), 0.0, 1e-12);
+    EXPECT_NEAR(
+      (pose.grasp_position_offset_object - repeated[i].grasp_position_offset_object).norm(), 0.0,
+      1e-12);
     for (std::size_t j = 0U; j < i; ++j) {
       EXPECT_FALSE(
         (pose.grasp_position_offset_object - candidates[j].grasp_position_offset_object).norm() < 1e-9 &&
@@ -530,15 +569,13 @@ TEST(PickGraspSearch, SelectionSpreadsFacesOrientationsAndOffsetsDeterministical
   order_pick_grasp_search_candidates(
     candidates, PickGraspPoseOrderPolicy::DISTANCE_THEN_DIVERSITY);
   PickSearchController controller(candidates.size(), 2U);
-  for (std::size_t i = 0U; i < candidates.size(); ++i) {
-    if (i > 0U) {
-      EXPECT_GE(
-        candidates[i].grasp_position_offset_object.norm() + 1e-12,
-        candidates[i - 1U].grasp_position_offset_object.norm());
-    }
-    // This is the production evaluator boundary: controller indices select
-    // the already ordered target; both existing IK seed attempts keep it.
-    for (std::size_t seed = 0U; seed < 2U; ++seed) {
+  for (std::size_t seed = 0U; seed < 2U; ++seed) {
+    for (std::size_t i = 0U; i < candidates.size(); ++i) {
+      if (i > 0U) {
+        EXPECT_GE(
+          candidates[i].grasp_position_offset_object.norm() + 1e-12,
+          candidates[i - 1U].grasp_position_offset_object.norm());
+      }
       ASSERT_EQ(controller.next(100.0), PickSearchStatus::SEARCHING);
       EXPECT_EQ(controller.pose_index(), i);
       EXPECT_EQ(
@@ -693,7 +730,9 @@ TEST(PickGraspSearch, OrderPolicyNamesAreExplicitAndRejectTypos)
 
 TEST(PickGraspSearch, ReferenceTranslationAndCapPreserveEligibleFacePoses)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   const Eigen::Vector3d reference_grasp_position_object(0.004, -0.003, 0.002);
   for (const auto cap : {0U, 1U, 3U, 48U}) {
     const auto poses = generate_pick_grasp_search_candidates(
@@ -707,7 +746,8 @@ TEST(PickGraspSearch, ReferenceTranslationAndCapPreserveEligibleFacePoses)
         EXPECT_TRUE(
           std::any_of(
             poses.begin(), poses.end(), [&](const auto & pose) {
-              return pose.contact->closing_axis == axis && pose.axis_orientation_sample_index == 0U &&
+              return pose.contact->closing_axis == axis &&
+              pose.axis_orientation_sample_index == 0U &&
               pose.grasp_position_offset_object.norm() < 1e-12;
             }));
       }
@@ -720,7 +760,9 @@ TEST(PickGraspSearch, ReferenceTranslationAndCapPreserveEligibleFacePoses)
 
 TEST(PickGraspSearch, FiniteLatticeDeduplicatesClampedOffsetsAndQuaternionSigns)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   const auto generate = [&](Eigen::Quaterniond rotation) {
       return generate_pick_grasp_search_candidates(
         Eigen::Quaterniond::Identity(), rotation, Eigen::Vector3d(0.004, -0.003, 0.002),
@@ -738,14 +780,19 @@ TEST(PickGraspSearch, FiniteLatticeDeduplicatesClampedOffsetsAndQuaternionSigns)
   const std::array<double, 3> lengths{0.07, 0.06, 0.08};
   for (std::size_t i = 0U; i < poses.size(); ++i) {
     EXPECT_NEAR(std::abs(poses[i].tcp_orientation.dot(equivalent[i].tcp_orientation)), 1.0, 1e-12);
-    EXPECT_NEAR((poses[i].grasp_position_offset_object - equivalent[i].grasp_position_offset_object).norm(), 0.0, 1e-12);
-    const Eigen::Vector3d point = Eigen::Vector3d(0.004, -0.003, 0.002) + poses[i].grasp_position_offset_object;
+    EXPECT_NEAR(
+      (poses[i].grasp_position_offset_object - equivalent[i].grasp_position_offset_object).norm(), 0.0,
+      1e-12);
+    const Eigen::Vector3d point =
+      Eigen::Vector3d(0.004, -0.003, 0.002) + poses[i].grasp_position_offset_object;
     for (std::size_t axis = 0U; axis < 3U; ++axis) {
-      if (axis == poses[i].contact->closing_axis || poses[i].grasp_position_offset_object.norm() < 1e-12) {continue;}
+      if (axis == poses[i].contact->closing_axis ||
+        poses[i].grasp_position_offset_object.norm() < 1e-12) {continue;}
       EXPECT_LT(std::abs(point[axis]), lengths[axis] * 0.5);
     }
     for (std::size_t j = 0U; j < i; ++j) {
-      EXPECT_FALSE((poses[i].grasp_position_offset_object - poses[j].grasp_position_offset_object).norm() < 1e-9 &&
+      EXPECT_FALSE(
+        (poses[i].grasp_position_offset_object - poses[j].grasp_position_offset_object).norm() < 1e-9 &&
         std::abs(poses[i].tcp_orientation.dot(poses[j].tcp_orientation)) > 1.0 - 1e-9);
     }
   }
@@ -753,7 +800,9 @@ TEST(PickGraspSearch, FiniteLatticeDeduplicatesClampedOffsetsAndQuaternionSigns)
 
 TEST(PickGraspSearch, ExhaustedVerticalPoseCanAdvanceToAnotherDirection)
 {
-  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
+  const Eigen::Quaterniond reference_grasp_tcp_orientation(Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
@@ -810,6 +859,8 @@ TEST(PickGraspClearance, ZeroIsIdentityAndInvalidRequestIsRejected)
   axis.z = 1.0;
   EXPECT_EQ(arm_cell_motion::shallower_pick_grasp(pose, axis, 0.0), pose);
   EXPECT_THROW(arm_cell_motion::shallower_pick_grasp(pose, axis, -0.001), std::invalid_argument);
-  EXPECT_THROW(arm_cell_motion::shallower_pick_grasp(pose, axis,
-    std::numeric_limits<double>::quiet_NaN()), std::invalid_argument);
+  EXPECT_THROW(
+    arm_cell_motion::shallower_pick_grasp(
+      pose, axis,
+      std::numeric_limits<double>::quiet_NaN()), std::invalid_argument);
 }

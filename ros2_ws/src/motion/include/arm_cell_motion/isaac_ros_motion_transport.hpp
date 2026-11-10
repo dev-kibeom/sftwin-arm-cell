@@ -320,9 +320,6 @@ private:
   FingerClearanceParameters finger_clearance_;
   double pick_grasp_ik_timeout_s_{1.0};
   double pick_approach_ik_timeout_s_{1.0};
-  double pick_search_budget_s_{100.0};
-  double pick_candidate_search_budget_s_{15.0};
-  std::chrono::steady_clock::time_point pick_candidate_search_started_at_{};
   std::mutex pick_search_budget_mutex_;
   std::chrono::steady_clock::time_point pick_search_started_at_{};
   std::string pick_search_goal_uuid_;
@@ -357,6 +354,7 @@ private:
   std::size_t selected_pick_ik_seed_attempt_{0U};
   std::size_t place_pose_candidate_count_{0U};
   std::vector<std::string> planning_candidate_history_;
+  std::chrono::steady_clock::time_point material_diagnostic_started_at_{};
   double place_candidate_planning_time_s_{1.0};
   double place_total_planning_time_s_{5.0};
   mutable std::mutex motion_envelope_mutex_;
