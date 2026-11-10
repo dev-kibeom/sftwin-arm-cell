@@ -17,14 +17,6 @@ except ImportError:
     from omni.isaac.core.utils.prims import delete_prim
     from omni.isaac.core.utils.stage import add_reference_to_stage
 
-try:
-    from isaacsim.storage.native import get_assets_root_path
-except ImportError:
-    try:
-        from isaacsim.core.utils.nucleus import get_assets_root_path
-    except ImportError:
-        from omni.isaac.core.utils.nucleus import get_assets_root_path
-
 
 def _add_cell_module_root():
     """Make sibling builders importable from a temporary Script Editor copy."""
@@ -56,7 +48,6 @@ run_scene_build(
     world_cls=World,
     enable_extension=enable_extension,
     delete_prim=delete_prim,
-    get_assets_root_path=get_assets_root_path,
     add_reference_to_stage=add_reference_to_stage,
     gf=Gf,
     usd_geom=UsdGeom,

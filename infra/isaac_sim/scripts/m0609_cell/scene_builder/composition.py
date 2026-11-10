@@ -93,7 +93,7 @@ class SceneBuildContext:
     static_geometry: dict
 
 
-def build_camera_rig(context, get_assets_root_path):
+def build_camera_rig(context):
     stage, cell_root, colors = context.stage, context.cell_root, context.colors
     mat_frame, mat_black = (
         context.materials["mat_frame"],
@@ -163,7 +163,6 @@ def run_scene_build(
     world_cls,
     enable_extension,
     delete_prim,
-    get_assets_root_path,
     add_reference_to_stage,
     gf,
     usd_geom,
@@ -222,7 +221,7 @@ def run_scene_build(
     build_environment(context)
     build_robot_station(context)
     build_amr(context)
-    build_camera_rig(context, get_assets_root_path)
+    build_camera_rig(context)
     build_status_hardware(context)
     apply_integration_metadata(context)
     run_reachability_check(context)

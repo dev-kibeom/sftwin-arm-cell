@@ -9,8 +9,6 @@ from scene_builder.camera_extrinsic import (
     find_d455_color_camera,
 )
 from scene_builder.d455_camera import (
-    D455_ASSET_FALLBACK_URL,
-    d455_asset_url,
     disable_embedded_imu,
     mount_d455,
 )
@@ -270,11 +268,6 @@ def test_d455_mount_owns_reference_mount_metadata_and_rigid_body_handling_only()
     ]
     assert d455_prim.custom_data == {"sf_twin:role": "realsense_d455_visual"}
     assert imu.active is False
-    assert d455_asset_url(None) == D455_ASSET_FALLBACK_URL
-    assert (
-        d455_asset_url("omniverse://assets")
-        == "omniverse://assets/Isaac/Sensors/Intel/RealSense/rsd455.usd"
-    )
 
 
 def test_extrinsic_authoring_clears_then_authors_the_derived_local_transform(
