@@ -38,12 +38,13 @@ class RawPartPoseRecorder:
         self._simulation_epoch = 0
         self._disabled_at_capacity = False
 
-    def sample(self, physx: Any, simulation_time_seconds: float, *, now: float) -> None:
+    def sample(self, physx: Any, simulation_time_seconds: float, *, now: float) -> bool:
+        """Return true only when this call persisted pose evidence."""
         if now - self._last_sampled_at < SAMPLE_INTERVAL_SECONDS:
-            return
+            return False
         self._last_sampled_at = now
         if self._disabled_at_capacity:
-            return
+            return False
         current: dict[str, dict[str, Any]] = {}
         complete = True
         for prim in self.stage.Traverse():
@@ -89,7 +90,7 @@ class RawPartPoseRecorder:
             current[path]["dimensions_m"] = list(dimensions)
             current[path]["mass_kg"] = mass
         if not complete:
-            return
+            return False
 
         sim_time_ns = max(0, round(float(simulation_time_seconds) * 1_000_000_000))
         if self._last_sim_time_ns is not None and sim_time_ns < self._last_sim_time_ns:
@@ -99,17 +100,25 @@ class RawPartPoseRecorder:
         self._last_sim_time_ns = sim_time_ns
         if self.session_id is None:
             if not current:
-                return
-            self._start_session(sim_time_ns)
+                return False
+            try:
+                self._start_session(sim_time_ns)
+            except Exception:
+                # Retry initialization after a storage failure; do not treat a
+                # partially initialized segment as an active recording.
+                self.session_id = None
+                self.session_path = None
+                raise
+        recorded = False
         for path, pose in current.items():
             previous = self._last_samples.get(path)
             if previous is None:
-                self._append("created", pose, sim_time_ns)
+                recorded = self._append("created", pose, sim_time_ns) or recorded
             elif _pose_changed(previous, pose):
-                self._append("pose_changed", pose, sim_time_ns)
+                recorded = self._append("pose_changed", pose, sim_time_ns) or recorded
         for path, previous in self._last_samples.items():
             if path not in current:
-                self._append("removed", previous, sim_time_ns)
+                recorded = self._append("removed", previous, sim_time_ns) or recorded
         # Thresholds compare to the last persisted pose, so sub-threshold motion
         # accumulates and is not lost when it eventually crosses the threshold.
         updated = dict(self._last_samples)
@@ -119,6 +128,7 @@ class RawPartPoseRecorder:
         for path in set(updated).difference(current):
             updated.pop(path, None)
         self._last_samples = updated
+        return recorded
 
     def stop(self) -> None:
         self.session_id = None
@@ -178,7 +188,7 @@ class RawPartPoseRecorder:
         for stale in sessions[MAX_SESSIONS:]:
             stale.unlink(missing_ok=True)
 
-    def _append(self, event: str, pose: dict[str, Any], sim_time_ns: int) -> None:
+    def _append(self, event: str, pose: dict[str, Any], sim_time_ns: int) -> bool:
         assert self.session_path is not None and self.session_id is not None
         record = {
             "session_id": self.session_id,
@@ -210,9 +220,10 @@ class RawPartPoseRecorder:
                 with self.session_path.open("a", encoding="utf-8") as output:
                     output.write(marker)
             self._disabled_at_capacity = True
-            return
+            return False
         with self.session_path.open("a", encoding="utf-8") as output:
             output.write(encoded)
+        return True
 
     @staticmethod
     def _identity(prim: Any, path: str) -> str:

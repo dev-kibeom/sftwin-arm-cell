@@ -332,12 +332,13 @@ class IsaacMaterialSupplyAdapter:
                 return
             import omni.physx
 
-            self.pose_recorder.sample(
+            recorded = self.pose_recorder.sample(
                 omni.physx.get_physx_interface(),
                 float(self.timeline.get_current_time()),
                 now=__import__("time").monotonic(),
             )
-            self._pose_recorder_error_reported = False
+            if recorded:
+                self._pose_recorder_error_reported = False
         except (
             ImportError,
             AttributeError,
@@ -345,9 +346,14 @@ class IsaacMaterialSupplyAdapter:
             RuntimeError,
             TypeError,
             ValueError,
-        ):
+        ) as error:
             if not self._pose_recorder_error_reported:
-                self._logger.warning("Isaac RawPart pose diagnostics are unavailable")
+                self._logger.warning(
+                    "Isaac RawPart pose diagnostics are unavailable path=%s reason=%s: %s",
+                    self.pose_recorder.artifact_directory,
+                    type(error).__name__,
+                    error,
+                )
                 self._pose_recorder_error_reported = True
 
     def _prim_exists(self, path: str) -> bool:

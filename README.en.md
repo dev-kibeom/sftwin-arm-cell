@@ -142,7 +142,16 @@ Press `Ctrl+C` to stop the ROS bringup.
 Docker Compose v2 is required. No separate host ROS workspace build is needed; run from the repository root:
 
 ```bash
+export ARM_CELL_UID="$(id -u)" ARM_CELL_GID="$(id -g)"
 docker compose up --build
+```
+
+Compose writes records with the host Isaac user’s UID/GID (defaults: `1000:1000`).
+If earlier runs left records owned by another user, stop Isaac and Compose before
+repairing ownership once. This preserves existing records:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" .local_artifacts
 ```
 
 Compose builds the ROS workspace image and starts `arm_cell_bringup` with the Python 3.10 sidecars. It uses Linux host networking, `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, and Fast DDS UDPv4 transport by default. Keep the ROS domain and RMW settings consistent between Isaac Sim and the container. Follow logs with `docker compose logs -f arm-cell`; stop with `Ctrl+C` in the Compose terminal or run `docker compose down`.

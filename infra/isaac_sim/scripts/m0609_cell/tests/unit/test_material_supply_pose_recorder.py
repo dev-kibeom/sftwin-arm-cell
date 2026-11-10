@@ -312,3 +312,75 @@ def test_recorded_world_pose_conversion_uses_parent_transform():
 
     assert local.position == (-9.6, 4.8, -1.69)
     assert local.orientation == (0.9238795325, (0.0, 0.0, 0.3826834324))
+
+
+def test_sample_reports_only_actual_persistence(tmp_path):
+    stage = _Stage()
+    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000')
+    stage.prims = [prim]
+    physx = _PhysX()
+    physx.states[prim.path] = _pose()
+    recorder = RawPartPoseRecorder(stage, tmp_path)
+    assert recorder.sample(physx, 1.0, now=0.0) is True
+    assert recorder.sample(physx, 1.1, now=0.1) is False
+    assert recorder.sample(physx, 1.3, now=0.3) is False
+    physx.states[prim.path] = _pose(x=0.02)
+    assert recorder.sample(physx, 1.6, now=0.6) is True
+
+
+def test_pose_warning_stays_suppressed_until_a_record_is_persisted(tmp_path, monkeypatch):
+    import sys
+    from unittest.mock import Mock
+    from scene_builder.material_supply_adapter import IsaacMaterialSupplyAdapter
+
+    physx = SimpleNamespace(get_physx_interface=lambda: object())
+    monkeypatch.setitem(sys.modules, 'omni', SimpleNamespace(physx=physx))
+    monkeypatch.setitem(sys.modules, 'omni.physx', physx)
+    recorder = SimpleNamespace(
+        artifact_directory=tmp_path / 'simulation',
+        sample=Mock(side_effect=[
+            PermissionError('denied'), False, PermissionError('denied'),
+            True, PermissionError('denied again'),
+        ]),
+    )
+    adapter = IsaacMaterialSupplyAdapter.__new__(IsaacMaterialSupplyAdapter)
+    adapter.timeline = SimpleNamespace(is_playing=lambda: True, get_current_time=lambda: 1.0)
+    adapter.pose_recorder = recorder
+    adapter._logger = Mock()
+    adapter._pose_recorder_error_reported = False
+    for _ in range(3):
+        adapter._record_rawpart_poses()
+    assert adapter._logger.warning.call_count == 1
+    args = adapter._logger.warning.call_args.args
+    assert args[1] == recorder.artifact_directory
+    assert args[2] == 'PermissionError'
+    assert str(args[3]) == 'denied'
+    adapter._record_rawpart_poses()
+    adapter._record_rawpart_poses()
+    assert adapter._logger.warning.call_count == 2
+
+
+def test_failed_segment_initialization_is_retried_after_storage_recovers(tmp_path, monkeypatch):
+    import pytest
+
+    stage = _Stage()
+    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000')
+    stage.prims = [prim]
+    physx = _PhysX()
+    physx.states[prim.path] = _pose()
+    recorder = RawPartPoseRecorder(stage, tmp_path)
+    append = recorder._append
+
+    def denied(*args):
+        raise PermissionError('recording unavailable')
+
+    monkeypatch.setattr(recorder, '_append', denied)
+    with pytest.raises(PermissionError):
+        recorder.sample(physx, 1.0, now=0.0)
+    assert recorder.session_id is None
+    assert recorder.session_path is None
+    monkeypatch.setattr(recorder, '_append', append)
+    assert recorder.sample(physx, 1.3, now=0.3) is True
+    assert [event['event'] for event in _events(recorder.session_path)] == [
+        'session_started', 'created'
+    ]

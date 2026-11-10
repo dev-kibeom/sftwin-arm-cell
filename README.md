@@ -181,7 +181,16 @@ Isaac 그리퍼 runtime이 현재 Python 모듈로 다시 로드되었는지 확
 호스트에 Docker Compose v2가 필요합니다. 별도의 호스트 ROS workspace 빌드 없이 저장소 루트에서 실행합니다.
 
 ```bash
+export ARM_CELL_UID="$(id -u)" ARM_CELL_GID="$(id -g)"
 docker compose up --build
+```
+
+Compose는 호스트 Isaac 사용자와 같은 UID/GID로 기록합니다(기본값 `1000:1000`).
+기존 기록 폴더가 다른 사용자 소유라면 Isaac과 Compose를 종료한 후 한 번만 복구합니다.
+아래 명령은 기존 기록을 삭제하지 않고 소유자만 변경합니다.
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" .local_artifacts
 ```
 
 C++ 소스 변경 후에는 기존 Compose 실행을 종료하고 `docker compose up --build`로
