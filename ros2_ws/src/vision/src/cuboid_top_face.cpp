@@ -712,6 +712,9 @@ DetectionResult detect_cuboid_top_face(
   }
   inherit_normalized_confidence(result.cuboid_hypotheses);
   append_disturbance_regions(result, plane_map.outlines, partitions, obs, profile);
+  if (!result.cuboid_replay_evidence) {
+    result.cuboid_replay_evidence = std::move(selected_replay);
+  }
   if (result.ordered_candidates.empty()) {
     result.result_code = Code::DETECT_RESULT_GEOMETRY_ERROR;
     result.diagnostic_detail = "cuboid_top_face; no_candidate_clear_of_upper_material";
@@ -720,9 +723,6 @@ DetectionResult detect_cuboid_top_face(
   result.result_code = Code::DETECT_RESULT_SUCCESS;
   result.processing_stage = "target_pose_estimation";
   result.diagnostic_detail = "cuboid_top_face; " + result.rawpart_candidate_generation;
-  if (!result.cuboid_replay_evidence) {
-    result.cuboid_replay_evidence = std::move(selected_replay);
-  }
   return result;
 }
 
