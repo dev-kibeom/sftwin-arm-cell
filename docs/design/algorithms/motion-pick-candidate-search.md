@@ -69,7 +69,7 @@ Motion은 선택된 후보에 대한 계산상 Planning 근거를 반환한다. 
 ### Material Candidate 순서
 
 1. `target_pose`는 이미 `base_link`로 전달되는 관측 상판 Pose이므로 Y 좌표를 기준으로 내림차순 정렬한다. 설치 좌표계/TF에서 Tray +Y는 로봇 쪽을 향하므로 Y가 큰 후보부터 Tray 안쪽(로봇 쪽)에서 바깥쪽으로 평가한다. 3차원 거리, 객체 하단, 자체 두께 또는 상판 법선 투영은 순위에 사용하지 않는다.
-2. Y가 같으면 관측 상판 높이 `target_pose.position.z`가 높은 후보를 먼저 평가한다. 객체 두께나 눕힌 면은 별도로 보정하지 않으며 적층 구분이나 높이 동등 그룹을 만들지 않는다.
+2. Y가 같으면 관측 상판 높이 `target_pose.position.z`가 높은 후보를 먼저 평가한다. 이 비교는 Vision이 전달한 적층 최상단 여부가 같은 후보에 적용한다.
 3. Y와 Z가 모두 같으면 `candidate_id` 오름차순으로 결정한다. 비교는 exact coordinate 값에 적용하며 Vision 열거 순서에 의존하지 않는다.
 
 가중 점수나 Vision 후보 순위로 대체하지 않는다. 이는 도메인 우선순위이지 Reachability·성공 보증이나 별도 Gate가 아니다. `top_height_tolerance_m`는 Vision의 관측 높이 비교 메타데이터이며 PICK 우선순위에는 사용하지 않는다. 후보 목록의 비어 있지 않은 단일 Acquisition ID와 중복 없는 비어 있지 않은 Candidate ID는 FDS/ICD의 입력 일관성 조건이다. 후보별 Pose·Geometry 검증에 실패한 항목은 기록·건너뛰되, 목록 전체의 ID 무결성 실패는 FDS가 분류한다. 후순위 후보를 미리 계획하거나 순위를 재계산하지 않는다.

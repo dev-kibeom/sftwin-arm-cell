@@ -191,6 +191,33 @@ TEST(PickCandidateSearchModule, UnifiedHighMediumCandidatesUseDistanceBeforeHeig
     fixture.blackboard->get<ExecuteTask::Goal>("pick_candidate_goal").vision_candidate_id, "C");
 }
 
+TEST(PickCandidateSearchModule, StackTopPrecedesCloserAndHigherCandidates)
+{
+  Fixture fixture;
+  auto a = candidate("A", 0.3);
+  auto b = candidate("B", 0.1);
+  auto c = candidate("C", 0.4);
+  a.target_pose.pose.position.y = 0.2;
+  b.target_pose.pose.position.y = 0.3;
+  c.target_pose.pose.position.y = 0.1;
+  a.is_stack_top = true;
+  ExecuteTask::Goal goal;
+  goal.material_candidates = {a, b, c};
+  fixture.blackboard->set("goal", goal);
+  PickCandidateSearch module(fixture.support);
+  BT::BehaviorTreeFactory factory;
+  module.register_nodes(factory, fixture.blackboard, fixture.report);
+  auto tree = factory.createTreeFromText(
+    "<root BTCPP_format=\"3\" main_tree_to_execute=\"Search\"><BehaviorTree ID=\"Search\">"
+    "<Sequence><PreparePickSearch/><SelectNextPickCandidate/>"
+    "<SelectNextPickCandidate/><SelectNextPickCandidate/></Sequence>"
+    "</BehaviorTree></root>", fixture.blackboard);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(module.attempted_candidate_ids(), (std::vector<std::string>{"A", "B", "C"}));
+  EXPECT_EQ(
+    fixture.blackboard->get<ExecuteTask::Goal>("pick_candidate_goal").vision_candidate_id, "C");
+}
+
 TEST(PickCandidateSearchModule, AcceptsHeightFirstPolicyAndKeepsVisionTieOrder)
 {
   Fixture fixture;

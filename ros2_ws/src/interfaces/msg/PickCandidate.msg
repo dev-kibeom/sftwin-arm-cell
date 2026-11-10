@@ -11,3 +11,6 @@ bool has_estimated_height
 bool has_observed_rectangle
 float32 rectangle_long_side_m
 float32 rectangle_short_side_m
+
+# Vision confirmed support by another material in this acquisition.
+bool is_stack_top

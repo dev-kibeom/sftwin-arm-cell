@@ -518,6 +518,7 @@ void DetectTargetService::handle(const Request & request, Response & response)
           value.acquisition_id = response.acquisition_id;
           value.candidate_id = "candidate-" + std::to_string(candidate_sequence++);
           value.target_pose = source.target_pose;
+          value.is_stack_top = source.is_stack_top;
           value.top_height_tolerance_m =
             detection->algorithm == "cuboid_top_face" && detection->applied_profile ?
             detection->applied_profile->cuboid.height_tolerance_m : 0.0;

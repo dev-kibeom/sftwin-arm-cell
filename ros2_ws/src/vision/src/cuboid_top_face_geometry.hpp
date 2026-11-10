@@ -123,6 +123,8 @@ struct Selection
   std::vector<uint32_t> competitors;
 };
 
+bool materially_overlaps(const Fit & a, const Fit & b, double spacing);
+
 std::map<uint32_t, Selection> select_hypotheses(
   const std::vector<Fit> & candidates, const CuboidHeightObservation & obs,
   const DetectorProfile & profile, size_t & operations);
