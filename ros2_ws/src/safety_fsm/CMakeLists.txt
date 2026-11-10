@@ -53,6 +53,11 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 
+  ament_add_gtest(test_safety_diagnostic_capture tests/test_safety_diagnostic_capture.cpp)
+  target_link_libraries(test_safety_diagnostic_capture ${PROJECT_NAME}_core)
+  target_include_directories(test_safety_diagnostic_capture PRIVATE include)
+  ament_target_dependencies(test_safety_diagnostic_capture rclcpp arm_cell_interfaces)
+
   ament_add_gtest(test_safety_core tests/test_safety_core.cpp)
   target_link_libraries(test_safety_core ${PROJECT_NAME}_core)
   target_include_directories(test_safety_core PRIVATE include)

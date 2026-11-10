@@ -70,10 +70,29 @@ void write_pick_execution_record(
     if (candidate_evidence.contains("global_planning")) {
       candidate_summary["global_planning"] = candidate_evidence["global_planning"];
     }
-    candidate_summary["motion_planning_summary_reference"] = {
-      {"path", "motion_planning_summaries/" + file_id + ".json"},
-      {"base", "motion_planning_records"}};
+    const auto summary_relative_path = "motion_planning_summaries/" + file_id + ".json";
+    const auto summary_path = directory.parent_path() / "motion_planning_records" /
+      summary_relative_path;
+    std::error_code summary_error;
+    const bool summary_saved = std::filesystem::is_regular_file(summary_path, summary_error) &&
+      !summary_error;
+    candidate_summary["motion_planning_summary_status"] = summary_saved ?
+      "saved" : "not_available_at_record_write";
+    candidate_summary["motion_planning_summary_reference"] = nullptr;
+    if (summary_saved) {
+      candidate_summary["motion_planning_summary_reference"] = {
+        {"path", summary_relative_path}, {"base", "motion_planning_records"}};
+    } else {
+      candidate_summary["motion_planning_summary_expected_path"] = summary_relative_path;
+    }
   }
+  const char * gripper_directory = std::getenv("ARM_CELL_GRIPPER_RECORD_DIR");
+  const auto capture_root = gripper_directory && *gripper_directory ?
+    std::filesystem::path(gripper_directory) : directory.parent_path().parent_path() / "gripper";
+  const auto capture_path = capture_root / (file_id + ".json");
+  std::error_code capture_error;
+  const bool capture_saved = !motion_goal_uuid.empty() &&
+    std::filesystem::is_regular_file(capture_path, capture_error) && !capture_error;
   try {
     std::filesystem::create_directories(directory);
     std::ofstream output(directory / (file_id + ".json"), std::ios::trunc);
@@ -83,11 +102,15 @@ void write_pick_execution_record(
            << "{\n  \"schema_version\": 1,\n"
            << "  \"motion_goal_uuid\": \"" << json_escape(motion_goal_uuid) << "\",\n"
            << "  \"capture_diagnostic_record_relative_path\": ";
-    if (motion_goal_uuid.empty()) {
-      output << "null,\n";
+    if (capture_saved) {
+      output << "\"" << json_escape(
+        std::filesystem::absolute(capture_path).lexically_relative(
+          std::filesystem::absolute(directory)).generic_string()) << "\",\n";
     } else {
-      output << "\"capture_diagnostic_records/" << file_id << ".json\",\n";
+      output << "null,\n";
     }
+    output << "  \"capture_diagnostic_record_status\": \"" <<
+      (capture_saved ? "saved" : "not_available_at_record_write") << "\",\n";
     output
       << "  \"vision_acquisition_id\": \"" << json_escape(goal.vision_acquisition_id) << "\",\n"
       << "  \"target_frame_id\": \"" << json_escape(goal.target_pose.header.frame_id) << "\",\n"
@@ -217,7 +240,7 @@ void queue_pick_execution_record_impl(
   const char * project_root = std::getenv("SFTWIN_PROJECT_ROOT");
   const auto directory = configured && *configured ? std::filesystem::path(configured) :
     (project_root && *project_root ? std::filesystem::path(project_root) :
-    std::filesystem::path(".")) / ".local_artifacts/pick_execution_records";
+    std::filesystem::path(".")) / ".local_artifacts/diagnostic_records/unassociated/motion/pick_execution_records";
   const auto accepted = pick_execution_record_writer().submit(
     [goal, motion_goal_uuid, stage, result_code, held, retract_succeeded,
     candidate_evaluation, directory]() {

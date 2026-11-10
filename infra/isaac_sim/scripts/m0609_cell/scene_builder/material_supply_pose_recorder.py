@@ -28,6 +28,7 @@ class RawPartPoseRecorder:
     ):
         self.stage = stage
         self.artifact_directory = Path(artifact_directory)
+        self._default_artifact_directory = self.artifact_directory
         self.live_test_session_id = live_test_session_id
         self.session_id: str | None = None
         self.session_path: Path | None = None
@@ -97,6 +98,8 @@ class RawPartPoseRecorder:
             self._last_sampled_at = now
         self._last_sim_time_ns = sim_time_ns
         if self.session_id is None:
+            if not current:
+                return
             self._start_session(sim_time_ns)
         for path, pose in current.items():
             previous = self._last_samples.get(path)
@@ -125,15 +128,39 @@ class RawPartPoseRecorder:
         self._last_sim_time_ns = None
         self._disabled_at_capacity = False
 
-    def bind_live_test_session(self, session_id: str | None) -> None:
-        if session_id != self.live_test_session_id:
+    def bind_live_test_session(
+        self, session_id: str | None, session_directory: Path | None = None
+    ) -> None:
+        directory = (
+            Path(session_directory) / "simulation"
+            if session_directory is not None
+            else self._default_artifact_directory
+        )
+        if session_id != self.live_test_session_id or directory != self.artifact_directory:
+            self.stop()
             self._simulation_epoch = 0
         self.live_test_session_id = session_id
+        self.artifact_directory = directory
 
     def _start_session(self, simulation_time_ns: int) -> None:
         self.artifact_directory.mkdir(parents=True, exist_ok=True)
         self.session_id = uuid.uuid4().hex
-        self.session_path = self.artifact_directory / f"{self.session_id}.jsonl"
+        sequence = 1 + max(
+            (
+                int(path.stem.removeprefix("object_poses-"))
+                for path in self.artifact_directory.glob("object_poses-*.jsonl")
+                if path.stem.removeprefix("object_poses-").isdigit()
+            ),
+            default=0,
+        )
+        while True:
+            self.session_path = self.artifact_directory / f"object_poses-{sequence:02d}.jsonl"
+            try:
+                with self.session_path.open("x", encoding="utf-8"):
+                    pass
+                break
+            except FileExistsError:
+                sequence += 1
         self._append(
             "session_started",
             {
@@ -144,7 +171,7 @@ class RawPartPoseRecorder:
             simulation_time_ns,
         )
         sessions = sorted(
-            self.artifact_directory.glob("*.jsonl"),
+            self.artifact_directory.glob("object_poses-*.jsonl"),
             key=lambda path: path.stat().st_mtime_ns,
             reverse=True,
         )

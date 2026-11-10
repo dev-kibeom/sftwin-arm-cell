@@ -194,7 +194,7 @@ def _start_live_test_session():
         os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"] = str(_live_test_session.descriptor)
         if _material_supply_adapter is not None:
             _material_supply_adapter.set_live_test_session_id(
-                _live_test_session.session_id
+                _live_test_session.session_id, _live_test_session.root
             )
     except Exception as error:
         _live_test_session = None
@@ -339,7 +339,9 @@ def _start_material_supply_adapter(context):
                 context.tray_y,
                 context.amr_tray_z + 0.0225,
             ),
-            artifact_directory=project_root / ".local_artifacts/isaac_pose_recordings",
+            artifact_directory=(
+                project_root / ".local_artifacts/diagnostic_records/unassociated/simulation"
+            ),
             timeline=omni.timeline.get_timeline_interface(),
         )
     except Exception:

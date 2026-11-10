@@ -1,23 +1,28 @@
 """Compose the supported software-only ARM Cell operational profile."""
 
 import fcntl
-from datetime import datetime, timezone
+import hashlib
+from datetime import datetime
 import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
+import uuid
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
+from launch.logging import launch_config
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     LogInfo,
     OpaqueFunction,
+    RegisterEventHandler,
 )
 from launch.actions import SetEnvironmentVariable
+from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
@@ -213,7 +218,7 @@ def _git_provenance(artifact_directory):
     return result
 
 
-def join_live_test_session(artifact_directory):
+def _live_isaac_descriptors(artifact_directory):
     """Join only one explicit open Isaac descriptor; never guess by recency."""
     root = Path(artifact_directory) / "diagnostic_records"
     descriptors = []
@@ -253,6 +258,14 @@ def join_live_test_session(artifact_directory):
                 continue
             descriptors.append((descriptor, data))
     if len(descriptors) != 1 or unreadable:
+        return []
+    return descriptors
+
+
+def join_live_test_session(artifact_directory):
+    """Join a unique live Isaac session only once per Vision namespace."""
+    descriptors = _live_isaac_descriptors(artifact_directory)
+    if not descriptors:
         return None
     descriptor, data = descriptors[0]
     try:
@@ -269,6 +282,9 @@ def join_live_test_session(artifact_directory):
         "git_provenance": _git_provenance(artifact_directory),
     }
     recording_locations = {
+        "ros_logs": str(launch_config.log_dir),
+        "clock": str(descriptor.parent / "clock"),
+        "simulation": str(descriptor.parent / "simulation"),
         "snapshots": str(
             Path(artifact_directory)
             / "snapshots"
@@ -304,10 +320,16 @@ def join_live_test_session(artifact_directory):
             ):
                 return None
             participants = latest.setdefault("participants", [])
+            # Recheck under the descriptor lock: separate Bringups cannot
+            # share Acquisition Generation numbers after a Vision restart.
+            if any(p.get("process") == "ros_bringup" and p.get("instance_id") != instance_id
+                   for p in participants if isinstance(p, dict)):
+                return None
             if not any(item.get("instance_id") == instance_id for item in participants):
                 participants.append(participant)
             # These are writer destinations, not a claim that files already
             # exist or that shared snapshot directories belong to this session.
+            latest.setdefault("camera_configuration", camera_configuration_provenance())
             latest.setdefault("recording_locations", {}).update(recording_locations)
             temporary.write_text(
                 json.dumps(latest, indent=2, sort_keys=True) + "\n",
@@ -324,21 +346,153 @@ def join_live_test_session(artifact_directory):
     return descriptor.parent
 
 
-def reserve_snapshot_run_directory(artifact_directory):
-    """Choose one shared date/time folder for this bringup's snapshots."""
-    now = datetime.now(timezone.utc)
-    date_directory = Path(artifact_directory) / "snapshots" / now.strftime("%Y%m%d")
-    date_directory.mkdir(parents=True, exist_ok=True)
-    timestamp = now.strftime("%H%M%S")
-    suffix = 0
-    while True:
-        run_name = timestamp if suffix == 0 else f"{timestamp}-{suffix}"
-        candidate = date_directory / run_name
+def camera_configuration_provenance():
+    """Identify the default calibration input without changing camera behavior."""
+    try:
+        path = (Path(get_package_share_directory("arm_cell_vision")) /
+                "config/isaac_d455_camera_calibration.json")
+        return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "scope": "packaged_default"}
+    except (OSError, LookupError):
+        return {"path": None, "sha256": None, "scope": "packaged_default", "status": "unavailable"}
+
+
+def create_recording_session(artifact_directory, runtime, related_session_id=None, related_session_root=None):
+    """Create a ROS-owned descriptor when no Isaac session can be joined."""
+    now = datetime.now().astimezone()
+    date_root = Path(artifact_directory) / "diagnostic_records" / now.strftime("%Y%m%d")
+    root = None
+    temporary = None
+    try:
+        date_root.mkdir(parents=True, exist_ok=True)
+        suffix = 0
+        while True:
+            name = now.strftime("%H%M%S") + (f"-{suffix:02d}" if suffix else "")
+            root = date_root / name
+            try:
+                root.mkdir()
+                break
+            except FileExistsError:
+                suffix += 1
+        data = {
+            "schema_version": 1,
+            "session_id": str(uuid.uuid4()),
+            "status": "open",
+            "owner": "ros_bringup",
+            "owner_pid": os.getpid(),
+            "related_live_test_session_id": related_session_id,
+            "runtime": runtime,
+            "camera_configuration": camera_configuration_provenance(),
+            "started_at": now.isoformat(),
+            "timezone": str(now.tzinfo),
+            "ended_at": None,
+            "end_condition": None,
+            "participants": [{"process": "ros_bringup", "instance_id": str(os.getpid()),
+                              "status": "participating",
+                              "git_provenance": _git_provenance(artifact_directory)}],
+            "recording_locations": {
+                name: str(root / name)
+                for name in ("vision", "motion", "gripper", "safety", "orchestration", "clock", "simulation")
+            },
+        }
+        if related_session_root is not None:
+            related_root = Path(related_session_root)
+            related_data = json.loads((related_root / "session.json").read_text(encoding="utf-8"))
+            if related_data.get("session_id") != related_session_id:
+                raise ValueError("related Isaac session changed")
+            data["related_live_test_session_path"] = str(related_root / "session.json")
+            for component in ("gripper", "simulation"):
+                source = Path(related_data.get("recording_locations", {}).get(component, component))
+                if not source.is_absolute():
+                    source = related_root / source
+                data["recording_locations"][component] = str(source)
+        data["recording_locations"]["ros_logs"] = str(launch_config.log_dir)
+        data["recording_locations"]["snapshots"] = str(
+            Path(artifact_directory) / "snapshots" / root.parent.name / root.name)
+        descriptor = root / "session.json"
+        temporary = descriptor.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, descriptor)
+        return root
+    except (OSError, ValueError):
         try:
-            candidate.mkdir()
-            return candidate
-        except FileExistsError:
-            suffix += 1
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+            if root is not None:
+                root.rmdir()
+        except OSError:
+            pass
+        return None
+
+
+def record_session_configuration(root, config, profile_path, selection, include_simulation):
+    """Index selected inputs; recording failures never affect runtime results."""
+    descriptor = Path(root) / "session.json"
+    calibration = Path(vision_profile_parameters(config, profile_path)["calibration_file"])
+    try:
+        calibration_hash = hashlib.sha256(calibration.read_bytes()).hexdigest()
+    except OSError:
+        calibration_hash = None
+    vision = config.get("vision", {})
+    camera_topic = vision.get("camera_info_topic", "")
+    camera_id = vision.get("camera_id")
+    selection_record = {
+        "diagnostic_selection": sorted(selection),
+        "simulation_composition_enabled": include_simulation,
+        "camera": {
+            "camera_id": camera_id,
+            "identity_status": "configured" if camera_id else "not_configured",
+            "camera_info_topic": camera_topic,
+            "rgb_topic": vision.get("rgb_topic"),
+            "depth_topic": vision.get("depth_topic"),
+            "vision_calibration": {"path": str(calibration), "sha256": calibration_hash,
+                                   "status": "available" if calibration_hash else "unavailable"},
+        },
+    }
+    try:
+        with Path(str(descriptor) + ".lock").open("a+") as lock_stream:
+            fcntl.flock(lock_stream, fcntl.LOCK_EX)
+            data = json.loads(descriptor.read_text(encoding="utf-8"))
+            if data.get("status") != "open":
+                return
+            data.update(selection_record)
+            temporary = descriptor.with_suffix(".json.tmp")
+            temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, descriptor)
+    except (OSError, ValueError, AttributeError):
+        pass
+
+
+def finish_recording_session(context, root):
+    """Only a clean launch shutdown closes a ROS-owned recording session."""
+    descriptor = Path(root) / "session.json"
+    try:
+        with Path(str(descriptor) + ".lock").open("a+") as lock_stream:
+            fcntl.flock(lock_stream, fcntl.LOCK_EX)
+            data = json.loads(descriptor.read_text(encoding="utf-8"))
+            if (data.get("owner") != "ros_bringup" or data.get("status") != "open"
+                    or data.get("owner_pid") != os.getpid()):
+                return []
+            data.update(status="closed", ended_at=datetime.now().astimezone().isoformat(),
+                        end_condition="bringup_shutdown")
+            for participant in data.get("participants", []):
+                participant["status"] = "session_ended"
+            temporary = descriptor.with_suffix(".json.tmp")
+            temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, descriptor)
+    except (OSError, ValueError, AttributeError):
+        pass
+    return []
+
+
+def reserve_snapshot_run_directory(artifact_directory, session_root=None):
+    """Choose the session's shared destination; writers create it on first save."""
+    if session_root is not None:
+        return (Path(artifact_directory) / "snapshots" /
+                Path(session_root).parent.name / Path(session_root).name)
+    now = datetime.now().astimezone()
+    return (Path(artifact_directory) / "snapshots" / now.strftime("%Y%m%d") /
+            f"{now:%H%M%S}-{now:%f}-{os.getpid()}")
 
 
 def node_ros_arguments(
@@ -390,12 +544,27 @@ def compose(context):
     )
     artifact_directory = Path(project_artifacts_directory())
     live_session_root = join_live_test_session(artifact_directory)
+    owns_recording_session = live_session_root is None
+    related_session_root = live_session_root
+    if live_session_root is None:
+        runtime = ("simulation" if LaunchConfiguration("include_simulation").perform(context).lower() == "true"
+                   else "unspecified")
+        related = _live_isaac_descriptors(artifact_directory)
+        related_id = related[0][1]["session_id"] if len(related) == 1 else None
+        related_session_root = related[0][0].parent if len(related) == 1 else None
+        live_session_root = create_recording_session(artifact_directory, runtime, related_id, related_session_root)
     live_session_id = None
+    gripper_record_directory = None
     if live_session_root:
         try:
-            live_session_id = json.loads(
+            session_data = json.loads(
                 (live_session_root / "session.json").read_text(encoding="utf-8")
-            ).get("session_id")
+            )
+            live_session_id = session_data.get("session_id")
+            gripper_record_directory = Path(
+                session_data.get("recording_locations", {}).get("gripper", "gripper"))
+            if not gripper_record_directory.is_absolute():
+                gripper_record_directory = live_session_root / gripper_record_directory
         except (OSError, ValueError, AttributeError):
             live_session_root = None
         if not live_session_id:
@@ -403,23 +572,23 @@ def compose(context):
     vision_artifact_directory = (
         live_session_root / "vision"
         if live_session_root
-        else artifact_directory / "observability" / "vision"
+        else artifact_directory / "diagnostic_records" / "unassociated" / "vision"
     )
-    snapshot_run_directory = reserve_snapshot_run_directory(artifact_directory)
+    snapshot_run_directory = reserve_snapshot_run_directory(artifact_directory, live_session_root)
     motion_artifact_directory = (
         live_session_root / "motion"
         if live_session_root
-        else artifact_directory / "observability"
+        else artifact_directory / "diagnostic_records" / "unassociated" / "motion"
     )
     safety_artifact_directory = (
         live_session_root / "safety"
         if live_session_root
-        else artifact_directory / "observability" / "safety"
+        else artifact_directory / "diagnostic_records" / "unassociated" / "safety"
     )
     orchestration_artifact_directory = (
         live_session_root / "orchestration"
         if live_session_root
-        else artifact_directory / "observability" / "orchestration"
+        else artifact_directory / "diagnostic_records" / "unassociated" / "orchestration"
     )
     selected_action_logger_level = LaunchConfiguration("action_logger_level").perform(
         context
@@ -473,6 +642,9 @@ def compose(context):
     include_simulation = (
         LaunchConfiguration("include_simulation").perform(context).lower() == "true"
     )
+    if live_session_root:
+        record_session_configuration(live_session_root, config, profile_path,
+                                     selected_diagnostics, include_simulation)
     if not readiness.get("fail_closed_until_inputs_fresh", False):
         raise RuntimeError("operational profile must keep Safety fail-closed")
     if readiness.get("required_motion_backend", False) and not include_simulation:
@@ -499,7 +671,7 @@ def compose(context):
                 f"Safety detail logger={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
                 f"Orchestration detail logger={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
                 "Isaac Gripper baseline capture is always enabled; detailed PhysX selection is session-local, "
-                f"ROS session association={'joined' if live_session_root else 'unassociated'}, "
+                f"ROS session association={'created' if owns_recording_session and live_session_root else 'joined' if live_session_root else 'unassociated'}, "
                 f"artifact_root={artifact_directory}"
             )
         ),
@@ -617,6 +789,16 @@ def compose(context):
             ],
         ),
     ]
+    if live_session_root:
+        actions.insert(1, SetEnvironmentVariable(
+            "ARM_CELL_RECORDING_SESSION_PATH", str(live_session_root / "session.json")))
+        actions.insert(1, SetEnvironmentVariable(
+            "ARM_CELL_GRIPPER_RECORD_DIR", str(gripper_record_directory)))
+    if live_session_root and owns_recording_session:
+        actions.append(RegisterEventHandler(OnShutdown(
+            on_shutdown=[OpaqueFunction(function=finish_recording_session,
+                                        args=[live_session_root])]
+        )))
     if live_session_root and not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
         actions.insert(
             1,

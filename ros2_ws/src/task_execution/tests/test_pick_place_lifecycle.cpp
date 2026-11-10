@@ -1422,8 +1422,7 @@ TEST(
     std::string::npos);
   EXPECT_NE(
     record.find(
-      "\"capture_diagnostic_record_relative_path\": "
-      "\"capture_diagnostic_records/motion-goal-diagnostic-test.json\""),
+      "\"capture_diagnostic_record_relative_path\": null"),
     std::string::npos);
   EXPECT_EQ(record.find("\"execution_id\""), std::string::npos);
   EXPECT_NE(record.find("test-acquisition"), std::string::npos);
@@ -1447,10 +1446,19 @@ TEST(
 TEST(TaskExecutorPickPlaceTest, PickExecutionRecordKeepsCompactCandidateSummaryAndPlanningReference)
 {
   ScopedEnvironmentVariable record_directory("ARM_CELL_PICK_EXECUTION_RECORD_DIR");
-  const auto directory = std::filesystem::temp_directory_path() /
+  const auto root = std::filesystem::temp_directory_path() /
     ("arm-cell-pick-compact-record-" + std::to_string(
       std::chrono::steady_clock::now().time_since_epoch().count()));
+  const auto directory = root / "pick_execution_records";
   ASSERT_EQ(::setenv("ARM_CELL_PICK_EXECUTION_RECORD_DIR", directory.c_str(), 1), 0);
+  ScopedEnvironmentVariable gripper_directory("ARM_CELL_GRIPPER_RECORD_DIR");
+  const auto summary_root = root / "motion_planning_records/motion_planning_summaries";
+  std::filesystem::create_directories(summary_root);
+  std::ofstream(summary_root / "motion-goal-compact-test.json") << "{}\n";
+  const auto gripper_root = root / "gripper";
+  std::filesystem::create_directories(gripper_root);
+  ASSERT_EQ(::setenv("ARM_CELL_GRIPPER_RECORD_DIR", gripper_root.c_str(), 1), 0);
+  std::ofstream(gripper_root / "motion-goal-compact-test.json") << "{}\n";
   auto backend = std::make_shared<RecordingBackend>();
   auto evidence = nlohmann::json::object();
   evidence["generated_candidate_count"] = 48;
@@ -1489,13 +1497,16 @@ TEST(TaskExecutorPickPlaceTest, PickExecutionRecordKeepsCompactCandidateSummaryA
   }
   ASSERT_TRUE(record.has_value());
   EXPECT_LT(serialized.size(), 10U * 1024U);
+  EXPECT_EQ(record->at("capture_diagnostic_record_status"), "saved");
+  EXPECT_EQ(record->at("capture_diagnostic_record_relative_path"),
+    "../gripper/motion-goal-compact-test.json");
   EXPECT_EQ(record->at("candidate_evaluation").at("candidate_result"), "PLANNED_SELECTED");
   EXPECT_EQ(record->at("candidate_evaluation").at("generated_candidate_count"), 48);
   EXPECT_EQ(
     record->at("candidate_evaluation").at("motion_planning_summary_reference").at("path"),
     "motion_planning_summaries/motion-goal-compact-test.json");
   EXPECT_FALSE(record->at("candidate_evaluation").contains("grasp_pose_candidates"));
-  std::filesystem::remove_all(directory);
+  std::filesystem::remove_all(root);
 }
 
 TEST(TaskExecutorPickPlaceTest, PickGoalCanSelectPlanningFrameVerticalApproach)

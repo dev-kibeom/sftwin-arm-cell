@@ -70,6 +70,59 @@ def _events(path: Path):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+def test_empty_scene_does_not_create_recording_directory(tmp_path):
+    destination = tmp_path / "simulation"
+    recorder = RawPartPoseRecorder(_Stage(), destination)
+    recorder.sample(_PhysX(), 0.0, now=0.0)
+    assert not destination.exists()
+
+
+def test_session_binding_changes_destination_without_mixing_records(tmp_path):
+    stage = _Stage()
+    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000")
+    stage.prims = [prim]
+    physx = _PhysX()
+    physx.states[prim.path] = _pose()
+    recorder = RawPartPoseRecorder(stage, tmp_path / "unassociated")
+    first = tmp_path / "session-a"
+    second = tmp_path / "session-b"
+    recorder.bind_live_test_session("a", first)
+    assert not first.exists()
+    recorder.sample(physx, 1.0, now=0.0)
+    first_path = first / "simulation/object_poses-01.jsonl"
+    original = first_path.read_bytes()
+    recorder.bind_live_test_session("b", second)
+    recorder.sample(physx, 1.2, now=0.2)
+    assert first_path.read_bytes() == original
+    assert all(
+        event["live_test_session_id"] == "b"
+        for event in _events(second / "simulation/object_poses-01.jsonl")
+    )
+    recorder.stop()
+    recorder.sample(physx, 1.4, now=0.4)
+    assert (second / "simulation/object_poses-02.jsonl").is_file()
+    assert not (tmp_path / "unassociated").exists()
+
+
+def test_pose_retention_preserves_other_simulation_records(tmp_path, monkeypatch):
+    import scene_builder.material_supply_pose_recorder as module
+
+    monkeypatch.setattr(module, "MAX_SESSIONS", 1)
+    unrelated = tmp_path / "events.jsonl"
+    unrelated.write_text("unrelated\n")
+    stage = _Stage()
+    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000")
+    stage.prims = [prim]
+    physx = _PhysX()
+    physx.states[prim.path] = _pose()
+    recorder = RawPartPoseRecorder(stage, tmp_path)
+    recorder.sample(physx, 1.0, now=0.0)
+    recorder.stop()
+    recorder.sample(physx, 1.2, now=0.2)
+    assert unrelated.read_text() == "unrelated\n"
+    assert len(list(tmp_path.glob("object_poses-*.jsonl"))) == 1
+
+
 def test_recorder_writes_initial_pose_and_suppresses_still_pose(tmp_path):
     stage = _Stage()
     prim = _Prim(

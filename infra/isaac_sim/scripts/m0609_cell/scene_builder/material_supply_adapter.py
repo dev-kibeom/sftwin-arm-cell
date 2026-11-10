@@ -55,7 +55,9 @@ class IsaacMaterialSupplyAdapter:
         profile: MaterialSupplyProfile,
         shelf_origin_m: tuple[float, float, float],
         delivery_deadline_ms: int,
-        artifact_directory: Path = Path(".local_artifacts/isaac_pose_recordings"),
+        artifact_directory: Path = Path(
+            ".local_artifacts/diagnostic_records/unassociated/simulation"
+        ),
         timeline: Any | None = None,
     ) -> None:
         self.stage = stage
@@ -120,9 +122,11 @@ class IsaacMaterialSupplyAdapter:
         self._runs.clear()
         self.sidecar.close()
 
-    def set_live_test_session_id(self, session_id: str | None) -> None:
+    def set_live_test_session_id(
+        self, session_id: str | None, session_directory: Path | None = None
+    ) -> None:
         """Bind pose observations to the active Isaac Play-to-Stop session."""
-        self.pose_recorder.bind_live_test_session(session_id)
+        self.pose_recorder.bind_live_test_session(session_id, session_directory)
 
     def reset_generated_materials(self, attachment_reset=None) -> bool:
         """Reset attachment ownership before material and report canceled work."""

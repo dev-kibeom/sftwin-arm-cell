@@ -455,3 +455,59 @@ TEST_F(ActionHandoffBoundaryTest, DisturbLateAcceptanceCancelsOnlyOriginal)
     false);
 }
 }
+
+TEST(DiagnosticCaptureStorage, IdleWriterDoesNotCreateDirectory)
+{
+  const auto root = std::filesystem::temp_directory_path() /
+    ("arm-cell-idle-capture-" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  {
+    arm_cell_orchestration::OrchestrationDiagnosticCapture capture(
+      root.string(), rclcpp::get_logger("diagnostic_capture_test"));
+  }
+  EXPECT_FALSE(std::filesystem::exists(root));
+}
+
+TEST(DiagnosticCaptureStorage, FirstEventIsDrainedAndSummarizedOnShutdown)
+{
+  const auto root = std::filesystem::temp_directory_path() /
+    ("arm-cell-event-capture-" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  {
+    arm_cell_orchestration::OrchestrationDiagnosticCapture capture(
+      root.string(), rclcpp::get_logger("diagnostic_capture_test"));
+    EXPECT_TRUE(capture.enqueue(arm_cell_orchestration::detail::QueuedOrchestrationRecord{}));
+  }
+  ASSERT_TRUE(std::filesystem::is_directory(root));
+  std::size_t count = 0;
+  for (const auto & entry : std::filesystem::directory_iterator(root)) {
+    std::ifstream input(entry.path());
+    std::string line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(input, line)));
+    EXPECT_NE(line.find("schema_version"), std::string::npos);
+    ASSERT_TRUE(static_cast<bool>(std::getline(input, line)));
+    EXPECT_NE(line.find("capture_summary"), std::string::npos);
+    ++count;
+  }
+  EXPECT_EQ(count, 1U);
+  std::filesystem::remove_all(root);
+}
+
+TEST(DiagnosticCaptureStorage, RejectedFirstEventDoesNotOpenAnotherFile)
+{
+  const auto root = std::filesystem::temp_directory_path() /
+    ("arm-cell-full-capture-" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(root);
+  const auto retained = root / "retained.jsonl";
+  std::ofstream(retained).close();
+  std::filesystem::resize_file(retained, arm_cell_orchestration::kDiagnosticByteLimit - 600U);
+  {
+    arm_cell_orchestration::OrchestrationDiagnosticCapture capture(
+      root.string(), rclcpp::get_logger("diagnostic_capture_test"));
+    EXPECT_TRUE(capture.enqueue(arm_cell_orchestration::detail::QueuedOrchestrationRecord{}));
+  }
+  EXPECT_EQ(std::distance(std::filesystem::directory_iterator(root),
+    std::filesystem::directory_iterator{}), 1);
+  std::filesystem::remove_all(root);
+}
