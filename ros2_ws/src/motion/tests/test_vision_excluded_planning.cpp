@@ -313,5 +313,60 @@ TEST_F(RequestScopedOccupancyTest, MoveItPlanningPipelineUsesPickAndPlaceRequest
   EXPECT_TRUE(collides(*unchanged_scene, 2.0));
 }
 
+TEST_F(RequestScopedOccupancyTest, VerifyKnuckleExceptionKeepsOtherCollisions) {
+  for (const std::string knuckle : {"gripper_robotiq_85_left_inner_knuckle_link",
+                                    "gripper_robotiq_85_right_inner_knuckle_link"}) {
+    auto xml = urdf_;
+    std::size_t pos = 0;
+    while ((pos = xml.find("brace", pos)) != std::string::npos) {
+      xml.replace(pos, 5, knuckle);
+      pos += knuckle.size();
+    }
+    auto u = urdf::parseURDF(xml);
+    auto sr = std::make_shared<srdf::Model>();
+    ASSERT_TRUE(sr->initString(*u, srdf_));
+    auto model = std::make_shared<moveit::core::RobotModel>(u, sr);
+    planning_scene::PlanningScene scene(model);
+    geometry_msgs::msg::Transform relation;
+    relation.rotation.w = 1;
+    relation.translation.x = 2;
+    auto payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+    EXPECT_NE(std::find(payload.touch_links.begin(), payload.touch_links.end(), knuckle),
+              payload.touch_links.end());
+    payload.touch_links.erase(
+        std::remove(payload.touch_links.begin(), payload.touch_links.end(), knuckle),
+        payload.touch_links.end());
+    ASSERT_TRUE(scene.processAttachedCollisionObjectMsg(payload));
+    collision_detection::CollisionRequest req;
+    req.contacts = true;
+    req.max_contacts = 100;
+    collision_detection::CollisionResult before;
+    scene.checkCollision(req, before, scene.getCurrentState());
+    EXPECT_TRUE(before.collision);
+    EXPECT_TRUE(before.contacts.count(std::minmax(std::string("accepted_pick_payload"), knuckle)) >
+                0);
+    payload.touch_links.push_back(knuckle);
+    ASSERT_TRUE(scene.processAttachedCollisionObjectMsg(payload));
+    collision_detection::CollisionResult after;
+    scene.checkCollision(req, after, scene.getCurrentState());
+    EXPECT_FALSE(after.collision);
+    relation.translation.x = 1;
+    payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+    payload.touch_links.push_back(knuckle);
+    ASSERT_TRUE(scene.processAttachedCollisionObjectMsg(payload));
+    collision_detection::CollisionResult arm;
+    scene.checkCollision(req, arm, scene.getCurrentState());
+    EXPECT_TRUE(arm.collision);
+    relation.translation.x = -2;
+    payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+    payload.touch_links.push_back(knuckle);
+    ASSERT_TRUE(scene.processAttachedCollisionObjectMsg(payload));
+    add_box(scene, "external_obstacle", 3);
+    collision_detection::CollisionResult world;
+    scene.checkCollision(req, world, scene.getCurrentState());
+    EXPECT_TRUE(world.collision);
+  }
+}
+
 }  // namespace
 }  // namespace arm_cell_motion
