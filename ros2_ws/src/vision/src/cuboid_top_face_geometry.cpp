@@ -659,6 +659,23 @@ PlaneMap build_plane_map(const CuboidHeightObservation & obs, const DetectorProf
     map.recovered_inclined_regions.push_back(std::move(combined));
     map.recovered_inclined_contours.push_back(std::move(contours));
   }
+  auto support_planes = std::make_shared<std::vector<PlaneRegion>>();
+  for (const auto & region : map.regions) {
+    if (region.status == "horizontal") {support_planes->push_back(region);}
+  }
+  auto support_profile = profile;
+  support_profile.support_contact_tolerance_m = -profile.support_contact_tolerance_m;
+  support_profile.workspace_roi_min_m[2] = -profile.support_contact_tolerance_m;
+  support_profile.workspace_roi_max_m[2] = profile.support_contact_tolerance_m;
+  for (auto & support : extract_plane_regions(obs, support_profile)) {
+    // The calibrated Tray may have a small residual slope across its full
+    // extent. Its coherent low plane is still useful as local support evidence.
+    if (support.plane_fitted && support.residual_m <= profile.cuboid.height_tolerance_m) {
+      support.status = "horizontal";
+      support_planes->push_back(std::move(support));
+    }
+  }
+  for (auto & region : map.regions) {region.support_planes = support_planes;}
   return map;
 }
 
@@ -951,74 +968,6 @@ bool recipe_continuation(double remaining, const std::vector<Face> & catalog,
 // A nearby lower top is not necessarily below this object. Require one
 // continuous observed region along opposing original boundary segments; do not
 // combine disconnected neighbours or use an inferred/clipped edge as evidence.
-static std::optional<double> observed_lower_support_height(
-  cv::Mat ring, const CuboidHeightObservation & obs, const DetectorProfile & profile,
-  double top, const std::array<std::vector<const Segment *>, 4> & observed_sides)
-{
-  std::vector<cv::Point> seeds;
-  double lowest = std::numeric_limits<double>::infinity();
-  double highest = -std::numeric_limits<double>::infinity();
-  for (int y = 0; y < ring.rows; ++y) {
-    for (int x = 0; x < ring.cols; ++x) {
-      if (!ring.at<uint8_t>(y, x)) {continue;}
-      const double z = obs.heights.at<double>(y, x);
-      if (!std::isfinite(z) || z >= top - profile.cuboid.height_tolerance_m) {
-        ring.at<uint8_t>(y, x) = 0; continue;
-      }
-      seeds.emplace_back(x, y);
-      lowest = std::min(lowest, z); highest = std::max(highest, z);
-    }
-  }
-  if (seeds.empty() || highest - lowest > profile.support_contact_tolerance_m) {
-    return std::nullopt;
-  }
-  const double band = std::ceil(profile.cuboid.line_residual_limit_px) * obs.spacing_m;
-  std::optional<double> support_height;
-  for (const auto & seed : seeds) {
-    if (!ring.at<uint8_t>(seed)) {continue;}
-    ring.at<uint8_t>(seed) = 0;
-    std::vector<cv::Point> pending{seed};
-    std::array<bool, 4> sides{};
-    double sum = 0;
-    double region_lowest = std::numeric_limits<double>::infinity();
-    double region_highest = -std::numeric_limits<double>::infinity();
-    size_t count = 0;
-    while (!pending.empty()) {
-      const auto pixel = pending.back(); pending.pop_back();
-      const double z = obs.heights.at<double>(pixel);
-      sum += z; ++count;
-      region_lowest = std::min(region_lowest, z); region_highest = std::max(region_highest, z);
-      const auto xy = obs.origin + cv::Point2d(pixel) * obs.spacing_m;
-      for (size_t side = 0; side < sides.size(); ++side) {
-        for (const auto * line : observed_sides[side]) {
-          const auto delta = line->last - line->first;
-          const double length = cv::norm(delta);
-          const auto direction = delta / length;
-          const auto offset = xy - line->first;
-          const double along = offset.dot(direction);
-          if (along >= 0 && along <= length &&
-            std::abs(offset.dot(cv::Point2d(-direction.y, direction.x))) <= band)
-          {sides[side] = true;}
-        }
-      }
-      for (int dy = -1; dy <= 1; ++dy) {
-        for (int dx = -1; dx <= 1; ++dx) {
-          const cv::Point next = pixel + cv::Point(dx, dy);
-          if (next.x < 0 || next.y < 0 || next.x >= ring.cols || next.y >= ring.rows ||
-            !ring.at<uint8_t>(next) || !within_height_tolerance(
-              z, obs.heights.at<double>(next), profile.cuboid.height_tolerance_m)) {continue;}
-          ring.at<uint8_t>(next) = 0; pending.push_back(next);
-        }
-      }
-    }
-    if (region_highest - region_lowest > profile.cuboid.height_tolerance_m ||
-      !((sides[0] && sides[1]) || (sides[2] && sides[3]))) {continue;}
-    if (support_height) {return std::nullopt;}
-    support_height = sum / count;
-  }
-  return support_height;
-}
-
 // Every hypothesis starts at an observed convex corner. Additional connected
 // contour edges validate that same hypothesis; they never create a second path.
 std::string evaluate_outline(
@@ -1114,18 +1063,60 @@ std::string evaluate_outline(
   const auto uncertainty_kernel = cv::Mat::ones(2 * residual_cells + 1,
     2 * residual_cells + 1, CV_8U);
   cv::dilate(patch.cells, observed_tolerant, uncertainty_kernel);
-  // Only observed lower cells beside the observed outline can support a
-  // thickness interpretation. Neither missing cells nor inferred edges are ground.
-  cv::Mat support_ring;
-  cv::dilate(fit.mask, support_ring, uncertainty_kernel);
-  support_ring &= observed_tolerant & ~fit.mask;
-  fit.support_height_m = observed_lower_support_height(
-    support_ring, obs, profile, fit.top, observed_sides);
+  // Support identities and observed areas are owned by the Plane Map.
+  if (patch.support_planes) {
+    std::optional<double> adjacent_height;
+    for (const auto & support_plane : *patch.support_planes) {
+      if (support_plane.status != "horizontal" ||
+        support_plane.height >= fit.top - tolerance) {continue;}
+      size_t supported_sides = 0;
+      for (const auto & side : observed_sides) {
+        double contact_length = 0;
+        for (const auto * line : side) {
+          const auto delta = line->last - line->first;
+          const double length = cv::norm(delta);
+          if (length <= 0) {continue;}
+          const auto direction = delta / length;
+          double first = length, last = 0;
+          for (const auto & pixel : support_plane.pixels) {
+            if (fit.mask.at<uint8_t>(pixel)) {continue;}
+            const auto xy = obs.origin + cv::Point2d(pixel) * obs.spacing_m;
+            const auto offset = xy - line->first;
+            const double along = offset.dot(direction);
+            if (along >= 0 && along <= length &&
+              std::abs(offset.dot(cv::Point2d(-direction.y, direction.x))) <=
+              2 * obs.spacing_m) {
+              first = std::min(first, along); last = std::max(last, along);
+            }
+          }
+          contact_length += std::max(0.0, last - first);
+        }
+        if (contact_length > 2 * epsilon) {++supported_sides;}
+      }
+      if (supported_sides == 0) {continue;}
+      if (adjacent_height &&
+        !within_height_tolerance(*adjacent_height, support_plane.height, tolerance)) {
+        fit.support_height_m.reset();
+        break;
+      }
+      adjacent_height = support_plane.height;
+      if (supported_sides < 2) {continue;}
+      if (fit.support_height_m &&
+        !within_height_tolerance(*fit.support_height_m, support_plane.height, tolerance)) {
+        fit.support_height_m.reset();
+        break;
+      }
+      fit.support_height_m = support_plane.height;
+    }
+  }
   if (fit.support_height_m) {
-    fit.tray_support_evidence +=
-      std::abs(fit.top - fit.face.thickness - *fit.support_height_m) <=
-      profile.support_contact_tolerance_m ? ";observed_lower_plane_matches_bottom" :
-      ";observed_lower_plane_does_not_match_bottom";
+    const bool matches = std::abs(fit.top - fit.face.thickness - *fit.support_height_m) <=
+      profile.support_contact_tolerance_m;
+    fit.tray_support_evidence = matches ?
+      "observed_lower_plane_matches_bottom" : "observed_lower_plane_does_not_match_bottom";
+    if (matches && std::abs(*fit.support_height_m) <= profile.support_contact_tolerance_m) {
+      fit.tray_support_evidence = "direct_tray_support_confirmed";
+    }
   }
   cv::Mat interior;
   cv::erode(fit.mask, interior, uncertainty_kernel);
@@ -1181,7 +1172,10 @@ std::string evaluate_outline(
       low_v = std::min(low_v, relative.dot(v)); high_v = std::max(high_v, relative.dot(v));
       heights.push_back(obs.heights.at<double>(pixel.y, pixel.x));
     }
-    if (!heights.empty() &&
+    const bool preserves_face_shape = std::abs(fit.face.length - fit.face.width) < 1e-9 ||
+      std::abs((high_u - low_u) - (high_v - low_v)) > obs.spacing_m;
+    if (!preserves_face_shape) {fit.rectangle_measured = false;}
+    if (!heights.empty() && preserves_face_shape &&
       std::abs(high_u - low_u - fit.face.length) <= fit.face.length_tolerance &&
       std::abs(high_v - low_v - fit.face.width) <= fit.face.width_tolerance) {
       fit.measured_length = high_u - low_u;
@@ -1361,6 +1355,7 @@ PlaneFits reconstruct_plane_impl(
             if (!local_plane.pixels.empty()) {
               measure_plane(local_plane, obs, profile);
               local_plane.cells = patch.cells;
+              local_plane.support_planes = patch.support_planes;
               support_plane = &local_plane;
               fit.top = local_plane.height;
             }

@@ -462,7 +462,8 @@ DetectionResult detect_cuboid_top_face(
     const auto & selection = selections.at(fit.candidate_id);
     if (selection.state == "SELECTED") {models.push_back(fit);}
     if (selection.state != "SELECTED") {
-      conflicts[fit.candidate_id] = "identity_ambiguous";
+      conflicts[fit.candidate_id] = selection.state == "REJECTED" ?
+        selection.reason : "identity_ambiguous";
       ++result.rawpart_rejected_by_reason[conflicts[fit.candidate_id]];
     }
     for (auto & item : result.cuboid_hypotheses) {
@@ -470,13 +471,15 @@ DetectionResult detect_cuboid_top_face(
       item.selection_state = selection.state;
       item.selection_reason = selection.reason;
       item.competing_candidate_ids = selection.competitors;
-      item.confidence_grade = selection.state == "UNRESOLVED" ? "LOW" :
+      item.confidence_grade = (selection.state == "UNRESOLVED" || selection.state == "REJECTED") ? "LOW" :
         fit.is_partial_reconstruction ? "MEDIUM" : "HIGH";
-      item.confidence_reason = selection.state == "UNRESOLVED" ? "distinct_pose_or_layout_hypotheses_remain_indistinguishable" :
+      item.confidence_reason = selection.state == "REJECTED" ? selection.reason :
+        selection.state == "UNRESOLVED" ? "distinct_pose_or_layout_hypotheses_remain_indistinguishable" :
         fit.is_partial_reconstruction ? "partial_top_surface_resolved_by_l_corner_height_and_recipe_evidence" :
         "top_surface_observed_and_individual_pose_resolved";
       if (selection.state != "SELECTED") {
-        item.disposition = selection.state == "ALTERNATIVE" ? "alternative_interpretation" : "rejected_identity_ambiguous";
+        item.disposition = selection.state == "ALTERNATIVE" ? "alternative_interpretation" :
+          selection.state == "REJECTED" ? "rejected_geometry_validation" : "rejected_identity_ambiguous";
         item.reason = selection.reason;
       }
     }
@@ -664,7 +667,6 @@ DetectionResult detect_cuboid_top_face(
     candidate.target_pose.pose.orientation.w = std::cos(model.yaw / 2);
     candidate.has_estimated_height = true;
     candidate.estimated_height_m = fit.face.thickness;
-    const bool complete_top_observed = !fit.is_partial_reconstruction;
     candidate.has_observed_rectangle = fit.rectangle_measured;
     candidate.rectangle_long_side_m = std::max(fit.measured_length, fit.measured_width);
     candidate.rectangle_short_side_m = std::min(fit.measured_length, fit.measured_width);
@@ -684,15 +686,16 @@ DetectionResult detect_cuboid_top_face(
       });
     const bool support_unresolved = fit.covered_by_upper_surface && !supports_material;
     candidate.is_stack_top = !supports_material && !inclined_contact && !support_unresolved &&
-      supported_candidates.count(fit.candidate_id) != 0;
-    candidate.confidence_grade = supports_material || inclined_contact || support_unresolved ? "LOW" :
-      complete_top_observed ? "HIGH" : "MEDIUM";
-    candidate.confidence_reason = supports_material ? "supports_upper_material" :
-      inclined_contact ? "inclined_surface_contact_possible" :
-      support_unresolved ? "upper_surface_support_unresolved" :
-      complete_top_observed ?
-      "top_surface_observed_and_individual_pose_resolved" :
-      "partial_top_surface_resolved_by_l_corner_height_and_recipe_evidence";
+      (supported_candidates.count(fit.candidate_id) != 0 ||
+      fit.top - fit.face.thickness > profile.support_contact_tolerance_m +
+      profile.cuboid.height_tolerance_m);
+    candidate.confidence_grade = fit.area >= profile.high_confidence_observed_area_ratio ? "HIGH" :
+      fit.area >= profile.medium_confidence_observed_area_ratio ? "MEDIUM" : "LOW";
+    candidate.confidence_reason = candidate.confidence_grade == "HIGH" ?
+      "observed_area_ratio_meets_high_threshold" :
+      candidate.confidence_grade == "MEDIUM" ?
+      "observed_area_ratio_meets_medium_threshold" :
+      "observed_area_ratio_below_medium_threshold";
     for (auto & hypothesis : result.cuboid_hypotheses) {
       if (hypothesis.candidate_id == fit.candidate_id) {
         hypothesis.confidence_grade = candidate.confidence_grade;
@@ -736,7 +739,7 @@ DetectionResult detect_cuboid_top_face(
   }
   if (result.ordered_candidates.empty()) {
     result.result_code = Code::DETECT_RESULT_GEOMETRY_ERROR;
-    result.diagnostic_detail = "cuboid_top_face; no_candidate_clear_of_upper_material";
+    result.diagnostic_detail = "cuboid_top_face; no_candidate_meets_observed_area_threshold";
     return result;
   }
   result.result_code = Code::DETECT_RESULT_SUCCESS;

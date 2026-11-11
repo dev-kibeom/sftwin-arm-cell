@@ -210,6 +210,11 @@ bool valid_profile(const DetectorProfile & profile, bool calibration_requested)
     profile.support_contact_tolerance_m <= 0.0 ||
     !finite(profile.top_surface_geometry_tolerance_m) ||
     profile.top_surface_geometry_tolerance_m <= 0.0 ||
+    !finite(profile.high_confidence_observed_area_ratio) ||
+    !finite(profile.medium_confidence_observed_area_ratio) ||
+    profile.medium_confidence_observed_area_ratio <= 0.0 ||
+    profile.high_confidence_observed_area_ratio > 1.0 ||
+    profile.medium_confidence_observed_area_ratio > profile.high_confidence_observed_area_ratio ||
     !finite(profile.minimum_observation_coverage) ||
     profile.minimum_observation_coverage <= 0.0 ||
     profile.minimum_observation_coverage > 1.0 ||

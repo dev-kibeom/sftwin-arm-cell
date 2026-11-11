@@ -106,6 +106,8 @@ vision:
       support_contact_tolerance_m: 0.01
       top_surface_geometry_tolerance_m: 0.01
       minimum_observation_coverage: 0.55
+      high_confidence_observed_area_ratio: 0.80
+      medium_confidence_observed_area_ratio: 0.55
       support_region_dimensions_m: [0.6336, 0.4416]
       fiducial:
         dictionary: DICT_4X4_50

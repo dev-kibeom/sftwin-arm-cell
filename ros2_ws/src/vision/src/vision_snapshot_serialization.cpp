@@ -905,7 +905,9 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
       profile.tray_roi_max_m[1] << "],\"support_contact_tolerance_m\":" <<
       profile.support_contact_tolerance_m << ",\"top_surface_geometry_tolerance_m\":" <<
       profile.top_surface_geometry_tolerance_m << ",\"minimum_observation_coverage\":" <<
-      profile.minimum_observation_coverage;
+      profile.minimum_observation_coverage <<
+      ",\"high_confidence_observed_area_ratio\":" << profile.high_confidence_observed_area_ratio <<
+      ",\"medium_confidence_observed_area_ratio\":" << profile.medium_confidence_observed_area_ratio;
     if (profile.algorithm == "cuboid_top_face") {
       const auto & cuboid = profile.cuboid;
       json << ",\"cuboid\":{\"grid_resolution_m\":" << cuboid.grid_resolution_m <<

@@ -300,6 +300,8 @@ struct DetectorProfile
   double support_contact_tolerance_m = 0.0;
   double top_surface_geometry_tolerance_m = 0.0;
   double minimum_observation_coverage = 0.55;
+  double high_confidence_observed_area_ratio = 0.80;
+  double medium_confidence_observed_area_ratio = 0.55;
   std::string fiducial_dictionary;
   int fiducial_marker_id = -1;
   double fiducial_size_m = 0.0;
