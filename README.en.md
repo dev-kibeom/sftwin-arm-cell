@@ -125,13 +125,12 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 
 ### Method 1: Build and run ROS 2 on the host
 
-In another terminal with ROS 2 Humble and workspace dependencies installed, build and launch from the repository root:
+For a first run, use Docker Compose below. For local development, install ROS 2 Humble, colcon, and `nlohmann-json3-dev`, and initialize rosdep. Run the following from the repository root in a fresh terminal to build the same TRAC-IK revision as the Dockerfile.
 
 ```bash
-source /opt/ros/humble/setup.bash
-cd ros2_ws
-colcon build --packages-up-to arm_cell_bringup --cmake-args -DBUILD_TESTING=ON
-source install/setup.bash
+bash ros2_ws/build-local.bash
+source ros2_ws/install/setup.bash
+ros2 pkg prefix trac_ik_kinematics_plugin
 ros2 launch arm_cell_bringup arm_cell.launch.py
 ```
 

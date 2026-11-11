@@ -20,12 +20,6 @@
 namespace arm_cell_safety_fsm
 {
 
-namespace
-{
-constexpr std::size_t kDiagnosticQueueCapacity = 64;
-constexpr std::size_t kDiagnosticRecordLimit = 4096;
-constexpr std::uint64_t kDiagnosticByteLimit = 1024 * 1024;
-
 struct SafetyDiagnosticRecord
 {
   enum class Kind : std::uint8_t {RESET, DECISION};
@@ -56,6 +50,12 @@ struct SafetyDiagnosticRecord
   std::uint64_t local_sequence{0};
   std::array<SafetyInputDiagnostic, static_cast<std::size_t>(SafetyInput::COUNT)> inputs{};
 };
+
+namespace
+{
+constexpr std::size_t kDiagnosticQueueCapacity = 64;
+constexpr std::size_t kDiagnosticRecordLimit = 4096;
+constexpr std::uint64_t kDiagnosticByteLimit = 1024 * 1024;
 
 template<std::size_t N>
 std::uint16_t copy_bounded(std::array<char, N> & output, const std::string & input)

@@ -137,13 +137,12 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 
 ### 방법 1: 호스트에서 ROS 2 빌드 및 실행
 
-ROS 2 Humble과 workspace 의존성이 설치된 다른 터미널에서 저장소 루트 기준으로 빌드한 뒤 overlay를 source합니다.
+첫 실행에는 아래 Docker Compose 방법을 권장합니다. 로컬 개발 시 ROS 2 Humble, colcon, 초기화된 rosdep, `nlohmann-json3-dev`를 준비합니다. 새 터미널에서 저장소 루트 기준으로 아래 명령을 실행하면 Dockerfile과 동일한 TRAC-IK 리비전을 로컬에 빌드합니다.
 
 ```bash
-source /opt/ros/humble/setup.bash
-cd ros2_ws
-colcon build --packages-up-to arm_cell_bringup --cmake-args -DBUILD_TESTING=ON
-source install/setup.bash
+bash ros2_ws/build-local.bash
+source ros2_ws/install/setup.bash
+ros2 pkg prefix trac_ik_kinematics_plugin
 ```
 
 `info`는 기본 운영 로그 모드이고 선택적 구조화 진단 수집은 끕니다. 호스트에서 실행하려면 다음 명령을 사용합니다.

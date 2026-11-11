@@ -1165,26 +1165,26 @@ private:
     profile.shape = declare_parameter<std::string>(
       "material_definitions.RawPart.shape", "");
     const auto dimensions = declare_parameter<std::vector<double>>(
-      "material_definitions.RawPart.nominal_dimensions_m", {});
+      "material_definitions.RawPart.nominal_dimensions_m", std::vector<double>{});
     const auto dimension_tolerance = declare_parameter<std::vector<double>>(
-      prefix + "dimension_tolerance_m", {});
+      prefix + "dimension_tolerance_m", std::vector<double>{});
     const auto roi_x = declare_parameter<std::vector<double>>(
-      prefix + "workspace_roi_m.x", {});
+      prefix + "workspace_roi_m.x", std::vector<double>{});
     const auto roi_y = declare_parameter<std::vector<double>>(
-      prefix + "workspace_roi_m.y", {});
+      prefix + "workspace_roi_m.y", std::vector<double>{});
     const auto roi_z = declare_parameter<std::vector<double>>(
-      prefix + "workspace_roi_m.z", {});
+      prefix + "workspace_roi_m.z", std::vector<double>{});
     const auto tray_roi_x = declare_parameter<std::vector<double>>(
-      prefix + "tray_roi_m.x", {});
+      prefix + "tray_roi_m.x", std::vector<double>{});
     const auto tray_roi_y = declare_parameter<std::vector<double>>(
-      prefix + "tray_roi_m.y", {});
+      prefix + "tray_roi_m.y", std::vector<double>{});
     if (tray_roi_x.size() != 2 || tray_roi_y.size() != 2) {
       throw std::invalid_argument("RawPart tray_roi_m x and y must each contain two bounds");
     }
     const auto marker_position = declare_parameter<std::vector<double>>(
-      prefix + "fiducial.marker_in_support.position_m", {});
+      prefix + "fiducial.marker_in_support.position_m", std::vector<double>{});
     const auto marker_rpy = declare_parameter<std::vector<double>>(
-      prefix + "fiducial.marker_in_support.rpy_rad", {});
+      prefix + "fiducial.marker_in_support.rpy_rad", std::vector<double>{});
     const auto copy_three = [](const std::vector<double> & source,
         std::array<double, 3> & target) {
         if (source.size() == target.size()) {

@@ -94,56 +94,6 @@ std::filesystem::path temporary_snapshot_root(const std::string & name)
          ("vision-snapshot-" + name + "-" + std::to_string(nonce));
 }
 
-cv::Point2d colored_pixel_centroid(
-  const cv::Mat & image, const cv::Rect & region, bool observed, cv::Rect * bounds = nullptr)
-{
-  double sum_x = 0.0;
-  double sum_y = 0.0;
-  size_t count = 0;
-  int min_x = region.x + region.width;
-  int min_y = region.y + region.height;
-  int max_x = region.x - 1;
-  int max_y = region.y - 1;
-  for (int y = region.y; y < region.y + region.height; ++y) {
-    for (int x = region.x; x < region.x + region.width; ++x) {
-      const auto pixel = image.at<cv::Vec3b>(y, x);
-      const bool match = observed ?
-        pixel[0] > 75 && pixel[0] < 155 && pixel[1] > 145 && pixel[2] > 220 :
-        pixel[0] > 185 && pixel[0] < 235 && pixel[1] > 115 && pixel[1] < 185 &&
-        pixel[2] > 185 && pixel[2] < 235;
-      if (match) {
-        sum_x += x; sum_y += y; ++count;
-        min_x = std::min(min_x, x); min_y = std::min(min_y, y);
-        max_x = std::max(max_x, x); max_y = std::max(max_y, y);
-      }
-    }
-  }
-  if (count == 0) {return {-1.0, -1.0};}
-  if (bounds) {*bounds = cv::Rect(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1);}
-  return {sum_x / count, sum_y / count};
-}
-
-cv::Rect candidate_boundary_bounds(const cv::Mat & image, const cv::Rect & region, size_t & count)
-{
-  int min_x = region.x + region.width;
-  int min_y = region.y + region.height;
-  int max_x = region.x - 1;
-  int max_y = region.y - 1;
-  count = 0;
-  for (int y = region.y; y < region.y + region.height; ++y) {
-    for (int x = region.x; x < region.x + region.width; ++x) {
-      const auto pixel = image.at<cv::Vec3b>(y, x);
-      if (pixel[0] < 80 && pixel[1] > 180 && pixel[2] < 80) {
-        min_x = std::min(min_x, x); min_y = std::min(min_y, y);
-        max_x = std::max(max_x, x); max_y = std::max(max_y, y);
-        ++count;
-      }
-    }
-  }
-  if (count == 0) {return {};}
-  return {min_x, min_y, max_x - min_x + 1, max_y - min_y + 1};
-}
-
 arm_cell_vision::VisionDetectorSnapshotJob calibration_job()
 {
   using Message = arm_cell_interfaces::msg::VisionDetectorSnapshot;
@@ -214,9 +164,15 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_projection_job(const std::stri
   job.result.algorithm = "cuboid_top_face";
   job.result.result_code = arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
   job.result.confidence_grade = "HIGH";
-  job.result.cuboid_hypotheses = {{0, 0, 1.0, 0.0, 0.0, 0.0, 0.4, 0.2, 0.0, 1.0, 1.0,
-    "qualified_geometry", "", 0}};
-  job.result.cuboid_hypotheses.front().confidence_grade = "HIGH";
+  arm_cell_vision::CuboidHypothesisVisualization hypothesis;
+  hypothesis.height_m = 1.0;
+  hypothesis.length_m = 0.4;
+  hypothesis.width_m = 0.2;
+  hypothesis.observed_area_ratio = 1.0;
+  hypothesis.boundary_support = 1.0;
+  hypothesis.disposition = "qualified_geometry";
+  hypothesis.confidence_grade = "HIGH";
+  job.result.cuboid_hypotheses = {hypothesis};
   job.calibration.ready = true;
   job.calibration.tray_from_camera.header.frame_id = "Tray";
   job.calibration.tray_from_camera.child_frame_id = "camera_optical";
@@ -3213,7 +3169,7 @@ TEST_F(VisionDetectorSnapshotTest, BlockedSnapshotWriteDoesNotDelayDetectTargetR
     [&retained](const std::string &, uint64_t generation) {
       return make_acquisition_result(retained, generation);
     }, {},
-    [&output](const std::string &, uint64_t generation,
+    [&output](const std::string &, uint64_t,
       const arm_cell_interfaces::srv::DetectTarget::Response & response,
       const arm_cell_vision::SharedAcquisitionResult & acquisition_result,
       const arm_cell_vision::VisionRequestDiagnosticRecord & diagnostics) {

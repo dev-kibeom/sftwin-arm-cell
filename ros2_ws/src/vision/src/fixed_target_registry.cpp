@@ -99,8 +99,8 @@ bool FixedTargetRegistry::finite_pose(
   const auto norm = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
   return finite(p.x) && finite(p.y) && finite(p.z) &&
          (orientation_symmetry_order == 0 ||
-         finite(q.x) && finite(q.y) && finite(q.z) && finite(q.w) &&
-         std::isfinite(norm) && norm > 1e-12);
+         (finite(q.x) && finite(q.y) && finite(q.z) && finite(q.w) &&
+         std::isfinite(norm) && norm > 1e-12));
 }
 
 }  // namespace arm_cell_vision
