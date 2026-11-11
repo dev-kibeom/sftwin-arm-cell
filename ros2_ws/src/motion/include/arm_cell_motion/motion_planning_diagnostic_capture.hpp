@@ -101,6 +101,7 @@ private:
   std::unordered_map<std::string, DetailSnapshot> detail_snapshots_;
   std::unordered_map<std::string, std::string> occupancy_snapshot_paths_;
   std::unordered_map<std::string, uint64_t> occupancy_snapshot_sequences_;
+  uint64_t stage_sequence_{0U};
   bool stopping_{false};
   std::thread worker_;
 };

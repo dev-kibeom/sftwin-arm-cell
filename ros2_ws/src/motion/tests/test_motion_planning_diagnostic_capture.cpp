@@ -6,6 +6,7 @@
 #include <iterator>
 #include <string>
 #include <thread>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -1002,6 +1003,35 @@ TEST(MotionPlanningDiagnosticCaptureTest, ProgressNamesDoNotClaimTerminalResult)
   EXPECT_TRUE(record.at("task_result_name").is_null());
   EXPECT_TRUE(record.at("task_executor_result_code").is_null());
   std::filesystem::remove_all(directory);
+}
+
+TEST(MotionPlanningDiagnosticCaptureTest, PreservesPlaceRequestsAcrossHomeWithSameGoal)
+{
+  const auto root = std::filesystem::temp_directory_path() /
+    ("motion_stage_retention_" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  {
+    MotionPlanningDiagnosticCapture capture(root.string(), rclcpp::get_logger("stages"));
+    EXPECT_TRUE(capture.enqueue_progress("goal", "TASK_TYPE_PLACE", R"({"request":1})"));
+    EXPECT_TRUE(capture.enqueue_progress("goal", "TASK_TYPE_PLACE", R"({"request":2})"));
+    EXPECT_TRUE(capture.enqueue("goal", "TASK_TYPE_PLACE", 0, R"({"request":3})"));
+    EXPECT_TRUE(capture.enqueue("goal", "TASK_TYPE_GO_HOME", 0, "{}"));
+  }
+  const auto stages = root / "motion_planning_stages";
+  ASSERT_TRUE(std::filesystem::is_directory(stages));
+  std::set<int> requests;
+  bool home = false;
+  for (const auto & entry : std::filesystem::directory_iterator(stages)) {
+    nlohmann::json record;
+    std::ifstream(entry.path()) >> record;
+    if (record["task_type"] == "TASK_TYPE_PLACE") {
+      requests.insert(record["planning_evidence"]["request"].get<int>());
+    } else if (record["task_type"] == "TASK_TYPE_GO_HOME") {home = true;}
+  }
+  EXPECT_EQ(requests, (std::set<int>{1, 2, 3}));
+  EXPECT_TRUE(home);
+  EXPECT_TRUE(std::filesystem::exists(root / "goal.json"));
+  std::filesystem::remove_all(root);
 }
 
 }  // namespace arm_cell_motion

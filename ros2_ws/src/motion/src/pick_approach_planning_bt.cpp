@@ -114,6 +114,7 @@ BT::NodeStatus SearchPoseSeed::tick()
         return terminal();
       }
       context->attempt = PickPlanningAttempt();
+      context->diagnostic_evidence.clear();
       context->attempt.current_pose_index = controller.pose_index();
       if (std::find(
           context->visited_poses.begin(), context->visited_poses.end(),
@@ -173,6 +174,7 @@ void register_pick_approach_planning_nodes(BT::BehaviorTreeFactory & factory)
   factory.registerNodeType<PrepareAttempt>("PrepareAttempt");
   factory.registerNodeType<PrepareSeed>("PrepareSeed");
   factory.registerNodeType<SetGraspScenePolicy>("SetGraspScenePolicy");
+  factory.registerNodeType<ValidateGraspPose>("ValidateGraspPose");
   factory.registerNodeType<SolveGraspIK>("SolveGraspIK");
   factory.registerNodeType<ValidateGraspKinematics>("ValidateGraspKinematics");
   factory.registerNodeType<ValidateGraspContact>("ValidateGraspContact");
@@ -312,6 +314,24 @@ BT::NodeStatus SetGraspScenePolicy::execute(PlanningContext & context)
     return BT::NodeStatus::FAILURE;
   }
   return BT::NodeStatus::SUCCESS;
+}
+
+BT::NodeStatus ValidateGraspPose::execute(PlanningContext & context)
+{
+  // This check only rejects geometry fixed relative to the requested TCP for
+  // every arm seed. The full robot-state check still runs after IK.
+  if (!context.common_grasp_scene || !context.robot_state || !context.joint_group) {
+    return BT::NodeStatus::SUCCESS;
+  }
+  auto collision = validate_pick_grasp_pose_rail_collision(
+    *context.common_grasp_scene, *context.robot_state, context.joint_group,
+    context.attempt.current_grasp_goal);
+  if (!collision.collision) {return BT::NodeStatus::SUCCESS;}
+  context.attempt.grasp_collision_result = std::move(collision);
+  context.attempt.failure_stage = "GRASP_POSE_COLLISION";
+  context.attempt.failure_reason = "TCP_RIGID_RAIL_COLLISION";
+  context.attempt.attempt_evaluation = PickSearchEvaluation::GRASP_COLLISION;
+  return BT::NodeStatus::FAILURE;
 }
 
 BT::NodeStatus SolveGraspIK::execute(PlanningContext & context)

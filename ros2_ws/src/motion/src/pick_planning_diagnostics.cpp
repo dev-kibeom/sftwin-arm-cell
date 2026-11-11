@@ -28,6 +28,8 @@ nlohmann::json attempt_record(
       "SEARCH_BUDGET_EXHAUSTED" : pick_search_evaluation_name(evaluation)},
     {"planning_bt_steps", metadata.bt_steps},
     {"executed_stages", attempt.executed_stages},
+    {"pose_collision_contacts", attempt.failure_stage == "GRASP_POSE_COLLISION" ?
+      nlohmann::json(attempt.grasp_collision_result.contacts) : nlohmann::json::array()},
     {"planning_elapsed_s", attempt.approach_planning_elapsed_s},
     {"global_planning_requests", nlohmann::json::array()}};
   for (const auto & entry : attempt.planning_request_evidence) {
