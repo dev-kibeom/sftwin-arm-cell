@@ -7,6 +7,7 @@
 **/cache/
 .local_artifacts/
 .run_records/
+/.motion_data/
 .env
 .env.*
 !.env.example

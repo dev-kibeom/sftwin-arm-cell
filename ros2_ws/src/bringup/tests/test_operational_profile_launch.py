@@ -126,11 +126,9 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     parameters = _node_parameters(nodes["motion_node"])
     configured = {key: parameters[key] for key in motion}
     assert parameters["place_waypoint_trajectory_file"].endswith(
-        ".run_records/trajectories/place_waypoint_home_to_place.json"
+        ".motion_data/place_waypoint_home_to_place.json"
     )
-    configured.pop("place_waypoint_trajectory_file")
     expected_motion = dict(motion)
-    expected_motion.pop("place_waypoint_trajectory_file")
     assert {
         key: list(value) if isinstance(value, tuple) else value
         for key, value in configured.items()
@@ -1088,7 +1086,7 @@ def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):
     actions = _composed_nodes(module=module)
     motion = _node_parameters(_project_nodes(actions)["motion_node"])
     assert motion["place_waypoint_trajectory_file"] == str(
-        root / "trajectories/place_waypoint_home_to_place.json"
+        checkout / ".motion_data/place_waypoint_home_to_place.json"
     )
     context = LaunchContext()
     for action in actions:

@@ -604,12 +604,15 @@ def compose(context):
     config = yaml.safe_load(profile_path.read_text()) or {}
     material_handoff_config = dict(config.get("material_handoff", {}))
     motion_parameters = profile_parameters(config, "motion")
-    configured_trajectory = motion_parameters.get("place_waypoint_trajectory_file")
-    trajectory_file = (
-        Path(configured_trajectory)
-        if configured_trajectory
-        else artifact_directory / "trajectories/place_waypoint_home_to_place.json"
+    motion_share = Path(get_package_share_directory("arm_cell_motion"))
+    waypoint_config = yaml.safe_load(
+        (motion_share / "config/place_waypoint.yaml").read_text()
     )
+    configured_trajectory = (
+        motion_parameters.get("place_waypoint_trajectory_file")
+        or waypoint_config["place_waypoint_trajectory_file"]
+    )
+    trajectory_file = Path(configured_trajectory).expanduser()
     if not trajectory_file.is_absolute():
         trajectory_file = project_checkout_root() / trajectory_file
     motion_parameters["place_waypoint_trajectory_file"] = str(trajectory_file.resolve())
@@ -621,11 +624,8 @@ def compose(context):
     if len(home_joint_positions) != 6:
         raise RuntimeError("home_joint_positions must contain six arm joints")
     use_sim_time = config.get("use_sim_time", True)
-    description = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "assets/robots/m0609_robotiq_2f85"
-    )
-    moveit_share = Path(get_package_share_directory("arm_cell_motion"))
+    description = motion_share / "assets/robots/m0609_robotiq_2f85"
+    moveit_share = motion_share
     robot_description = xacro.process_file(
         str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
         mappings={
