@@ -135,7 +135,7 @@ motion:
   pick_ik_solver: trac_ik_kinematics_plugin/TRAC_IKKinematicsPlugin
   pick_ik_solve_type: Distance
   # Each Grasp and Approach 6D IK call has its own timeout (0, 30] seconds.
-  pick_grasp_ik_timeout_s: 1.0
+  pick_grasp_ik_timeout_s: 0.1
   pick_approach_ik_timeout_s: 1.0
   # PICK search exhausts pose/seed counts, stopping at the first executable plan.
   # Retained for non-PICK/general IK paths.
@@ -194,7 +194,7 @@ motion:
   # W06 seed enables the validated time-parameterized trajectory execution
   # path; final acceleration calibration remains in M11-W01.
   planning_max_acceleration_rad_s2: 5.0
-  place_candidate_planning_time_s: 15.0
+  place_candidate_planning_time_s: 2.0
   # Legacy budget used only by explicit qualification/waypoint generation,
   # never as an overall deadline for production PLACE search.
   place_total_planning_time_s: 60.0

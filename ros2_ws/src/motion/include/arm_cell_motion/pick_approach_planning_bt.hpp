@@ -219,6 +219,16 @@ private:
   BT::NodeStatus execute(PlanningContext & context) override;
 };
 
+class ValidateGraspPose final : public PlanningLeaf
+{
+public:
+  using PlanningLeaf::PlanningLeaf;
+
+private:
+  const char * stage_name() const override {return "ValidateGraspPose";}
+  BT::NodeStatus execute(PlanningContext & context) override;
+};
+
 class SolveGraspIK final : public PlanningLeaf
 {
 public:

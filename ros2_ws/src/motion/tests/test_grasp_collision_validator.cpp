@@ -270,4 +270,68 @@ TEST_F(GraspCollisionValidatorTest, FingerCollisionUsesExistingPoseSeedRetry)
   EXPECT_EQ(context->attempt.attempt_evaluation, PickSearchEvaluation::GRASP_COLLISION);
 }
 }  // namespace
+TEST(GraspPosePrecheck, RejectsRailFingerIntersectionBeforeCallingIK)
+{
+  moveit::core::RobotModelBuilder builder("precheck", "base_link");
+  builder.addChain("base_link->sf_grasp_tcp", "prismatic");
+  builder.addChain("sf_grasp_tcp->gripper_robotiq_85_right_finger_tip_link", "fixed");
+  builder.addGroupChain("base_link", "sf_grasp_tcp", "arm");
+  builder.addChain("base_link->gripper_unrelated", "prismatic");
+  geometry_msgs::msg::Pose origin;
+  origin.orientation.w = 1.0;
+  builder.addCollisionBox("gripper_robotiq_85_right_finger_tip_link", {0.02, 0.02, 0.02}, origin);
+  builder.addCollisionBox("gripper_unrelated", {0.02, 0.02, 0.02}, origin);
+  const auto model = builder.build();
+  ASSERT_NE(model, nullptr);
+  auto context = std::make_shared<PlanningContext>();
+  context->robot_model = model;
+  context->joint_group = model->getJointModelGroup("arm");
+  auto state = std::make_shared<moveit::core::RobotState>(model);
+  state->setToDefaultValues();
+  state->update();
+  // Measured snapshots can have dirty transforms; the precheck updates its own copy.
+  state->setVariablePosition(context->joint_group->getVariableNames().front(), 0.5);
+  context->robot_state = state;
+  context->common_grasp_scene = std::make_shared<planning_scene::PlanningScene>(model);
+  context->common_grasp_scene->getWorldNonConst()->addToObject(
+    "amr_tray_rail_left", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
+    Eigen::Isometry3d::Identity());
+  context->attempt.current_grasp_goal.header.frame_id = "base_link";
+  context->attempt.current_grasp_goal.pose.orientation.w = 1.0;
+  context->planning_budget = std::make_unique<PickSearchBudget>(5.0);
+  BT::BehaviorTreeFactory factory;
+  register_pick_approach_planning_nodes(factory);
+  auto bb = BT::Blackboard::create();
+  bb->set("context", context);
+  auto tree = factory.createTreeFromText(
+    "<root main_tree_to_execute=\"T\"><BehaviorTree ID=\"T\"><Sequence><ValidateGraspPose/><SolveGraspIK/></Sequence>"
+    "</BehaviorTree></root>",
+    bb);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(context->attempt.failure_reason, "TCP_RIGID_RAIL_COLLISION");
+  EXPECT_EQ(context->attempt.attempt_evaluation, PickSearchEvaluation::GRASP_COLLISION);
+  EXPECT_FALSE(context->attempt.grasp_ik_result.solver_returned);
+  EXPECT_EQ(context->attempt.stage_elapsed_s.count("SolveGraspIK"), 0U);
+  ASSERT_EQ(context->attempt.grasp_collision_result.contacts.size(), 1U);
+  EXPECT_EQ(context->attempt.grasp_collision_result.contacts.front().first, "amr_tray_rail_left");
+
+  // Relocating the TCP away from the rail must pass through to the IK leaf.
+  context->attempt = PickPlanningAttempt();
+  context->attempt.current_grasp_goal.header.frame_id = "base_link";
+  context->attempt.current_grasp_goal.pose.orientation.w = 1.0;
+  context->attempt.current_grasp_goal.pose.position.x = 0.1;
+  tree.haltTree();
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(context->attempt.failure_reason, "IK_SOLVER_UNAVAILABLE");
+
+  // An explicit allowed-collision entry must also defer to normal IK checks.
+  context->common_grasp_scene->getAllowedCollisionMatrixNonConst().setEntry(
+    "amr_tray_rail_left", "gripper_robotiq_85_right_finger_tip_link", true);
+  context->attempt.current_grasp_goal.pose.position.x = 0.0;
+  tree.haltTree();
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(context->attempt.failure_reason, "IK_SOLVER_UNAVAILABLE");
+
+}
+
 }  // namespace arm_cell_motion

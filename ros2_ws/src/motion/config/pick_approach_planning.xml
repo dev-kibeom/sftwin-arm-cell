@@ -5,6 +5,7 @@
         <PrepareAttempt/>
         <PrepareSeed/>
         <SetGraspScenePolicy/>
+        <ValidateGraspPose/>
         <SolveGraspIK/>
         <ValidateGraspKinematics/>
         <ValidateGraspContact/>

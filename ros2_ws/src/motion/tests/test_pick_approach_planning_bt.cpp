@@ -163,6 +163,7 @@ TEST(PickApproachPlanningBT, RetryReplacesAttemptAndPreservesRequestState)
       EXPECT_TRUE(current.attempt.approach_joint_positions.empty());
       EXPECT_TRUE(current.attempt.failure_reason.empty());
       EXPECT_TRUE(current.attempt.planning_request_evidence.empty());
+      EXPECT_EQ(current.diagnostic_evidence.size(), 1U);
       EXPECT_EQ(current.attempt.planning_status, "NOT_RUN");
       EXPECT_EQ(current.planning_budget.get(), budget);
       ++calls;

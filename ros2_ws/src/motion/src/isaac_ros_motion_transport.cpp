@@ -1126,21 +1126,31 @@ bool MotionPlanningDiagnosticCapture::enqueue_serialized(
         "Motion planning diagnostic unavailable reason=writer_stopping");
       return false;
     }
+    const auto value = nlohmann::json::parse(serialized, nullptr, false);
+    const auto task_type = value.is_object() ? value.value("task_type", std::string{}) : "";
+    // PICK has its own per-candidate details. Preserve every other planning
+    // snapshot so PLACE requests and phases survive the final GO_HOME record.
+    const bool archive = task_type != "TASK_TYPE_PICK" && task_type != "PICK";
     const auto queued = std::find_if(
       queue_.begin(), queue_.end(), [&goal_uuid](const PendingRecord & pending) {
-        return pending.goal_uuid == goal_uuid;
+        return pending.goal_uuid == goal_uuid && pending.file_name.empty();
       });
-    if (queued != queue_.end()) {
+    if (!archive && queued != queue_.end()) {
       queued->serialized = std::move(serialized);
       return true;
     }
     if (queue_.size() >= kQueueCapacity) {
       RCLCPP_WARN(
-        logger_,
-        "Motion planning diagnostic unavailable reason=writer_queue_full");
+        logger_, "Motion planning diagnostic unavailable reason=writer_queue_full");
       return false;
     }
-    queue_.push_back({goal_uuid, {}, std::move(serialized)});
+    std::string file_name;
+    if (archive) {
+      const auto sequence = ++stage_sequence_;
+      file_name = "motion_planning_stages/" + safe_goal_id(goal_uuid) + "_" +
+        safe_goal_id(task_type) + "_" + std::to_string(sequence) + ".json";
+    }
+    queue_.push_back({goal_uuid, file_name, std::move(serialized)});
   }
   condition_.notify_one();
   return true;
@@ -1355,33 +1365,39 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
           }
         }
       }
-      const auto directory = destination.parent_path();
-      std::filesystem::create_directories(directory);
-      std::uintmax_t retained_bytes = 0;
-      for (const auto & entry : std::filesystem::directory_iterator(directory)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-          retained_bytes += entry.file_size();
-        }
+      std::vector<std::filesystem::path> destinations{destination};
+      if (record.file_name.rfind("motion_planning_stages/", 0U) == 0U) {
+        destinations.push_back(root / (safe_goal_id(record.goal_uuid) + ".json"));
       }
-      if (std::filesystem::exists(destination)) {
-        retained_bytes -= std::min<std::uintmax_t>(
-          retained_bytes, std::filesystem::file_size(destination));
-      }
-      if (retained_bytes + record.serialized.size() > kMaxDirectoryBytes) {
-        RCLCPP_WARN(
-          logger_, "Motion planning diagnostic unavailable "
-          "reason=directory_byte_limit");
-      } else {
-        const auto temporary = destination.string() + ".tmp";
-        {
-          std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-          if (!output) {throw std::runtime_error("open failed");}
-          output << record.serialized << '\n';
-          output.flush();
-          if (!output) {throw std::runtime_error("write failed");}
+      for (const auto & output_path : destinations) {
+        const auto directory = output_path.parent_path();
+        std::filesystem::create_directories(directory);
+        std::uintmax_t retained_bytes = 0;
+        for (const auto & entry : std::filesystem::directory_iterator(directory)) {
+          if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            retained_bytes += entry.file_size();
+          }
         }
-        std::filesystem::rename(temporary, destination);
-        persisted_record = true;
+        if (std::filesystem::exists(output_path)) {
+          retained_bytes -= std::min<std::uintmax_t>(
+            retained_bytes, std::filesystem::file_size(output_path));
+        }
+        if (retained_bytes + record.serialized.size() > kMaxDirectoryBytes) {
+          RCLCPP_WARN(
+            logger_, "Motion planning diagnostic unavailable "
+            "reason=directory_byte_limit");
+        } else {
+          const auto temporary = output_path.string() + ".tmp";
+          {
+            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+            if (!output) {throw std::runtime_error("open failed");}
+            output << record.serialized << '\n';
+            output.flush();
+            if (!output) {throw std::runtime_error("write failed");}
+          }
+          std::filesystem::rename(temporary, output_path);
+          persisted_record = true;
+        }
       }
     } catch (const std::exception & error) {
       RCLCPP_WARN(
