@@ -130,7 +130,7 @@ Snapshot·Diagnostic은 실제 선택 Evaluation을 재사용하고 계산한 Hy
 
 전체 Recipe 복원의 자세가 미해결이어도 실제 관측 평면의 Pose·Geometry가 확정되면 Vision은 그 평면을 별도 SELECTED 후보로 반환할 수 있다. 반환 범위는 실제 관측 직사각형이며 미관측 Recipe Footprint를 채우지 않는다. 경쟁 가설이 자체 두께에 동의하는 경우만 기존 두께 필드를 사용하고, 관측 평면 근거를 진단에 보존한다. 상세 적격성은 Cuboid Algorithm을 따른다. 전체 객체 복원의 UNRESOLVED 진단과 관측 평면 후보의 적격성은 구분하며, Motion·Orchestration 책임은 변경하지 않는다.
 
-Tray 내부와 겹치는 관측 연결 영역은 Tray 밖으로 이어진 부분까지 Plane Map에 보존한다. Tray는 영역 선택 기준이며 자재 Contour의 절단선이 아니다. Tray 바닥 기준 Support 허용오차보다 낮은 깊이는 Height Grid 생성 단계에서 제외한다.
+설정된 자재 대상 `workspace_roi_m`과 겹치는 관측 연결 영역은 ROI 밖으로 이어진 부분까지 Plane Map에 보존한다. 대상 ROI는 고정된 선택 기준이며 자재 Contour의 절단선이 아니다. 보정용 `tray_roi_m`과 확장 Height Grid 범위는 대상 ROI를 변경하지 않는다. Tray 바닥 기준 Support 허용오차보다 낮은 깊이는 Height Grid 생성 단계에서 제외한다.
 
 ### 2.5 RawPart Observation Pose 기준
 
