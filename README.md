@@ -4,7 +4,7 @@
 
 Doosan M0609 로봇과 Robotiq 2F-85 그리퍼를 대상으로 하는 시뮬레이터 기반 ROS 2 로봇 셀 프로젝트입니다. 비전, 모션 계획, 작업 오케스트레이션, 소프트웨어 안전 감독, 자재 인계, 운영자 UI를 공통 ROS 인터페이스로 연결합니다.
 
-현재 공식 배포 버전은 v0.3.2입니다. v0.3.2는 잔여 ROS 패키지를 제거하고 Motion 설정, 공통 로봇 자산과 소스 폴더 구조를 정리했습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
+현재 공식 배포 버전은 v0.3.4입니다. v0.3.4는 Vision/PICK 후보 선택과 PLACE 복구, 실행별 진단 기록, 로컬 D455 자산과 런타임 로그를 개선했습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
 
 ## 프로젝트 개요
 
@@ -230,7 +230,7 @@ ARM_CELL_LOG_LEVEL=debug ARM_CELL_DIAGNOSTICS=none docker compose up --build
 
 ## 문서 탐색
 
-- [v0.3.2 릴리즈 노트](docs/releases/v0.3.2.ko.md) / [English](docs/releases/v0.3.2.en.md) · [이전 버전 v0.3.1](docs/releases/v0.3.1.ko.md)
+- [v0.3.4 릴리즈 노트](docs/releases/v0.3.4.ko.md) / [English](docs/releases/v0.3.4.en.md) · [이전 버전 v0.3.3](docs/releases/v0.3.3.ko.md)
 
 - [ARM Cell 데모 정의](docs/product/definition.md)
 - [최종 라이브 인수 계약](docs/product/acceptance.md)
@@ -244,7 +244,7 @@ ARM_CELL_LOG_LEVEL=debug ARM_CELL_DIAGNOSTICS=none docker compose up --build
 
 ## 구현 상태 및 한계
 
-호스트 ROS 2 실행과 Docker Compose 실행이 정상 동작하고, Docker 환경에서 Isaac Sim의 RGB-D 토픽이 ROS에 전달되는 것을 확인했습니다. 전체 Mission acceptance나 실물 로봇 운전까지 검증됐다는 뜻은 아닙니다. 자산·소스 구조 정리 후 live test 통과를 확인했습니다. 전체 테스트 모음에는 알려진 실패가 남아 있습니다. 세부 개선과 검증 범위는 [v0.3.2 릴리즈 노트](docs/releases/v0.3.2.ko.md)를 참고하세요.
+v0.3.4의 주요 변경과 업그레이드 안내, 검증 범위는 [릴리즈 노트](docs/releases/v0.3.4.ko.md)를 참고하세요. 이번 버전 문서 갱신에서는 소스 검사와 문서 링크를 확인했습니다. 전체 ROS 테스트 모음과 라이브 Isaac Mission acceptance는 다시 실행하지 않았습니다.
 
 ## 라이선스 및 제3자 저작물
 
