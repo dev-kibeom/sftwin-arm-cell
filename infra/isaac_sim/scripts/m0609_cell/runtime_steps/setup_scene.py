@@ -173,7 +173,7 @@ def _start_live_test_session():
     if _live_test_session is not None:
         return
     try:
-        from shared.run_records import diagnostic_component_directory, run_records_root
+        from shared.run_records import run_records_root
         from shared.live_test_session import LiveTestSession
 
         from shared.environment_setup import resolve_diagnostics_selection
@@ -290,8 +290,8 @@ atexit.register(_close_material_supply_adapter)
 
 
 def _start_material_supply_adapter(context):
-    from shared.run_records import run_records_root
     """Connect the Isaac supply realization to Integration's accepted event."""
+    from shared.run_records import diagnostic_component_directory
     global _material_supply_adapter
     global _material_supply_update_subscription
     global _material_supply_timeline_subscription
