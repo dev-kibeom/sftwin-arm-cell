@@ -88,7 +88,7 @@ Stop 완료를 요구하지 않는다. `IDLE`이나 정상 실행 완료를 `STO
 |---|---|
 | 신선한 필수 Safety 입력 | Demo에서는 유효한 Payload의 **로컬 수신 경과 시간**으로 필수 입력의 유효성을 평가한다 |
 | Source Timestamp 미래·과거 | `source_timestamp_max_age_ms`를 벗어나더라도 Payload가 유효하고 로컬 수신 Freshness를 만족하면 Timestamp 자체만으로 Capability·Envelope 변경, StopMotion, Cause/Latch를 만들지 않는다 |
-| Timestamp 품질 이상 | 해당 이상 시작에 WARN 한 번, 지속 중 중복 WARN 억제, 정상화 시 회복 기록; Timestamp 진단 임계값과 필수 입력 수신 Freshness를 혼동하지 않는다 |
+| Timestamp 품질 이상 | 해당 이상 시작에 DEBUG 한 번, 지속 중 중복 DEBUG 억제, 정상화 시 DEBUG 및 기존 진단 기록; Timestamp 진단 임계값과 필수 입력 수신 Freshness를 혼동하지 않는다 |
 | 필수 입력 누락·수신 지연·무효 | 기존 Safety Fail-closed 동작 유지; 명시적 Motion Fault, E-Stop, STO도 그대로 적용 |
 | Envelope 입력 불가 | Motion은 새 Trajectory를 실행하지 않으며 Motion 자체가 Safety 원인·강도를 판정하지 않는다 |
 | Reset과 복구 | Operator Reset이 적격한 Latch를 해제하더라도 `STOPPING` 동안 Capability를 부여하지 않는다. Safety는 소프트웨어 정지 완료 후에만 운동 권한을 허용하고 Motion은 현재 권한으로 새 요청을 평가한다 |

@@ -18,6 +18,7 @@
 
 #include "arm_cell_motion/fake_motion_backend.hpp"
 #include "arm_cell_motion/motion_core.hpp"
+#include "arm_cell_motion/motion_result_code_name.hpp"
 #include "arm_cell_motion/pick_symmetry.hpp"
 #include "arm_cell_motion/rectangle_grasp_geometry.hpp"
 
@@ -1378,3 +1379,16 @@ TEST(MotionCoreTest, PickPreservesFailureResultWithoutLoggingPropagationAsFailur
 }
 
 }  // namespace arm_cell_motion
+
+TEST(MotionConsoleNames, PreservesDiagnosticNamesAndFormatsConsoleOnly)
+{
+  using namespace arm_cell_motion;
+  using arm_cell_interfaces::msg::MotionTaskResultCode;
+  using arm_cell_interfaces::msg::MotionTaskPhase;
+  EXPECT_STREQ(motion_result_code_name(MotionTaskResultCode::TASK_RESULT_SUCCESS),
+    "TASK_RESULT_SUCCESS");
+  EXPECT_EQ(motion_console_result(MotionTaskResultCode::TASK_RESULT_SUCCESS), "success");
+  EXPECT_EQ(motion_console_name(motion_task_phase_name(MotionTaskPhase::TASK_PHASE_APPROACHING)),
+    "approach");
+  EXPECT_EQ(motion_console_name(motion_task_type_name(255)), "UNKNOWN");
+}

@@ -114,7 +114,7 @@
       "id": "camera_rig_post_right",
       "pose": {
         "position_m": [
-          0.96,
+          1.26,
           -0.35,
           0.95
         ],
@@ -229,7 +229,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "deac66b2c60e664c3eb0683feb1f6c8ace5804d4d4a59f451c2688ff31927ee5",
+    "canonical_manifest_sha256": "7d8404386f2ab606c00acf305798a76615ad787247770eb1c8a734d2699a64bb",
     "selection_sha256": "f002a8be8ac8c954c5a6783a0f4b47bfb46d3b7cabd5286c890943819e16c347"
   }
 }

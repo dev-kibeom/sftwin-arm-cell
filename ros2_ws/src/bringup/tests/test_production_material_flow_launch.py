@@ -48,6 +48,8 @@ def generate_test_description():
                     package="arm_cell_orchestration",
                     executable="orchestration_node",
                     name="orchestration_node",
+                    # This test inspects admission diagnostics, which are DEBUG.
+                    ros_arguments=["--log-level", "debug"],
                     output="screen",
                     parameters=[
                         {

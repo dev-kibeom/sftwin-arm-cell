@@ -89,6 +89,9 @@ if(BUILD_TESTING)
   target_include_directories(test_orchestration_diagnostic_record PRIVATE include)
   ament_target_dependencies(test_orchestration_diagnostic_record arm_cell_interfaces)
 
+  ament_add_gtest(test_pnp_progress tests/test_pnp_progress.cpp)
+  target_include_directories(test_pnp_progress PRIVATE include)
+
   find_package(launch_testing_ament_cmake REQUIRED)
   add_launch_test(tests/test_orchestration_node_admission.launch.py TIMEOUT 30)
 

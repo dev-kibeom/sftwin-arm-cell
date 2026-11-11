@@ -214,7 +214,7 @@
       "id": "camera_rig_post_right",
       "pose": {
         "position_m": [
-          0.96,
+          1.26,
           -0.35,
           0.95
         ],
@@ -230,7 +230,7 @@
       "display_name": "CameraRig TopBeam",
       "geometry": {
         "dimensions_m": [
-          1.58,
+          1.88,
           0.06,
           0.06
         ],
@@ -239,7 +239,7 @@
       "id": "camera_rig_top_beam",
       "pose": {
         "position_m": [
-          0.2,
+          0.35,
           -0.35,
           1.88
         ],
@@ -554,7 +554,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "deac66b2c60e664c3eb0683feb1f6c8ace5804d4d4a59f451c2688ff31927ee5",
+    "canonical_manifest_sha256": "7d8404386f2ab606c00acf305798a76615ad787247770eb1c8a734d2699a64bb",
     "selection_sha256": "696375d019af91df658ff0cf006d73fc63c89f88d0f79bc8dfb34b479966dc07"
   }
 }

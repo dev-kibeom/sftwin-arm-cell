@@ -76,6 +76,9 @@ install(TARGETS task_execution_node RUNTIME DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(launch_testing_ament_cmake REQUIRED)
+  add_launch_test(tests/test_motion_capability_launch.py TIMEOUT 40)
+  add_launch_test(tests/test_safety_motion_stop_integration.py TIMEOUT 60)
   ament_add_gtest(
     test_motion_plan_execute_action tests/test_motion_plan_execute_action.cpp)
   target_link_libraries(test_motion_plan_execute_action ${PROJECT_NAME}_core)

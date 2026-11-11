@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <algorithm>
+#include <cctype>
 
 #include <arm_cell_interfaces/msg/motion_task_result_code.hpp>
 #include <arm_cell_interfaces/msg/motion_status.hpp>
@@ -102,6 +105,34 @@ inline const char * motion_stop_mode_name(uint8_t value)
     case Mode::STOP_MODE_EMERGENCY: return "STOP_MODE_EMERGENCY";
     default: return "UNKNOWN";
   }
+}
+
+// Human-readable console projection; diagnostic names above remain stable.
+inline std::string motion_console_name(const char * name)
+{
+  const std::string original(name);
+  if (original == "TASK_PHASE_APPROACHING") {return "approach";}
+  if (original == "TASK_PHASE_EXECUTING") {return "execute";}
+  if (original == "TASK_PHASE_RETRACTING") {return "retract";}
+  if (original.rfind("TASK_PHASE_", 0) == 0) {
+    auto phase = original.substr(11);
+    std::transform(phase.begin(), phase.end(), phase.begin(),
+      [](unsigned char c) {return static_cast<char>(std::tolower(c));});
+    return phase;
+  }
+  std::string text(name);
+  for (const auto * prefix : {"TASK_TYPE_", "TASK_PHASE_", "TASK_RESULT_"}) {
+    if (text.rfind(prefix, 0) == 0) {text.erase(0, std::char_traits<char>::length(prefix)); break;}
+  }
+  return text;
+}
+
+inline std::string motion_console_result(uint8_t value)
+{
+  auto text = motion_console_name(motion_result_code_name(value));
+  std::transform(text.begin(), text.end(), text.begin(),
+    [](unsigned char c) {return static_cast<char>(std::tolower(c));});
+  return text;
 }
 
 }  // namespace arm_cell_motion

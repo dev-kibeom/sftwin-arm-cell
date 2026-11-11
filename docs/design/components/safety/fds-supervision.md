@@ -132,7 +132,7 @@ Warning은 독립 진단 분류이며 Not Ready 또는 Safety interlock과 병�
 | `VR-SAFE-SUP-07` | 활성 envelope 제한 | 활성 실행 중 강화된 envelope는 backend가 안전하게 적용·확증할 때만 계속 실행; 그렇지 않으면 Safety StopMotion 후 inactivity 확인. 다음 작업은 현재 envelope로 계획 |
 | `VR-SAFE-SUP-08` | 통신 품질 비감속 | `/motion/state` payload가 유효하고 로컬 receipt age가 500ms 이내이면 source timestamp 경고만으로 normal capability·envelope 변경 또는 StopMotion 불가. 필수 payload invalid/상실/수신 stale 시 fail-closed·active 정지. fresh 복원 시 비래치 block 해제 가능하나 정지 완료 필요 |
 | `VR-SAFE-SUP-09` | Timestamp는 위험이 아님 | AMR/PackML source timestamp 이상만으로 Safety cause·StopMotion·latch·reset 금지. 실제 필수 Safety-HW/Motion 근거 상실은 별도 fail-closed 및 정지 완료 규칙 적용 |
-| `VR-SAFE-SUP-10` | 필수 입력의 timestamp | Safety-HW/MotionStatus의 source timestamp가 미래 또는 `source_timestamp_max_age_ms` 초과여도 payload valid 및 receipt fresh라면 capability·envelope·cause·latch·StopMotion 불변. 이상 구간당 WARN 1회·반복 억제·회복 기록. missing/stale/invalid·Motion fault·E-Stop/STO의 기존 fail-closed 유지 |
+| `VR-SAFE-SUP-10` | 필수 입력의 timestamp | Safety-HW/MotionStatus의 source timestamp가 미래 또는 `source_timestamp_max_age_ms` 초과여도 payload valid 및 receipt fresh라면 capability·envelope·cause·latch·StopMotion 불변. 이상 구간당 DEBUG 1회·반복 억제·회복 DEBUG 및 기존 Communication Health 진단 기록. missing/stale/invalid·Motion fault·E-Stop/STO의 기존 fail-closed 유지 |
 
 ## 참조
 

@@ -159,7 +159,8 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
             )
         )
         proc_output.assertWaitFor(
-            "material handoff supply completed requested=3 supplied=3",
+            f"[Material] Supply ready: {completion.material_type} "
+            f"{completion.supplied_quantity}/{completion.requested_quantity}",
             process=material_handoff,
         )
         ready = next(
