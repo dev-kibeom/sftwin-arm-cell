@@ -82,7 +82,7 @@ class LiveTestSession:
                 break
             except FileExistsError:
                 suffix += 1
-        candidate = run_root / "diagnostic_records"
+        candidate = run_root / "diagnostic"
         candidate.mkdir()
         self.root = candidate
         self.descriptor = candidate / "session.json"
@@ -92,6 +92,7 @@ class LiveTestSession:
             "runtime": "simulation",
             "timezone": str(now.tzinfo),
             "session_id": self.session_id,
+            "session_association": "associated",
             "status": "open",
             "started_at": self.started_at,
             "ended_at": None,
@@ -196,6 +197,7 @@ def find_open_session(artifact_root):
     if not root.is_dir():
         return None
     for descriptor in (
+        *root.glob("[0-9]*/[0-9]*/diagnostic/session.json"),
         *root.glob("[0-9]*/[0-9]*/diagnostic_records/session.json"),
         *root.glob("diagnostic_records/[0-9]*/**/session.json"),
     ):

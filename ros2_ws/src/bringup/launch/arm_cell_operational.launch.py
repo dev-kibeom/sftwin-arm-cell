@@ -240,6 +240,7 @@ def _live_isaac_descriptors(artifact_directory):
     unreadable = False
     if root.is_dir():
         for descriptor in (
+            *root.glob("[0-9]*/[0-9]*/diagnostic/session.json"),
             *root.glob("[0-9]*/[0-9]*/diagnostic_records/session.json"),
             *root.glob("diagnostic_records/[0-9]*/**/session.json"),
         ):
@@ -344,6 +345,7 @@ def join_live_test_session(artifact_directory):
                 participants.append(participant)
             # These are writer destinations, not a claim that files already
             # exist or that shared snapshot directories belong to this session.
+            latest["session_association"] = "associated"
             latest.setdefault("camera_configuration", camera_configuration_provenance())
             latest.setdefault("recording_locations", {}).update(recording_locations)
             temporary.write_text(
@@ -389,11 +391,12 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
                 break
             except FileExistsError:
                 suffix += 1
-        root = run_root / "diagnostic_records"
+        root = diagnostic_root(run_root)
         root.mkdir()
         data = {
             "schema_version": 1,
             "session_id": str(uuid.uuid4()),
+            "session_association": "unassociated",
             "status": "open",
             "owner": "ros_bringup",
             "owner_pid": os.getpid(),
@@ -506,7 +509,7 @@ def finish_recording_session(context, root):
 def reserve_snapshot_run_directory(artifact_directory, session_root=None):
     """Choose the session's shared destination; writers create it on first save."""
     if session_root is not None:
-        if Path(session_root).name == "diagnostic_records":
+        if Path(session_root).name in ("diagnostic", "diagnostic_records"):
             return Path(session_root).parent / "snapshots"
         # Existing descriptors keep their original artifact locations.
         return (Path(artifact_directory) / "snapshots" /
@@ -590,12 +593,37 @@ def compose(context):
             live_session_root = None
         if not live_session_id:
             live_session_root = None
+    if live_session_root is None:
+        # Reserve one fallback namespace for all writers in this launch.
+        now = datetime.now().astimezone()
+        date_root = artifact_directory / now.strftime("%Y%m%d")
+        date_root.mkdir(parents=True, exist_ok=True)
+        suffix = 0
+        while True:
+            fallback_run = date_root / (now.strftime("%H%M%S") + (f"-{suffix:02d}" if suffix else ""))
+            try:
+                fallback_run.mkdir()
+                break
+            except FileExistsError:
+                suffix += 1
+        artifact_directory = fallback_run
+        try:
+            fallback_diagnostic = diagnostic_root(fallback_run)
+            fallback_diagnostic.mkdir()
+            (fallback_diagnostic / "session.json").write_text(json.dumps({
+                "schema_version": 1, "session_id": None,
+                "session_association": "unassociated", "owner_pid": os.getpid(),
+                "started_at": now.isoformat(),
+            }, indent=2) + "\n", encoding="utf-8")
+        except OSError:
+            pass  # Metadata failure must not stop operational bringup.
     vision_artifact_directory = (
         live_session_root / "vision"
         if live_session_root
         else diagnostic_root(artifact_directory) / "vision"
     )
-    snapshot_run_directory = reserve_snapshot_run_directory(artifact_directory, live_session_root)
+    snapshot_run_directory = (reserve_snapshot_run_directory(artifact_directory, live_session_root)
+                              if live_session_root else artifact_directory / "snapshots")
     motion_artifact_directory = (
         live_session_root / "motion"
         if live_session_root

@@ -16,8 +16,8 @@ def test_session_descriptor_uses_unique_path_and_stop_closes(tmp_path, monkeypat
     first = LiveTestSession(tmp_path)
     second = LiveTestSession(tmp_path)
     assert first.root != second.root
-    assert first.root == tmp_path / "20261020/120000/diagnostic_records"
-    assert second.root == tmp_path / "20261020/120000-01/diagnostic_records"
+    assert first.root == tmp_path / "20261020/120000/diagnostic"
+    assert second.root == tmp_path / "20261020/120000-01/diagnostic"
     first_data = json.loads(first.descriptor.read_text())
     assert first_data["status"] == "open"
     isaac_provenance = first_data["participants"][0]["git_provenance"]

@@ -499,7 +499,7 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
         _node_parameters(nodes["motion_node"])["diagnostics.output_directory"]
     )
     assert clock_directory.is_absolute()
-    assert "diagnostic_records" in clock_directory.parts
+    assert "diagnostic" in clock_directory.parts
     assert module.node_ros_arguments("arm_cell_vision", "info") == [
         "--log-level",
         "info",
@@ -1006,7 +1006,7 @@ def test_standalone_recording_session_is_lazy_and_closes_on_shutdown(tmp_path):
     assert data["started_at"][-6] in "+-"
     snapshot_path = module.reserve_snapshot_run_directory(artifact_root, session)
     assert data["recording_locations"]["snapshots"] == str(snapshot_path)
-    assert session.name == "diagnostic_records"
+    assert session.name == "diagnostic"
     assert snapshot_path == session.parent / "snapshots"
     assert not snapshot_path.exists()
     assert sorted(p.name for p in session.iterdir()) == ["session.json"]
@@ -1102,6 +1102,6 @@ def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):
     for action in actions:
         if isinstance(action, SetEnvironmentVariable):
             action.execute(context)
-    assert context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"] == str(
-        root / "diagnostic_records/unassociated/motion/pick_execution_records"
-    )
+    record_path = Path(context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"])
+    assert record_path.relative_to(root).parts[-3:] == ("diagnostic", "motion", "pick_execution_records")
+    assert len(record_path.relative_to(root).parts) == 5

@@ -1,6 +1,9 @@
 """Repository-local, ignored output locations for M0609 operator tooling."""
 
 from pathlib import Path
+from datetime import datetime
+import json
+import os
 
 import yaml
 
@@ -18,10 +21,41 @@ def run_records_config(checkout):
     return (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
 
 
+_RUN_DIRECTORIES = {}
+
+
+def standalone_run_directory(artifact_root):
+    """Reserve one output directory per process; mkdir arbitrates collisions."""
+    root = Path(artifact_root).resolve()
+    key = (os.getpid(), root)
+    if key not in _RUN_DIRECTORIES:
+        now = datetime.now().astimezone()
+        parent = root / now.strftime("%Y%m%d")
+        parent.mkdir(parents=True, exist_ok=True)
+        suffix = 0
+        while True:
+            candidate = parent / (now.strftime("%H%M%S") + (f"-{suffix:02d}" if suffix else ""))
+            try:
+                candidate.mkdir()
+                break
+            except FileExistsError:
+                suffix += 1
+        _RUN_DIRECTORIES[key] = candidate
+    return _RUN_DIRECTORIES[key]
+
+
 def diagnostic_component_directory(checkout, component):
     config = run_records_config(checkout)
     diagnostic = config.get("directories", {}).get("diagnostic", "diagnostic")
-    return run_records_root(checkout) / diagnostic / component
+    directory = standalone_run_directory(run_records_root(checkout)) / diagnostic
+    directory.mkdir(parents=True, exist_ok=True)
+    descriptor = directory / "session.json"
+    if not descriptor.exists():
+        descriptor.write_text(json.dumps({
+            "schema_version": 1, "session_id": None,
+            "session_association": "unassociated", "owner_pid": os.getpid(),
+        }, indent=2) + "\n", encoding="utf-8")
+    return directory / component
 
 
 def project_root(script_path, environ=None):
