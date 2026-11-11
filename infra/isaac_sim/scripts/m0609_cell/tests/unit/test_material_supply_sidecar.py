@@ -1044,3 +1044,54 @@ def test_shutdown_closes_ipc_without_synthesizing_completion():
 
     assert child.recv(4096) == b""
     child.close()
+
+
+def test_scene_supply_startup_resolves_diagnostic_directory(tmp_path, monkeypatch):
+    """Exercise the startup function without loading Isaac or launching ROS."""
+    import os
+    import pytest
+    import yaml
+
+    source = REPOSITORY / "infra/isaac_sim/scripts/m0609_cell/runtime_steps/setup_scene.py"
+    tree = ast.parse(source.read_text())
+    startup = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                   and node.name == "_start_material_supply_adapter")
+    config = tmp_path / "infra/isaac_sim/config/material_supply.yaml"
+    config.parent.mkdir(parents=True)
+    config.write_text('{}')
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(tmp_path))
+    omni = types.ModuleType("omni")
+    timeline = types.ModuleType("omni.timeline")
+    omni.timeline = timeline
+    monkeypatch.setitem(sys.modules, "omni", omni)
+    monkeypatch.setitem(sys.modules, "omni.timeline", timeline)
+    sidecar = _FakeSidecar()
+    captured = {}
+
+    class AdapterReached(Exception):
+        pass
+
+    def construct_adapter(**kwargs):
+        captured.update(kwargs)
+        raise AdapterReached()
+
+    namespace = {
+        "Path": Path, "os": os, "yaml": yaml,
+        "_close_material_supply_adapter": lambda: None,
+        "_load_operational_profile": lambda: {},
+        "MaterialSupplyProfile": types.SimpleNamespace(from_mapping=lambda *args: object()),
+        "MaterialSupplySidecarClient": types.SimpleNamespace(launch=lambda root: sidecar),
+        "IsaacMaterialSupplyAdapter": construct_adapter,
+        "World": types.SimpleNamespace(instance=lambda: types.SimpleNamespace(stage=object())),
+    }
+    exec(compile(ast.Module(body=[startup], type_ignores=[]), str(source), "exec"), namespace)
+    context = types.SimpleNamespace(tray_x=0.0, tray_y=0.0, amr_tray_z=0.0)
+    # get_timeline_interface is evaluated after artifact_directory.
+    timeline.get_timeline_interface = lambda: object()
+    with pytest.raises(AdapterReached):
+        namespace["_start_material_supply_adapter"](context)
+    directory = captured["artifact_directory"]
+    assert directory.name == "simulation"
+    assert directory.parent.name == "diagnostic"
+    assert (directory.parent / "session.json").is_file()
+    assert sidecar.closed
