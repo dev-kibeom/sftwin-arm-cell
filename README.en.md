@@ -150,11 +150,18 @@ Compose writes records with the host Isaac user’s UID/GID (defaults: `1000:100
 If earlier runs left records owned by another user, stop Isaac and Compose before
 repairing ownership once. This preserves existing records:
 
-```bash
-sudo chown -R "$(id -u):$(id -g)" .run_records
-```
+Run this from the repository root. For custom paths, set `record_dir` to `root` from `config/run_records.yaml` and `waypoint_dir` to the parent directory of the file configured in Motion’s `config/place_waypoint.yaml`. Relative paths are resolved from the repository root. Ownership changes recursively, so use only directories dedicated to records or waypoint storage.
 
-Set the root for diagnostics and snapshots with `root` in `config/run_records.yaml`. Relative paths are resolved from the repository root.
+```bash
+record_dir=".run_records"
+waypoint_dir=".motion_data"
+
+for dir in "$record_dir" "$waypoint_dir"; do
+  if [ -d "$dir" ]; then
+    sudo chown -R -- "$(id -u):$(id -g)" "$dir"
+  fi
+done
+```
 
 Compose builds the ROS workspace image and starts `arm_cell_bringup` with the Python 3.10 sidecars. It uses Linux host networking, `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, and Fast DDS UDPv4 transport by default. Keep the ROS domain and RMW settings consistent between Isaac Sim and the container. Follow logs with `docker compose logs -f arm-cell`; stop with `Ctrl+C` in the Compose terminal or run `docker compose down`.
 
