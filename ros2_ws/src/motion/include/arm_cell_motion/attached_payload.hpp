@@ -36,7 +36,9 @@ inline moveit_msgs::msg::AttachedCollisionObject make_attached_payload(
   payload.link_name = link;
   payload.touch_links = {link, "gripper_robotiq_85_left_finger_link",
     "gripper_robotiq_85_right_finger_link",
-    "gripper_robotiq_85_left_finger_tip_link", "gripper_robotiq_85_right_finger_tip_link"};
+    "gripper_robotiq_85_left_finger_tip_link", "gripper_robotiq_85_right_finger_tip_link",
+    "gripper_robotiq_85_left_inner_knuckle_link",
+    "gripper_robotiq_85_right_inner_knuckle_link"};
   payload.object.id = "accepted_pick_payload";
   payload.object.header.frame_id = link;
   payload.object.operation = moveit_msgs::msg::CollisionObject::ADD;
