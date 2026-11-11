@@ -122,4 +122,4 @@ PICK/PLACE Trajectory 완료는 정확도·안정화 보증이 아니다. 관측
 - [Safety Supervision FDS](../components/safety/fds-supervision.md)
 - [Orchestration Mission FDS](../components/orchestration/fds-mission-cycle.md)
 
-현재 Payload의 정식 이름과 이전 필드 호환 관계는 [Diagnostic Field Naming](../components/diagnostic-field-naming.md)을 참고한다. 이름 변경은 생산자의 실행 결과 권한이나 수집 조건을 변경하지 않는다.
+현재 Payload의 정식 이름과 이전 필드 호환 관계는 [진단 필드 명명과 호환성](../components/diagnostic-field-naming.md)을 참고한다. 이름 변경은 생산자의 실행 결과 권한이나 수집 조건을 변경하지 않는다.
