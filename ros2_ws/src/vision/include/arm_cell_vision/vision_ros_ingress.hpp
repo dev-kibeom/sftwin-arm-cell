@@ -42,8 +42,8 @@ struct VisionIngressAcceptanceSnapshot
   uint64_t policy_delivery_count = 0;
   uint64_t observation_ready_count = 0;
   bool calibration_cache_valid = false;
-  // Legacy pair spelling: this is the bounded Depth cache, independent of RGB.
-  bool cached_pair_reused = false;
+  // Bounded Depth cache, independent of RGB; legacy JSON keys retain cached_pair_* spelling.
+  bool cached_depth_reused = false;
   uint64_t calibration_cache_generation = 0;
   std::optional<int64_t> latest_rgb_stamp_ns;
   std::optional<int64_t> latest_depth_stamp_ns;
@@ -132,10 +132,10 @@ struct VisionIngressRequestDiagnostics
   bool detailed_capture_enabled = false;
   uint64_t clock_epoch_start = 0;
   bool processing_started = false;
-  // Legacy pair spelling: this is the bounded Depth cache, independent of RGB.
-  bool cached_pair_reused = false;
-  bool cached_pair_available = false;
-  std::optional<IngressStatus> cached_pair_status;
+  // Bounded Depth cache, independent of RGB; legacy JSON keys retain cached_pair_* spelling.
+  bool cached_depth_reused = false;
+  bool cached_depth_available = false;
+  std::optional<IngressStatus> cached_depth_status;
   uint64_t rgb_received = 0;
   uint64_t depth_received = 0;
   uint64_t sync_callbacks = 0;

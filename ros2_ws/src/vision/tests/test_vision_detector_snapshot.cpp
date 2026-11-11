@@ -265,34 +265,34 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_stage_job(const std::string & 
   ordered_candidate.confidence_grade = "HIGH";
   ordered_candidate.has_observed_rectangle = true;
   job.result.ordered_candidates.push_back(ordered_candidate);
-  job.result.cuboid_height_patches.push_back({});
-  job.result.cuboid_height_patches.back().height_m = 0.03;
-  job.result.cuboid_height_patches.back().cell_count = 400;
-  job.result.cuboid_height_patches.back().contour_count = 1;
-  job.result.cuboid_height_patches.back().fitted_edge_count = 1;
+  job.result.cuboid_planes.push_back({});
+  job.result.cuboid_planes.back().height_m = 0.03;
+  job.result.cuboid_planes.back().cell_count = 400;
+  job.result.cuboid_planes.back().contour_count = 1;
+  job.result.cuboid_planes.back().fitted_edge_count = 1;
   for (int y = 30; y < 50; ++y) {
     for (int x = 30; x < 50; ++x) {
       geometry_msgs::msg::Point32 cell;
       cell.x = static_cast<float>(-0.2 + x * 0.005);
       cell.y = static_cast<float>(-0.2 + y * 0.005);
-      job.result.cuboid_height_patches.back().observed_cells_xy.push_back(cell);
+      job.result.cuboid_planes.back().observed_cells_xy.push_back(cell);
     }
   }
-  job.result.cuboid_height_patches.back().observed_contours_xy.push_back({
+  job.result.cuboid_planes.back().observed_contours_xy.push_back({
       geometry_msgs::msg::Point32(), geometry_msgs::msg::Point32(),
       geometry_msgs::msg::Point32(), geometry_msgs::msg::Point32()});
-  auto & test_contour = job.result.cuboid_height_patches.back().observed_contours_xy.back();
+  auto & test_contour = job.result.cuboid_planes.back().observed_contours_xy.back();
   test_contour[0].x = -0.05F; test_contour[0].y = -0.05F;
   test_contour[1].x = 0.05F; test_contour[1].y = -0.05F;
   test_contour[2].x = 0.05F; test_contour[2].y = 0.05F;
   test_contour[3].x = -0.05F; test_contour[3].y = 0.05F;
-  job.result.cuboid_height_patches.back().fitted_edges_xy_support.push_back(
+  job.result.cuboid_planes.back().fitted_edges_xy_support.push_back(
     {-0.05, -0.05, 0.05, -0.05, 1.0});
-  job.result.cuboid_height_patches.back().candidate_evaluation_attempt_count = 3;
-  job.result.cuboid_height_patches.back().geometry_valid_before_deduplication_count = 2;
-  job.result.cuboid_height_patches.back().generated_hypothesis_count = 1;
-  job.result.cuboid_height_patches.back().deduplicated_count = 1;
-  job.result.cuboid_height_patches.back().geometry_rejected_by_reason[
+  job.result.cuboid_planes.back().candidate_evaluation_attempt_count = 3;
+  job.result.cuboid_planes.back().geometry_valid_before_deduplication_count = 2;
+  job.result.cuboid_planes.back().generated_hypothesis_count = 1;
+  job.result.cuboid_planes.back().deduplicated_count = 1;
+  job.result.cuboid_planes.back().geometry_rejected_by_reason[
     "insufficient_observed_top_area"] = 1;
   auto replay = std::make_shared<arm_cell_vision::CuboidReplayEvidence>();
   replay->rows = 80;
@@ -340,24 +340,24 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_stage_job(const std::string & 
   removed.disposition = "removed_by_deduplication";
   removed.deduplicated_to_candidate_id = 7;
   job.result.cuboid_hypotheses.push_back(removed);
-  job.result.cuboid_height_patches.push_back({});
-  job.result.cuboid_height_patches.back().height_m = 0.06;
-  job.result.cuboid_height_patches.back().cell_count = 144;
-  job.result.cuboid_height_patches.back().contour_count = 1;
-  job.result.cuboid_height_patches.back().fitted_edge_count = 4;
-  job.result.cuboid_height_patches.back().observed_cells_xy.reserve(144);
+  job.result.cuboid_planes.push_back({});
+  job.result.cuboid_planes.back().height_m = 0.06;
+  job.result.cuboid_planes.back().cell_count = 144;
+  job.result.cuboid_planes.back().contour_count = 1;
+  job.result.cuboid_planes.back().fitted_edge_count = 4;
+  job.result.cuboid_planes.back().observed_cells_xy.reserve(144);
   for (int y = 52; y < 64; ++y) {
     for (int x = 52; x < 64; ++x) {
       geometry_msgs::msg::Point32 cell;
       cell.x = static_cast<float>(-0.2 + x * 0.005);
       cell.y = static_cast<float>(-0.2 + y * 0.005);
-      job.result.cuboid_height_patches.back().observed_cells_xy.push_back(cell);
+      job.result.cuboid_planes.back().observed_cells_xy.push_back(cell);
     }
   }
-  job.result.cuboid_height_patches.back().observed_contours_xy.push_back({
+  job.result.cuboid_planes.back().observed_contours_xy.push_back({
       geometry_msgs::msg::Point32(), geometry_msgs::msg::Point32(),
       geometry_msgs::msg::Point32(), geometry_msgs::msg::Point32()});
-  auto & upper_contour = job.result.cuboid_height_patches.back().observed_contours_xy.back();
+  auto & upper_contour = job.result.cuboid_planes.back().observed_contours_xy.back();
   upper_contour[0].x = 0.06F; upper_contour[0].y = 0.06F;
   upper_contour[1].x = 0.115F; upper_contour[1].y = 0.06F;
   upper_contour[2].x = 0.115F; upper_contour[2].y = 0.115F;
@@ -366,13 +366,13 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_stage_job(const std::string & 
     {{0.06, 0.06, 0.115, 0.06}}, {{0.115, 0.06, 0.115, 0.115}},
     {{0.115, 0.115, 0.06, 0.115}}, {{0.06, 0.115, 0.06, 0.06}}}};
   for (const auto & edge : upper_edges) {
-    job.result.cuboid_height_patches.back().fitted_edges_xy_support.push_back(
+    job.result.cuboid_planes.back().fitted_edges_xy_support.push_back(
       {edge[0], edge[1], edge[2], edge[3], 1.0});
   }
-  job.result.cuboid_height_patches.back().candidate_evaluation_attempt_count = 6;
-  job.result.cuboid_height_patches.back().geometry_valid_before_deduplication_count = 6;
-  job.result.cuboid_height_patches.back().generated_hypothesis_count = 2;
-  job.result.cuboid_height_patches.back().deduplicated_count = 4;
+  job.result.cuboid_planes.back().candidate_evaluation_attempt_count = 6;
+  job.result.cuboid_planes.back().geometry_valid_before_deduplication_count = 6;
+  job.result.cuboid_planes.back().generated_hypothesis_count = 2;
+  job.result.cuboid_planes.back().deduplicated_count = 4;
   auto ranked = hypothesis;
   ranked.candidate_id = 86;
   ranked.height_m = 0.06;
@@ -415,11 +415,11 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_stage_job(const std::string & 
   diagnostic_low.confidence_reason = "distinct_hypotheses_remain_ambiguous";
   diagnostic_low.disposition = "rejected_identity_ambiguous";
   job.result.cuboid_hypotheses.push_back(diagnostic_low);
-  job.result.cuboid_height_patches[0].candidate_evaluation_attempt_count = 4;
-  job.result.cuboid_height_patches[0].geometry_rejected_by_reason[
+  job.result.cuboid_planes[0].candidate_evaluation_attempt_count = 4;
+  job.result.cuboid_planes[0].geometry_rejected_by_reason[
     "insufficient_observed_boundary_support"] = 2;
-  job.result.cuboid_boundaries.push_back(job.result.cuboid_height_patches.front());
-  auto & plane = job.result.cuboid_height_patches.front();
+  job.result.cuboid_boundaries.push_back(job.result.cuboid_planes.front());
+  auto & plane = job.result.cuboid_planes.front();
   plane.plane_fitted = true;
   plane.plane_status = "horizontal";
   plane.partition_status = "alternatives";
@@ -428,8 +428,8 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_stage_job(const std::string & 
   plane.rectangle_alternatives = {{1, 2}};
   plane.adjacent_planes = {{1, 0.03, 1}};
   plane.fitted_edge_source_ids = {4};
-  job.result.cuboid_height_patches[1].plane_status = "mixed_or_inclined";
-  job.result.cuboid_height_patches[1].plane_normal = {0.2, 0, 0.98};
+  job.result.cuboid_planes[1].plane_status = "mixed_or_inclined";
+  job.result.cuboid_planes[1].plane_normal = {0.2, 0, 0.98};
   return job;
 }
 
@@ -455,7 +455,7 @@ arm_cell_vision::VisionDetectorSnapshotJob orientation_stage_job(
   job.result.result_code = job.terminal_result_code;
   job.result.has_target_pose = false;
   job.result.cuboid_hypotheses.clear();
-  job.result.cuboid_height_patches.clear();
+  job.result.cuboid_planes.clear();
   job.result.cuboid_replay_evidence.reset();
   job.selected_profile->algorithm = "cuboid_top_face";
   job.selected_profile->target_id = "RawPart";
@@ -512,8 +512,8 @@ arm_cell_vision::VisionDetectorSnapshotJob orientation_stage_job(
   replay->height_grid_m.at<double>(79, 0) = 0.02;
   job.result.cuboid_replay_evidence = replay;
 
-  job.result.cuboid_height_patches.resize(3);
-  auto & strip = job.result.cuboid_height_patches[1];
+  job.result.cuboid_planes.resize(3);
+  auto & strip = job.result.cuboid_planes[1];
   strip.height_m = 0.03;
   strip.cell_count = 35;
   strip.contour_count = 1;
@@ -537,7 +537,7 @@ arm_cell_vision::VisionDetectorSnapshotJob orientation_stage_job(
   strip.geometry_valid_before_deduplication_count = 1;
   strip.generated_hypothesis_count = 1;
 
-  auto & corner = job.result.cuboid_height_patches[2];
+  auto & corner = job.result.cuboid_planes[2];
   corner.height_m = 0.02;
   corner.cell_count = 1;
   geometry_msgs::msg::Point32 corner_cell;
@@ -849,6 +849,8 @@ TEST_F(VisionDetectorSnapshotTest, TerminalSnapshotSaveFailureDoesNotSuppressPub
   arm_cell_vision::VisionRequestDiagnosticRecord request_diagnostics;
   request_diagnostics.ingress.detailed_capture_enabled = true;
   request_diagnostics.ingress.sample_detail_dropped = 2;
+  request_diagnostics.ingress.cached_depth_available = true;
+  request_diagnostics.ingress.cached_depth_reused = true;
   arm_cell_vision::VisionIngressPairDiagnostic pair;
   pair.rgb_frame_id = "rgb-optical";
   pair.depth_frame_id = "depth-optical";
@@ -888,6 +890,8 @@ TEST_F(VisionDetectorSnapshotTest, TerminalSnapshotSaveFailureDoesNotSuppressPub
   output.submit(std::move(terminal));
   output.shutdown();
   EXPECT_TRUE(save_attempted);
+  EXPECT_NE(published.diagnostic_record_json.find("\"depth_cache\":{\"scope\":\"detect_target_depth_cache\",\"available\":true,\"reused\":true"), std::string::npos);
+  EXPECT_NE(published.diagnostic_record_json.find("\"cached_pair_available\":true"), std::string::npos);
   EXPECT_EQ(published.event_kind,
     arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE);
   EXPECT_EQ(published.acquisition_id, "acq-7");
@@ -960,7 +964,7 @@ TEST_F(VisionDetectorSnapshotTest, TerminalAcquisitionWritesDiagnosticAndReplayB
   arm_cell_vision::CuboidHeightPatchDiagnostic patch_diagnostic;
   patch_diagnostic.height_m = 0.03;
   patch_diagnostic.pre_object_rejected_count = 0;
-  job.result.cuboid_height_patches.push_back(patch_diagnostic);
+  job.result.cuboid_planes.push_back(patch_diagnostic);
   arm_cell_vision::CuboidStageDiagnostic patch_stage;
   patch_stage.stage = "height_patch_formation";
   patch_stage.status = "computed";
@@ -2002,13 +2006,13 @@ TEST_F(VisionDetectorSnapshotTest, BoundaryExtractionExcludesEveryPostBoundaryOv
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> before, after;
   arm_cell_vision::snapshot_detail::render_geometry(job, before);
   ASSERT_EQ(before.size(), 3U);
-  ASSERT_FALSE(job.result.cuboid_height_patches.front().rectangle_regions.empty());
-  ASSERT_FALSE(job.result.cuboid_height_patches.front().inferred_partition_edges.empty());
+  ASSERT_FALSE(job.result.cuboid_planes.front().rectangle_regions.empty());
+  ASSERT_FALSE(job.result.cuboid_planes.front().inferred_partition_edges.empty());
   ASSERT_FALSE(job.result.cuboid_boundaries.empty());
   ASSERT_FALSE(job.result.cuboid_boundaries.front().observed_contours_xy.empty());
   ASSERT_FALSE(job.result.cuboid_boundaries.front().fitted_edges_xy_support.empty());
 
-  auto & plane = job.result.cuboid_height_patches.front();
+  auto & plane = job.result.cuboid_planes.front();
   plane.rectangle_regions.push_back({0.12, -0.12, 0.5, 0.08, 0.04});
   plane.inferred_partition_edges.push_back({0.08, -0.15, 0.16, -0.09});
   job.result.cuboid_hypotheses.front().anchor_x_m = 0.14;
@@ -2036,7 +2040,7 @@ TEST_F(VisionDetectorSnapshotTest, BoundaryExtractionExcludesEveryPostBoundaryOv
     cv::NORM_INF), 0) << "Stage 4 displays changed Runtime partition and anchor evidence";
 
   auto without_partition = job;
-  for (auto & partition_plane : without_partition.result.cuboid_height_patches) {
+  for (auto & partition_plane : without_partition.result.cuboid_planes) {
     partition_plane.rectangle_regions.clear();
     partition_plane.inferred_partition_edges.clear();
   }
@@ -2056,14 +2060,14 @@ TEST_F(VisionDetectorSnapshotTest, BoundaryExtractionUsesOnlyOriginalBoundaryEdg
   auto job = cuboid_stage_job("boundary-edge-source");
   ASSERT_FALSE(job.result.cuboid_boundaries.empty());
   ASSERT_FALSE(job.result.cuboid_boundaries.front().fitted_edges_xy_support.empty());
-  ASSERT_FALSE(job.result.cuboid_height_patches.empty());
-  ASSERT_FALSE(job.result.cuboid_height_patches.front().fitted_edges_xy_support.empty());
+  ASSERT_FALSE(job.result.cuboid_planes.empty());
+  ASSERT_FALSE(job.result.cuboid_planes.front().fitted_edges_xy_support.empty());
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> baseline;
   arm_cell_vision::snapshot_detail::render_geometry(job, baseline);
   ASSERT_EQ(baseline.size(), 3U);
 
   auto plane_edge_change = job;
-  auto & plane_edges = plane_edge_change.result.cuboid_height_patches.front().fitted_edges_xy_support;
+  auto & plane_edges = plane_edge_change.result.cuboid_planes.front().fitted_edges_xy_support;
   plane_edges.front()[0] += 0.04;
   plane_edges.front()[2] += 0.04;
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> plane_changed;
@@ -2100,12 +2104,12 @@ TEST_F(VisionDetectorSnapshotTest, BoundaryExtractionUsesOnlyOriginalBoundaryEdg
 TEST_F(VisionDetectorSnapshotTest, SelectionUsesTheSamePlaneCellsAsThePlaneMap)
 {
   auto job = cuboid_stage_job("plane-background");
-  job.result.cuboid_height_patches.resize(1);
+  job.result.cuboid_planes.resize(1);
   job.result.cuboid_hypotheses.clear();
   job.result.cuboid_boundaries.clear();
   job.result.ordered_candidates.clear();
   job.result.rawpart_candidate_diagnostics.clear();
-  for (auto & plane : job.result.cuboid_height_patches) {
+  for (auto & plane : job.result.cuboid_planes) {
     plane.candidate_evaluation_attempt_count = 0;
     plane.rectangle_regions.clear();
     plane.inferred_partition_edges.clear();
@@ -2139,7 +2143,7 @@ TEST_F(VisionDetectorSnapshotTest, SelectionUsesTheSamePlaneCellsAsThePlaneMap)
     brightest_fill = std::max(brightest_fill, maximum);
   }
   EXPECT_GT(brightest_fill, 100) << "plane identity must remain visible on the dark background";
-  job.result.cuboid_height_patches.front().plane_status = "unresolved_insufficient_support";
+  job.result.cuboid_planes.front().plane_status = "unresolved_insufficient_support";
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> residual_images;
   arm_cell_vision::snapshot_detail::render_geometry(job, residual_images);
   ASSERT_EQ(residual_images.size(), 3U);
@@ -2147,8 +2151,8 @@ TEST_F(VisionDetectorSnapshotTest, SelectionUsesTheSamePlaneCellsAsThePlaneMap)
   double residual_maximum = 0;
   cv::minMaxLoc(residual(plane_map).reshape(1), nullptr, &residual_maximum);
   EXPECT_GT(residual_maximum, 100) << "insufficient support is dimmer but still visible";
-  job.result.cuboid_height_patches.front().plane_status = "horizontal";
-  job.result.cuboid_height_patches.front().observed_cells_xy.front().x += 0.05;
+  job.result.cuboid_planes.front().plane_status = "horizontal";
+  job.result.cuboid_planes.front().observed_cells_xy.front().x += 0.05;
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> changed;
   arm_cell_vision::snapshot_detail::render_geometry(job, changed);
   const auto changed_observation = cv::imdecode(changed[0].png, cv::IMREAD_COLOR);
@@ -2165,8 +2169,8 @@ TEST_F(VisionDetectorSnapshotTest, IncompleteHypothesisEvidenceKeepsThePlaneMapB
 {
   auto job = cuboid_stage_job("incomplete-hypothesis-background");
   job.result.cuboid_boundaries.clear();
-  job.result.cuboid_height_patches.front().candidate_evaluation_attempt_count = 0;
-  for (auto & plane : job.result.cuboid_height_patches) {
+  job.result.cuboid_planes.front().candidate_evaluation_attempt_count = 0;
+  for (auto & plane : job.result.cuboid_planes) {
     plane.rectangle_regions.clear();
     plane.inferred_partition_edges.clear();
   }
@@ -2324,24 +2328,24 @@ TEST(GeometrySnapshotLayoutTest, PlaneAnnotationRetainsRecordedStatusAndFitsAsOn
 TEST_F(VisionDetectorSnapshotTest, DenseGeometryKeepsBoundedHeadersAndEveryDiagnosticId)
 {
   auto job = cuboid_stage_job("dense-geometry");
-  job.result.cuboid_height_patches[0].plane_status = "horizontal";
-  job.result.cuboid_height_patches[1].plane_status = "mixed_or_inclined";
+  job.result.cuboid_planes[0].plane_status = "horizontal";
+  job.result.cuboid_planes[1].plane_status = "mixed_or_inclined";
   // Many one-cell residual planes and coincident hypotheses reproduce the live clutter.
   for (size_t i = 2; i < 92; ++i) {
-    auto patch = job.result.cuboid_height_patches[0];
+    auto patch = job.result.cuboid_planes[0];
     patch.plane_status = "unresolved_insufficient_support";
     patch.observed_cells_xy.resize(1);
     patch.observed_cells_xy[0].x = -0.18F + static_cast<float>(i % 40) * 0.005F;
     patch.observed_cells_xy[0].y = 0.15F;
     patch.cell_count = 1;
     patch.candidate_evaluation_attempt_count = 0;
-    job.result.cuboid_height_patches.push_back(patch);
+    job.result.cuboid_planes.push_back(patch);
   }
   for (uint32_t id = 100; job.result.cuboid_hypotheses.size() < 76; ++id) {
     auto h = job.result.cuboid_hypotheses.front();
     h.candidate_id = id;
     job.result.cuboid_hypotheses.push_back(h);
-    ++job.result.cuboid_height_patches[h.patch_index].candidate_evaluation_attempt_count;
+    ++job.result.cuboid_planes[h.patch_index].candidate_evaluation_attempt_count;
   }
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> dense, sparse;
   arm_cell_vision::snapshot_detail::render_geometry(job, dense);
@@ -2359,9 +2363,9 @@ TEST_F(VisionDetectorSnapshotTest, DenseGeometryKeepsBoundedHeadersAndEveryDiagn
     EXPECT_EQ(dense_image.size(), sparse_image.size())
       << "diagnostic list length must not grow the header or image";
   }
-  EXPECT_EQ(job.result.cuboid_height_patches.size(), 92U);
+  EXPECT_EQ(job.result.cuboid_planes.size(), 92U);
   EXPECT_EQ(job.result.cuboid_hypotheses.size(), 76U);
-  EXPECT_EQ(job.result.cuboid_height_patches.back().plane_status, "unresolved_insufficient_support");
+  EXPECT_EQ(job.result.cuboid_planes.back().plane_status, "unresolved_insufficient_support");
   if (const char * preview = std::getenv("SFTWIN_SNAPSHOT_PREVIEW")) {
     const auto directory = std::filesystem::path(preview) / "dense-geometry";
     std::filesystem::create_directories(directory);
@@ -2532,7 +2536,7 @@ TEST_F(VisionDetectorSnapshotTest, GeometryUsesSelectionStateIndependentlyOfConf
 TEST_F(VisionDetectorSnapshotTest, BoundaryEvidenceSurvivesUnavailablePlaneAndHypothesisEvidence)
 {
   auto job = cuboid_stage_job("boundary-only");
-  job.result.cuboid_height_patches.clear();
+  job.result.cuboid_planes.clear();
   job.result.cuboid_hypotheses.clear();
   std::vector<arm_cell_vision::VisionDetectorSnapshotJob::CuboidStageImage> images;
   arm_cell_vision::snapshot_detail::render_geometry(job, images);
@@ -2719,7 +2723,7 @@ TEST_F(VisionDetectorSnapshotTest, CuboidStageImagesRemainReadableWhenThereAreNo
   job.result.result_code = job.terminal_result_code;
   job.result.has_target_pose = false;
   job.result.cuboid_hypotheses.clear();
-  job.result.cuboid_height_patches.clear();
+  job.result.cuboid_planes.clear();
   job.result.ordered_candidates.clear();
   job.result.rawpart_candidate_diagnostics.clear();
   job.result.rawpart_candidate_count = 0;
@@ -2808,7 +2812,7 @@ TEST_F(VisionDetectorSnapshotTest, HypothesisCompletenessUsesMatchingRuntimeEval
   using Message = arm_cell_interfaces::msg::VisionDetectorSnapshot;
   const auto root = temporary_snapshot_root("stage-attempt-count-mismatch");
   auto job = cuboid_stage_job("stage-attempt-count-mismatch");
-  ++job.result.cuboid_height_patches[0].candidate_evaluation_attempt_count;
+  ++job.result.cuboid_planes[0].candidate_evaluation_attempt_count;
   std::vector<Message> published;
   arm_cell_vision::VisionDetectorSnapshotOutput output(
     *node, root, "stage-run", {}, [&](const auto & message) {published.push_back(message);},

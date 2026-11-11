@@ -81,7 +81,7 @@ void render_geometry(
       replay->height_grid_m.type() == CV_64FC1 && replay->resolution_m > 0.0 &&
       replay->rows == static_cast<uint32_t>(replay->height_grid_m.rows) &&
       replay->columns == static_cast<uint32_t>(replay->height_grid_m.cols);
-    const auto & patches = detection.cuboid_height_patches;
+    const auto & patches = detection.cuboid_planes;
     const auto & hypotheses = detection.cuboid_hypotheses;
     const bool patch_evidence_complete = !patches.empty() && std::all_of(
       patches.begin(), patches.end(), [](const auto & patch) {

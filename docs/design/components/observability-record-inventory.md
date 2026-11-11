@@ -3,7 +3,7 @@
 - **설계 근거:** PR #503의 초기 목록. 현재 Live Test Analysis 설계를 위해 증거 재감사
 - **런타임 감사 기준:** `origin/main`의 `3eb67804e8ebb23b830e2591050bd8a1d3cbbf54`(PR #515 통합, PR #511의 Live Test Analysis FDS)
 - **범위:** 해당 기준의 구현된 기록 생산자·독자·라이브 세션 연결·보고서 준비 상태
-- **소유자:** 컴포넌트 간 분류·연결은 ARM Cell Observability. 각 생산 컴포넌트는 기록 내용과 결과 의미를 계속 소유
+- **소유자:** 현행 컴포넌트 간 공유 의미는 [Observability Records ICD](../interfaces/icd-observability-records.md)의 ARM Cell Shared Interface가 소유한다. 각 생산 컴포넌트는 기록 내용과 결과 의미를 계속 소유
 
 이 목록은 관측된 구현을 기록하며 FDS의 목표 계약이 모두 출시됐다고 주장하지 않는다. 아래 경로와 한계는 감사 기준을 설명하며 설정 가능한 경로와 런타임 옵션이 우선한다. 이는 설계 감사이지 마이그레이션 지시가 아니다. 기존 파일은 원래 위치에 남는다. 7절은 당시 기준의 라이브 테스트 보고서 준비 상태를 재감사하며 과거 생산자 Payload의 세부사항은 열거된 소유 계약의 범위로 제한한다.
 

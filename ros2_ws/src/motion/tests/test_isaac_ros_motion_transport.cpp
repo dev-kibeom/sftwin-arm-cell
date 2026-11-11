@@ -2129,17 +2129,31 @@ TEST_F(IsaacRosMotionTransportTest, MissingAccuracyDoesNotChangeCompletedTraject
   ASSERT_EQ(transport_->task_accuracy_history_.size(), 1u);
   const auto accuracy = nlohmann::json::parse(transport_->task_accuracy_history_.back());
   EXPECT_EQ(accuracy.at("segment"), "RETRACT");
+  EXPECT_EQ(accuracy.at("feedback_fk_tcp_pose"), accuracy.at("actual_tcp_pose"));
+  EXPECT_EQ(accuracy.at("measurement_status"), "UNAVAILABLE");
+  EXPECT_EQ(accuracy.at("selected_grasp_or_place_pose_index"),
+    accuracy.at("selected_planning_candidate_index"));
   EXPECT_TRUE(accuracy.at("tcp_position_error_mm").is_null());
   EXPECT_TRUE(accuracy.at("tcp_orientation_error_rad").is_null());
   const auto & execution = accuracy.at("trajectory_execution");
   EXPECT_TRUE(execution.at("final_joint_position_error_max_rad").is_null());
   EXPECT_TRUE(execution.at("actual_joint_positions_rad").is_null());
   EXPECT_EQ(execution.at("goal_accuracy"), "UNAVAILABLE");
+  EXPECT_EQ(execution.at("final_command_attempt_simulation_time_s"),
+    execution.at("final_command_attempt_simulation_time"));
   EXPECT_TRUE(execution.at("trajectory_execution_complete").get<bool>());
   EXPECT_LE(
     execution.at("final_command_attempt_steady_time_s").get<double>(),
     execution.at("final_command_accepted_steady_time_s").get<double>());
   EXPECT_EQ(transport_->wait_for_motion_completion(), MotionCompletionOutcome::COMPLETED);
+  request.task_type.value = MotionTaskType::TASK_TYPE_PLACE;
+  transport_->selected_planning_candidate_index_ = 3U;
+  transport_->record_task_accuracy(
+    request, arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS);
+  const auto place = nlohmann::json::parse(transport_->task_accuracy_history_.back());
+  EXPECT_EQ(place.at("selected_grasp_or_place_pose_index"), 3U);
+  EXPECT_EQ(place.at("selected_planning_candidate_index"), 4U);
+  EXPECT_EQ(place.at("selected_pose_scope"), "PLACE_POSE");
 }
 
 TEST_F(IsaacRosMotionTransportTest, WholePickSummaryPreservesEveryMaterialAndActionElapsedTime)

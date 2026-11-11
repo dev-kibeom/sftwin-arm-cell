@@ -97,6 +97,36 @@ PICK/PLACE Trajectory 완료는 정확도·안정화 보증이 아니다. 관측
 - 동일한 원본 Artifact는 복사 대신 참조하고, Progress가 Terminal Summary를 덮어쓰거나 일부 파일이 완전한 결과처럼 제시되지 않도록 한다.
 - 사후 분석은 확인됨, 범위 축소, 증거 불충분을 구분한다. 분석 분류는 새 Runtime 상태나 Result Code가 아니다.
 
+## 기록 해석과 이전 형식 호환
+
+정식 필드와 이전 호환 별칭은 동일한 근거이므로 중복 집계하지 않는다. 새 소비자는 정식 필드를 우선하고 과거 기록에서는 이전 필드를 대체 입력으로 해석한다. 이름 변경은 생산자의 실행 결과 권한·수집 조건·기존 스키마 버전을 변경하지 않는다.
+
+### 결과와 수집 완전성
+
+- Motion의 이전 `task_executor_result_code`는 문자열 이름이고 `task_executor_result_code_value`는 숫자다. 정식 `task_result_code`는 숫자, `task_result_name`은 문자열이며 계획 진행 중에는 모두 null이다.
+- Orchestration의 이전 `failure_code`·`failure_name`에는 성공한 Motion Action 결과도 포함된다. 정식 `result_code`·`result_name`은 `failure_domain`·`event`와 함께 해석하며 결과 도메인이 없거나 결과가 미가용이면 null / UNAVAILABLE다. 이전 필드의 기본값만으로 결과 가용성을 판단하지 않는다.
+- Mission의 `mission_exit_reason`, Vision의 `terminal_result`, PICK의 `candidate_evaluation`을 정식 결과 위치로 사용한다. 각각의 중복 호환 필드는 별도 결과가 아니다.
+- Safety/Orchestration 요약의 `capture_complete`와 이전 `complete`는 기록된 유실·잘림 없이 Writer가 대기 기록 처리를 마쳤음을 뜻한다. Mission 성공이나 전체 센서 수집 범위를 보장하지 않는다. 요약이 없으면 완전성은 미확인이다.
+
+### 후보 식별과 번호 기준
+
+자재 후보 ID, 파지 자세 인덱스, 시도 순서는 서로 다른 식별 정보다. 일반적인 이전 `candidate_id`는 상위 객체 범위 안에서 해석하며 이름만으로 전역 연결하지 않는다.
+
+- PICK 요약의 `selected_grasp_pose_index`와 이전 `selected_candidate`는 GRASP_POSE 범위에서 0부터 시작하며 -1은 선택 없음을 뜻한다.
+- `last_evaluated_grasp_pose_number`와 이전 `last_evaluated_candidate_number`는 1부터 시작한다. `last_evaluated_material_candidate_id`와 함께 읽으며 null은 미가용이다.
+- 작업 정확도의 `selected_grasp_or_place_pose_index`는 PICK·PLACE 모두 0부터 시작하며 `selected_pose_scope`로 범위를 구분한다. 이전 `selected_planning_candidate_index`는 PICK에서 0부터, PLACE에서 1부터 시작한다.
+- 이전 `insertion_execution_count`는 실제 횟수가 아닌 0/1 시작 표시다. 정식 `insertion_started`를 사용한다.
+- `multiple_material_candidates_searched`와 이전 `candidate_switch_occurred`는 `precise_search_began`인 시도가 둘 이상임을 뜻한다. 이전 기록에서 해당 플래그가 없으면 true로 간주한다. 실제 물리 동작의 전환을 입증하지 않는다.
+
+### 관측 출처와 호환 범위
+
+- 작업 정확도의 `feedback_fk_tcp_pose`와 이전 `actual_tcp_pose`는 측정 관절 피드백과 모델의 순기구학으로 계산한 값이다. 독립적인 물리 TCP 측정값으로 해석하지 않는다. 가용성은 기존 측정 상태를 따르며 미가용 Pose는 빈 객체다.
+- 이전 `feedback_gap_elapsed_ns`는 release·통신 이벤트에도 나타나므로 해당 문맥에서 측정된 피드백 공백으로 해석하지 않는다. 정식 `motion_feedback_gap_elapsed_ns`는 피드백 공백·복구 이벤트에만 출력한다.
+- Vision의 이전 `cached_pair_available/reused/status`는 RGB와 독립적인 Depth 캐시다. 정식 `depth_cache`는 이전 `pairing` 객체 밖에 별도 범위를 두며, 명시적인 RGB-D Calibration 쌍의 진단과 구별한다.
+- 직렬화된 `cuboid_height_patches`는 평면 근거를 담는 호환 키다. 내부 평면 컬렉션의 이름 변경 때문에 기하 배열을 중복 저장하지 않는다.
+- Clock 수집 ID는 해당 수집에만 속하며 전역 추적 ID가 아니다. 비어 있지 않은 `ARM_CELL_MOTION_CLOCK_CAPTURE_ID`가 우선하고, 없거나 비어 있으면 이전 `ARM_CELL_OBSERVABILITY_CAPTURE_ID`를 사용한다.
+- 새 실행의 `diagnostic/session.json`·`diagnostic/<component>/`와 이전 `diagnostic_records` 읽기 호환은 구별한다. 이전 세션도 명시적인 연결 근거가 필요하며 경로 인접성만으로 소속을 확정하지 않는다.
+
 ## 상호운용 조건 및 비보장
 
 세션 소속과 업무 인과 ID는 독립적이다. Session Descriptor는 참여와 증거 경로를 연결하는 기록이지 Runtime 상태 저장소나 Mission Manifest가 아니다. Join 실패와 기록 유실은 정상 제어를 차단하지 않는다. 컴포넌트별 기록의 생성 조건, 세부 Payload, 저장·한계, 후보 계산, 오류 분류는 각 Owner에 남는다.

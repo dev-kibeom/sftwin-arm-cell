@@ -435,7 +435,7 @@ DetectionResult detect_cuboid_top_face(
       item.reason = "candidate_local_geometry_or_observation_check_failed";
     }
     patch_diagnostic.partitioned_candidate_count = generated.size();
-    result.cuboid_height_patches.push_back(std::move(patch_diagnostic));
+    result.cuboid_planes.push_back(std::move(patch_diagnostic));
     *eligibility_stage.input_count += generated.size();
     ++patch_index;
   }
@@ -496,9 +496,9 @@ DetectionResult detect_cuboid_top_face(
   } else {
     result.rawpart_candidate_generation = "unified_l_corner_candidate_eligibility";
   }
-  for (auto & patch : result.cuboid_height_patches) {
+  for (auto & patch : result.cuboid_planes) {
     patch.partitioned_candidate_count = std::count_if(accepted.begin(), accepted.end(),
-        [&](const Fit & fit) {return fit.patch_index == &patch - result.cuboid_height_patches.data();});
+        [&](const Fit & fit) {return fit.patch_index == &patch - result.cuboid_planes.data();});
   }
   *eligibility_stage.output_count = accepted.size();
   *eligibility_stage.rejected_count = *eligibility_stage.input_count - *eligibility_stage.output_count;
@@ -545,7 +545,7 @@ DetectionResult detect_cuboid_top_face(
     cv::Mat() : missing_depth(obs.heights);
   if (accepted.empty()) {
     const bool final_geometry_unresolved = std::any_of(
-      result.cuboid_height_patches.begin(), result.cuboid_height_patches.end(),
+      result.cuboid_planes.begin(), result.cuboid_planes.end(),
       [](const auto & patch) {
         return (patch.contour_count > 0 && patch.cell_count >= 3) || patch.fitted_edge_count > 0 ||
                patch.hypothesis_rejected_by_reason.count("inclined_surface") > 0 ||

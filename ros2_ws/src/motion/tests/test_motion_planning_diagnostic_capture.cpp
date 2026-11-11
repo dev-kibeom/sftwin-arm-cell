@@ -188,6 +188,10 @@ TEST(MotionPlanningDiagnosticCaptureTest, SuccessfulCandidateMatchesFinalActionR
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_SUCCESS");
   EXPECT_EQ(summary.at("task_executor_result_code_value"), Result::TASK_RESULT_SUCCESS);
+  EXPECT_EQ(summary.at("task_result_code"), Result::TASK_RESULT_SUCCESS);
+  EXPECT_EQ(summary.at("task_result_name"), "TASK_RESULT_SUCCESS");
+  EXPECT_TRUE(summary.at("insertion_started").get<bool>());
+  EXPECT_TRUE(summary.at("material_candidate_search").at("multiple_material_candidates_searched").get<bool>());
   const auto & material = summary.at("material_candidate_search");
   ASSERT_EQ(material.at("attempts").size(), 3U);
   EXPECT_EQ(material.at("attempts").at(0).at("result"), "TASK_RESULT_PATH_OBSTRUCTED");
@@ -237,6 +241,9 @@ TEST(MotionPlanningDiagnosticCaptureTest, OversizedMaterialCandidateHistoryStays
     std::string(
       (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_PATH_OBSTRUCTED");
+  EXPECT_EQ(summary.at("task_result_name"), summary.at("task_executor_result_code"));
+  EXPECT_EQ(summary.at("task_result_code"), summary.at("task_executor_result_code_value"));
+  EXPECT_EQ(summary.at("insertion_started"), summary.at("pick_grasp_insertion_started"));
   EXPECT_EQ(summary.at("final_failure_reason"), "APPROACH_ROUTE_NOT_FOUND");
   const auto & material = summary.at("material_candidate_search");
   EXPECT_EQ(material.at("final_target_candidate_id"), attempts.back().at("candidate_id"));
@@ -508,6 +515,8 @@ TEST(MotionPlanningDiagnosticCaptureTest, LastEvaluationUsesChronologicalMateria
   EXPECT_EQ(summary.at("last_evaluated_candidate"), 0);
   EXPECT_EQ(summary.at("last_evaluated_material_candidate_id"), "a");
   EXPECT_EQ(summary.at("selected_candidate_number"), 1U);
+  EXPECT_EQ(summary.at("selected_grasp_pose_index"), summary.at("selected_candidate"));
+  EXPECT_EQ(summary.at("last_evaluated_grasp_pose_number"), 1U);
   EXPECT_EQ(summary.at("selected_material_candidate_id"), "a");
   std::filesystem::remove_all(directory);
 }
@@ -661,6 +670,9 @@ TEST(MotionPlanningDiagnosticCaptureTest, ProgressBacklogDoesNotDelayOrSuppressT
     std::string(
       (std::istreambuf_iterator<char>(summary_input)), std::istreambuf_iterator<char>()));
   EXPECT_EQ(summary.at("task_executor_result_code"), "TASK_RESULT_PATH_OBSTRUCTED");
+  EXPECT_EQ(summary.at("task_result_name"), summary.at("task_executor_result_code"));
+  EXPECT_EQ(summary.at("task_result_code"), summary.at("task_executor_result_code_value"));
+  EXPECT_EQ(summary.at("insertion_started"), summary.at("pick_grasp_insertion_started"));
   EXPECT_EQ(summary.at("detail_coverage").at("status"), "persisted");
   EXPECT_EQ(summary.at("detail_coverage").at("persisted_count"), 1U);
   EXPECT_TRUE(
@@ -971,6 +983,25 @@ TEST(MotionPlanningDiagnosticCaptureTest, StorageFailureIsContainedByDiagnosticW
   }
   EXPECT_TRUE(std::filesystem::is_regular_file(directory));
   std::filesystem::remove(directory);
+}
+
+TEST(MotionPlanningDiagnosticCaptureTest, ProgressNamesDoNotClaimTerminalResult)
+{
+  const auto directory = std::filesystem::temp_directory_path() /
+    ("motion_progress_names_" + std::to_string(
+      std::chrono::steady_clock::now().time_since_epoch().count()));
+  {
+    MotionPlanningDiagnosticCapture capture(directory.string(), rclcpp::get_logger("progress_names"));
+    ASSERT_TRUE(capture.enqueue_progress("progress", "TASK_TYPE_PLACE", "{}"));
+  }
+  std::ifstream input(directory / "progress.json");
+  const auto record = nlohmann::json::parse(input);
+  EXPECT_EQ(record.at("record_phase"), "planning_in_progress");
+  EXPECT_EQ(record.at("record_phase"), record.at("record_status"));
+  EXPECT_TRUE(record.at("task_result_code").is_null());
+  EXPECT_TRUE(record.at("task_result_name").is_null());
+  EXPECT_TRUE(record.at("task_executor_result_code").is_null());
+  std::filesystem::remove_all(directory);
 }
 
 }  // namespace arm_cell_motion

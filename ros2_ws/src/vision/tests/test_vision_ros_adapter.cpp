@@ -1183,11 +1183,11 @@ TEST_F(VisionRosIngressTest, FreshPreRequestPairIsReusedAsNewDetectionInput)
   EXPECT_EQ(observation->rgb_presentation_status, "deferred_to_snapshot");
   EXPECT_EQ(observation->rgb.width, 0U);
   EXPECT_EQ(observation->depth.header.stamp.sec, 10);
-  EXPECT_TRUE(ingress->acceptance_snapshot().cached_pair_reused);
+  EXPECT_TRUE(ingress->acceptance_snapshot().cached_depth_reused);
   const auto diagnostics = ingress->finish_request_diagnostics();
-  EXPECT_TRUE(diagnostics.cached_pair_available);
-  EXPECT_TRUE(diagnostics.cached_pair_reused);
-  EXPECT_EQ(diagnostics.cached_pair_status, IngressStatus::kObservationReady);
+  EXPECT_TRUE(diagnostics.cached_depth_available);
+  EXPECT_TRUE(diagnostics.cached_depth_reused);
+  EXPECT_EQ(diagnostics.cached_depth_status, IngressStatus::kObservationReady);
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);
@@ -1219,10 +1219,10 @@ TEST_F(VisionRosIngressTest, CachedPairOlderThanConfiguredFreshnessWindowIsNotRe
 
   ASSERT_EQ(ingress->begin_acquisition(ns(20), steady_now_ns()).status, IngressStatus::kWaiting);
   EXPECT_FALSE(ingress->latest_observation());
-  EXPECT_FALSE(ingress->acceptance_snapshot().cached_pair_reused);
+  EXPECT_FALSE(ingress->acceptance_snapshot().cached_depth_reused);
   const auto diagnostics = ingress->finish_request_diagnostics();
-  EXPECT_TRUE(diagnostics.cached_pair_available);
-  EXPECT_EQ(diagnostics.cached_pair_status, IngressStatus::kReceiptStaleObservation);
+  EXPECT_TRUE(diagnostics.cached_depth_available);
+  EXPECT_EQ(diagnostics.cached_depth_status, IngressStatus::kReceiptStaleObservation);
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);

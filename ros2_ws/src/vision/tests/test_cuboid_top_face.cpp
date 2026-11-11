@@ -323,7 +323,7 @@ TEST(CuboidTopFace, PartialLDoesNotBecomeAClosedObservedRectangleOrUseCompleteIo
   }
   // Narrow observed arms may themselves partition into geometric rectangles;
   // the unobserved Recipe interior must never be completed at this stage.
-  for (const auto & region : result.cuboid_height_patches.front().rectangle_regions) {
+  for (const auto & region : result.cuboid_planes.front().rectangle_regions) {
     EXPECT_LT(region[3] * region[4], 0.08 * 0.05 / 2);
   }
 }
@@ -410,9 +410,9 @@ TEST(CuboidTopFace, ConvexBevelDoesNotInventRectanglePartitionFromVertexCoordina
   cv::fillPoly(mask, std::vector<std::vector<cv::Point>>{polygon}, cv::Scalar(255));
   obs.heights.setTo(0.03, mask);
   const auto result = detect_cuboid_top_face(obs, profile(), true);
-  ASSERT_EQ(result.cuboid_height_patches.size(), 1U);
-  EXPECT_TRUE(result.cuboid_height_patches.front().rectangle_regions.empty());
-  EXPECT_FALSE(result.cuboid_height_patches.front().observed_contours_xy.empty());
+  ASSERT_EQ(result.cuboid_planes.size(), 1U);
+  EXPECT_TRUE(result.cuboid_planes.front().rectangle_regions.empty());
+  EXPECT_FALSE(result.cuboid_planes.front().observed_contours_xy.empty());
 }
 
 TEST(CuboidTopFace, RemoteCollinearBoundaryCannotTurnPlanePartitionIntoObservedAnchor)
@@ -456,9 +456,9 @@ TEST(CuboidTopFace, SeparatedEqualHeightTopsHaveDistinctConnectedPatches)
   const auto r = detect_cuboid_top_face(obs, profile());
   ASSERT_EQ(r.result_code, Code::DETECT_RESULT_SUCCESS);
   EXPECT_EQ(r.ordered_candidates.size(), 2U);
-  EXPECT_EQ(r.cuboid_height_patches.size(), 2U);
+  EXPECT_EQ(r.cuboid_planes.size(), 2U);
   uint64_t cells = 0;
-  for (const auto & patch : r.cuboid_height_patches) {cells += patch.cell_count;}
+  for (const auto & patch : r.cuboid_planes) {cells += patch.cell_count;}
   EXPECT_EQ(cells, static_cast<uint64_t>(cv::countNonZero(obs.heights > 0)));
 }
 
@@ -541,8 +541,8 @@ TEST(CuboidTopFace, NoisyTopCellsBelongToOnePatchAcrossAbsoluteHeightBins)
   add_height_variation(obs, 0, 0, 0.0001);
   const auto r = detect_cuboid_top_face(obs, profile());
   ASSERT_EQ(r.result_code, Code::DETECT_RESULT_SUCCESS);
-  ASSERT_EQ(r.cuboid_height_patches.size(), 1U);
-  EXPECT_EQ(r.cuboid_height_patches[0].cell_count,
+  ASSERT_EQ(r.cuboid_planes.size(), 1U);
+  EXPECT_EQ(r.cuboid_planes[0].cell_count,
     static_cast<uint64_t>(cv::countNonZero(obs.heights > 0)));
 }
 
@@ -593,8 +593,8 @@ TEST(CuboidTopFace, OneContourCanProduceSeveralIndependentlyCountedFittedEdges)
   auto obs = scene(); cuboid(obs, 0, 0);
   const auto result = detect_cuboid_top_face(obs, profile());
   ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
-  ASSERT_EQ(result.cuboid_height_patches.size(), 1U);
-  const auto & patch = result.cuboid_height_patches.front();
+  ASSERT_EQ(result.cuboid_planes.size(), 1U);
+  const auto & patch = result.cuboid_planes.front();
   EXPECT_EQ(patch.contour_count, 1U);
   EXPECT_GT(patch.fitted_edge_count, 1U);
   uint64_t rejected_edges = 0;
@@ -667,19 +667,19 @@ TEST(CuboidTopFace, ZeroCandidateEvidenceSeparatesStagesAndRetainsActualHeightGr
   EXPECT_FALSE(result.cuboid_stages[4].input_count);
   EXPECT_EQ(result.cuboid_stages[5].reason, "no_generated_candidates");
   EXPECT_EQ(result.cuboid_stages[6].status, "not_computed");
-  ASSERT_EQ(result.cuboid_height_patches.size(), 1U);
-  EXPECT_DOUBLE_EQ(result.cuboid_height_patches[0].height_m, 0.03);
-  EXPECT_EQ(result.cuboid_height_patches[0].cell_count, 1U);
-  EXPECT_EQ(result.cuboid_height_patches[0].partition_status, "orthogonal_outline_reconstruction");
+  ASSERT_EQ(result.cuboid_planes.size(), 1U);
+  EXPECT_DOUBLE_EQ(result.cuboid_planes[0].height_m, 0.03);
+  EXPECT_EQ(result.cuboid_planes[0].cell_count, 1U);
+  EXPECT_EQ(result.cuboid_planes[0].partition_status, "orthogonal_outline_reconstruction");
   EXPECT_EQ(
-    result.cuboid_height_patches[0].partition_reason,
+    result.cuboid_planes[0].partition_reason,
     "unresolved_insufficient_support");
   EXPECT_EQ(result.cuboid_stages[5].status, "not_computed");
   EXPECT_EQ(result.cuboid_stages[5].reason, "no_generated_candidates");
   EXPECT_NE(
-    result.cuboid_height_patches[0].hypothesis_rejected_by_reason.find(
+    result.cuboid_planes[0].hypothesis_rejected_by_reason.find(
       "unresolved_insufficient_support"),
-    result.cuboid_height_patches[0].hypothesis_rejected_by_reason.end());
+    result.cuboid_planes[0].hypothesis_rejected_by_reason.end());
   ASSERT_TRUE(result.cuboid_replay_evidence);
   EXPECT_EQ(result.cuboid_replay_evidence->rows, 240U);
   EXPECT_EQ(result.cuboid_replay_evidence->columns, 240U);
@@ -710,17 +710,17 @@ TEST(CuboidTopFace, MultipleHeightPatchesKeepTheirOwnRejectionReasons)
   obs.heights.at<double>(30, 30) = 0.06;
   const auto result = detect_cuboid_top_face(obs, profile());
   EXPECT_EQ(result.result_code, Code::DETECT_RESULT_GEOMETRY_ERROR);
-  ASSERT_EQ(result.cuboid_height_patches.size(), 2U);
-  EXPECT_DOUBLE_EQ(result.cuboid_height_patches[0].height_m, 0.06);
+  ASSERT_EQ(result.cuboid_planes.size(), 2U);
+  EXPECT_DOUBLE_EQ(result.cuboid_planes[0].height_m, 0.06);
   EXPECT_NE(
-    result.cuboid_height_patches[0].hypothesis_rejected_by_reason.find(
+    result.cuboid_planes[0].hypothesis_rejected_by_reason.find(
       "unresolved_insufficient_support"),
-    result.cuboid_height_patches[0].hypothesis_rejected_by_reason.end());
-  EXPECT_DOUBLE_EQ(result.cuboid_height_patches[1].height_m, 0.03);
-  EXPECT_FALSE(result.cuboid_height_patches[1].geometry_rejected_by_reason.empty());
+    result.cuboid_planes[0].hypothesis_rejected_by_reason.end());
+  EXPECT_DOUBLE_EQ(result.cuboid_planes[1].height_m, 0.03);
+  EXPECT_FALSE(result.cuboid_planes[1].geometry_rejected_by_reason.empty());
   EXPECT_EQ(result.cuboid_stages[3].stage, "cuboid_hypothesis_generation");
   EXPECT_EQ(result.cuboid_stages[4].stage, "dimension_and_geometry_validation");
-  for (const auto & patch : result.cuboid_height_patches) {
+  for (const auto & patch : result.cuboid_planes) {
     EXPECT_EQ(patch.candidate_evaluation_attempt_count, patch.geometry_valid_before_deduplication_count +
       std::accumulate(patch.geometry_rejected_by_reason.begin(),
       patch.geometry_rejected_by_reason.end(), uint64_t{0},
@@ -732,10 +732,10 @@ TEST(CuboidTopFace, MultipleHeightPatchesKeepTheirOwnRejectionReasons)
       [](uint64_t total, const auto & entry) {return total + entry.second;}));
   }
   const auto attempts = std::accumulate(
-    result.cuboid_height_patches.begin(), result.cuboid_height_patches.end(), uint64_t{0},
+    result.cuboid_planes.begin(), result.cuboid_planes.end(), uint64_t{0},
     [](uint64_t total, const auto & patch) {return total + patch.candidate_evaluation_attempt_count;});
   const auto geometrically_valid = std::accumulate(
-    result.cuboid_height_patches.begin(), result.cuboid_height_patches.end(), uint64_t{0},
+    result.cuboid_planes.begin(), result.cuboid_planes.end(), uint64_t{0},
     [](uint64_t total, const auto & patch) {return total + patch.geometry_valid_before_deduplication_count;});
   ASSERT_EQ(result.cuboid_hypotheses.size(), attempts);
   std::set<uint32_t> attempt_ids;
@@ -749,7 +749,7 @@ TEST(CuboidTopFace, MultipleHeightPatchesKeepTheirOwnRejectionReasons)
   }
   EXPECT_EQ(rejected_geometry_attempts, attempts - geometrically_valid);
   const auto pre_object_rejected = std::accumulate(
-    result.cuboid_height_patches.begin(), result.cuboid_height_patches.end(), uint64_t{0},
+    result.cuboid_planes.begin(), result.cuboid_planes.end(), uint64_t{0},
     [](uint64_t total, const auto & patch) {return total + patch.pre_object_rejected_count;});
   EXPECT_EQ(result.cuboid_stages[4].candidate_evaluation_attempt_count, attempts);
   EXPECT_EQ(result.cuboid_stages[4].generated_count, geometrically_valid);
@@ -759,7 +759,7 @@ TEST(CuboidTopFace, MultipleHeightPatchesKeepTheirOwnRejectionReasons)
   EXPECT_FALSE(result.cuboid_stages[4].input_count);
   EXPECT_FALSE(result.cuboid_stages[4].output_count);
   EXPECT_EQ(result.cuboid_stages[5].input_count.value_or(0),
-    std::accumulate(result.cuboid_height_patches.begin(), result.cuboid_height_patches.end(),
+    std::accumulate(result.cuboid_planes.begin(), result.cuboid_planes.end(),
       uint64_t{0}, [](uint64_t total, const auto & patch) {
         return total + patch.generated_hypothesis_count;
       }));
@@ -847,24 +847,24 @@ TEST(CuboidTopFace, DetailedSelectionRetainsTheActualHeightGrid)
   EXPECT_DOUBLE_EQ(
     result.cuboid_replay_evidence->height_grid_m.at<double>(120, 120),
     obs.heights.at<double>(120, 120));
-  ASSERT_EQ(result.cuboid_height_patches.size(), 1U);
-  EXPECT_GT(result.cuboid_height_patches.front().fitted_edge_count,
-    result.cuboid_height_patches.front().contour_count);
+  ASSERT_EQ(result.cuboid_planes.size(), 1U);
+  EXPECT_GT(result.cuboid_planes.front().fitted_edge_count,
+    result.cuboid_planes.front().contour_count);
   EXPECT_EQ(result.cuboid_stages[2].input_count,
-    result.cuboid_height_patches.front().contour_count);
+    result.cuboid_planes.front().contour_count);
   EXPECT_EQ(result.cuboid_stages[2].output_count,
-    result.cuboid_height_patches.front().contours_with_fitted_edges_count);
+    result.cuboid_planes.front().contours_with_fitted_edges_count);
   EXPECT_EQ(result.cuboid_stages[2].fitted_edge_count,
-    result.cuboid_height_patches.front().fitted_edge_count);
-  EXPECT_EQ(result.cuboid_height_patches.front().observed_cells_xy.size(),
-    result.cuboid_height_patches.front().cell_count);
-  EXPECT_EQ(result.cuboid_height_patches.front().observed_contours_xy.size(),
-    result.cuboid_height_patches.front().contour_count);
-  EXPECT_EQ(result.cuboid_height_patches.front().fitted_edges_xy_support.size(),
-    result.cuboid_height_patches.front().fitted_edge_count);
-  EXPECT_TRUE(lightweight.cuboid_height_patches.front().observed_cells_xy.empty());
-  EXPECT_TRUE(lightweight.cuboid_height_patches.front().observed_contours_xy.empty());
-  EXPECT_TRUE(lightweight.cuboid_height_patches.front().fitted_edges_xy_support.empty());
+    result.cuboid_planes.front().fitted_edge_count);
+  EXPECT_EQ(result.cuboid_planes.front().observed_cells_xy.size(),
+    result.cuboid_planes.front().cell_count);
+  EXPECT_EQ(result.cuboid_planes.front().observed_contours_xy.size(),
+    result.cuboid_planes.front().contour_count);
+  EXPECT_EQ(result.cuboid_planes.front().fitted_edges_xy_support.size(),
+    result.cuboid_planes.front().fitted_edge_count);
+  EXPECT_TRUE(lightweight.cuboid_planes.front().observed_cells_xy.empty());
+  EXPECT_TRUE(lightweight.cuboid_planes.front().observed_contours_xy.empty());
+  EXPECT_TRUE(lightweight.cuboid_planes.front().fitted_edges_xy_support.empty());
   EXPECT_EQ(result.cuboid_stages[5].stage, "candidate_local_eligibility");
   EXPECT_EQ(result.cuboid_stages[5].output_count, 1U);
   EXPECT_TRUE(result.cuboid_stages[5].rejected_by_reason.empty());
@@ -1014,10 +1014,10 @@ TEST(CuboidTopFace, BiasedShortEdgeOutsideExistingOrthogonalityToleranceDoesNotI
   const auto result = detect_cuboid_top_face(observation, profile(), true);
   EXPECT_FALSE(result.has_target_pose);
   EXPECT_EQ(result.result_code, Code::DETECT_RESULT_GEOMETRY_ERROR);
-  ASSERT_FALSE(result.cuboid_height_patches.empty());
-  EXPECT_GT(result.cuboid_height_patches.front().hypothesis_rejected_by_reason.count(
+  ASSERT_FALSE(result.cuboid_planes.empty());
+  EXPECT_GT(result.cuboid_planes.front().hypothesis_rejected_by_reason.count(
       "nonorthogonal_corner_edges"), 0U);
-  EXPECT_EQ(result.cuboid_height_patches.front().confidence_grade, "LOW");
+  EXPECT_EQ(result.cuboid_planes.front().confidence_grade, "LOW");
 }
 
 
@@ -1228,8 +1228,8 @@ TEST(CuboidTopFace, ContinuousInclinedTopIsRejectedWithoutPoseReconstruction)
   EXPECT_EQ(result.ordered_candidates.size(), 0U);
   EXPECT_GT(result.rawpart_rejected_by_reason.count("inclined_surface"), 0U);
   EXPECT_TRUE(result.cuboid_hypotheses.empty());
-  ASSERT_EQ(result.cuboid_height_patches.size(), 1U);
-  EXPECT_GT(result.cuboid_height_patches[0].hypothesis_rejected_by_reason.count("inclined_surface"), 0U);
+  ASSERT_EQ(result.cuboid_planes.size(), 1U);
+  EXPECT_GT(result.cuboid_planes[0].hypothesis_rejected_by_reason.count("inclined_surface"), 0U);
   ASSERT_EQ(result.disturbance_candidates.size(), 1U);
   EXPECT_EQ(
     result.disturbance_candidates.front().category,
@@ -1442,11 +1442,11 @@ TEST(CuboidTopFace, AlternatingNearBinBoundaryHeightsFormOnePhysicalTop)
   }
   const auto result = detect_cuboid_top_face(obs, profile());
   ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
-  EXPECT_EQ(result.cuboid_height_patches.size(), 1U);
+  EXPECT_EQ(result.cuboid_planes.size(), 1U);
   ASSERT_EQ(result.ordered_candidates.size(), 1U);
   EXPECT_EQ(result.rawpart_candidate_count, 1U);
   EXPECT_EQ(result.rawpart_candidate_diagnostics[0].greedy_rank, 0U);
-  EXPECT_EQ(result.cuboid_height_patches[0].cell_count,
+  EXPECT_EQ(result.cuboid_planes[0].cell_count,
     static_cast<uint64_t>(cv::countNonZero(obs.heights > 0)));
 }
 
