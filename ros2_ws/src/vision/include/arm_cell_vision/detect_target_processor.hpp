@@ -162,6 +162,8 @@ struct CuboidHeightPatchDiagnostic
 // cuboid_top_face. IDs are local to this one DetectionResult/observation.
 struct CuboidHypothesisVisualization
 {
+  // Explicit support-frame face geometry for inclined hypotheses.
+  std::vector<geometry_msgs::msg::Point32> reference_face_corners;
   uint32_t candidate_id = 0;
   uint32_t patch_index = 0;
   double height_m = 0.0;

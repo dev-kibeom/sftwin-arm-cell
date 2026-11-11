@@ -136,10 +136,9 @@ inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_search_candidates
     return {};
   }
   const auto object_rotation = object_orientation.normalized();
-  // The supported production domain uses a horizontal Tray and RawPart poses
-  // whose local +Z is the top normal, so this is also the outward support
-  // normal. A separate support-plane interface is not part of this domain.
-  const Eigen::Vector3d support_normal = object_rotation * Eigen::Vector3d::UnitZ();
+  // The deployed Tray is horizontal in base_link. Object tilt must not rotate
+  // the support normal used to constrain withdrawal directions.
+  const Eigen::Vector3d support_normal = Eigen::Vector3d::UnitZ();
   const auto insertion = insertion_axis_tcp.normalized();
   const std::array<double, 3> lengths{long_side_m, short_side_m, height_m};
   const auto seeds = candidates;

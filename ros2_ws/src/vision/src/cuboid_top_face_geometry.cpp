@@ -219,7 +219,6 @@ std::vector<ContourEvidence> extract_contours_impl(
       retain_narrow_boundary();
       ++diagnostic.contour_rejected_by_reason["fewer_than_three_observed_vertices"]; continue;
     }
-    if (occupancy_contours) {occupancy_contours->push_back(evidence);}
     for (size_t i = 0; i < evidence.vertices.size(); ++i) {
       const auto previous = evidence.vertices[(i + evidence.vertices.size() - 1) % evidence.vertices.size()];
       const auto current = evidence.vertices[i];
@@ -292,6 +291,7 @@ std::vector<ContourEvidence> extract_contours_impl(
       ++diagnostic.contour_rejected_by_reason["no_fitted_edge"];
     }
     evidence.observed_boundary = std::make_shared<const std::vector<cv::Point>>(evidence.points);
+    if (occupancy_contours) {occupancy_contours->push_back(evidence);}
     result.push_back(std::move(evidence));
   }
   return result;
@@ -1255,6 +1255,7 @@ PlaneFits reconstruct_plane_impl(
     }
     // Reconstruction can also use the original observed anchors. A plane split
     // supplies local measured support, never an exclusive new object gate.
+    result.occupancy_contours = contours;
     contours.insert(contours.end(), patch.source_contours->begin(), patch.source_contours->end());
   }
   const bool inclined_plane = patch.status == "mixed_or_inclined" && patch.plane_fitted &&

@@ -46,7 +46,7 @@ inline std::vector<Eigen::Quaterniond> twofold_pick_orientations(
   const auto nominal = measured_object_orientation.normalized();
   const Eigen::Quaterniond half_turn(Eigen::AngleAxisd(
       3.14159265358979323846, Eigen::Vector3d::UnitZ()));
-  return {nominal, (half_turn * nominal).normalized()};
+  return {nominal, (nominal * half_turn).normalized()};
 }
 
 inline std::vector<Eigen::Quaterniond> fourfold_pick_orientations(
@@ -58,7 +58,7 @@ inline std::vector<Eigen::Quaterniond> fourfold_pick_orientations(
     const Eigen::Quaterniond quarter_turn(Eigen::AngleAxisd(
         static_cast<double>(index) * 1.57079632679489661923,
         Eigen::Vector3d::UnitZ()));
-    candidates.push_back((quarter_turn * measured_object_orientation.normalized()).normalized());
+    candidates.push_back((measured_object_orientation.normalized() * quarter_turn).normalized());
   }
   return candidates;
 }

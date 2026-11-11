@@ -45,6 +45,7 @@ ament_target_dependencies(fixed_target_registry geometry_msgs)
 
 add_library(detect_target_processor src/detect_target_processor.cpp src/calibration_file.cpp)
 target_sources(detect_target_processor PRIVATE
+  src/inclined_cuboid.cpp
   src/cuboid_disturbance_regions.cpp
   src/cuboid_top_face.cpp
   src/cuboid_unresolved.cpp

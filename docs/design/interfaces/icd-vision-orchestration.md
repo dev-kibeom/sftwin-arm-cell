@@ -129,7 +129,7 @@ Legacy `scene_generation`, `SceneStability.msg`, `/vision/scene_stability`는 �
 | 후보별 필드 | 공유 의미 |
 | --- | --- |
 | `candidate_id` | 해당 Acquisition 안에서 고유하며 비어 있지 않은 관측 후보 ID. 영속 객체 Identity가 아님 |
-| `target_pose` | 관측 상판의 Object Reference. `base_link`와 원본 Depth 관측 Timestamp를 보존하며 실행 TCP Pose가 아님 |
+| `target_pose` | 관측 상판의 Object Reference. 경사 후보는 복원된 전체 기준 면 중심이며 로컬 X/Y는 장변/단변, +Z는 바깥쪽 법선이다. `base_link`와 원본 Depth 관측 Timestamp를 보존하며 실행 TCP Pose가 아님 |
 | `orientation_symmetry_order` | `0=UNOBSERVABLE`, `1=UNIQUE`, `2=TWOFOLD`, `4=FOURFOLD`; 해당 후보의 `target_pose.orientation`을 지배하는 Class |
 | `estimated_height_m` / `has_estimated_height` | 보이는 상판 법선 방향 자체 두께. 측정 또는 형상 근거 추론이며 Rectangle 성공 후보에서 필수·유한·양수. Tray 위 상판 높이가 아님 |
 | `has_observed_rectangle` | 상판 변 길이의 외곽선 실측 여부. L자 복원의 Recipe 추정 치수 및 Rectangle Geometry 미제공 Profile에는 거짓 |
@@ -176,7 +176,7 @@ DetectTarget Response의 `acquisition_id`, 결과·후보 목록·Source Identit
 
 ### VR-ICD-VIS-ORCH-DISTURB — 미확정 관측 인계
 
-유효한 기울어진 상판 관측은 일반 PICK 후보에 포함되지 않으면서 교란 후보의 중심·유형·관측 ID로 인계될 수 있어야 한다(SHALL). 교란 후보는 면적 하한을 적용하지 않으며, Sensor 오류나 미관측 영역을 유효한 교란 좌표로 꾸며서는 안 된다(SHALL NOT).
+자재 형상·자세가 미해결인 유효한 기울어진 상판 관측은 일반 PICK 후보에 포함되지 않으면서 교란 후보의 중심·유형·관측 ID로 인계될 수 있어야 한다(SHALL). 교란 후보는 면적 하한을 적용하지 않으며, Sensor 오류나 미관측 영역을 유효한 교란 좌표로 꾸며서는 안 된다(SHALL NOT).
 
 각 후보의 `center`는 해당 미확정 영역의 유효 관측 Grid 셀을 중복 없이 산술 평균한 3D 점이어야 하고(SHALL), 누락 영역을 보간하거나 전체 물체 중심으로 추정해서는 안 된다(SHALL NOT).
 
