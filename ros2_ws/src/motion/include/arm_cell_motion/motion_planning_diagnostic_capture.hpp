@@ -22,7 +22,7 @@ class MotionPlanningDiagnosticCapture final
 public:
   MotionPlanningDiagnosticCapture(
     std::string directory, rclcpp::Logger logger,
-    std::string snapshot_directory = ".local_artifacts/snapshots");
+    std::string snapshot_directory = ".run_records/snapshots");
   ~MotionPlanningDiagnosticCapture();
 
   bool enqueue(

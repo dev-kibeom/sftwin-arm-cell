@@ -739,7 +739,7 @@ Grasp Qualification은 선택 자재의 Shape와 Gripper Model 지원 여부를 
 보장하지 않는다. CLOSE 완료 시 후보 부재·복수 후보·무효 Runtime 상태·기존 소유 Joint·미지원 Qualification·Joint 생성 또는 Ownership 실패는 Fail-closed로 처리하고
 `UNKNOWN`/실패 동작을 수행한다. PLACE의 Detach·Open·새로운 `RELEASED` 계약은 유지된다. Grasp Pose 생성과 선택은 계속 Vision 및 Motion이 소유한다.
 
-Motion은 Terminal PICK마다 `.local_artifacts/pick_execution_records/<goal_uuid>.json`에 불변 Pick Execution Record 하나를 저장하려고
+Motion은 Terminal PICK마다 `.run_records/pick_execution_records/<goal_uuid>.json`에 불변 Pick Execution Record 하나를 저장하려고
 시도해야 한다. 전달된 `vision_acquisition_id`로 Vision Detector Snapshot과 연계한다. Action 실행 식별자, 수신 관측과 Orientation Class, 실제 적용 Grasp
 요구조건, 계산한 Object/Target/Approach/Retract Transform, 관측 가능한 IK·Planning 결과, 선택 해 또는 선택 실패, Motion Phase, 새로운 `HELD` 또는 그
 부재, Retract 완료와 Terminal Result를 기록한다. Schema는 관측값과 이용 불가능한 값을 구분하고 Source Observation Stamp/Frame, `vision_acquisition_id`,
@@ -747,7 +747,7 @@ Motion은 Terminal PICK마다 `.local_artifacts/pick_execution_records/<goal_uui
 활성화된 PICK Motion Planning Record와 Progress Record에는 Motion Goal UUID와 전달된 `vision_acquisition_id`를 함께 넣어 후보·IK 근거를 Vision
 Acquisition과 연결한다. 다른 작업 유형에는 해당 필드를 `null`로 기록한다. Isaac Adapter는 `GripperPort` 아래 별도 Capture Diagnostic Record를 추가하며,
 측정 위치/방향/폭 오차·설정 한계·Capture Volume 결과·적격 객체 수·Attachment/HELD 전이를 Motion Goal UUID로 연계한다. Motion은 Backend 중립 Result만 기록하고
-장면/Prim 상세는 Capture Record에 남긴다. Pick Execution Record가 존재할 때 `capture_diagnostic_record_relative_path`는 `.local_artifacts`
+장면/Prim 상세는 Capture Record에 남긴다. Pick Execution Record가 존재할 때 `capture_diagnostic_record_relative_path`는 `.run_records`
 기준 상대 경로 `capture_diagnostic_records/<goal_uuid>.json`을 사용한다. 근거 기록은 Terminal 분류 후 최선 노력으로 수행하며 작업 결과를 지연하거나 변경하지 않는다.
 Vision Detector Snapshot은 Vision 소유의 불변 산출물이며 Motion과 Hub가 수정하지 않는다. Hub는 Viewer 계약에 따라 읽기 전용 Snapshot을 표시한다.
 

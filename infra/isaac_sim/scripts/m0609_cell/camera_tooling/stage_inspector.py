@@ -8,7 +8,7 @@ from pathlib import Path
 
 from camera_tooling.inspection_math import *  # compatibility re-export for inspect_camera
 from shared.script_editor_bootstrap import is_script_editor_path
-from shared.local_artifacts import project_root
+from shared.run_records import project_root
 
 
 def collision_scene_query_snapshot(camera_transform, reference_geometry):

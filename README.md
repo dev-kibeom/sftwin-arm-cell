@@ -189,8 +189,17 @@ Compose는 호스트 Isaac 사용자와 같은 UID/GID로 기록합니다(기본
 기존 기록 폴더가 다른 사용자 소유라면 Isaac과 Compose를 종료한 후 한 번만 복구합니다.
 아래 명령은 기존 기록을 삭제하지 않고 소유자만 변경합니다.
 
+저장소 루트에서 실행합니다. 경로를 바꿨다면 `record_dir`에는 `config/run_records.yaml`의 `root`를, `waypoint_dir`에는 Motion의 `config/place_waypoint.yaml`에 지정한 파일의 상위 디렉터리를 넣으세요. 상대 경로는 저장소 루트 기준입니다. 재귀적으로 소유권이 바뀌므로 기록과 waypoint 저장 전용 디렉터리만 지정하세요.
+
 ```bash
-sudo chown -R "$(id -u):$(id -g)" .local_artifacts
+record_dir=".run_records"
+waypoint_dir=".motion_data"
+
+for dir in "$record_dir" "$waypoint_dir"; do
+  if [ -d "$dir" ]; then
+    sudo chown -R -- "$(id -u):$(id -g)" "$dir"
+  fi
+done
 ```
 
 C++ 소스 변경 후에는 기존 Compose 실행을 종료하고 `docker compose up --build`로

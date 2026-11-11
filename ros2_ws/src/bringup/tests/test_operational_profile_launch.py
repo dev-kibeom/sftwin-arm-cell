@@ -126,11 +126,9 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     parameters = _node_parameters(nodes["motion_node"])
     configured = {key: parameters[key] for key in motion}
     assert parameters["place_waypoint_trajectory_file"].endswith(
-        motion["place_waypoint_trajectory_file"]
+        ".motion_data/place_waypoint_home_to_place.json"
     )
-    configured.pop("place_waypoint_trajectory_file")
     expected_motion = dict(motion)
-    expected_motion.pop("place_waypoint_trajectory_file")
     assert {
         key: list(value) if isinstance(value, tuple) else value
         for key, value in configured.items()
@@ -472,7 +470,10 @@ def test_installed_launch_resolves_checkout_artifacts_from_any_working_directory
     monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     module.__file__ = str(installed_launch)
 
-    assert module.project_artifacts_directory() == str(checkout / ".local_artifacts")
+    assert module.project_artifacts_directory() == str(checkout / ".run_records")
+    (checkout / "config").mkdir()
+    (checkout / "config/run_records.yaml").write_text("root: output/records\n")
+    assert module.project_artifacts_directory() == str(checkout / "output/records")
 
 
 def test_info_vision_diagnostics_enables_capture_without_debug_logging():
@@ -825,9 +826,9 @@ def test_vision_parameters_keep_cuboid_settings_without_algorithm_selection():
 
 
 def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch):
-    monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(tmp_path))
     module = _load_launch_module()
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session_dir = artifact_root / "diagnostic_records" / "20261020" / "120000"
     session_dir.mkdir(parents=True)
     descriptor = session_dir / "session.json"
@@ -895,7 +896,7 @@ def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch):
 
 def test_bringup_preserves_explicit_pick_execution_directory(tmp_path, monkeypatch):
     module = _load_launch_module()
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session_dir = artifact_root / "diagnostic_records" / "20261020" / "120000"
     session_dir.mkdir(parents=True)
     descriptor = session_dir / "session.json"
@@ -927,7 +928,7 @@ def test_bringup_preserves_explicit_pick_execution_directory(tmp_path, monkeypat
 
 def test_bringup_rejects_stale_or_unreadable_session_descriptors(tmp_path):
     module = _load_launch_module()
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session_dir = artifact_root / "diagnostic_records" / "20261020" / "120000"
     session_dir.mkdir(parents=True)
     descriptor = session_dir / "session.json"
@@ -953,7 +954,7 @@ def test_bringup_rejects_stale_or_unreadable_session_descriptors(tmp_path):
 
 def test_bringup_session_write_failure_is_unassociated(tmp_path, monkeypatch):
     module = _load_launch_module()
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session_dir = artifact_root / "diagnostic_records" / "20261020" / "120000"
     session_dir.mkdir(parents=True)
     descriptor = session_dir / "session.json"
@@ -988,7 +989,7 @@ def test_bringup_session_write_failure_is_unassociated(tmp_path, monkeypatch):
 
 def test_standalone_recording_session_is_lazy_and_closes_on_shutdown(tmp_path):
     module = _load_launch_module()
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session = module.create_recording_session(artifact_root, "hardware")
     data = json.loads((session / "session.json").read_text())
     assert data["owner"] == "ros_bringup"
@@ -1026,7 +1027,7 @@ def test_failed_session_creation_is_nonblocking_and_leaves_no_run(tmp_path, monk
 
 def test_new_bringup_uses_fresh_namespace_but_links_prior_isaac_session(tmp_path):
     module = _load_launch_module()
-    root = tmp_path / ".local_artifacts"
+    root = tmp_path / ".run_records"
     session_dir = root / "diagnostic_records/20261020/120000"
     session_dir.mkdir(parents=True)
     start = Path(f"/proc/{os.getpid()}/stat").read_text().rsplit(")", 1)[1].split()[19]
@@ -1070,3 +1071,27 @@ def test_session_indexes_selected_calibration_and_camera_topics(tmp_path):
     assert data["camera"]["camera_id"] == "real_d455_01"
     assert data["camera"]["vision_calibration"]["path"] == str(calibration)
     assert data["camera"]["vision_calibration"]["sha256"] == hashlib.sha256(calibration.read_bytes()).hexdigest()
+
+
+def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):
+    checkout = Path(os.environ["SFTWIN_PROJECT_ROOT"])
+    (checkout / "config").mkdir()
+    (checkout / "config/run_records.yaml").write_text("root: output/records\n")
+    root = checkout / "output/records"
+    module = _load_launch_module()
+    monkeypatch.delenv("ARM_CELL_PICK_EXECUTION_RECORD_DIR", raising=False)
+    monkeypatch.setattr(module, "join_live_test_session", lambda _: None)
+    monkeypatch.setattr(module, "create_recording_session", lambda *args: None)
+
+    actions = _composed_nodes(module=module)
+    motion = _node_parameters(_project_nodes(actions)["motion_node"])
+    assert motion["place_waypoint_trajectory_file"] == str(
+        checkout / ".motion_data/place_waypoint_home_to_place.json"
+    )
+    context = LaunchContext()
+    for action in actions:
+        if isinstance(action, SetEnvironmentVariable):
+            action.execute(context)
+    assert context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"] == str(
+        root / "diagnostic_records/unassociated/motion/pick_execution_records"
+    )

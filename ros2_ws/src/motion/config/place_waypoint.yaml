@@ -1,0 +1,2 @@
+# Motion reads and writes this file. Relative paths are based at the checkout root.
+place_waypoint_trajectory_file: .motion_data/place_waypoint_home_to_place.json

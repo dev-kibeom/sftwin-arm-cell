@@ -263,7 +263,7 @@ public:
     diagnostic_capture_enabled_ = declare_parameter<bool>(
       "diagnostics.capture_enabled", false);
     const auto diagnostics_directory = declare_parameter<std::string>(
-      "diagnostics.output_directory", ".local_artifacts/diagnostic_records/unassociated/orchestration");
+      "diagnostics.output_directory", ".run_records/diagnostic_records/unassociated/orchestration");
     diagnostic_capture_ = std::make_unique<OrchestrationDiagnosticCapture>(
       diagnostics_directory, get_logger());
     RCLCPP_DEBUG(get_logger(), "recipe registry ready source=%s", recipe_directory.c_str());

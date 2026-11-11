@@ -151,7 +151,7 @@ def resolve_diagnostics(value, log_level):
     return parse_diagnostics(value)
 
 
-def project_artifacts_directory():
+def project_checkout_root():
     """Locate the checkout root so diagnostics do not depend on process cwd."""
     configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
     candidates = [Path(configured_root).expanduser()] if configured_root else []
@@ -162,15 +162,22 @@ def project_artifacts_directory():
             if (root / "ros2_ws/src").is_dir() and (
                 root / "infra/isaac_sim/scripts/m0609_cell"
             ).is_dir():
-                return str(root / ".local_artifacts")
+                return root
             if (root / "src").is_dir() and (
                 root.parent / "infra/isaac_sim/scripts/m0609_cell"
             ).is_dir():
-                return str(root.parent / ".local_artifacts")
-    return str(Path.cwd() / ".local_artifacts")
+                return root.parent
+    return Path.cwd()
 
 
-def _git_provenance(artifact_directory):
+def project_artifacts_directory():
+    root = project_checkout_root()
+    config_path = root / "config/run_records.yaml"
+    config = (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
+    return str((root / Path(config.get("root", ".run_records")).expanduser()).resolve())
+
+
+def _git_provenance():
     """Capture source checkout revision, not the running binary revision."""
     result = {
         "source": "git worktree",
@@ -180,7 +187,7 @@ def _git_provenance(artifact_directory):
         "unavailable_reason": None,
     }
     project_root = Path(
-        os.environ.get("SFTWIN_PROJECT_ROOT", Path(artifact_directory).resolve().parent)
+        os.environ.get("SFTWIN_PROJECT_ROOT", project_checkout_root())
     )
     result["source_root"] = str(project_root.resolve())
     try:
@@ -279,7 +286,7 @@ def join_live_test_session(artifact_directory):
         "instance_id": instance_id,
         "process_start_token": own_start_token,
         "status": "participating",
-        "git_provenance": _git_provenance(artifact_directory),
+        "git_provenance": _git_provenance(),
     }
     recording_locations = {
         "ros_logs": str(launch_config.log_dir),
@@ -389,7 +396,7 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
             "end_condition": None,
             "participants": [{"process": "ros_bringup", "instance_id": str(os.getpid()),
                               "status": "participating",
-                              "git_provenance": _git_provenance(artifact_directory)}],
+                              "git_provenance": _git_provenance()}],
             "recording_locations": {
                 name: str(root / name)
                 for name in ("vision", "motion", "gripper", "safety", "orchestration", "clock", "simulation")
@@ -597,9 +604,17 @@ def compose(context):
     config = yaml.safe_load(profile_path.read_text()) or {}
     material_handoff_config = dict(config.get("material_handoff", {}))
     motion_parameters = profile_parameters(config, "motion")
-    trajectory_file = Path(motion_parameters["place_waypoint_trajectory_file"])
+    motion_share = Path(get_package_share_directory("arm_cell_motion"))
+    waypoint_config = yaml.safe_load(
+        (motion_share / "config/place_waypoint.yaml").read_text()
+    )
+    configured_trajectory = (
+        motion_parameters.get("place_waypoint_trajectory_file")
+        or waypoint_config["place_waypoint_trajectory_file"]
+    )
+    trajectory_file = Path(configured_trajectory).expanduser()
     if not trajectory_file.is_absolute():
-        trajectory_file = Path(artifact_directory).parent / trajectory_file
+        trajectory_file = project_checkout_root() / trajectory_file
     motion_parameters["place_waypoint_trajectory_file"] = str(trajectory_file.resolve())
     share = Path(get_package_share_directory("arm_cell_bringup"))
     home_config = (
@@ -609,11 +624,8 @@ def compose(context):
     if len(home_joint_positions) != 6:
         raise RuntimeError("home_joint_positions must contain six arm joints")
     use_sim_time = config.get("use_sim_time", True)
-    description = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "assets/robots/m0609_robotiq_2f85"
-    )
-    moveit_share = Path(get_package_share_directory("arm_cell_motion"))
+    description = motion_share / "assets/robots/m0609_robotiq_2f85"
+    moveit_share = motion_share
     robot_description = xacro.process_file(
         str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
         mappings={
@@ -653,7 +665,7 @@ def compose(context):
         )
 
     actions = [
-        SetEnvironmentVariable("SFTWIN_PROJECT_ROOT", str(artifact_directory.parent)),
+        SetEnvironmentVariable("SFTWIN_PROJECT_ROOT", str(project_checkout_root())),
         SetEnvironmentVariable(
             "RCUTILS_CONSOLE_OUTPUT_FORMAT",
             "[{severity}] [{name}] {message}",
@@ -799,12 +811,12 @@ def compose(context):
             on_shutdown=[OpaqueFunction(function=finish_recording_session,
                                         args=[live_session_root])]
         )))
-    if live_session_root and not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
+    if not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
         actions.insert(
             1,
             SetEnvironmentVariable(
                 "ARM_CELL_PICK_EXECUTION_RECORD_DIR",
-                str(live_session_root / "motion" / "pick_execution_records"),
+                str(motion_artifact_directory / "pick_execution_records"),
             ),
         )
 

@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from graph_builder.graph_contract import GRAPH_PATH
+from shared.run_records import run_records_root
 from shared.environment_setup import resolve_diagnostics_selection
 
 from gripper_runtime.action_graph_command_adapter import SimGripperAdapter
@@ -72,8 +73,7 @@ class GripperRuntimeSession:
         self.capture_diagnostic_writer = diagnostic_writer
         self.physx_observer = physx_observer
         output_directory = diagnostic_output_directory or (
-            Path(__file__).resolve().parents[5]
-            / ".local_artifacts"
+            run_records_root(Path(__file__).resolve().parents[5])
             / "diagnostic_records"
             / "unassociated"
             / "gripper"

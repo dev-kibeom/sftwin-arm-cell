@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from shared.script_editor_bootstrap import is_script_editor_path
-from shared.local_artifacts import project_relative_path
+from shared.run_records import project_relative_path
 from camera_tooling.renderer_depth_target_spec import CANONICAL_FRAME, CANONICAL_TARGETS
 
 
