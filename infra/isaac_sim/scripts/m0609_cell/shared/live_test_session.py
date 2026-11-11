@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import uuid
 
-from shared.run_records import record_directory_name
+from shared.run_records import record_directory_name, remove_empty_run
 from datetime import datetime
 
 
@@ -84,65 +84,74 @@ class LiveTestSession:
                 break
             except FileExistsError:
                 suffix += 1
-        candidate = run_root / record_directory_name(project_root, "diagnostic")
-        candidate.mkdir(parents=True)
-        self.root = candidate
-        self.descriptor = candidate / "session.json"
-        self.data = {
-            "schema_version": 1,
-            "owner": "isaac",
-            "runtime": "simulation",
-            "timezone": str(now.tzinfo),
-            "session_id": self.session_id,
-            "session_association": "associated",
-            "status": "open",
-            "started_at": self.started_at,
-            "ended_at": None,
-            "end_condition": None,
-            "diagnostic_selection": sorted(detail_selection),
-            "participants": [
-                {
-                    "process": "isaac",
-                    "instance_id": f"isaac-{os.getpid()}",
-                    "process_start_token": _process_start_token(os.getpid()),
-                    "status": "participating",
-                    "git_provenance": _git_provenance(project_root),
-                }
-            ],
-            "artifacts": {},
-            "recording_locations": {
-                **{name: f"{name}/" for name in COMPONENTS},
-                "motion_planning_details": str(
-                    candidate
-                    / "motion"
-                    / "motion_planning_records"
-                    / "motion_planning_details"
-                ),
-                "motion_planning_summaries": str(
-                    candidate
-                    / "motion"
-                    / "motion_planning_records"
-                    / "motion_planning_summaries"
-                ),
-                "pick_execution_records": str(
-                    candidate / "motion" / "pick_execution_records"
-                ),
-                "motion_profile_traces": str(
-                    candidate / "motion" / "motion_profile_trace"
-                ),
-            },
-            "artifact_locations": {
-                "vision_snapshots": {
-                    "path": str(run_root / record_directory_name(project_root, "snapshots")),
-                    "status": "unconfirmed",
+        try:
+            candidate = run_root / record_directory_name(project_root, "diagnostic")
+            candidate.mkdir(parents=True)
+            self.root = candidate
+            self.descriptor = candidate / "session.json"
+            self.data = {
+                "schema_version": 1,
+                "owner": "isaac",
+                "runtime": "simulation",
+                "timezone": str(now.tzinfo),
+                "session_id": self.session_id,
+                "session_association": "associated",
+                "status": "open",
+                "started_at": self.started_at,
+                "ended_at": None,
+                "end_condition": None,
+                "diagnostic_selection": sorted(detail_selection),
+                "participants": [
+                    {
+                        "process": "isaac",
+                        "instance_id": f"isaac-{os.getpid()}",
+                        "process_start_token": _process_start_token(os.getpid()),
+                        "status": "participating",
+                        "git_provenance": _git_provenance(project_root),
+                    }
+                ],
+                "artifacts": {},
+                "recording_locations": {
+                    **{name: f"{name}/" for name in COMPONENTS},
+                    "motion_planning_details": str(
+                        candidate
+                        / "motion"
+                        / "motion_planning_records"
+                        / "motion_planning_details"
+                    ),
+                    "motion_planning_summaries": str(
+                        candidate
+                        / "motion"
+                        / "motion_planning_records"
+                        / "motion_planning_summaries"
+                    ),
+                    "pick_execution_records": str(
+                        candidate / "motion" / "pick_execution_records"
+                    ),
+                    "motion_profile_traces": str(
+                        candidate / "motion" / "motion_profile_trace"
+                    ),
                 },
-                "rawpart_pose_recordings": {
-                    "path": str(candidate / "simulation"),
-                    "status": "unconfirmed",
+                "artifact_locations": {
+                    "vision_snapshots": {
+                        "path": str(run_root / record_directory_name(project_root, "snapshots")),
+                        "status": "unconfirmed",
+                    },
+                    "rawpart_pose_recordings": {
+                        "path": str(candidate / "simulation"),
+                        "status": "unconfirmed",
+                    },
                 },
-            },
-        }
-        self._write()
+            }
+            self._write()
+        except (OSError, ValueError):
+            temporary = candidate / "session.json.tmp"
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+            remove_empty_run(run_root)
+            raise
 
     def _write(self):
         temporary = self.descriptor.with_suffix(".json.tmp")

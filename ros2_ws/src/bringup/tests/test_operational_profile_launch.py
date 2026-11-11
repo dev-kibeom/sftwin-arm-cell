@@ -1126,3 +1126,14 @@ def test_custom_directory_names_control_sessions_and_snapshots(tmp_path, monkeyp
                              'process_start_token': Path(f'/proc/{os.getpid()}/stat').read_text().rsplit(')', 1)[1].split()[19]}]
     (session / 'session.json').write_text(json.dumps(data))
     assert module._live_isaac_descriptors(root)[0][0] == session / 'session.json'
+
+
+def test_failed_nested_session_creation_removes_run(tmp_path, monkeypatch):
+    checkout = Path(os.environ['SFTWIN_PROJECT_ROOT'])
+    (checkout / 'config').mkdir()
+    (checkout / 'config/run_records.yaml').write_text('directories:\n  diagnostic: logs/diag\n')
+    module = _load_launch_module()
+    monkeypatch.setattr(module.os, 'replace', lambda *_: (_ for _ in ()).throw(OSError('full')))
+    assert module.create_recording_session(tmp_path, 'hardware') is None
+    assert not list(tmp_path.glob('[0-9]*/*'))
+    assert not list(tmp_path.rglob('*.tmp'))

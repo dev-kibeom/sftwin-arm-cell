@@ -154,3 +154,15 @@ def test_custom_directories_are_used_for_creation_and_discovery(tmp_path, monkey
     run_root = session.root.parent.parent
     assert session.data['artifact_locations']['vision_snapshots']['path'] == str(
         run_root / 'images/captures')
+
+
+def test_initial_write_failure_removes_nested_run(tmp_path, monkeypatch):
+    import pytest
+    (tmp_path / 'config').mkdir()
+    (tmp_path / 'config/run_records.yaml').write_text('directories:\n  diagnostic: logs/diag\n')
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(tmp_path))
+    monkeypatch.setattr(session_module.os, 'replace', lambda *_: (_ for _ in ()).throw(OSError('full')))
+    with pytest.raises(OSError):
+        LiveTestSession(tmp_path / '.run_records')
+    assert not list((tmp_path / '.run_records').glob('[0-9]*/*'))
+    assert not list((tmp_path / '.run_records').rglob('*.tmp'))

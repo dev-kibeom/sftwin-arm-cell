@@ -26,6 +26,21 @@ def record_directory_name(checkout, kind):
     return run_records_config(checkout).get("directories", {}).get(kind, kind)
 
 
+def remove_empty_run(run_root):
+    """Remove only empty directories beneath an exclusively reserved run."""
+    run_root = Path(run_root)
+    for directory in sorted(run_root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if directory.is_dir() and not directory.is_symlink():
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+    try:
+        run_root.rmdir()
+    except OSError:
+        pass
+
+
 _RUN_DIRECTORIES = {}
 
 
@@ -52,15 +67,28 @@ def standalone_run_directory(artifact_root):
 def diagnostic_component_directory(checkout, component):
     config = run_records_config(checkout)
     diagnostic = config.get("directories", {}).get("diagnostic", "diagnostic")
-    directory = standalone_run_directory(run_records_root(checkout)) / diagnostic
-    directory.mkdir(parents=True, exist_ok=True)
-    descriptor = directory / "session.json"
-    if not descriptor.exists():
-        descriptor.write_text(json.dumps({
-            "schema_version": 1, "session_id": None,
-            "session_association": "unassociated", "owner_pid": os.getpid(),
-        }, indent=2) + "\n", encoding="utf-8")
-    return directory / component
+    artifact_root = run_records_root(checkout)
+    run_root = standalone_run_directory(artifact_root)
+    directory = run_root / diagnostic
+    temporary = directory / "session.json.tmp"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        descriptor = directory / "session.json"
+        if not descriptor.exists():
+            temporary.write_text(json.dumps({
+                "schema_version": 1, "session_id": None,
+                "session_association": "unassociated", "owner_pid": os.getpid(),
+            }, indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, descriptor)
+        return directory / component
+    except OSError:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        remove_empty_run(run_root)
+        _RUN_DIRECTORIES.pop((os.getpid(), artifact_root.resolve()), None)
+        raise
 
 
 def project_root(script_path, environ=None):

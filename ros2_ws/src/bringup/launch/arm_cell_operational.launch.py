@@ -378,11 +378,27 @@ def camera_configuration_provenance():
         return {"path": None, "sha256": None, "scope": "packaged_default", "status": "unavailable"}
 
 
+def remove_empty_run(run_root):
+    """Remove only empty directories beneath an exclusively reserved run."""
+    run_root = Path(run_root)
+    for directory in sorted(run_root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if directory.is_dir() and not directory.is_symlink():
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+    try:
+        run_root.rmdir()
+    except OSError:
+        pass
+
+
 def create_recording_session(artifact_directory, runtime, related_session_id=None, related_session_root=None):
     """Create a ROS-owned descriptor when no Isaac session can be joined."""
     now = datetime.now().astimezone()
     date_root = Path(artifact_directory) / now.strftime("%Y%m%d")
     root = None
+    run_root = None
     temporary = None
     try:
         date_root.mkdir(parents=True, exist_ok=True)
@@ -442,9 +458,8 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
         try:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
-            if root is not None:
-                root.rmdir()
-                root.parent.rmdir()
+            if run_root is not None:
+                remove_empty_run(run_root)
         except OSError:
             pass
         return None
@@ -624,16 +639,25 @@ def compose(context):
             except FileExistsError:
                 suffix += 1
         artifact_directory = fallback_run
+        fallback_temporary = None
         try:
             fallback_diagnostic = diagnostic_root(fallback_run)
-            fallback_diagnostic.mkdir()
-            (fallback_diagnostic / "session.json").write_text(json.dumps({
+            fallback_diagnostic.mkdir(parents=True)
+            fallback_temporary = fallback_diagnostic / "session.json.tmp"
+            fallback_temporary.write_text(json.dumps({
                 "schema_version": 1, "session_id": None,
                 "session_association": "unassociated", "owner_pid": os.getpid(),
                 "started_at": now.isoformat(),
             }, indent=2) + "\n", encoding="utf-8")
+            os.replace(fallback_temporary, fallback_diagnostic / "session.json")
         except OSError:
-            pass  # Metadata failure must not stop operational bringup.
+            try:
+                if fallback_temporary is not None:
+                    fallback_temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+            remove_empty_run(fallback_run)
+            # Writers may recreate their destinations; metadata is best effort.
     vision_artifact_directory = (
         live_session_root / "vision"
         if live_session_root
