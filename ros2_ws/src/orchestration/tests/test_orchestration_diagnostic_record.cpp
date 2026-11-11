@@ -82,6 +82,7 @@ TEST(OrchestrationDiagnosticSerializationTest, RetainsTreeTransitionAndExecution
   EXPECT_NE(serialized.find("\"delivery_id\":\"56000000000000000000000000000078\""),
     std::string::npos);
   EXPECT_NE(serialized.find("\"target_id\":\"RawPart\""), std::string::npos);
+  EXPECT_NE(serialized.find("\"result_code\":null"), std::string::npos);
 }
 
 TEST(OrchestrationDiagnosticSerializationTest, IdentifiesMissionStartWithoutClaimingOutcome)
@@ -97,6 +98,7 @@ TEST(OrchestrationDiagnosticSerializationTest, IdentifiesMissionStartWithoutClai
   EXPECT_NE(serialized.find("\"requested_quantity\":3"), std::string::npos);
   EXPECT_NE(serialized.find("\"result_available\":false"), std::string::npos);
   EXPECT_NE(serialized.find("\"failure_code\":null"), std::string::npos);
+  EXPECT_NE(serialized.find("\"result_code\":null"), std::string::npos);
 }
 
 TEST(OrchestrationDiagnosticSerializationTest, RetainsUnexpectedMotionBusyResult)

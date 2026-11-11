@@ -117,7 +117,7 @@ Safety-HW와 `/motion/state`의 수신 freshness는 의미 유효성과 분리�
 | E-Stop/STO·확인된 Motion 위험 | Safety 위험 판단 | Safety | 적용 stop·interlock·latch | 위험 원인, selected stop mode, MotionStatus |
 | AMR/PackML 외부 상태 이상 | 외부 상태 소비 | Orchestration | 작업 의존성이 있는 경우에만 readiness/progression 변화 | 현재 작업 문맥과 Safety 원인의 불변성 |
 
-Warning은 독립 진단 분류이며 Not Ready 또는 Safety interlock과 병존할 수 있지만 이를 대체하지 않는다. 진단 기록의 실패가 Safety 실행 결과 의미를 덮어쓰지 않는다. 관측의 구체 저장/표현은 Observability Diagnostics FDS가 소유한다.
+Warning은 독립 진단 분류이며 Not Ready 또는 Safety interlock과 병존할 수 있지만 이를 대체하지 않는다. 진단 기록의 실패가 Safety 실행 결과 의미를 덮어쓰지 않는다. 기록 연결·시간·손실의 공유 의미는 [Observability Records ICD](../../interfaces/icd-observability-records.md)가 소유하며, Safety 기록의 생성·내용은 본 FDS가 소유한다.
 
 ## Verification Requirements
 
@@ -141,4 +141,4 @@ Warning은 독립 진단 분류이며 Not Ready 또는 Safety interlock과 병�
 - [Safety–Motion ICD](../../interfaces/icd-safety-motion.md)
 - [Safety–Orchestration ICD](../../interfaces/icd-safety-orchestration.md)
 - [External Safety ICD](../../interfaces/icd-external-safety.md)
-- Observability Diagnostics FDS
+- [Observability Records ICD](../../interfaces/icd-observability-records.md)

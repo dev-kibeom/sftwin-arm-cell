@@ -208,12 +208,18 @@ std::string request_diagnostics_json(const VisionRequestDiagnosticRecord & recor
   json << ",\"latest_pair_delta_ns\":";
   if (ingress.latest_pair_delta_ns) {json << *ingress.latest_pair_delta_ns;} else {json << "null";}
   json
-    << ",\"cached_pair_available\":" << (ingress.cached_pair_available ? "true" : "false")
-    << ",\"cached_pair_reused\":" << (ingress.cached_pair_reused ? "true" : "false")
+    << ",\"cached_pair_available\":" << (ingress.cached_depth_available ? "true" : "false")
+    << ",\"cached_pair_reused\":" << (ingress.cached_depth_reused ? "true" : "false")
     << ",\"cached_pair_status\":\"" <<
-    (ingress.cached_pair_status ? ingress_status_name(*ingress.cached_pair_status) : "none")
+    (ingress.cached_depth_status ? ingress_status_name(*ingress.cached_depth_status) : "none")
     << "\",\"sample_details_dropped\":" << ingress.sample_detail_dropped
-    << ",\"pair_details_dropped\":" << ingress.pair_detail_dropped << "},\"samples\":[";
+    << ",\"pair_details_dropped\":" << ingress.pair_detail_dropped
+    << "},\"depth_cache\":{\"scope\":\"detect_target_depth_cache\",\"available\":"
+    << (ingress.cached_depth_available ? "true" : "false")
+    << ",\"reused\":" << (ingress.cached_depth_reused ? "true" : "false")
+    << ",\"status\":\"" <<
+    (ingress.cached_depth_status ? ingress_status_name(*ingress.cached_depth_status) : "none")
+    << "\"},\"samples\":[";
   for (size_t index = 0; index < ingress.sample_details.size(); ++index) {
     const auto & sample = ingress.sample_details[index];
     if (index) {json << ',';}
@@ -1019,9 +1025,9 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
       }
       json << ']';
     };
-  for (size_t i = 0; cuboid_strategy && i < job.detection_result().cuboid_height_patches.size(); ++i) {
+  for (size_t i = 0; cuboid_strategy && i < job.detection_result().cuboid_planes.size(); ++i) {
     if (i) {json << ',';}
-    const auto & patch = job.detection_result().cuboid_height_patches[i];
+    const auto & patch = job.detection_result().cuboid_planes[i];
     json << "{\"height_m\":" << patch.height_m << ",\"cell_count\":" <<
       patch.cell_count << ",\"contour_count\":" << patch.contour_count <<
       ",\"contours_with_fitted_edges_count\":" << patch.contours_with_fitted_edges_count <<

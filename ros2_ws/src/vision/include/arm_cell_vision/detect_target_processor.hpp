@@ -269,8 +269,8 @@ struct DetectionResult
   std::string rawpart_selected_candidate;
   std::vector<RawPartCandidateDiagnostic> rawpart_candidate_diagnostics;
   std::vector<CuboidStageDiagnostic> cuboid_stages;
-  // Legacy collection name retained for Snapshot compatibility; entries are planes.
-  std::vector<CuboidHeightPatchDiagnostic> cuboid_height_patches;
+  // Plane evidence; serialized as legacy cuboid_height_patches for Snapshot compatibility.
+  std::vector<CuboidHeightPatchDiagnostic> cuboid_planes;
   std::vector<CuboidHeightPatchDiagnostic> cuboid_boundaries;
   std::vector<CuboidHypothesisVisualization> cuboid_hypotheses;
   std::shared_ptr<CuboidReplayEvidence> cuboid_replay_evidence;

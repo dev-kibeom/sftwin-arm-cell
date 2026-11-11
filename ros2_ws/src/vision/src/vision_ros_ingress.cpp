@@ -147,7 +147,7 @@ IngressResult VisionRosIngress::begin_acquisition(
   }
   {
     std::lock_guard<std::mutex> lock(acceptance_mutex_);
-    acceptance_snapshot_.cached_pair_reused = false;
+    acceptance_snapshot_.cached_depth_reused = false;
   }
   {
     std::lock_guard<std::mutex> lock(observation_mutex_);
@@ -199,8 +199,8 @@ IngressResult VisionRosIngress::begin_acquisition(
         }();
       {
         std::lock_guard<std::mutex> lock(request_diagnostics_mutex_);
-        request_diagnostics_.cached_pair_available = true;
-        request_diagnostics_.cached_pair_status = reusable.status;
+        request_diagnostics_.cached_depth_available = true;
+        request_diagnostics_.cached_depth_status = reusable.status;
       }
       if (reusable.status == IngressStatus::kObservationReady) {
         {
@@ -210,12 +210,12 @@ IngressResult VisionRosIngress::begin_acquisition(
         set_last_result(reusable);
         {
           std::lock_guard<std::mutex> lock(request_diagnostics_mutex_);
-          request_diagnostics_.cached_pair_reused = true;
+          request_diagnostics_.cached_depth_reused = true;
           request_diagnostics_.last_status = reusable.status;
         }
         {
           std::lock_guard<std::mutex> acceptance_lock(acceptance_mutex_);
-          acceptance_snapshot_.cached_pair_reused = true;
+          acceptance_snapshot_.cached_depth_reused = true;
           acceptance_snapshot_.last_depth_observation_monotonic_ns = now;
         }
         auto reused_observation = cached->observation;

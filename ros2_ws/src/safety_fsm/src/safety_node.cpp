@@ -381,7 +381,8 @@ private:
       const auto summary = std::string(
         "{\"schema_version\":1,\"event\":\"capture_summary\",\"dropped_records\":") +
         std::to_string(dropped) + ",\"complete\":" +
-        (truncated || dropped != 0 ? "false}" : "true}") + '\n';
+        (truncated || dropped != 0 ? "false,\"capture_complete\":false}" :
+        "true,\"capture_complete\":true}") + '\n';
       if (retained_bytes + bytes + summary.size() <= kDiagnosticByteLimit) {
         output.write(summary.data(), static_cast<std::streamsize>(summary.size()));
         output.flush();

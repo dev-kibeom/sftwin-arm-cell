@@ -35,6 +35,7 @@ TEST(SafetyDiagnosticCaptureStorage, FirstEventIsWrittenOnShutdown)
     EXPECT_NE(line.find("schema_version"), std::string::npos);
     ASSERT_TRUE(static_cast<bool>(std::getline(input, line)));
     EXPECT_NE(line.find("capture_summary"), std::string::npos);
+    EXPECT_NE(line.find("\"capture_complete\":true"), std::string::npos);
     ++count;
   }
   EXPECT_EQ(count, 1U);

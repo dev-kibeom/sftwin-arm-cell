@@ -314,6 +314,15 @@ inline std::string serialize_diagnostic(const QueuedOrchestrationRecord & queued
     out << static_cast<unsigned>(record.failure_code)
         << ",\"failure_name\":\"" << failure_code_name(record) << '\"';
   }
+  if (record.failure_domain == CycleCoordinator::DiagnosticFailureDomain::NONE ||
+    !record.result_available ||
+    record.event == CycleCoordinator::DiagnosticEvent::MOTION_ACTION_COMMUNICATION)
+  {
+    out << ",\"result_code\":null,\"result_name\":\"UNAVAILABLE\"";
+  } else {
+    out << ",\"result_code\":" << static_cast<unsigned>(record.failure_code)
+        << ",\"result_name\":\"" << failure_code_name(record) << '\"';
+  }
   out
       << ",\"result_available\":" << (record.result_available ? "true" : "false")
       << ",\"original_failure_code\":" << static_cast<unsigned>(record.original_failure_code)
@@ -439,6 +448,11 @@ inline std::string serialize_diagnostic(const QueuedOrchestrationRecord & queued
     out << ",\"motion_status_observation\":\"" << motion_status_observation << '"';
     if (record.event != CycleCoordinator::DiagnosticEvent::MOTION_ACTION_RESULT) {
       out << ",\"feedback_gap_elapsed_ns\":" << record.wait_elapsed_ns;
+      if (record.event == CycleCoordinator::DiagnosticEvent::MOTION_FEEDBACK_GAP ||
+        record.event == CycleCoordinator::DiagnosticEvent::MOTION_FEEDBACK_RECOVERED)
+      {
+        out << ",\"motion_feedback_gap_elapsed_ns\":" << record.wait_elapsed_ns;
+      }
     } else {
       out << ",\"motion_action_elapsed_ns\":";
       if (record.motion_action_elapsed_ns >= 0) {
