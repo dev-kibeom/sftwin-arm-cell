@@ -1,21 +1,23 @@
 import json
-from datetime import datetime as RealDatetime, timezone
+from datetime import datetime as RealDatetime
 
 import shared.live_test_session as session_module
 from shared.live_test_session import LiveTestSession, find_open_session, join_session
 
 
 def test_session_descriptor_uses_unique_path_and_stop_closes(tmp_path, monkeypatch):
+    monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     class _FixedDatetime:
         @classmethod
         def now(cls, tz=None):
-            return RealDatetime(2026, 10, 20, 12, 0, 0, tzinfo=tz or timezone.utc)
+            return RealDatetime(2026, 10, 20, 12, 0, 0).astimezone(tz)
 
     monkeypatch.setattr(session_module, "datetime", _FixedDatetime)
     first = LiveTestSession(tmp_path)
     second = LiveTestSession(tmp_path)
     assert first.root != second.root
-    assert first.root.name.split("-")[0] == second.root.name.split("-")[0]
+    assert first.root == tmp_path / "20261020/120000/diagnostic_records"
+    assert second.root == tmp_path / "20261020/120000-01/diagnostic_records"
     first_data = json.loads(first.descriptor.read_text())
     assert first_data["status"] == "open"
     isaac_provenance = first_data["participants"][0]["git_provenance"]
@@ -34,7 +36,7 @@ def test_session_descriptor_uses_unique_path_and_stop_closes(tmp_path, monkeypat
         first_data["artifact_locations"]["vision_snapshots"]["status"] == "unconfirmed"
     )
     assert first_data["artifact_locations"]["vision_snapshots"]["path"] == str(
-        tmp_path / "snapshots" / first.root.parent.name / first.root.name
+        tmp_path / "20261020/120000/snapshots"
     )
     for component in ("vision", "motion", "gripper", "safety", "orchestration"):
         assert not (first.root / component).exists()
@@ -126,3 +128,14 @@ def test_join_write_failure_leaves_session_usable_and_unassociated(
 
     assert join_session(artifact_root, "ros_bringup", "ros-bringup-test") is None
     assert json.loads(session.descriptor.read_text())["status"] == "open"
+
+
+def test_session_search_accepts_legacy_and_rejects_mixed_layout_ambiguity(tmp_path):
+    legacy = tmp_path / "diagnostic_records/20261020/120000/session.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(json.dumps({"session_id": "legacy", "status": "open"}))
+    assert find_open_session(tmp_path)[0] == legacy
+    current = LiveTestSession(tmp_path)
+    assert find_open_session(tmp_path) is None
+    legacy.write_text(json.dumps({"session_id": "legacy", "status": "closed"}))
+    assert find_open_session(tmp_path)[0] == current.descriptor

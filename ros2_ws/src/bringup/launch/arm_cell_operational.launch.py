@@ -227,11 +227,14 @@ def _git_provenance():
 
 def _live_isaac_descriptors(artifact_directory):
     """Join only one explicit open Isaac descriptor; never guess by recency."""
-    root = Path(artifact_directory) / "diagnostic_records"
+    root = Path(artifact_directory)
     descriptors = []
     unreadable = False
     if root.is_dir():
-        for descriptor in root.glob("[0-9]*/**/session.json"):
+        for descriptor in (
+            *root.glob("[0-9]*/[0-9]*/diagnostic_records/session.json"),
+            *root.glob("diagnostic_records/[0-9]*/**/session.json"),
+        ):
             try:
                 data = json.loads(descriptor.read_text(encoding="utf-8"))
                 if not isinstance(data, dict):
@@ -293,10 +296,7 @@ def join_live_test_session(artifact_directory):
         "clock": str(descriptor.parent / "clock"),
         "simulation": str(descriptor.parent / "simulation"),
         "snapshots": str(
-            Path(artifact_directory)
-            / "snapshots"
-            / descriptor.parent.parent.name
-            / descriptor.parent.name
+            reserve_snapshot_run_directory(artifact_directory, descriptor.parent)
         ),
         "vision_diagnostic_records": str(descriptor.parent / "vision"),
         "motion_planning_details": str(
@@ -367,7 +367,7 @@ def camera_configuration_provenance():
 def create_recording_session(artifact_directory, runtime, related_session_id=None, related_session_root=None):
     """Create a ROS-owned descriptor when no Isaac session can be joined."""
     now = datetime.now().astimezone()
-    date_root = Path(artifact_directory) / "diagnostic_records" / now.strftime("%Y%m%d")
+    date_root = Path(artifact_directory) / now.strftime("%Y%m%d")
     root = None
     temporary = None
     try:
@@ -375,12 +375,14 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
         suffix = 0
         while True:
             name = now.strftime("%H%M%S") + (f"-{suffix:02d}" if suffix else "")
-            root = date_root / name
+            run_root = date_root / name
             try:
-                root.mkdir()
+                run_root.mkdir()
                 break
             except FileExistsError:
                 suffix += 1
+        root = run_root / "diagnostic_records"
+        root.mkdir()
         data = {
             "schema_version": 1,
             "session_id": str(uuid.uuid4()),
@@ -415,7 +417,7 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
                 data["recording_locations"][component] = str(source)
         data["recording_locations"]["ros_logs"] = str(launch_config.log_dir)
         data["recording_locations"]["snapshots"] = str(
-            Path(artifact_directory) / "snapshots" / root.parent.name / root.name)
+            root.parent / "snapshots")
         descriptor = root / "session.json"
         temporary = descriptor.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -427,6 +429,7 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
                 temporary.unlink(missing_ok=True)
             if root is not None:
                 root.rmdir()
+                root.parent.rmdir()
         except OSError:
             pass
         return None
@@ -495,11 +498,14 @@ def finish_recording_session(context, root):
 def reserve_snapshot_run_directory(artifact_directory, session_root=None):
     """Choose the session's shared destination; writers create it on first save."""
     if session_root is not None:
+        if Path(session_root).name == "diagnostic_records":
+            return Path(session_root).parent / "snapshots"
+        # Existing descriptors keep their original artifact locations.
         return (Path(artifact_directory) / "snapshots" /
                 Path(session_root).parent.name / Path(session_root).name)
     now = datetime.now().astimezone()
-    return (Path(artifact_directory) / "snapshots" / now.strftime("%Y%m%d") /
-            f"{now:%H%M%S}-{now:%f}-{os.getpid()}")
+    return (Path(artifact_directory) / now.strftime("%Y%m%d") /
+            f"{now:%H%M%S}-{now:%f}-{os.getpid()}" / "snapshots")
 
 
 def node_ros_arguments(
