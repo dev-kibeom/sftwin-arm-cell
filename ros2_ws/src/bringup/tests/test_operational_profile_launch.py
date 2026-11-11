@@ -499,7 +499,7 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
         _node_parameters(nodes["motion_node"])["diagnostics.output_directory"]
     )
     assert clock_directory.is_absolute()
-    assert "diagnostic_records" in clock_directory.parts
+    assert "diagnostic" in clock_directory.parts
     assert module.node_ros_arguments("arm_cell_vision", "info") == [
         "--log-level",
         "info",
@@ -1006,7 +1006,7 @@ def test_standalone_recording_session_is_lazy_and_closes_on_shutdown(tmp_path):
     assert data["started_at"][-6] in "+-"
     snapshot_path = module.reserve_snapshot_run_directory(artifact_root, session)
     assert data["recording_locations"]["snapshots"] == str(snapshot_path)
-    assert session.name == "diagnostic_records"
+    assert session.name == "diagnostic"
     assert snapshot_path == session.parent / "snapshots"
     assert not snapshot_path.exists()
     assert sorted(p.name for p in session.iterdir()) == ["session.json"]
@@ -1102,6 +1102,38 @@ def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):
     for action in actions:
         if isinstance(action, SetEnvironmentVariable):
             action.execute(context)
-    assert context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"] == str(
-        root / "diagnostic_records/unassociated/motion/pick_execution_records"
-    )
+    record_path = Path(context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"])
+    assert record_path.relative_to(root).parts[-3:] == ("diagnostic", "motion", "pick_execution_records")
+    assert len(record_path.relative_to(root).parts) == 5
+
+
+def test_custom_directory_names_control_sessions_and_snapshots(tmp_path, monkeypatch):
+    checkout = Path(os.environ['SFTWIN_PROJECT_ROOT'])
+    (checkout / 'config').mkdir()
+    (checkout / 'config/run_records.yaml').write_text(
+        'root: output/records\ndirectories:\n  diagnostic: logs/diag\n  snapshots: images/captures\n')
+    module = _load_launch_module()
+    root = Path(module.project_artifacts_directory())
+    assert root == checkout / 'output/records'
+    session = module.create_recording_session(root, 'hardware')
+    assert session.parts[-2:] == ('logs', 'diag')
+    snapshots = module.reserve_snapshot_run_directory(root, session)
+    assert snapshots == session.parent.parent / 'images/captures'
+    assert json.loads((session / 'session.json').read_text())['recording_locations']['snapshots'] == str(snapshots)
+    data = json.loads((session / 'session.json').read_text())
+    data['owner'] = 'isaac'
+    data['participants'] = [{'process': 'isaac', 'instance_id': f'isaac-{os.getpid()}',
+                             'process_start_token': Path(f'/proc/{os.getpid()}/stat').read_text().rsplit(')', 1)[1].split()[19]}]
+    (session / 'session.json').write_text(json.dumps(data))
+    assert module._live_isaac_descriptors(root)[0][0] == session / 'session.json'
+
+
+def test_failed_nested_session_creation_removes_run(tmp_path, monkeypatch):
+    checkout = Path(os.environ['SFTWIN_PROJECT_ROOT'])
+    (checkout / 'config').mkdir()
+    (checkout / 'config/run_records.yaml').write_text('directories:\n  diagnostic: logs/diag\n')
+    module = _load_launch_module()
+    monkeypatch.setattr(module.os, 'replace', lambda *_: (_ for _ in ()).throw(OSError('full')))
+    assert module.create_recording_session(tmp_path, 'hardware') is None
+    assert not list(tmp_path.glob('[0-9]*/*'))
+    assert not list(tmp_path.rglob('*.tmp'))

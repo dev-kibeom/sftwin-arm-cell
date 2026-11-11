@@ -421,7 +421,7 @@ SafetyNode::SafetyNode(const rclcpp::NodeOptions & options)
   const bool diagnostic_capture_enabled = declare_parameter<bool>(
     "diagnostics.capture_enabled", false);
   const auto diagnostics_directory = declare_parameter<std::string>(
-    "diagnostics.output_directory", ".run_records/diagnostic_records/unassociated/safety");
+    "diagnostics.output_directory", ".run_records/diagnostic/safety");
   if (diagnostic_capture_enabled) {
     diagnostic_capture_ = std::make_unique<SafetyDiagnosticCapture>(
       diagnostics_directory, get_logger());

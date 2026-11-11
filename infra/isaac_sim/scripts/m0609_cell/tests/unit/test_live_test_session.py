@@ -16,8 +16,8 @@ def test_session_descriptor_uses_unique_path_and_stop_closes(tmp_path, monkeypat
     first = LiveTestSession(tmp_path)
     second = LiveTestSession(tmp_path)
     assert first.root != second.root
-    assert first.root == tmp_path / "20261020/120000/diagnostic_records"
-    assert second.root == tmp_path / "20261020/120000-01/diagnostic_records"
+    assert first.root == tmp_path / "20261020/120000/diagnostic"
+    assert second.root == tmp_path / "20261020/120000-01/diagnostic"
     first_data = json.loads(first.descriptor.read_text())
     assert first_data["status"] == "open"
     isaac_provenance = first_data["participants"][0]["git_provenance"]
@@ -139,3 +139,30 @@ def test_session_search_accepts_legacy_and_rejects_mixed_layout_ambiguity(tmp_pa
     assert find_open_session(tmp_path) is None
     legacy.write_text(json.dumps({"session_id": "legacy", "status": "closed"}))
     assert find_open_session(tmp_path)[0] == current.descriptor
+
+
+def test_custom_directories_are_used_for_creation_and_discovery(tmp_path, monkeypatch):
+    (tmp_path / 'config').mkdir()
+    (tmp_path / 'config/run_records.yaml').write_text(
+        'root: output/records\ndirectories:\n  diagnostic: logs/diag\n  snapshots: images/captures\n')
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(tmp_path))
+    from shared.run_records import run_records_root
+    root = run_records_root(tmp_path)
+    session = LiveTestSession(root)
+    assert session.root.parts[-2:] == ('logs', 'diag')
+    assert find_open_session(root)[0] == session.descriptor
+    run_root = session.root.parent.parent
+    assert session.data['artifact_locations']['vision_snapshots']['path'] == str(
+        run_root / 'images/captures')
+
+
+def test_initial_write_failure_removes_nested_run(tmp_path, monkeypatch):
+    import pytest
+    (tmp_path / 'config').mkdir()
+    (tmp_path / 'config/run_records.yaml').write_text('directories:\n  diagnostic: logs/diag\n')
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(tmp_path))
+    monkeypatch.setattr(session_module.os, 'replace', lambda *_: (_ for _ in ()).throw(OSError('full')))
+    with pytest.raises(OSError):
+        LiveTestSession(tmp_path / '.run_records')
+    assert not list((tmp_path / '.run_records').glob('[0-9]*/*'))
+    assert not list((tmp_path / '.run_records').rglob('*.tmp'))

@@ -9,7 +9,7 @@ import secrets
 import uuid
 from dataclasses import asdict
 from pathlib import Path
-from shared.run_records import run_records_root
+from shared.run_records import diagnostic_component_directory, run_records_root
 from typing import Any
 
 from scene_builder.material_supply import MaterialSupplyProfile, sample_initial_poses
@@ -66,8 +66,7 @@ class IsaacMaterialSupplyAdapter:
         self.pose_recorder = RawPartPoseRecorder(
             stage,
             artifact_directory if artifact_directory is not None else (
-                run_records_root(Path(__file__).resolve().parents[5])
-                / "diagnostic_records/unassociated/simulation"
+                diagnostic_component_directory(Path(__file__).resolve().parents[5], "simulation")
             ),
         )
         self.shelf_origin_m = shelf_origin_m
