@@ -71,18 +71,21 @@ class LiveTestSession:
         project_root = Path(
             os.environ.get("SFTWIN_PROJECT_ROOT", Path(artifact_root).resolve().parent)
         )
-        parent = Path(artifact_root) / "diagnostic_records" / now.strftime("%Y%m%d")
+        parent = Path(artifact_root) / now.strftime("%Y%m%d")
         parent.mkdir(parents=True, exist_ok=True)
         base = now.strftime("%H%M%S")
-        candidate = parent / base
-        suffix = 1
-        while candidate.exists():
-            candidate = parent / f"{base}-{suffix:02d}"
-            suffix += 1
+        suffix = 0
+        while True:
+            run_root = parent / (base + (f"-{suffix:02d}" if suffix else ""))
+            try:
+                run_root.mkdir()
+                break
+            except FileExistsError:
+                suffix += 1
+        candidate = run_root / "diagnostic_records"
         candidate.mkdir()
         self.root = candidate
         self.descriptor = candidate / "session.json"
-        artifact_root = Path(artifact_root)
         self.data = {
             "schema_version": 1,
             "owner": "isaac",
@@ -127,12 +130,7 @@ class LiveTestSession:
             },
             "artifact_locations": {
                 "vision_snapshots": {
-                    "path": str(
-                        artifact_root
-                        / "snapshots"
-                        / candidate.parent.name
-                        / candidate.name
-                    ),
+                    "path": str(run_root / "snapshots"),
                     "status": "unconfirmed",
                 },
                 "rawpart_pose_recordings": {
@@ -192,12 +190,15 @@ class LiveTestSession:
 
 def find_open_session(artifact_root):
     """Return the sole explicitly open session; fail closed on stale/ambiguous data."""
-    root = Path(artifact_root) / "diagnostic_records"
+    root = Path(artifact_root)
     matches = []
     unreadable = False
     if not root.is_dir():
         return None
-    for descriptor in root.glob("[0-9]*/**/session.json"):
+    for descriptor in (
+        *root.glob("[0-9]*/[0-9]*/diagnostic_records/session.json"),
+        *root.glob("diagnostic_records/[0-9]*/**/session.json"),
+    ):
         try:
             data = json.loads(descriptor.read_text(encoding="utf-8"))
             if not isinstance(data, dict):

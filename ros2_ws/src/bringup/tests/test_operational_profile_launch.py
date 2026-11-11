@@ -491,8 +491,9 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
         _node_parameters(nodes["motion_node"])["diagnostics.snapshot_run_directory"]
     )
     assert vision_snapshot_directory == motion_snapshot_directory
-    assert vision_snapshot_directory.parent.name.isdigit()
-    assert vision_snapshot_directory.parent.parent.name == "snapshots"
+    assert vision_snapshot_directory.name == "snapshots"
+    assert vision_snapshot_directory.parent.parent.name.isdigit()
+    assert Path(_node_parameters(vision)["diagnostics.output_directory"]).parent.parent == vision_snapshot_directory.parent
     assert _node_parameters(vision)["diagnostics.live_test_session_id"]
     clock_directory = Path(
         _node_parameters(nodes["motion_node"])["diagnostics.output_directory"]
@@ -825,11 +826,15 @@ def test_vision_parameters_keep_cuboid_settings_without_algorithm_selection():
     )
 
 
-def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch):
+@pytest.mark.parametrize("layout", ["legacy", "shared"])
+def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch, layout):
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(tmp_path))
     module = _load_launch_module()
     artifact_root = tmp_path / ".run_records"
-    session_dir = artifact_root / "diagnostic_records" / "20261020" / "120000"
+    session_dir = artifact_root / (
+        "diagnostic_records/20261020/120000" if layout == "legacy"
+        else "20261020/120000/diagnostic_records"
+    )
     session_dir.mkdir(parents=True)
     descriptor = session_dir / "session.json"
     start_token = (
@@ -879,9 +884,12 @@ def test_bringup_joins_only_a_unique_live_isaac_session(tmp_path, monkeypatch):
     vision_parameters = _node_parameters(joined_nodes["detect_target_node"])
     assert vision_parameters["diagnostics.live_test_session_id"] == "isaac-session-1"
     vision_snapshot_directory = Path(vision_parameters["diagnostics.snapshot_run_directory"])
-    assert vision_snapshot_directory.parent.parent == artifact_root / "snapshots"
-    assert vision_snapshot_directory.parent.name.isdigit()
-    assert vision_snapshot_directory == artifact_root / "snapshots/20261020/120000"
+    expected_snapshot = artifact_root / (
+        "snapshots/20261020/120000" if layout == "legacy"
+        else "20261020/120000/snapshots"
+    )
+    assert vision_snapshot_directory == expected_snapshot
+    assert data["recording_locations"]["snapshots"] == str(expected_snapshot)
     assert not vision_snapshot_directory.exists()
     motion_parameters = _node_parameters(joined_nodes["motion_node"])
     assert motion_parameters["diagnostics.snapshot_run_directory"] == str(
@@ -998,6 +1006,8 @@ def test_standalone_recording_session_is_lazy_and_closes_on_shutdown(tmp_path):
     assert data["started_at"][-6] in "+-"
     snapshot_path = module.reserve_snapshot_run_directory(artifact_root, session)
     assert data["recording_locations"]["snapshots"] == str(snapshot_path)
+    assert session.name == "diagnostic_records"
+    assert snapshot_path == session.parent / "snapshots"
     assert not snapshot_path.exists()
     assert sorted(p.name for p in session.iterdir()) == ["session.json"]
     module.finish_recording_session(None, session)
@@ -1022,7 +1032,7 @@ def test_failed_session_creation_is_nonblocking_and_leaves_no_run(tmp_path, monk
     assert module.create_recording_session(tmp_path, "unspecified") is None
     assert not list(tmp_path.rglob("session.json"))
     assert not list(tmp_path.rglob("*.tmp"))
-    assert not list(tmp_path.glob("diagnostic_records/*/*"))
+    assert not list(tmp_path.glob("[0-9]*/*"))
 
 
 def test_new_bringup_uses_fresh_namespace_but_links_prior_isaac_session(tmp_path):

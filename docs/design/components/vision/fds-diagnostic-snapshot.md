@@ -111,7 +111,7 @@ Vision 판단
 
 Vision은 명시적 Calibration 요청이 산출 파일을 생성했을 때에만 Calibration 완료 Snapshot을 저장한다. DetectTarget의 성공·실패 terminal Snapshot은 UI Annotation용으로 생성·저장·발행하지만 진행 중 Snapshot은 만들지 않는다. 프로세스 시작 시 선택 Calibration 파일을 로드하는 것만으로는 Snapshot이 생기지 않는다. 실패한 Calibration 요청은 서비스 결과로 보고하고 Calibration Output Snapshot을 만들지 않는다.
 
-Vision은 Snapshot의 생성·저장·발행을 소유한다. 한 bringup 실행의 Vision·Motion Snapshot은 같은 `snapshots/YYYYMMDD/HHMMSS/` 실행 폴더를 사용한다. Vision이 인계한 Acquisition 순번에 따라 `01/`, `02/` 같은 폴더를 만들며, 그 안에 `detection.png`, `metadata.json`, 기존 이름의 선택적 진단 이미지와 Motion의 `occupancy-01.png`, `occupancy-02.png`를 둔다. 이미지 파일명에는 UUID나 Acquisition ID를 넣지 않는다. Snapshot Metadata와 `diagnostic_records/`의 Vision/Motion 진단 JSON은 Acquisition ID·저장 경로·역할 파일명을 보존해 서로 연결한다. Calibration Metadata와 Calibration Snapshot은 기존 Calibration 경로와 `snapshot.png` 규칙을 유지한다. 세션에 연결되지 않은 실행도 각 bringup이 고유한 날짜·시간 실행 폴더를 사용해 다른 실행 기록을 덮어쓰지 않는다.
+Vision은 Snapshot의 생성·저장·발행을 소유한다. 한 bringup 실행의 Vision·Motion Snapshot은 같은 `.run_records/YYYYMMDD/HHMMSS/snapshots/` 실행 폴더를 사용한다. Vision이 인계한 Acquisition 순번에 따라 `01/`, `02/` 같은 폴더를 만들며, 그 안에 `detection.png`, `metadata.json`, 기존 이름의 선택적 진단 이미지와 Motion의 `occupancy-01.png`, `occupancy-02.png`를 둔다. 이미지 파일명에는 UUID나 Acquisition ID를 넣지 않는다. Snapshot Metadata와 `diagnostic_records/`의 Vision/Motion 진단 JSON은 Acquisition ID·저장 경로·역할 파일명을 보존해 서로 연결한다. Calibration Metadata와 Calibration Snapshot은 기존 Calibration 경로와 `snapshot.png` 규칙을 유지한다. 세션에 연결되지 않은 실행도 각 bringup이 고유한 날짜·시간 실행 폴더를 사용해 다른 실행 기록을 덮어쓰지 않는다.
 
 Stage 이미지의 상대 참조는 선택적 `snapshot_directory`가 가리키는 이미지 디렉터리를 기준으로 해석한다. 이 필드와 기존 Metadata의 Source·식별자·Optional/Unavailable 의미는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)를 따른다. Metadata는 기존 Snapshot·Run·Acquisition·Calibration 식별자, Source, Terminal Result와 처리 단계 및 제한된 시간·Ingress Summary를 보존한다. 상세 Sample·Pair 기록은 기존 Capture 설정을 따른다. Metadata 저장 위치의 변경은 Stage 이미지나 정식 Diagnostic Record의 데이터 의미를 변경하지 않는다. 저장·발행은 Hub의 실행 여부에 의존하지 않으며 원본 RGB-D Replay 데이터는 기본 저장하지 않는다. Runtime Calibration의 원천은 Snapshot이 아닌 `vision.calibration_file`이 선택한 YAML이다.
 
@@ -145,3 +145,5 @@ Hub 프로세스나 Snapshot Subscriber가 없어도 Vision은 Calibration 성�
 ## 검증 계약 및 참조
 
 Snapshot의 생성·출력 시점 및 실패 독립성은 위에서 유지한 `VR-VIS-DETECT-16~18`의 요구사항을 따른다. 다른 소비자의 공유 필드·데이터 보장 검증은 [ICD의 `VR-ICD-VIS-ORCH-18~20`](../../interfaces/icd-vision-orchestration.md)를 단일 Owner로 참조한다. 이 FDS는 추가 Gate·Timeout을 도입하지 않는다.
+
+진단은 같은 실행 폴더의 `diagnostic_records/`에 저장하고 세션 서술자는 `diagnostic_records/session.json`에 둔다. 날짜·시간은 실행 시작 시 한 번 정하며 같은 초의 실행은 `HHMMSS-01`처럼 구별한다. Isaac 세션에 명시적으로 참여하는 bringup은 해당 세션 폴더를 공유한다. 기존 `diagnostic_records/YYYYMMDD/HHMMSS/` 서술자도 검색하며 그 세션의 기존 Snapshot 경로는 유지한다.
