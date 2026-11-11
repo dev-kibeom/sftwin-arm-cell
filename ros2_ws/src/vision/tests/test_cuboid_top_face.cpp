@@ -2690,3 +2690,73 @@ TEST(CuboidTopFace, RemoteAndBelowRoiObservationsCannotExpandHeightGrid)
     EXPECT_EQ(result.cuboid_replay_evidence->columns, 241U);
   }
 }
+
+TEST(CuboidTopFace, TrayCalibrationRoiCannotWidenMaterialTargetSelection)
+{
+  auto obs = scene();
+  // Marker overlaps the wider Tray calibration ROI, but not the material ROI.
+  cuboid(obs, 0, -0.24625, 0, 0.048, 0.08, 0.0775, 0.07);
+  cuboid(obs, 0.15, 0);
+  auto p = profile();
+  p.workspace_roi_min_m[1] = -0.2;
+  p.workspace_roi_max_m[1] = 0.2;
+  p.tray_roi_min_m = {-0.324, -0.228};
+  p.tray_roi_max_m = {0.324, 0.228};
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_FALSE(result.ordered_candidates.empty());
+  EXPECT_TRUE(std::all_of(result.ordered_candidates.begin(), result.ordered_candidates.end(),
+    [](const auto & c) {return c.target_pose.pose.position.y > -0.2;}));
+  EXPECT_TRUE(std::none_of(result.cuboid_planes.begin(), result.cuboid_planes.end(),
+    [](const auto & p) {return p.height_m > 0.1;}));
+}
+
+TEST(CuboidTopFace, MaterialCrossingTargetRoiRetainsFullObservedContour)
+{
+  auto obs = scene();
+  cuboid(obs, 0.04, 0);
+  auto p = profile();
+  p.workspace_roi_min_m[0] = 0;
+  p.workspace_roi_max_m[0] = 0.02;
+  // Tray calibration bounds must not narrow or widen the target ROI.
+  p.tray_roi_min_m = {-0.3, -0.3};
+  p.tray_roi_max_m = {-0.2, -0.2};
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U) << result.diagnostic_detail;
+  EXPECT_NEAR(result.ordered_candidates.front().target_pose.pose.position.x, 0.04, obs.spacing_m);
+  EXPECT_GT(result.ordered_candidates.front().rectangle_long_side_m, 0.07);
+}
+
+TEST(CuboidTopFace, LocalMarkerReplayExcludesMarkerAndPreservesMaterials)
+{
+  const char * prefix = std::getenv("ARM_CELL_MARKER_REPLAY");
+  if (!prefix) {GTEST_SKIP() << "Set ARM_CELL_MARKER_REPLAY to 20261112/084111 acquisition 5 prefix";}
+  CuboidHeightObservation obs{cv::Mat(209, 261, CV_64F), {-0.325, -0.29}, 0.0025,
+    cv::Mat(209, 261, CV_8U)};
+  std::ifstream grid(std::string(prefix) + ".height_grid.f64le", std::ios::binary);
+  ASSERT_TRUE(grid.read(reinterpret_cast<char *>(obs.heights.data), obs.heights.total() * 8));
+  std::ifstream mask(std::string(prefix) + ".image_boundary.u8", std::ios::binary);
+  ASSERT_TRUE(mask.read(reinterpret_cast<char *>(obs.image_boundary.data), obs.heights.total()));
+  auto p = profile();
+  p.dimensions_m = {0.07, 0.07, 0.08};
+  p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.workspace_roi_min_m = {-0.3, -0.2, 0.01};
+  p.workspace_roi_max_m = {0.3, 0.2, 1};
+  p.tray_roi_min_m = {-0.324, -0.228};
+  p.tray_roi_max_m = {0.324, 0.228};
+  p.support_contact_tolerance_m = 0.01;
+  p.top_surface_geometry_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003;
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
+  ASSERT_FALSE(result.ordered_candidates.empty());
+  for (const auto & candidate : result.ordered_candidates) {
+    const auto & pos = candidate.target_pose.pose.position;
+    EXPECT_FALSE(std::hypot(pos.x, pos.y + 0.24625) < 0.02 && std::abs(pos.z - 0.11803) < 0.01);
+  }
+  EXPECT_TRUE(std::none_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+    [](const auto & h) {
+      return h.selection_state == "SELECTED" &&
+             std::hypot(h.center_x_m, h.center_y_m + 0.24625) < 0.02 &&
+             std::abs(h.height_m - 0.11803) < 0.01;
+    }));
+}

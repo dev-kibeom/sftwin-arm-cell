@@ -396,18 +396,17 @@ static std::vector<PlaneRegion> connected_observations(
           }
         }
       }
-      // The Tray selects connected observations; it never cuts their contours.
-      const bool tray_configured = profile.tray_roi_max_m[0] > profile.tray_roi_min_m[0] &&
-        profile.tray_roi_max_m[1] > profile.tray_roi_min_m[1];
-      const bool intersects_tray = std::any_of(patch.pixels.begin(), patch.pixels.end(),
+      // Preserve the configured material target ROI. Calibration Tray bounds
+      // and expanded observation bounds must never widen candidate selection.
+      const bool intersects_target = std::any_of(patch.pixels.begin(), patch.pixels.end(),
         [&](const cv::Point & pixel) {
           const auto xy = obs.origin + cv::Point2d(pixel) * obs.spacing_m;
-          return xy.x >= (tray_configured ? profile.tray_roi_min_m[0] : profile.workspace_roi_min_m[0]) &&
-                 xy.x <= (tray_configured ? profile.tray_roi_max_m[0] : profile.workspace_roi_max_m[0]) &&
-                 xy.y >= (tray_configured ? profile.tray_roi_min_m[1] : profile.workspace_roi_min_m[1]) &&
-                 xy.y <= (tray_configured ? profile.tray_roi_max_m[1] : profile.workspace_roi_max_m[1]);
+          return xy.x >= profile.workspace_roi_min_m[0] &&
+                 xy.x <= profile.workspace_roi_max_m[0] &&
+                 xy.y >= profile.workspace_roi_min_m[1] &&
+                 xy.y <= profile.workspace_roi_max_m[1];
         });
-      if (!intersects_tray) {continue;}
+      if (!intersects_target) {continue;}
       patch.source_boundary_id = pick_boundary_id++;
       patches.push_back(std::move(patch));
     }
