@@ -795,7 +795,9 @@ TEST_F(VisionRosIngressTest, CrossStreamInterleavingProducesT1WithoutRollback)
 
 TEST_F(VisionRosIngressTest, RequestDiagnosticsSeparateLatestSamplesFromActualPairsAndReset)
 {
-  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG),
+    RCUTILS_RET_OK);
   auto ingress = make_ingress(0.0, 200.0, true);
   auto publisher = std::make_shared<rclcpp::Node>("vision_ingress_request_diagnostics_publisher");
   auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
@@ -888,7 +890,9 @@ TEST_F(VisionRosIngressTest, RequestDiagnosticsSeparateLatestSamplesFromActualPa
 
   executor.remove_node(publisher);
   executor.remove_node(ingress);
-  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO),
+    RCUTILS_RET_OK);
 }
 
 TEST_F(VisionRosIngressTest, DetailedCapturePreservesSignedPairFreshnessEvidence)
@@ -1119,7 +1123,9 @@ TEST_F(VisionRosIngressTest, DetailedFreshnessExamplesStayBoundedAndAggregateRej
 
 TEST_F(VisionRosIngressTest, DetailedCaptureDropsOversizedFrameIdentityWithinTheBound)
 {
-  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG),
+    RCUTILS_RET_OK);
   auto ingress = make_ingress(1.0, 200.0, true);
   auto publisher = std::make_shared<rclcpp::Node>("vision_ingress_long_frame_id_publisher");
   auto rgb = publisher->create_publisher<sensor_msgs::msg::Image>(
@@ -1139,7 +1145,9 @@ TEST_F(VisionRosIngressTest, DetailedCaptureDropsOversizedFrameIdentityWithinThe
   EXPECT_EQ(details.rgb_received, 1U);
   executor.remove_node(publisher);
   executor.remove_node(ingress);
-  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO),
+    RCUTILS_RET_OK);
 }
 
 TEST_F(VisionRosIngressTest, FreshPreRequestPairIsReusedAsNewDetectionInput)

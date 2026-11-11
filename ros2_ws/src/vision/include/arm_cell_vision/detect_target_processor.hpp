@@ -232,7 +232,7 @@ struct DetectionResult
   std::string failure_cause;
   // Candidate-local geometry, also used by independent calibration/profile results.
   // Cuboid Acquisition stores all geometry in ordered_candidates; no representative.
-  geometry_msgs::msg::PoseStamped target_pose;
+  geometry_msgs::msg::PoseStamped target_pose{};
   bool has_target_pose = false;
   std::vector<arm_cell_interfaces::msg::DisturbanceCandidate> disturbance_candidates;
   uint8_t orientation_symmetry_order = 0;
@@ -247,7 +247,7 @@ struct DetectionResult
   double observed_yaw_rad = 0.0;
   std::string diagnostic_detail;
   std::string processing_stage;
-  std_msgs::msg::Header source_rgb_header;
+  std_msgs::msg::Header source_rgb_header{};
   bool centroid_pixel_valid = false;
   float centroid_pixel_x = 0.0F;
   float centroid_pixel_y = 0.0F;
@@ -337,7 +337,7 @@ struct SupportCalibrationSnapshot
     std::string reason;
   };
   std::vector<DepthValidation> recent_depth_validations;
-  geometry_msgs::msg::TransformStamped tray_from_camera;
+  geometry_msgs::msg::TransformStamped tray_from_camera{};
   std::vector<geometry_msgs::msg::Point32> support_region;
 };
 

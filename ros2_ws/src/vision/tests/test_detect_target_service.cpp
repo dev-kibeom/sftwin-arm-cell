@@ -299,7 +299,9 @@ TEST_F(DetectTargetServiceTest, ReturnsCalibrationNotReadyWithoutStartingAcquisi
 
 TEST_F(DetectTargetServiceTest, UsesOneDeadlineForTheActiveAcquisition)
 {
-  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_DEBUG),
+    RCUTILS_RET_OK);
   arm_cell_vision::VisionRosIngress ingress(rclcpp::NodeOptions().parameter_overrides(
       {rclcpp::Parameter("diagnostics.capture_enabled", true)}));
   int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -337,7 +339,9 @@ TEST_F(DetectTargetServiceTest, UsesOneDeadlineForTheActiveAcquisition)
   EXPECT_EQ(terminal_diagnostics.timeout_ns, 2'000'000);
   EXPECT_EQ(terminal_diagnostics.result_code, response.result_code.value);
   EXPECT_EQ(terminal_diagnostics.ingress.clock_epoch_start, 0U);
-  rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO);
+  EXPECT_EQ(
+    rcutils_logging_set_logger_level("vision_ros_ingress", RCUTILS_LOG_SEVERITY_INFO),
+    RCUTILS_RET_OK);
 }
 
 TEST_F(DetectTargetServiceTest, HandsOffOnlyTheMatchingAcquisitionResultOnce)

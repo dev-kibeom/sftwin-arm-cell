@@ -38,7 +38,7 @@ DetectorProfile profile()
 }
 CuboidHeightObservation scene()
 {
-  return {cv::Mat::zeros(240, 240, CV_64F), {-0.3, -0.3}, 0.0025};
+  return {cv::Mat::zeros(240, 240, CV_64F), {-0.3, -0.3}, 0.0025, {}};
 }
 // Independent Figure 4 test scene renderer: polygon coordinates round to grid, depth is max top.
 void cuboid(
@@ -46,7 +46,7 @@ void cuboid(
   double bottom = 0, double length = 0.08, double width = 0.05, double thickness = 0.03)
 {
   std::vector<cv::Point> polygon;
-  for (const auto s : std::array<cv::Point2d, 4>{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}}) {
+  for (const auto & s : std::array<cv::Point2d, 4>{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}}) {
     double px = x + s.x * length / 2 * std::cos(yaw) - s.y * width / 2 * std::sin(yaw);
     double py = y + s.x * length / 2 * std::sin(yaw) + s.y * width / 2 * std::cos(yaw);
     polygon.emplace_back(
