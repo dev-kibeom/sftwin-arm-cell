@@ -31,6 +31,7 @@
 #include "../src/vision_snapshot_internal.hpp"
 #include "arm_cell_vision/detect_target_service.hpp"
 #include "arm_cell_vision/cuboid_top_face.hpp"
+#include "../src/inclined_cuboid.hpp"
 
 namespace
 {
@@ -3710,3 +3711,77 @@ TEST_F(VisionDetectorSnapshotTest, DisabledDepthSceneCaptureDoesNotRenderPanoram
   EXPECT_EQ(published.metadata_json.find("scene_stability_panorama.png"), std::string::npos);
 }
 }  // namespace
+TEST_F(VisionDetectorSnapshotTest, NormalizedInclinedCandidateKeepsRecordAndPanelsConsistent)
+{
+  using namespace arm_cell_vision;
+  CuboidHeightObservation observation{cv::Mat::zeros(240, 240, CV_64F), {-0.3, -0.3}, 0.0025, {}};
+  for (int row = 0; row < observation.heights.rows; ++row) {
+    for (int column = 0; column < observation.heights.cols; ++column) {
+      const auto xy = observation.origin + cv::Point2d(column, row) * observation.spacing_m;
+      if (std::abs(xy.x) <= 0.04 * std::cos(0.45) && std::abs(xy.y) <= 0.025) {
+        observation.heights.at<double>(row, column) = 0.06 - std::tan(0.45) * xy.x;
+      }
+    }
+  }
+  DetectorProfile profile;
+  profile.algorithm = "cuboid_top_face";
+  profile.dimensions_m = {0.08, 0.05, 0.03};
+  profile.dimension_tolerance_m = {0.0035, 0.0035, 0.0035};
+  profile.workspace_roi_min_m = {-0.3, -0.3, 0.005}; profile.workspace_roi_max_m = {0.3, 0.3, 0.2};
+  profile.support_contact_tolerance_m = 0.0025; profile.cuboid.height_tolerance_m = 0.0025;
+  auto job = cuboid_stage_job("normalized-inclined");
+  job.result = detect_cuboid_top_face(observation, profile, true);
+  ASSERT_EQ(job.result.ordered_candidates.size(), 1U);
+  const auto canonical_id = std::stoul(
+    job.result.ordered_candidates.front().rawpart_selected_candidate);
+  auto h = *std::find_if(
+    job.result.cuboid_hypotheses.begin(), job.result.cuboid_hypotheses.end(),
+    [&](const auto & item) {return item.candidate_id == canonical_id;});
+  uint32_t duplicate_id = 1;
+  for (const auto & item : job.result.cuboid_hypotheses) {
+    duplicate_id = std::max(duplicate_id, item.candidate_id + 1);
+  }
+  h.candidate_id = duplicate_id; h.confidence_grade = "MEDIUM"; h.observed_area_ratio = 0.6;
+  job.result.cuboid_hypotheses.push_back(h);
+  auto duplicate = job.result.ordered_candidates.front();
+  duplicate.rawpart_selected_candidate = std::to_string(duplicate_id);
+  duplicate.confidence_grade = "MEDIUM";
+  job.result.ordered_candidates.push_back(duplicate);
+  auto detail = job.result.rawpart_candidate_diagnostics.back();
+  detail.candidate_id = duplicate_id; detail.coverage = 0.6; detail.confidence_grade = "MEDIUM";
+  job.result.rawpart_candidate_diagnostics.push_back(detail);
+  auto & patch = job.result.cuboid_planes[h.patch_index];
+  ++patch.candidate_evaluation_attempt_count; ++patch.geometry_valid_before_deduplication_count;
+  cuboid_geometry::reconcile_cuboid_volumes(job.result, profile.cuboid.height_tolerance_m);
+  cuboid_geometry::finalize_cuboid_diagnostics(job.result);
+  ASSERT_EQ(job.result.ordered_candidates.size(), 1U);
+  EXPECT_EQ(job.result.cuboid_planes[h.patch_index].partitioned_candidate_count, 1U);
+  EXPECT_EQ(job.result.cuboid_stages[5].output_count, 1U);
+  job.selected_profile = profile;
+  job.input.reset(); job.has_observation = false;
+  std::vector<VisionDetectorSnapshotJob::CuboidStageImage> images;
+  snapshot_detail::render_geometry(job, images);
+  ASSERT_EQ(images.size(), 3U);
+  EXPECT_EQ(images[1].status, "rendered"); EXPECT_EQ(images[2].status, "rendered");
+  EXPECT_EQ(images[1].candidate_ids.size(), job.result.cuboid_hypotheses.size());
+  ASSERT_EQ(images[2].candidate_ids.size(), 1U);
+  EXPECT_EQ(images[2].candidate_ids.front(), canonical_id);
+  const auto root = temporary_snapshot_root("normalized-inclined");
+  std::vector<arm_cell_interfaces::msg::VisionDetectorSnapshot> published;
+  VisionDetectorSnapshotOutput output(*node, root, "normalized-inclined-run", {},
+    [&](const auto & message) {published.push_back(message);}, utc_date_now(), {}, {}, "123456");
+  output.submit(std::move(job)); output.shutdown();
+  ASSERT_EQ(published.size(), 1U);
+  const auto & record = published.front().diagnostic_record_json;
+  EXPECT_NE(record.find("\"ordered_candidate_count\":1"), std::string::npos);
+  EXPECT_NE(record.find("\"reference_face_corners_m\":[["), std::string::npos);
+  EXPECT_NE(
+    record.find(
+      "normalized_to_candidate_" + std::to_string(
+        canonical_id)), std::string::npos);
+  EXPECT_NE(
+    record.find(
+      "\"deduplicated_to_candidate_id\":" + std::to_string(
+        canonical_id)), std::string::npos);
+  std::filesystem::remove_all(root);
+}

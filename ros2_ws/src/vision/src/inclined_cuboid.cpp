@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <map>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <opencv2/imgproc.hpp>
 
@@ -18,6 +19,8 @@ struct Box
   std::set<size_t> planes;
   uint32_t id;
   bool ambiguous = false;
+  std::set<std::pair<size_t, uint32_t>> sources{};
+  std::pair<size_t, uint32_t> reference_source{};
 };
 V point(const PlaneRegion & plane, cv::Point2d xy)
 {
@@ -194,6 +197,8 @@ void append_inclined_cuboids(
               const V face_center = anchor + x * (length / 2) + y * (sign * width / 2);
               Box box{face_center - z * (thickness / 2), x, y, z,
                 V(length, width, thickness), 0, {pi}, next_id++, false};
+              box.reference_source = {pi, contour.outline_id};
+              box.sources.insert(box.reference_source);
               bool valid = true;
               // Retained boundary vertices are the observation; never fill or
               // reselect Depth cells to make a recipe fit.
@@ -245,10 +250,12 @@ void append_inclined_cuboids(
                 });
               if (same == boxes.end()) {boxes.push_back(box);} else {
                 same->planes.insert(pi);
+                same->sources.insert(box.sources.begin(), box.sources.end());
                 if (box.coverage > same->coverage) {
-                  const auto sources = same->planes;
+                  const auto planes = same->planes;
+                  const auto sources = same->sources;
                   const auto id = same->id;
-                  *same = box; same->planes = sources; same->id = id;
+                  *same = box; same->planes = planes; same->sources = sources; same->id = id;
                 }
               }
             }
@@ -308,15 +315,17 @@ void append_inclined_cuboids(
     const std::string grade = box.ambiguous ||
       box.coverage < profile.medium_confidence_observed_area_ratio ?
       "LOW" : box.coverage < profile.high_confidence_observed_area_ratio ? "MEDIUM" : "HIGH";
-    for (const auto pi : box.planes) {
+    for (const auto & source : box.sources) {
+      const auto pi = source.first;
       const auto & plane = *planes[pi];
       CuboidHypothesisVisualization h;
-      h.candidate_id = pi == *box.planes.begin() ? box.id : next_id++;
+      h.candidate_id = source == box.reference_source ? box.id : next_id++;
       if (h.candidate_id != box.id) {h.deduplicated_to_candidate_id = box.id;}
       h.source_boundary_id = plane.source_boundary_id;
       h.patch_index = pi;
-      h.outline_id = contours[pi]->empty() ? 0 : contours[pi]->front().outline_id;
-      h.center_x_m = box.center[0]; h.center_y_m = box.center[1];
+      h.outline_id = source.second;
+      const V reference_center = box.center + box.z * (box.dimensions[2] / 2);
+      h.center_x_m = reference_center[0]; h.center_y_m = reference_center[1];
       h.height_m = (box.center + box.z * (box.dimensions[2] / 2))[2];
       h.observed_area_ratio = box.coverage;
       h.length_m = box.dimensions[0]; h.width_m = box.dimensions[1];
@@ -333,8 +342,10 @@ void append_inclined_cuboids(
         geometry_msgs::msg::Point32 p; p.x = corner[0]; p.y = corner[1]; p.z = corner[2];
         h.reference_face_corners.push_back(p);
       }
-      h.disposition = box.ambiguous ? "unresolved_inclined_geometry" : "qualified_geometry";
-      h.reason = h.selection_reason;
+      h.disposition = h.deduplicated_to_candidate_id ? "removed_by_deduplication" :
+        box.ambiguous ? "unresolved_inclined_geometry" : "qualified_geometry";
+      h.reason =
+        h.deduplicated_to_candidate_id ? "equivalent_inclined_cuboid_volume" : h.selection_reason;
       if (result.cuboid_planes.size() <= pi) {result.cuboid_planes.resize(pi + 1);}
       auto & diagnostic = result.cuboid_planes[pi];
       if (diagnostic.cell_count == 0) {
@@ -370,6 +381,13 @@ void append_inclined_cuboids(
         }
       }
       diagnostic.candidate_evaluation_attempt_count++;
+      diagnostic.geometry_valid_before_deduplication_count++;
+      if (h.deduplicated_to_candidate_id) {
+        diagnostic.deduplicated_count++;
+        diagnostic.deduplicated_by_reason[h.reason]++;
+      } else {
+        diagnostic.generated_hypothesis_count++;
+      }
       diagnostic.plane_normal = {plane.normal[0], plane.normal[1], plane.normal[2]};
       diagnostic.plane_fitted = plane.plane_fitted;
       diagnostic.plane_status = plane.status;
@@ -424,39 +442,106 @@ void append_inclined_cuboids(
     result.ordered_candidates.push_back(std::move(candidate));
   }
 }
+void normalize_cuboid_hypothesis_aliases(std::vector<CuboidHypothesisVisualization> & hypotheses)
+{
+  std::map<uint32_t, CuboidHypothesisVisualization *> by_id;
+  for (auto & h : hypotheses) {
+    by_id[h.candidate_id] = &h;
+  }
+  for (auto & h : hypotheses) {
+    if (!h.deduplicated_to_candidate_id) {continue;}
+    auto * root = &h;
+    std::set<uint32_t> seen;
+    while (root->deduplicated_to_candidate_id && seen.insert(root->candidate_id).second) {
+      const auto parent = by_id.find(root->deduplicated_to_candidate_id);
+      if (parent == by_id.end()) {break;}
+      root = parent->second;
+    }
+    if (root == &h || root->deduplicated_to_candidate_id) {continue;}
+    h.deduplicated_to_candidate_id = root->candidate_id;
+    if (h.disposition != "removed_by_deduplication") {h.reason = "equivalent_cuboid_volume";}
+    h.disposition = "removed_by_deduplication";
+    h.selection_state = root->selection_state;
+    h.selection_reason = "equivalent_normalized_hypothesis";
+    h.confidence_grade = root->confidence_grade;
+    h.confidence_reason = "normalized_to_candidate_" + std::to_string(root->candidate_id);
+    h.competing_candidate_ids = root->competing_candidate_ids;
+  }
+  for (auto & h : hypotheses) {
+    const auto self =
+      h.deduplicated_to_candidate_id ? h.deduplicated_to_candidate_id : h.candidate_id;
+    for (auto & id : h.competing_candidate_ids) {
+      const auto found = by_id.find(id);
+      if (found != by_id.end() && found->second->deduplicated_to_candidate_id) {
+        id = found->second->deduplicated_to_candidate_id;
+      }
+    }
+    auto & competitors = h.competing_candidate_ids;
+    competitors.erase(std::remove(competitors.begin(), competitors.end(), self), competitors.end());
+    std::sort(competitors.begin(), competitors.end());
+    competitors.erase(std::unique(competitors.begin(), competitors.end()), competitors.end());
+  }
+}
+
 void reconcile_cuboid_volumes(DetectionResult & result, double tolerance)
 {
   auto & candidates = result.ordered_candidates;
-  std::set<size_t> excluded, duplicates;
+  std::set<size_t> duplicates, conflicts;
+  const auto coverage = [&](const DetectionResult & c) {
+      const auto id = std::stoul(c.rawpart_selected_candidate);
+      const auto diagnostic = std::find_if(
+        result.rawpart_candidate_diagnostics.begin(),
+        result.rawpart_candidate_diagnostics.end(), [&](const auto & d) {
+          return d.candidate_id == id;
+        });
+      if (diagnostic != result.rawpart_candidate_diagnostics.end()) {return diagnostic->coverage;}
+      const auto hypothesis = std::find_if(
+        result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+        [&](const auto & h) {return h.candidate_id == id;});
+      return hypothesis == result.cuboid_hypotheses.end() ? 0.0 : hypothesis->observed_area_ratio;
+    };
+  // Choose the complete representative payload before evaluating conflicts.
+  // Changing only its grade would detach HIGH from the face that supports it.
   for (size_t i = 0; i < candidates.size(); ++i) {
     if (duplicates.count(i)) {continue;}
-    const auto a = candidate_box(candidates[i]);
     for (size_t j = i + 1; j < candidates.size(); ++j) {
-      if (duplicates.count(j)) {continue;}
-      const auto b = candidate_box(candidates[j]);
-      if (equivalent(a, b, tolerance)) {
-        excluded.insert(j); duplicates.insert(j);
-        if (candidates[j].confidence_grade == "HIGH" && candidates[i].confidence_grade != "HIGH") {
-          candidates[i].confidence_grade = "HIGH";
+      if (duplicates.count(j) || !equivalent(
+          candidate_box(candidates[i]),
+          candidate_box(candidates[j]), tolerance)) {continue;}
+      if (coverage(candidates[j]) > coverage(candidates[i])) {
+        std::swap(candidates[i], candidates[j]);
+      }
+      duplicates.insert(j);
+      const auto representative = std::stoul(candidates[i].rawpart_selected_candidate);
+      const auto duplicate = std::stoul(candidates[j].rawpart_selected_candidate);
+      for (auto & h : result.cuboid_hypotheses) {
+        if (h.candidate_id == duplicate) {
+          h.deduplicated_to_candidate_id = representative;
+          h.disposition = "removed_by_deduplication";
+          h.reason = "equivalent_cuboid_volume";
         }
-        const auto representative = std::stoul(candidates[i].rawpart_selected_candidate);
-        const auto duplicate = std::stoul(candidates[j].rawpart_selected_candidate);
-        for (auto & h : result.cuboid_hypotheses) {
-          if (h.candidate_id == duplicate || h.deduplicated_to_candidate_id == duplicate) {
-            h.deduplicated_to_candidate_id = representative;
-          }
-        }
-      } else if (overlaps(a, b, tolerance)) {
-        excluded.insert(i); excluded.insert(j);
-        for (auto & h : result.cuboid_hypotheses) {
-          if (std::to_string(h.candidate_id) == candidates[i].rawpart_selected_candidate ||
-            std::to_string(h.candidate_id) == candidates[j].rawpart_selected_candidate)
-          {
-            h.selection_state = "UNRESOLVED";
-            h.selection_reason = "incompatible_observed_material_volumes";
-            h.confidence_grade = "LOW";
-          }
-        }
+      }
+    }
+  }
+  normalize_cuboid_hypothesis_aliases(result.cuboid_hypotheses);
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    if (duplicates.count(i)) {continue;}
+    for (size_t j = i + 1; j < candidates.size(); ++j) {
+      if (duplicates.count(j) || !overlaps(
+          candidate_box(candidates[i]),
+          candidate_box(candidates[j]), tolerance)) {continue;}
+      conflicts.insert(i); conflicts.insert(j);
+      const uint32_t a = std::stoul(candidates[i].rawpart_selected_candidate);
+      const uint32_t b = std::stoul(candidates[j].rawpart_selected_candidate);
+      for (auto & h : result.cuboid_hypotheses) {
+        if (h.candidate_id != a && h.candidate_id != b) {continue;}
+        h.selection_state = "UNRESOLVED";
+        h.selection_reason = "incompatible_observed_material_volumes";
+        h.confidence_grade = "LOW";
+        h.confidence_reason = h.selection_reason;
+        h.disposition = "unresolved_volume_conflict";
+        h.reason = h.selection_reason;
+        h.competing_candidate_ids.push_back(h.candidate_id == a ? b : a);
       }
     }
   }
@@ -464,8 +549,144 @@ void reconcile_cuboid_volumes(DetectionResult & result, double tolerance)
   candidates.erase(
     std::remove_if(
       candidates.begin(), candidates.end(), [&](const auto &) {
-        return excluded.count(index++) != 0;
+        const auto i = index++;
+        return duplicates.count(i) || conflicts.count(i);
       }), candidates.end());
+  for (auto & h : result.cuboid_hypotheses) {
+    if (h.deduplicated_to_candidate_id) {continue;}
+    const auto returned = std::find_if(
+      candidates.begin(), candidates.end(), [&](const auto & c) {
+        return c.rawpart_selected_candidate == std::to_string(h.candidate_id);
+      });
+    if (returned != candidates.end()) {
+      h.confidence_grade = returned->confidence_grade;
+      h.confidence_reason = returned->confidence_reason;
+    }
+  }
+  normalize_cuboid_hypothesis_aliases(result.cuboid_hypotheses);
+  for (auto & diagnostic : result.rawpart_candidate_diagnostics) {
+    const auto h = std::find_if(
+      result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+      [&](const auto & h) {return h.candidate_id == diagnostic.candidate_id;});
+    if (h == result.cuboid_hypotheses.end()) {continue;}
+    diagnostic.confidence_grade = h->confidence_grade;
+    diagnostic.confidence_reason = h->confidence_reason;
+    const auto root = h->deduplicated_to_candidate_id ? std::find_if(
+      result.cuboid_hypotheses.begin(),
+      result.cuboid_hypotheses.end(), [&](const auto & r) {
+        return r.candidate_id == h->deduplicated_to_candidate_id;
+      }) : h;
+    if (root != result.cuboid_hypotheses.end() && root->selection_state == "UNRESOLVED") {
+      diagnostic.rejection_reason = root->selection_reason;
+    }
+  }
+}
+
+void finalize_cuboid_diagnostics(DetectionResult & result)
+{
+  normalize_cuboid_hypothesis_aliases(result.cuboid_hypotheses);
+  std::set<uint32_t> returned;
+  for (const auto & c : result.ordered_candidates) {
+    returned.insert(std::stoul(c.rawpart_selected_candidate));
+  }
+  std::vector<std::pair<std::string, std::string>> pre_object_confidence;
+  for (auto & patch : result.cuboid_planes) {
+    pre_object_confidence.emplace_back(patch.confidence_grade, patch.confidence_reason);
+    patch.partitioned_candidate_count = 0;
+    patch.deduplicated_count = 0;
+    patch.deduplicated_by_reason.clear();
+    patch.confidence_grade.clear();
+    patch.confidence_reason = "no_independent_normalized_candidate";
+  }
+  std::vector<uint64_t> plane_roots(result.cuboid_planes.size(), 0);
+  uint64_t roots = 0, aliases = 0, attempts = 0, valid = 0, generated = 0;
+  std::map<std::string, uint64_t> deduplicated_by_reason, qualification_rejections;
+  uint64_t conflict_count = 0;
+  for (const auto & h : result.cuboid_hypotheses) {
+    if (h.deduplicated_to_candidate_id) {
+      ++aliases; ++deduplicated_by_reason[h.reason];
+      if (h.patch_index < result.cuboid_planes.size()) {
+        auto & patch = result.cuboid_planes[h.patch_index];
+        ++patch.deduplicated_count; ++patch.deduplicated_by_reason[h.reason];
+      }
+    } else {
+      if (h.selection_state != "REJECTED") {
+        ++roots;
+        if (!returned.count(h.candidate_id)) {
+          const auto reason = h.selection_state ==
+            "SELECTED" ? h.confidence_reason : h.selection_reason;
+          ++qualification_rejections[reason];
+          conflict_count += h.selection_state != "SELECTED";
+        }
+      }
+      if (h.selection_state != "REJECTED" && h.patch_index < result.cuboid_planes.size()) {
+        auto & patch = result.cuboid_planes[h.patch_index];
+        const auto count = ++plane_roots[h.patch_index];
+        patch.confidence_grade = count == 1 ? h.confidence_grade : "";
+        patch.confidence_reason = count ==
+          1 ? h.confidence_reason : "multiple_normalized_candidates";
+        if (returned.count(h.candidate_id)) {++patch.partitioned_candidate_count;}
+      }
+    }
+  }
+  // A LOW observation with no object anchor is pre-object evidence, not a
+  // stale candidate grade. Preserve it when normalization has no object there.
+  for (size_t i = 0; i < result.cuboid_planes.size(); ++i) {
+    auto & patch = result.cuboid_planes[i];
+    if (plane_roots[i] == 0 && patch.deduplicated_count == 0 &&
+      pre_object_confidence[i].first == "LOW")
+    {
+      patch.confidence_grade = pre_object_confidence[i].first;
+      patch.confidence_reason = pre_object_confidence[i].second;
+    }
+  }
+  for (auto & patch : result.cuboid_planes) {
+    patch.generated_hypothesis_count = patch.geometry_valid_before_deduplication_count -
+      std::min(patch.geometry_valid_before_deduplication_count, patch.deduplicated_count);
+    attempts += patch.candidate_evaluation_attempt_count;
+    valid += patch.geometry_valid_before_deduplication_count;
+    generated += patch.generated_hypothesis_count;
+  }
+  result.rawpart_candidate_count = returned.size();
+  result.rawpart_profile_match_count = returned.size();
+  for (auto & stage : result.cuboid_stages) {
+    if (stage.stage == "cuboid_hypothesis_generation" ||
+      stage.stage == "dimension_and_geometry_validation")
+    {
+      stage.candidate_evaluation_attempt_count = attempts;
+      stage.deduplicated_count = aliases;
+      stage.deduplicated_by_reason = deduplicated_by_reason;
+      stage.generated_count = stage.stage == "cuboid_hypothesis_generation" ? generated : valid;
+      if (attempts) {
+        stage.status = "computed"; stage.reason = "retained_plane_map_hypotheses_evaluated";
+      }
+      stage.auxiliary_counts["normalized_geometry_candidates"] = roots;
+    } else if (stage.stage == "candidate_local_eligibility") {
+      stage.input_count = roots;
+      stage.output_count = returned.size();
+      stage.rejected_count = roots - returned.size();
+      stage.rejected_by_reason = qualification_rejections;
+      stage.auxiliary_counts["candidates_rejected_for_conflict"] = conflict_count;
+      stage.auxiliary_counts["evaluated_height_patches"] = result.cuboid_planes.size();
+      if (roots) {stage.status = "computed"; stage.reason = "normalized_candidate_qualification";}
+    } else if (stage.stage == "candidate_enumeration") {
+      stage.input_count = returned.size(); stage.output_count = returned.size();
+      stage.rejected_count = 0;
+      stage.auxiliary_counts["enumerated_candidates"] = returned.size();
+      stage.status = returned.empty() ? "not_computed" : "computed";
+      stage.reason =
+        returned.empty() ? "no_individually_eligible_candidates" :
+        "deterministic_candidate_id_enumeration";
+    }
+  }
+  std::stable_sort(
+    result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+    [](const auto & a, const auto & b) {return a.candidate_id < b.candidate_id;});
+  std::stable_sort(
+    result.ordered_candidates.begin(), result.ordered_candidates.end(),
+    [](const auto & a, const auto & b) {
+      return std::stoul(a.rawpart_selected_candidate) < std::stoul(b.rawpart_selected_candidate);
+    });
 }
 
 }

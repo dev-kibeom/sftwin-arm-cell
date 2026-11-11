@@ -7,7 +7,6 @@
 #include <iomanip>
 #include <cstring>
 #include <limits>
-#include <iostream>
 #include <numeric>
 #include <set>
 #include <gtest/gtest.h>
@@ -206,9 +205,7 @@ TEST(CuboidTopFace, SmallWholePlaneResidualDoesNotHideLocallyDistinctRamp)
     const int radius = std::max(2, static_cast<int>(std::ceil(p.cuboid.line_residual_limit_px)));
     ASSERT_GT(cv::norm(gradient(flat.front()) - gradient(ramp.front())) * 2 * radius * obs.spacing_m,
       p.cuboid.height_tolerance_m);
-    std::cout << "LOCAL_PLANE_REPRO narrow_contact=" << narrow_contact <<
-      " whole_status=" << whole.status << " whole_rms_m=" << whole.residual_m <<
-      " tolerance_m=" << p.cuboid.height_tolerance_m << std::endl;
+
     size_t budget = 20000;
     const auto map = geometry::build_plane_map(obs, p, budget, true);
     EXPECT_GE(map.regions.size(), 2U);
@@ -525,7 +522,7 @@ TEST(CuboidTopFace, LaterContourSearchLimitPreservesCompletedIndependentGeometry
       EXPECT_GT(std::count_if(result.hypotheses.begin(), result.hypotheses.end(),
           [](const auto & h) {return h.reason == "orthogonal_outline_search_limit";}), 0);
     }
-    std::cout << "SEARCH_LIMIT_DIAGNOSTIC " << result.diagnostic.partition_reason << std::endl;
+
     for (const auto & h : result.hypotheses) {
       if (h.reason == "orthogonal_outline_search_limit") {
         EXPECT_EQ(h.disposition, "unresolved_search_limit");
@@ -896,11 +893,9 @@ void measure_capture_path(
     }
   }
   std::sort(elapsed_us.begin(), elapsed_us.end());
-  std::cout << "VISION_REPLAY_PERF case=" << name << " repetitions=" << repetitions
-            << " median_us=" << elapsed_us[elapsed_us.size() / 2]
-            << " p95_us=" << elapsed_us[(elapsed_us.size() - 1) * 95 / 100]
-            << " capture_payload_copy_bytes=0 retained_grid_and_mask_bytes=" << retained_bytes
-            << "\n";
+  ::testing::Test::RecordProperty(name + "_median_us", std::to_string(elapsed_us[elapsed_us.size() / 2]));
+  ::testing::Test::RecordProperty(name + "_p95_us", std::to_string(elapsed_us[(elapsed_us.size() - 1) * 95 / 100]));
+  ::testing::Test::RecordProperty(name + "_retained_bytes", std::to_string(retained_bytes));
 }
 TEST(CuboidTopFace, ReconstructsFromLocallySupportedCornerOnConvexPartialContour)
 {
@@ -1584,10 +1579,7 @@ TEST(CuboidTopFace, LiveAcquisition20261024PreservesGroundTruthPoseAndCompetingF
   for (const auto & candidate : result.ordered_candidates) {
     EXPECT_NE(candidate.rawpart_selected_candidate, std::to_string(competing->candidate_id));
   }
-  std::cout << "LIVE_REPLAY ground_truth_evaluation_only=true center_xy_m=" << measured.center_x_m <<
-    "," << measured.center_y_m << " top_m=" << measured.height_m << " yaw_rad=" << measured.yaw_rad <<
-    " gt_compatible_id=" << measured.candidate_id << " competing_face_id=" << competing->candidate_id <<
-    " classification=HIGH result=SUCCESS\n";
+
 }
 
 
@@ -2212,6 +2204,22 @@ TEST(CuboidInclined, SingleFaceRecoversMetricDimensionsAndTilt)
   EXPECT_NEAR(1 - 2 * (q.x * q.x + q.y * q.y), std::cos(pitch), 0.02);
   EXPECT_NEAR(candidate.target_pose.pose.position.z, top, 0.003);
   EXPECT_EQ(candidate.confidence_grade, "HIGH");
+  const auto root = std::find_if(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+    [&](const auto & h) {return std::to_string(h.candidate_id) == candidate.rawpart_selected_candidate;});
+  ASSERT_NE(root, result.cuboid_hypotheses.end());
+  EXPECT_NEAR(root->center_x_m, candidate.target_pose.pose.position.x, 1e-8);
+  EXPECT_NEAR(root->center_y_m, candidate.target_pose.pose.position.y, 1e-8);
+  uint64_t attempts = 0, returned = 0;
+  for (const auto & patch : result.cuboid_planes) {
+    attempts += patch.candidate_evaluation_attempt_count;
+    returned += patch.partitioned_candidate_count;
+  }
+  EXPECT_EQ(returned, result.ordered_candidates.size());
+  EXPECT_EQ(attempts, result.cuboid_hypotheses.size());
+  EXPECT_EQ(result.cuboid_stages[3].candidate_evaluation_attempt_count, attempts);
+  EXPECT_EQ(result.cuboid_stages[4].candidate_evaluation_attempt_count, attempts);
+  EXPECT_EQ(result.cuboid_stages[5].status, "computed");
+  EXPECT_EQ(result.cuboid_stages[5].output_count, 1U);
 }
 
 namespace
@@ -2369,19 +2377,164 @@ TEST(CuboidInclined, FullDetectorMergesThreeVisibleFacesAndKeepsIndependentHoriz
   cuboid(obs, 0.12, 0);
   const auto result = detect_cuboid_top_face(obs, profile());
   ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS);
-  for (const auto & p : result.cuboid_planes) {
-    std::cerr << "PLANE " << p.plane_status << " " << p.cell_count << " " << p.fitted_edge_count <<
-      " normal " << p.plane_normal[0] << " " << p.plane_normal[1] << " " << p.plane_normal[2] <<
-      "\n";
-  }
-  for (const auto & h : result.cuboid_hypotheses) {
-    std::cerr << "H " << h.candidate_id << " " << h.selection_state << " " << h.confidence_grade <<
-      " " << h.center_x_m << " " << h.center_y_m << " " << h.height_m << " " << h.length_m << " " <<
-      h.width_m << " " << h.selection_reason << "\n";
-  }
   ASSERT_EQ(result.ordered_candidates.size(), 2U) << result.diagnostic_detail;
   EXPECT_EQ(
     std::count_if(
       result.ordered_candidates.begin(), result.ordered_candidates.end(),
       [](const auto & c) {return c.target_pose.pose.position.x < 0;}), 1);
+}namespace
+{
+void add_volume_diagnostic_candidate(
+  DetectionResult & result, uint32_t id,
+  const std::string & grade, double coverage, double x = 0)
+{
+  DetectionResult candidate;
+  candidate.rawpart_selected_candidate = std::to_string(id);
+  candidate.has_target_pose = true;
+  candidate.target_pose.pose.position.x = x;
+  candidate.target_pose.pose.position.z = 0.08;
+  candidate.target_pose.pose.orientation.w = 1;
+  candidate.rectangle_long_side_m = 0.08;
+  candidate.rectangle_short_side_m = 0.05;
+  candidate.estimated_height_m = 0.03;
+  candidate.has_estimated_height = true;
+  candidate.confidence_grade = grade;
+  candidate.confidence_reason = grade + "_observed_area";
+  result.ordered_candidates.push_back(candidate);
+  arm_cell_vision::RawPartCandidateDiagnostic diagnostic;
+  diagnostic.candidate_id = id;
+  diagnostic.coverage = coverage;
+  diagnostic.confidence_grade = grade;
+  diagnostic.confidence_reason = candidate.confidence_reason;
+  result.rawpart_candidate_diagnostics.push_back(diagnostic);
+  arm_cell_vision::CuboidHypothesisVisualization h;
+  h.candidate_id = id;
+  h.selection_state = "SELECTED";
+  h.disposition = "qualified_geometry";
+  h.confidence_grade = grade;
+  h.confidence_reason = candidate.confidence_reason;
+  h.observed_area_ratio = coverage;
+  result.cuboid_hypotheses.push_back(h);
+}
+}
+
+TEST(CuboidDiagnosticNormalization, StrongestRepresentativeRetainsItsWholeEvidence)
+{
+  DetectionResult result;
+  add_volume_diagnostic_candidate(result, 1, "MEDIUM", 0.6);
+  add_volume_diagnostic_candidate(result, 2, "HIGH", 0.9);
+  result.ordered_candidates.back().has_observed_rectangle = true;
+  result.ordered_candidates.back().profile_candidate_features = {0, 0, 0.08, 0.08, 0.05, 0.03};
+  auto alias = result.cuboid_hypotheses.back();
+  alias.candidate_id = 11; alias.deduplicated_to_candidate_id = 2;
+  result.cuboid_hypotheses.push_back(alias);
+  alias.candidate_id = 10; alias.deduplicated_to_candidate_id = 11;
+  result.cuboid_hypotheses.push_back(alias);
+  arm_cell_vision::cuboid_geometry::reconcile_cuboid_volumes(result, 0.0025);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  EXPECT_EQ(result.ordered_candidates.front().rawpart_selected_candidate, "2");
+  EXPECT_EQ(result.ordered_candidates.front().confidence_reason, "HIGH_observed_area");
+  EXPECT_TRUE(result.ordered_candidates.front().has_observed_rectangle);
+  EXPECT_DOUBLE_EQ(result.ordered_candidates.front().profile_candidate_features[2], 0.08);
+  for (const auto & h : result.cuboid_hypotheses) {
+    EXPECT_EQ(h.confidence_grade, "HIGH");
+    EXPECT_EQ(h.selection_state, "SELECTED");
+    if (h.candidate_id != 2) {
+      EXPECT_EQ(h.deduplicated_to_candidate_id, 2U);
+      EXPECT_EQ(h.disposition, "removed_by_deduplication");
+    }
+  }
+  EXPECT_EQ(result.rawpart_candidate_diagnostics.front().confidence_grade, "HIGH");
+  EXPECT_EQ(
+    result.rawpart_candidate_diagnostics.front().confidence_reason, "normalized_to_candidate_2");
+}
+
+TEST(CuboidDiagnosticNormalization, LaterConflictInvalidatesAliasesAndDetailedGrades)
+{
+  DetectionResult result;
+  add_volume_diagnostic_candidate(result, 1, "MEDIUM", 0.6);
+  add_volume_diagnostic_candidate(result, 2, "HIGH", 0.9);
+  add_volume_diagnostic_candidate(result, 3, "HIGH", 0.95, 0.04);
+  auto alias = result.cuboid_hypotheses.front();
+  alias.candidate_id = 10; alias.deduplicated_to_candidate_id = 1;
+  result.cuboid_hypotheses.push_back(alias);
+  arm_cell_vision::cuboid_geometry::reconcile_cuboid_volumes(result, 0.0025);
+  EXPECT_TRUE(result.ordered_candidates.empty());
+  for (const auto & h : result.cuboid_hypotheses) {
+    EXPECT_EQ(h.selection_state, "UNRESOLVED");
+    EXPECT_EQ(h.confidence_grade, "LOW");
+    EXPECT_FALSE(h.competing_candidate_ids.empty());
+  }
+  for (const auto & diagnostic : result.rawpart_candidate_diagnostics) {
+    EXPECT_EQ(diagnostic.confidence_grade, "LOW");
+    EXPECT_EQ(diagnostic.rejection_reason, "incompatible_observed_material_volumes");
+  }
+}
+
+TEST(CuboidDiagnosticNormalization, ReferenceFaceSourceAndOutlineFollowStrongestEvidence)
+{
+  using namespace arm_cell_vision::cuboid_geometry;
+  CuboidHeightObservation obs{cv::Mat(), {-0.2, -0.2}, 0.00025, {}};
+  const double pitch = 0.45, roll = 0.4;
+  const cv::Vec3d x(std::cos(pitch), 0, -std::sin(pitch));
+  const cv::Vec3d y(std::sin(pitch) * std::sin(roll), std::cos(roll),
+    std::cos(pitch) * std::sin(roll));
+  const cv::Vec3d z = x.cross(y), center(0, 0, 0.1);
+  PlaneMap map;
+  add_observed_face(map, obs, center + z * 0.015, x, y, 0.08, 0.05);
+  add_observed_face(map, obs, center + y * 0.025, -x, z, 0.08, 0.03);
+  map.regions[0].pixels.resize(map.regions[0].pixels.size() * 6 / 10);
+  map.region_contours[1][0].outline_id = 7;
+  DetectionResult result; uint32_t next = 1; size_t budget = 20000;
+  append_inclined_cuboids(result, map, obs, profile(), next, budget);
+  reconcile_cuboid_volumes(result, 0.0025);
+  finalize_cuboid_diagnostics(result);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  const auto before = result.cuboid_planes;
+  finalize_cuboid_diagnostics(result);
+  for (size_t i = 0; i < before.size(); ++i) {
+    EXPECT_EQ(result.cuboid_planes[i].deduplicated_count, before[i].deduplicated_count);
+    EXPECT_EQ(
+      result.cuboid_planes[i].generated_hypothesis_count,
+      before[i].generated_hypothesis_count);
+    EXPECT_EQ(
+      result.cuboid_planes[i].partitioned_candidate_count,
+      before[i].partitioned_candidate_count);
+  }
+  const auto & candidate = result.ordered_candidates.front();
+  const auto root = std::find_if(
+    result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+    [&](const auto & h) {
+      return std::to_string(h.candidate_id) == candidate.rawpart_selected_candidate;
+    });
+  ASSERT_NE(root, result.cuboid_hypotheses.end());
+  EXPECT_EQ(root->patch_index, 1U);
+  EXPECT_EQ(root->outline_id, 7U);
+  EXPECT_NEAR(root->center_x_m, candidate.target_pose.pose.position.x, 1e-8);
+  EXPECT_NEAR(root->center_y_m, candidate.target_pose.pose.position.y, 1e-8);
+  EXPECT_EQ(result.cuboid_planes[1].partitioned_candidate_count, 1U);
+  EXPECT_EQ(result.cuboid_planes[1].confidence_grade, "HIGH");
+  for (const auto & h : result.cuboid_hypotheses) {
+    if (h.candidate_id != root->candidate_id) {
+      EXPECT_EQ(h.deduplicated_to_candidate_id, root->candidate_id);
+      EXPECT_EQ(h.disposition, "removed_by_deduplication");
+      EXPECT_EQ(h.confidence_grade, "HIGH");
+    }
+  }
+}
+
+TEST(CuboidDiagnosticNormalization, CompetitorReferencesUseUniqueCanonicalIds)
+{
+  using arm_cell_vision::CuboidHypothesisVisualization;
+  CuboidHypothesisVisualization first, representative, other, indirect;
+  first.candidate_id = 1; first.deduplicated_to_candidate_id = 2;
+  representative.candidate_id = 2; representative.competing_candidate_ids = {1, 3, 3};
+  other.candidate_id = 3; other.competing_candidate_ids = {1, 2, 11};
+  indirect.candidate_id = 11; indirect.deduplicated_to_candidate_id = 1;
+  std::vector<CuboidHypothesisVisualization> hypotheses{first, representative, other, indirect};
+  arm_cell_vision::cuboid_geometry::normalize_cuboid_hypothesis_aliases(hypotheses);
+  EXPECT_EQ(hypotheses[0].competing_candidate_ids, std::vector<uint32_t>{3});
+  EXPECT_EQ(hypotheses[1].competing_candidate_ids, std::vector<uint32_t>{3});
+  EXPECT_EQ(hypotheses[2].competing_candidate_ids, std::vector<uint32_t>{2});
+  EXPECT_EQ(hypotheses[3].competing_candidate_ids, std::vector<uint32_t>{3});
 }

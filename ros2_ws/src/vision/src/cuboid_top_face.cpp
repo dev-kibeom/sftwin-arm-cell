@@ -174,22 +174,7 @@ size_t deduplicate_across_heights(
 
 void inherit_normalized_confidence(std::vector<CuboidHypothesisVisualization> & hypotheses)
 {
-  for (auto & hypothesis : hypotheses) {
-    if (hypothesis.disposition != "removed_by_deduplication" ||
-      hypothesis.deduplicated_to_candidate_id == 0) {continue;}
-    const auto representative = std::find_if(
-      hypotheses.begin(), hypotheses.end(),
-      [&](const auto & candidate) {
-        return candidate.candidate_id == hypothesis.deduplicated_to_candidate_id;
-      });
-    if (representative != hypotheses.end()) {
-      hypothesis.selection_state = representative->selection_state;
-      hypothesis.selection_reason = "equivalent_normalized_hypothesis";
-      hypothesis.confidence_grade = representative->confidence_grade;
-      hypothesis.confidence_reason = "normalized_to_candidate_" +
-        std::to_string(hypothesis.deduplicated_to_candidate_id);
-    }
-  }
+  normalize_cuboid_hypothesis_aliases(hypotheses);
 }
 
 cv::Mat missing_depth(const cv::Mat & heights)
@@ -545,6 +530,11 @@ DetectionResult detect_cuboid_top_face(
   const cv::Mat missing = (models.empty() && accepted.empty()) ?
     cv::Mat() : missing_depth(obs.heights);
   append_inclined_cuboids(result, plane_map, obs, profile, next_candidate_id, search_operations);
+  for (auto & stage : result.cuboid_stages) {
+    if (stage.stage == "cuboid_hypothesis_generation") {
+      stage.auxiliary_counts["shared_evaluations_used"] = initial_operations - search_operations;
+    }
+  }
   if (accepted.empty() && result.ordered_candidates.empty()) {
     const bool final_geometry_unresolved = std::any_of(
       result.cuboid_planes.begin(), result.cuboid_planes.end(),
@@ -573,6 +563,7 @@ DetectionResult detect_cuboid_top_face(
     enumeration_stage.status = "not_computed";
     enumeration_stage.reason = "no_individually_eligible_candidates";
     result.cuboid_stages.push_back(std::move(enumeration_stage));
+    finalize_cuboid_diagnostics(result);
     auto replay = std::make_shared<CuboidReplayEvidence>();
     replay->rows = static_cast<uint32_t>(obs.heights.rows);
     replay->columns = static_cast<uint32_t>(obs.heights.cols);
@@ -735,27 +726,22 @@ DetectionResult detect_cuboid_top_face(
     }
   }
   reconcile_cuboid_volumes(result, profile.cuboid.height_tolerance_m);
-  result.rawpart_profile_match_count = result.ordered_candidates.size();
-  result.rawpart_candidate_count = result.ordered_candidates.size();
-  for (auto & stage : result.cuboid_stages) {
-    if (stage.stage == "candidate_enumeration") {
-      stage.input_count = result.ordered_candidates.size();
-      stage.output_count = result.ordered_candidates.size();
-      stage.auxiliary_counts["enumerated_candidates"] = result.ordered_candidates.size();
-    }
-  }
   if (std::any_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
       [](const auto & h) {return !h.reference_face_corners.empty();})) {
     result.rawpart_candidate_generation = "plane_map_cuboid_geometry_qualified";
   }
-  inherit_normalized_confidence(result.cuboid_hypotheses);
+  finalize_cuboid_diagnostics(result);
   append_disturbance_regions(result, plane_map.outlines, partitions, obs, profile);
   if (!result.cuboid_replay_evidence) {
     result.cuboid_replay_evidence = std::move(selected_replay);
   }
   if (result.ordered_candidates.empty()) {
     result.result_code = Code::DETECT_RESULT_GEOMETRY_ERROR;
-    result.diagnostic_detail = "cuboid_top_face; no_candidate_meets_observed_area_threshold";
+    const bool volume_conflict = std::any_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+      [](const auto & h) {return h.selection_reason == "incompatible_observed_material_volumes";});
+    result.failure_cause = volume_conflict ? "cuboid volume geometry unresolved" : "insufficient observed face area";
+    result.diagnostic_detail = volume_conflict ? "cuboid_top_face; incompatible_observed_material_volumes" :
+      "cuboid_top_face; no_candidate_meets_observed_area_threshold";
     return result;
   }
   result.result_code = Code::DETECT_RESULT_SUCCESS;
