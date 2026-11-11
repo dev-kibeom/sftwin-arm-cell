@@ -73,7 +73,7 @@ def test_geometry_diagnostic_default_is_repo_local_and_override_creates_parent(
     from live_geometry_acceptance import diagnostic_output_directory
 
     default = diagnostic_output_directory()
-    assert str(default).endswith(".run_records/m0609_cell/live_geometry_acceptance")
+    assert str(default).endswith(".run_records/diagnostic/live_geometry_acceptance")
     override = diagnostic_output_directory(tmp_path / "nested" / "diagnostics")
     assert override == tmp_path / "nested" / "diagnostics"
     assert override.is_dir()

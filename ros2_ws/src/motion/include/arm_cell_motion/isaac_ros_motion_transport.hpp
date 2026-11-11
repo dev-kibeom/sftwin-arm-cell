@@ -82,7 +82,7 @@ public:
     double place_candidate_planning_time_s = 1.0,
     double place_total_planning_time_s = 5.0,
     bool diagnostics_capture_enabled = false,
-    std::string diagnostics_output_directory = ".run_records/diagnostic_records/unassociated/motion",
+    std::string diagnostics_output_directory = ".run_records/diagnostic/motion",
     std::string snapshot_run_directory = ".run_records/snapshots",
     std::string planning_planner_id = "RRTConnect",
     std::string place_waypoint_trajectory_file = "");

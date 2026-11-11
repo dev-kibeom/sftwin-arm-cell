@@ -13,6 +13,17 @@ def run_records_root(checkout):
     return (checkout / Path(config.get("root", ".run_records")).expanduser()).resolve()
 
 
+def run_records_config(checkout):
+    config_path = Path(checkout) / "config/run_records.yaml"
+    return (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
+
+
+def diagnostic_component_directory(checkout, component):
+    config = run_records_config(checkout)
+    diagnostic = config.get("directories", {}).get("diagnostic", "diagnostic")
+    return run_records_root(checkout) / diagnostic / component
+
+
 def project_root(script_path, environ=None):
     """Resolve the repository root from the validated module root, never cwd."""
     module_root = discover_module_root(script_path, environ)
@@ -35,19 +46,15 @@ def project_relative_path(value, script_path, environ=None):
 
 def default_run_record_path(tool, filename, script_path, environ=None):
     """Return and create the parent for a stable tool-owned output file."""
-    path = (
-        run_records_root(project_root(script_path, environ))
-        / "m0609_cell"
-        / tool
-        / filename
-    )
+    root = project_root(script_path, environ)
+    path = diagnostic_component_directory(root, tool) / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def default_run_record_directory(tool, script_path, environ=None):
     """Return and create a stable tool-owned output directory."""
-    directory = run_records_root(project_root(script_path, environ)) / "m0609_cell" / tool
+    directory = diagnostic_component_directory(project_root(script_path, environ), tool)
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 

@@ -240,7 +240,7 @@ void queue_pick_execution_record_impl(
   const char * project_root = std::getenv("SFTWIN_PROJECT_ROOT");
   const auto directory = configured && *configured ? std::filesystem::path(configured) :
     (project_root && *project_root ? std::filesystem::path(project_root) :
-    std::filesystem::path(".")) / ".run_records/diagnostic_records/unassociated/motion/pick_execution_records";
+    std::filesystem::path(".")) / ".run_records/diagnostic/motion/pick_execution_records";
   const auto accepted = pick_execution_record_writer().submit(
     [goal, motion_goal_uuid, stage, result_code, held, retract_succeeded,
     candidate_evaluation, directory]() {

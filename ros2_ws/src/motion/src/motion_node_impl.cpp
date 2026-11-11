@@ -344,7 +344,7 @@ MotionNode::MotionNode(
     rcl_interfaces::msg::ParameterDescriptor().set__description(
       "Enable bounded optional Motion clock diagnostics independently of log level."));
   const auto diagnostics_output_directory = declare_parameter<std::string>(
-    "diagnostics.output_directory", ".run_records/diagnostic_records/unassociated/motion");
+    "diagnostics.output_directory", ".run_records/diagnostic/motion");
   const auto diagnostics_snapshot_run_directory = declare_parameter<std::string>(
     "diagnostics.snapshot_run_directory", ".run_records/snapshots");
   const auto place_waypoint_trajectory_file = declare_parameter<std::string>(

@@ -1,2 +1,5 @@
 # Relative paths are resolved from the repository root.
 root: .run_records
+directories:
+  diagnostic: diagnostic
+  snapshots: snapshots

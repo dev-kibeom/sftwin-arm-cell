@@ -267,7 +267,7 @@ VisionDetectorSnapshotOutput::VisionDetectorSnapshotOutput(
   std::string vision_run_time, std::filesystem::path snapshot_run_directory)
 : logger_(node.get_logger()), artifact_root_(std::move(artifact_root)),
   diagnostic_root_(diagnostic_root.empty() ?
-    artifact_root_.parent_path() / "diagnostic_records" / "unassociated" / "vision" :
+    artifact_root_.parent_path() / "diagnostic" / "vision" :
     std::move(diagnostic_root)),
   snapshot_run_directory_(std::move(snapshot_run_directory)),
   live_test_session_id_(std::move(live_test_session_id)),

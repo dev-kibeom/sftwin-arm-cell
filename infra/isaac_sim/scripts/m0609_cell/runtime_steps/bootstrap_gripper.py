@@ -24,7 +24,7 @@ if shared_bytecode_cache.is_dir():
 sys.modules.pop("shared.script_editor_bootstrap", None)
 importlib.invalidate_caches()
 
-from shared.run_records import run_records_root
+from shared.run_records import diagnostic_component_directory, run_records_root
 from shared.script_editor_bootstrap import (
     clear_imported_package,
     clear_package_bytecode,
@@ -134,7 +134,7 @@ runtime_session = session_module.create_gripper_runtime_session(
     diagnostic_output_directory=(
         Path(os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"]).parent / "gripper"
         if os.environ.get("SFTWIN_LIVE_TEST_SESSION_PATH")
-        else run_records_root(project_root) / "diagnostic_records/unassociated/gripper"
+        else diagnostic_component_directory(project_root, "gripper")
     ),
 )
 # Both Motion-driven profiles require the selected reference. Direct users of

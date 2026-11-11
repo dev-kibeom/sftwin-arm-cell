@@ -177,6 +177,14 @@ def project_artifacts_directory():
     return str((root / Path(config.get("root", ".run_records")).expanduser()).resolve())
 
 
+def diagnostic_root(artifact_directory):
+    root = project_checkout_root()
+    config_path = root / "config/run_records.yaml"
+    config = (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
+    relative = config.get("directories", {}).get("diagnostic", "diagnostic")
+    return Path(artifact_directory) / relative
+
+
 def _git_provenance():
     """Capture source checkout revision, not the running binary revision."""
     result = {
@@ -585,23 +593,23 @@ def compose(context):
     vision_artifact_directory = (
         live_session_root / "vision"
         if live_session_root
-        else artifact_directory / "diagnostic_records" / "unassociated" / "vision"
+        else diagnostic_root(artifact_directory) / "vision"
     )
     snapshot_run_directory = reserve_snapshot_run_directory(artifact_directory, live_session_root)
     motion_artifact_directory = (
         live_session_root / "motion"
         if live_session_root
-        else artifact_directory / "diagnostic_records" / "unassociated" / "motion"
+        else diagnostic_root(artifact_directory) / "motion"
     )
     safety_artifact_directory = (
         live_session_root / "safety"
         if live_session_root
-        else artifact_directory / "diagnostic_records" / "unassociated" / "safety"
+        else diagnostic_root(artifact_directory) / "safety"
     )
     orchestration_artifact_directory = (
         live_session_root / "orchestration"
         if live_session_root
-        else artifact_directory / "diagnostic_records" / "unassociated" / "orchestration"
+        else diagnostic_root(artifact_directory) / "orchestration"
     )
     selected_action_logger_level = LaunchConfiguration("action_logger_level").perform(
         context

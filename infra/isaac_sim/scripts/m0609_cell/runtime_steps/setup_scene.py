@@ -173,7 +173,7 @@ def _start_live_test_session():
     if _live_test_session is not None:
         return
     try:
-        from shared.run_records import run_records_root
+        from shared.run_records import diagnostic_component_directory, run_records_root
         from shared.live_test_session import LiveTestSession
 
         from shared.environment_setup import resolve_diagnostics_selection
@@ -333,7 +333,7 @@ def _start_material_supply_adapter(context):
                 context.amr_tray_z + 0.0225,
             ),
             artifact_directory=(
-                run_records_root(project_root) / "diagnostic_records/unassociated/simulation"
+                diagnostic_component_directory(project_root, "simulation")
             ),
             timeline=omni.timeline.get_timeline_interface(),
         )
