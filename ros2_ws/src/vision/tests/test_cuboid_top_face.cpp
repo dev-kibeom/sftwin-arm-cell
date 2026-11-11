@@ -309,9 +309,13 @@ TEST(CuboidTopFace, PlaneMapSeparatesConnectedSurfacesWithoutRecipeAndPreservesC
 
 TEST(CuboidTopFace, PartialLDoesNotBecomeAClosedObservedRectangleOrUseCompleteIou)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto obs = scene();
   l_outline_cuboid(obs, 0, 0.065, 0.04);
-  const auto result = detect_cuboid_top_face(obs, profile(), true);
+  const auto result = detect_cuboid_top_face(obs, sparse_profile, true);
   ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS);
   EXPECT_EQ(result.ordered_candidates.at(0).confidence_grade, "MEDIUM");
   for (const auto & hypothesis : result.cuboid_hypotheses) {
@@ -899,9 +903,13 @@ void measure_capture_path(
 }
 TEST(CuboidTopFace, ReconstructsFromLocallySupportedCornerOnConvexPartialContour)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto observation = scene();
   partial_rectangle_at_recipe_corner(observation, 0.06, 0.01);
-  const auto result = detect_cuboid_top_face(observation, profile(), true);
+  const auto result = detect_cuboid_top_face(observation, sparse_profile, true);
   ASSERT_FALSE(result.ordered_candidates.empty()) << result.diagnostic_detail;
   EXPECT_EQ(result.rawpart_candidate_generation, "unified_l_corner_candidate_eligibility");
   EXPECT_FALSE(result.ordered_candidates.at(0).has_observed_rectangle);
@@ -912,7 +920,7 @@ TEST(CuboidTopFace, ReconstructsFromLocallySupportedCornerOnConvexPartialContour
   EXPECT_EQ(result.ordered_candidates.at(0).orientation_symmetry_order, 2);
   ASSERT_EQ(result.ordered_candidates.size(), 1U);
   EXPECT_EQ(result.ordered_candidates.front().confidence_grade, "MEDIUM");
-  EXPECT_NE(result.ordered_candidates.front().confidence_reason.find("partial_top_surface"),
+  EXPECT_NE(result.ordered_candidates.front().confidence_reason.find("observed_area_ratio"),
     std::string::npos);
   EXPECT_TRUE(result.ordered_candidates.at(0).has_estimated_height);
   EXPECT_NEAR(result.ordered_candidates.at(0).estimated_height_m, 0.03, 1e-6);
@@ -920,9 +928,13 @@ TEST(CuboidTopFace, ReconstructsFromLocallySupportedCornerOnConvexPartialContour
 
 TEST(CuboidTopFace, ReconstructsFromTwoPartialEdgesWithoutClosedLContour)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto observation = scene();
   l_outline_cuboid(observation, 0.0, 0.0225, 0.015, 0.0075);
-  const auto result = detect_cuboid_top_face(observation, profile(), true);
+  const auto result = detect_cuboid_top_face(observation, sparse_profile, true);
   ASSERT_FALSE(result.ordered_candidates.empty()) << result.diagnostic_detail;
   EXPECT_EQ(result.rawpart_candidate_generation, "unified_l_corner_candidate_eligibility");
   EXPECT_FALSE(result.ordered_candidates.at(0).has_observed_rectangle);
@@ -932,13 +944,17 @@ TEST(CuboidTopFace, ReconstructsFromTwoPartialEdgesWithoutClosedLContour)
 
 TEST(CuboidTopFace, ReconstructsAcrossSmallRasterGapAtObservedOuterCorner)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto observation = scene();
   l_outline_cuboid(observation, 0.0, 0.06, 0.02, 0.0075);
   // Simulate a short depth dropout at the shared corner. Both orthogonal
   // fitted edges and interior patch support remain, but their endpoints no
   // longer touch in the raster.
   observation.heights(cv::Rect(104, 110, 3, 3)).setTo(std::numeric_limits<double>::quiet_NaN());
-  const auto result = detect_cuboid_top_face(observation, profile(), true);
+  const auto result = detect_cuboid_top_face(observation, sparse_profile, true);
   ASSERT_FALSE(result.ordered_candidates.empty()) << result.diagnostic_detail;
   const auto corner_hypothesis = std::find_if(
     result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(), [&](const auto & h) {
@@ -952,6 +968,10 @@ TEST(CuboidTopFace, ReconstructsAcrossSmallRasterGapAtObservedOuterCorner)
 
 TEST(CuboidTopFace, ReconstructedRecipeFootprintAndTopReferenceFollowRotatedCorners)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   const double half_pi = std::acos(-1.0) / 2;
   for (const double yaw : {-2.4, -0.73, -0.73 + half_pi, -0.28, 0.31,
       1.7, 2.8})
@@ -960,7 +980,7 @@ TEST(CuboidTopFace, ReconstructedRecipeFootprintAndTopReferenceFollowRotatedCorn
     // The observed L, Recipe dimensions and measured surrounding Tray constrain
     // the unknown completion. Check the same normalized pose at every rotation.
     partial_rotated_rectangle_at_recipe_corner(observation, 0.06, 0.02, yaw);
-    const auto result = detect_cuboid_top_face(observation, profile(), true);
+    const auto result = detect_cuboid_top_face(observation, sparse_profile, true);
     ASSERT_FALSE(result.ordered_candidates.empty()) << "yaw=" << yaw << " " << result.diagnostic_detail;
     const auto selected = std::find_if(
       result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(), [&result](const auto & h) {
@@ -1060,10 +1080,14 @@ TEST(CuboidTopFace, RejectsOnlyRecipeHypothesesDirectlyContradictedByObservedEdg
 
 TEST(CuboidTopFace, ReconstructedCandidateHasEstimatedProvenanceAndDeterministicPose)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto observation = scene();
   partial_rectangle_at_recipe_corner(observation, 0.06, 0.01);
-  const auto first = detect_cuboid_top_face(observation, profile(), true);
-  const auto repeated = detect_cuboid_top_face(observation, profile(), true);
+  const auto first = detect_cuboid_top_face(observation, sparse_profile, true);
+  const auto repeated = detect_cuboid_top_face(observation, sparse_profile, true);
   ASSERT_FALSE(first.ordered_candidates.empty());
   ASSERT_EQ(first.ordered_candidates.size(), 1U);
   const auto & candidate = first.ordered_candidates.front();
@@ -1089,12 +1113,16 @@ TEST(CuboidTopFace, MissingLocalCornerEvidenceRemainsGeometryFailure)
 
 TEST(CuboidTopFace, FootprintCanCrossWorkspaceObservationBoundaryWhenCenterIsAllowed)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto observation = scene();
   partial_rectangle_at_recipe_corner(observation, 0.06, 0.01, 0.03, 0.24, -0.025);
   // The true Recipe edge continues past the Height Grid boundary; only the
   // observed raster is retained, so the missing cells remain UNKNOWN.
   EXPECT_GT(cv::countNonZero(observation.heights.col(observation.heights.cols - 1) > 0), 0);
-  const auto result = detect_cuboid_top_face(observation, profile(), true);
+  const auto result = detect_cuboid_top_face(observation, sparse_profile, true);
   ASSERT_FALSE(result.ordered_candidates.empty()) << result.diagnostic_detail;
   EXPECT_EQ(result.ordered_candidates.at(0).confidence_grade, "MEDIUM");
   EXPECT_NEAR(result.ordered_candidates.at(0).target_pose.pose.position.x, 0.28, 2 * observation.spacing_m);
@@ -1103,6 +1131,10 @@ TEST(CuboidTopFace, FootprintCanCrossWorkspaceObservationBoundaryWhenCenterIsAll
 
 TEST(CuboidTopFace, ImageBoundaryClippingKeepsUniquelyReconstructedMediumCandidate)
 {
+  // Exercise sparse reconstruction independently of the production area cutoff.
+  auto sparse_profile = profile();
+  sparse_profile.medium_confidence_observed_area_ratio = 0.01;
+
   auto observation = scene();
   // Render only the part of a target that remains inside the camera crop.
   partial_rectangle_at_recipe_corner(observation, 0.04, 0.01, 0.03, -0.04, -0.025);
@@ -1111,7 +1143,7 @@ TEST(CuboidTopFace, ImageBoundaryClippingKeepsUniquelyReconstructedMediumCandida
   observation.heights.colRange(120, observation.heights.cols).setTo(std::numeric_limits<double>::quiet_NaN());
   EXPECT_GT(cv::countNonZero(observation.heights.col(119) > 0), 0);
   EXPECT_EQ(cv::countNonZero(observation.heights.colRange(120, observation.heights.cols) > 0), 0);
-  const auto result = detect_cuboid_top_face(observation, profile(), true);
+  const auto result = detect_cuboid_top_face(observation, sparse_profile, true);
   ASSERT_FALSE(result.ordered_candidates.empty()) << result.diagnostic_detail;
   EXPECT_EQ(result.ordered_candidates.at(0).confidence_grade, "MEDIUM");
   EXPECT_FALSE(result.ordered_candidates.at(0).has_observed_rectangle);
@@ -1525,7 +1557,7 @@ TEST(CuboidTopFace, LiveAcquisition20261024PreservesGroundTruthPoseAndCompetingF
   ASSERT_NE(ground_truth_compatible, result.cuboid_hypotheses.end());
   const auto & measured = *ground_truth_compatible;
   EXPECT_EQ(measured.selection_state, "SELECTED");
-  EXPECT_EQ(measured.confidence_grade, "MEDIUM");
+  EXPECT_EQ(measured.confidence_grade, "HIGH");
   // Isaac recorded RawPart 5 at sim time 173.116666667 s, 7.25 s before
   // this stable acquisition. Preserve the original Tray-frame Pose oracle.
   EXPECT_NEAR(measured.center_x_m, 0.21580078, 0.003);
@@ -1554,7 +1586,7 @@ TEST(CuboidTopFace, LiveAcquisition20261024PreservesGroundTruthPoseAndCompetingF
   std::cout << "LIVE_REPLAY ground_truth_evaluation_only=true center_xy_m=" << measured.center_x_m <<
     "," << measured.center_y_m << " top_m=" << measured.height_m << " yaw_rad=" << measured.yaw_rad <<
     " gt_compatible_id=" << measured.candidate_id << " competing_face_id=" << competing->candidate_id <<
-    " classification=MEDIUM result=SUCCESS\n";
+    " classification=HIGH result=SUCCESS\n";
 }
 
 
@@ -2002,4 +2034,156 @@ TEST(CuboidTopFace, InconsistentSteepFragmentsDoNotBecomeAnInclinedPlane)
   const auto map = arm_cell_vision::cuboid_geometry::build_plane_map(obs, profile(), operations, false);
   EXPECT_TRUE(std::none_of(map.recovered_inclined_regions.begin(), map.recovered_inclined_regions.end(),
     [](const auto & region) {return region.status == "mixed_or_inclined" && region.plane_fitted;}));
+}
+
+TEST(CuboidTopFace, ConfidenceFollowsObservedAreaDespiteUpperSurface)
+{
+  for (int half_width : {2, 5, 8}) {
+    auto obs = scene();
+    cuboid(obs, 0, 0);
+    for (int y = 120 - half_width; y <= 120 + half_width; ++y) {
+      for (int x = 120 - half_width; x <= 120 + half_width; ++x) {
+        obs.heights.at<double>(y, x) = 0.04;
+      }
+    }
+    const auto result = detect_cuboid_top_face(obs, profile(), true);
+    bool checked = false;
+    for (const auto & candidate : result.rawpart_candidate_diagnostics) {
+      if (std::abs(candidate.position_x_m) > 0.005 ||
+        std::abs(candidate.position_y_m) > 0.005) {continue;}
+      const std::string expected = candidate.coverage >= 0.8 ? "HIGH" :
+        candidate.coverage >= 0.55 ? "MEDIUM" : "LOW";
+      EXPECT_EQ(candidate.confidence_grade, expected);
+      checked = true;
+    }
+    EXPECT_TRUE(checked);
+  }
+}
+
+TEST(CuboidTopFace, OperationalAreaThresholdsControlCandidateEligibility)
+{
+  auto obs = scene();
+  cuboid(obs, 0, 0);
+  obs.heights(cv::Rect(115, 115, 11, 11)).setTo(0.04);
+  auto p = profile();
+  const auto initial = detect_cuboid_top_face(obs, p, true);
+  ASSERT_FALSE(initial.ordered_candidates.empty());
+  p.high_confidence_observed_area_ratio = 1.0;
+  const auto medium = detect_cuboid_top_face(obs, p, true);
+  ASSERT_FALSE(medium.ordered_candidates.empty());
+  EXPECT_EQ(medium.ordered_candidates.front().confidence_grade, "MEDIUM");
+  p.medium_confidence_observed_area_ratio = 1.0;
+  const auto low = detect_cuboid_top_face(obs, p, true);
+  EXPECT_TRUE(low.ordered_candidates.empty());
+  EXPECT_EQ(low.result_code, Code::DETECT_RESULT_GEOMETRY_ERROR);
+}
+
+TEST(CuboidTopFace, GroundSupportRejectsPenetratingUpperThickness)
+{
+  namespace g = arm_cell_vision::cuboid_geometry;
+  auto obs = scene();
+  g::Fit lower{}, upper{}, wrong{};
+  lower.candidate_id = 1; lower.top = 0.07; lower.face = {0.08, 0.07, 0.07, 0.01, 0.01};
+  lower.center = {0, 0}; lower.yaw = 0; lower.support_height_m = 0;
+  upper = lower; upper.candidate_id = 2; upper.top = 0.14;
+  upper.support_height_m.reset();
+  wrong = upper; wrong.candidate_id = 3; wrong.face.thickness = 0.08;
+  for (auto * fit : {&lower, &upper, &wrong}) {fit->mask = g::footprint(*fit, obs);}
+  size_t budget = 20000;
+  auto selections = g::select_hypotheses({lower, upper, wrong}, obs, profile(), budget);
+  EXPECT_EQ(selections.at(1).state, "SELECTED");
+  EXPECT_EQ(selections.at(2).state, "SELECTED");
+  EXPECT_NE(selections.at(3).state, "SELECTED");
+}
+
+TEST(CuboidTopFace, LocalP14ReplayPreservesSupportedLowerMaterial)
+{
+  const char * prefix = std::getenv("ARM_CELL_P14_REPLAY");
+  if (!prefix) {GTEST_SKIP() << "Set ARM_CELL_P14_REPLAY to a saved height grid prefix";}
+  CuboidHeightObservation obs{cv::Mat(161, 241, CV_64F), {-0.3, -0.2}, 0.0025,
+    cv::Mat(161, 241, CV_8U)};
+  std::ifstream grid(std::string(prefix) + ".height_grid.f64le", std::ios::binary);
+  ASSERT_TRUE(grid.read(reinterpret_cast<char *>(obs.heights.data), obs.heights.total() * 8));
+  std::ifstream mask(std::string(prefix) + ".image_boundary.u8", std::ios::binary);
+  ASSERT_TRUE(mask.read(reinterpret_cast<char *>(obs.image_boundary.data), obs.heights.total()));
+  auto p = profile();
+  p.dimensions_m = {0.07, 0.07, 0.08}; p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.workspace_roi_min_m = {-0.3, -0.2, 0.01}; p.workspace_roi_max_m = {0.3, 0.2, 1};
+  p.support_contact_tolerance_m = 0.01; p.top_surface_geometry_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003; p.cuboid.line_residual_limit_px = 1.25;
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  size_t upper_count = 0, lower_count = 0;
+  for (const auto & candidate : result.ordered_candidates) {
+    const auto & pos = candidate.target_pose.pose.position;
+    if (std::hypot(pos.x + 0.142, pos.y - 0.035) < 0.02 && pos.z > 0.12) {
+      ++upper_count;
+      EXPECT_NEAR(candidate.estimated_height_m, 0.07, 1e-6);
+      EXPECT_TRUE(candidate.is_stack_top);
+    }
+    if (std::hypot(pos.x + 0.207, pos.y - 0.046) < 0.02 && pos.z < 0.09) {
+      ++lower_count;
+    }
+  }
+  EXPECT_EQ(upper_count, 1U);
+  EXPECT_EQ(lower_count, 1U);
+  EXPECT_TRUE(std::any_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+    [](const auto & h) {
+      return h.patch_index == 120 && h.selection_state == "SELECTED" &&
+             h.tray_support_evidence == "direct_tray_support_confirmed";
+    }));
+}
+
+TEST(CuboidTopFace, ElevatedTopIsPrioritizedWithoutResolvedLowerObject)
+{
+  auto obs = scene();
+  cuboid(obs, 0, 0, 0, 0.09);
+  const auto result = detect_cuboid_top_face(obs, profile(), true);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  EXPECT_TRUE(result.ordered_candidates.front().is_stack_top);
+}
+
+TEST(CuboidTopFace, AdjacentTrayObservationConfirmsSupportInPlaneMap)
+{
+  auto obs = scene();
+  cuboid(obs, 0, 0);
+  const auto result = detect_cuboid_top_face(obs, profile(), true);
+  EXPECT_TRUE(std::any_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+    [](const auto & h) {
+      return h.selection_state == "SELECTED" &&
+             h.tray_support_evidence == "direct_tray_support_confirmed";
+    }));
+}
+
+TEST(CuboidTopFace, LocalLatestReplayHasConsistentUniqueCandidates)
+{
+  const char * prefix = std::getenv("ARM_CELL_LATEST_REPLAY");
+  if (!prefix) {GTEST_SKIP();}
+  CuboidHeightObservation obs{cv::Mat(161, 241, CV_64F), {-0.3, -0.2}, 0.0025,
+    cv::Mat(161, 241, CV_8U)};
+  std::ifstream grid(std::string(prefix) + ".height_grid.f64le", std::ios::binary);
+  ASSERT_TRUE(grid.read(reinterpret_cast<char *>(obs.heights.data), obs.heights.total() * 8));
+  std::ifstream mask(std::string(prefix) + ".image_boundary.u8", std::ios::binary);
+  ASSERT_TRUE(mask.read(reinterpret_cast<char *>(obs.image_boundary.data), obs.heights.total()));
+  auto p = profile(); p.dimensions_m = {0.07, 0.07, 0.08};
+  p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.workspace_roi_min_m = {-0.3, -0.2, 0.01}; p.workspace_roi_max_m = {0.3, 0.2, 1};
+  p.support_contact_tolerance_m = 0.01; p.top_surface_geometry_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003; p.cuboid.line_residual_limit_px = 1.25;
+  auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS);
+  ASSERT_FALSE(result.ordered_candidates.empty());
+  EXPECT_TRUE(std::any_of(result.ordered_candidates.begin(), result.ordered_candidates.end(),
+    [](const auto & candidate) {return candidate.rawpart_selected_candidate == "19";}));
+  for (size_t i = 0; i < result.ordered_candidates.size(); ++i) {
+    const auto & a = result.ordered_candidates[i];
+    if (a.orientation_symmetry_order == 2) {
+      EXPECT_GT(a.rectangle_long_side_m, a.rectangle_short_side_m);
+    }
+    for (size_t j = i + 1; j < result.ordered_candidates.size(); ++j) {
+      const auto & b = result.ordered_candidates[j];
+      const auto & x = a.target_pose.pose.position;
+      const auto & y = b.target_pose.pose.position;
+      EXPECT_FALSE(std::hypot(x.x-y.x, x.y-y.y) < 0.01 && std::abs(x.z-y.z)<0.003);
+    }
+  }
 }

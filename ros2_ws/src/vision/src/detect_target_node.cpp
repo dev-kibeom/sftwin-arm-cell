@@ -1215,6 +1215,10 @@ private:
       prefix + "support_contact_tolerance_m", 0.0);
     profile.top_surface_geometry_tolerance_m = declare_parameter<double>(
       prefix + "top_surface_geometry_tolerance_m", 0.0);
+    profile.high_confidence_observed_area_ratio = declare_parameter<double>(
+      prefix + "high_confidence_observed_area_ratio", 0.80);
+    profile.medium_confidence_observed_area_ratio = declare_parameter<double>(
+      prefix + "medium_confidence_observed_area_ratio", 0.55);
     profile.minimum_observation_coverage = declare_parameter<double>(
       prefix + "minimum_observation_coverage", 0.55);
     profile.fiducial_dictionary = declare_parameter<std::string>(

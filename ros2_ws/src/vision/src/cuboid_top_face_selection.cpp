@@ -14,7 +14,14 @@ namespace cuboid_geometry
 bool materially_overlaps(const Fit & a, const Fit & b, double spacing)
 {
   std::vector<cv::Point2f> intersection;
-  const double overlap = cv::intersectConvexConvex(corners(a), corners(b), intersection);
+  double overlap = 0;
+  if (!a.mask.empty() && !b.mask.empty() && a.mask.size() == b.mask.size()) {
+    cv::Mat interior;
+    cv::erode(a.mask & b.mask, interior, cv::Mat::ones(3, 3, CV_8U));
+    overlap = cv::countNonZero(interior) * spacing * spacing;
+  } else {
+    overlap = cv::intersectConvexConvex(corners(a), corners(b), intersection);
+  }
   const double one_cell_band = spacing * std::min(
     {a.face.length, a.face.width, b.face.length, b.face.width});
   return overlap > one_cell_band;
@@ -30,15 +37,9 @@ int compare_observation(
     obs.spacing_m / std::sqrt(2.0),
     profile.cuboid.line_residual_limit_px * obs.spacing_m);
   cv::Mat observed = cv::Mat::zeros(obs.heights.size(), CV_8U);
-  for (int y = 0; y < observed.rows; ++y) {
-    for (int x = 0; x < observed.cols; ++x) {
-      const double z = obs.heights.at<double>(y, x);
-      if (std::isfinite(z) &&
-        (within_height_tolerance(z, a.top, profile.cuboid.height_tolerance_m) ||
-        within_height_tolerance(z, b.top, profile.cuboid.height_tolerance_m)))
-      {
-        observed.at<uint8_t>(y, x) = 255;
-      }
+  for (const auto * fit : {&a, &b}) {
+    for (uint32_t id : fit->observed_cell_ids) {
+      observed.at<uint8_t>(id / obs.heights.cols, id % obs.heights.cols) = 255;
     }
   }
   cv::Mat core;
@@ -116,13 +117,30 @@ std::map<uint32_t, Selection> select_hypotheses(
     selections[fit.candidate_id] = {};
   }
   const double tolerance = profile.cuboid.height_tolerance_m;
+  std::set<uint32_t> contradicted;
+  for (const auto & lower : candidates) {
+    const bool supported = lower.support_height_m &&
+      std::abs(lower.top - lower.face.thickness - *lower.support_height_m) <=
+      profile.support_contact_tolerance_m;
+    if (!supported) {continue;}
+    for (const auto & upper : candidates) {
+      if (upper.top <= lower.top + tolerance ||
+        !materially_overlaps(upper, lower, obs.spacing_m)) {continue;}
+      if (upper.top - upper.face.thickness < lower.top - tolerance) {
+        contradicted.insert(upper.candidate_id);
+      }
+    }
+  }
+  for (uint32_t id : contradicted) {
+    selections[id].state = "REJECTED";
+    selections[id].reason = "modeled_volume_penetrates_observed_supported_material";
+  }
   for (size_t i = 0; i < candidates.size(); ++i) {
     for (size_t j = i + 1; j < candidates.size(); ++j) {
       const auto & a = candidates[i]; const auto & b = candidates[j];
-      if (!materially_overlaps(a, b, obs.spacing_m)) {continue;}
-      const double overlap_z = std::min(a.top, b.top) -
-        std::max(a.top - a.face.thickness, b.top - b.face.thickness);
-      if (overlap_z <= tolerance) {continue;}
+      if (contradicted.count(a.candidate_id) || contradicted.count(b.candidate_id) ||
+        !within_height_tolerance(a.top, b.top, tolerance) ||
+        !materially_overlaps(a, b, obs.spacing_m)) {continue;}
       auto & sa = selections[a.candidate_id]; auto & sb = selections[b.candidate_id];
       sa.competitors.push_back(b.candidate_id); sb.competitors.push_back(a.candidate_id);
       int comparison = 0;
@@ -139,7 +157,7 @@ std::map<uint32_t, Selection> select_hypotheses(
   // this compares hypotheses and never searches combinations of object layouts.
   std::set<uint32_t> active;
   for (const auto & fit : candidates) {
-    active.insert(fit.candidate_id);
+    if (!contradicted.count(fit.candidate_id)) {active.insert(fit.candidate_id);}
   }
   while (!active.empty()) {
     std::vector<uint32_t> roots;

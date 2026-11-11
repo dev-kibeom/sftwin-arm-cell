@@ -684,7 +684,7 @@ TEST(RawPartDetectTarget, UniqueRoiAndCameraClippedGeometryIsMedium)
     << clipped_result.diagnostic_detail;
   EXPECT_FALSE(clipped_result.ordered_candidates.empty());
   EXPECT_EQ(clipped_result.ordered_candidates.at(0).confidence_grade, "MEDIUM");
-  EXPECT_EQ(outside_result.ordered_candidates.at(0).confidence_grade, "MEDIUM");
+  EXPECT_EQ(outside_result.ordered_candidates.at(0).confidence_grade, "HIGH");
   EXPECT_FALSE(clipped_result.ordered_candidates.at(0).has_observed_rectangle);
 }
 

@@ -87,6 +87,7 @@ struct PlaneRegion
   cv::Mat cells;
   std::vector<cv::Point> pixels;
   std::string status;
+  std::shared_ptr<const std::vector<PlaneRegion>> support_planes;
 };
 // Identity and scalar observation statistics of an existing outline/partition.
 // No disturbance-specific masks or cell collections are retained.
