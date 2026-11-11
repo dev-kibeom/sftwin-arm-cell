@@ -1,6 +1,7 @@
 #include "arm_cell_vision/cuboid_top_face.hpp"
 #include "cuboid_top_face_geometry.hpp"
 #include "cuboid_unresolved.hpp"
+#include "inclined_cuboid.hpp"
 
 #include <algorithm>
 #include <array>
@@ -543,7 +544,8 @@ DetectionResult detect_cuboid_top_face(
   result.cuboid_stages.push_back(std::move(eligibility_stage));
   const cv::Mat missing = (models.empty() && accepted.empty()) ?
     cv::Mat() : missing_depth(obs.heights);
-  if (accepted.empty()) {
+  append_inclined_cuboids(result, plane_map, obs, profile, next_candidate_id, search_operations);
+  if (accepted.empty() && result.ordered_candidates.empty()) {
     const bool final_geometry_unresolved = std::any_of(
       result.cuboid_planes.begin(), result.cuboid_planes.end(),
       [](const auto & patch) {
@@ -731,6 +733,20 @@ DetectionResult detect_cuboid_top_face(
     if (candidate.confidence_grade != "LOW") {
       result.ordered_candidates.push_back(std::move(candidate));
     }
+  }
+  reconcile_cuboid_volumes(result, profile.cuboid.height_tolerance_m);
+  result.rawpart_profile_match_count = result.ordered_candidates.size();
+  result.rawpart_candidate_count = result.ordered_candidates.size();
+  for (auto & stage : result.cuboid_stages) {
+    if (stage.stage == "candidate_enumeration") {
+      stage.input_count = result.ordered_candidates.size();
+      stage.output_count = result.ordered_candidates.size();
+      stage.auxiliary_counts["enumerated_candidates"] = result.ordered_candidates.size();
+    }
+  }
+  if (std::any_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+      [](const auto & h) {return !h.reference_face_corners.empty();})) {
+    result.rawpart_candidate_generation = "plane_map_cuboid_geometry_qualified";
   }
   inherit_normalized_confidence(result.cuboid_hypotheses);
   append_disturbance_regions(result, plane_map.outlines, partitions, obs, profile);

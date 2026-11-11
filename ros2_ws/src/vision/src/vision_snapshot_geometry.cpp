@@ -450,8 +450,17 @@ void render_geometry(
               h.selection_state == "UNRESOLVED" ? cv::Scalar(220, 180, 90) :
               h.selection_state == "ALTERNATIVE" ? cv::Scalar(190, 130, 200) : patch_color(h.candidate_id);
             const auto color = selected ? base : base * 0.55;
-            draw_rect(all_hypotheses, h.center_x_m, h.center_y_m, h.yaw_rad,
-              h.length_m, h.width_m, color, selected ? 3 : 1);
+            if (h.reference_face_corners.size() == 4) {
+              for (size_t i = 0; i < 4; ++i) {
+                const auto & a = h.reference_face_corners[i];
+                const auto & b = h.reference_face_corners[(i + 1) % 4];
+                evidence_line(all_hypotheses, point_on_map(a.x, a.y), point_on_map(b.x, b.y),
+                  color, true, selected ? 3 : 1);
+              }
+            } else {
+              draw_rect(all_hypotheses, h.center_x_m, h.center_y_m, h.yaw_rad,
+                h.length_m, h.width_m, color, selected ? 3 : 1);
+            }
             cv::drawMarker(all_hypotheses, point_on_map(h.anchor_x_m, h.anchor_y_m),
               selected ? anchor_color : anchor_color * 0.45, cv::MARKER_CROSS,
               selected ? 7 : 5, 1, cv::LINE_AA);

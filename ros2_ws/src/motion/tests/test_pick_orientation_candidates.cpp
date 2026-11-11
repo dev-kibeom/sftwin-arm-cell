@@ -864,3 +864,42 @@ TEST(PickGraspClearance, ZeroIsIdentityAndInvalidRequestIsRejected)
       pose, axis,
       std::numeric_limits<double>::quiet_NaN()), std::invalid_argument);
 }
+namespace arm_cell_motion
+{
+TEST(PickGraspSearch, InclinedObjectWithdrawalUsesTrayVertical)
+{
+  const Eigen::Quaterniond object(Eigen::AngleAxisd(0.7, Eigen::Vector3d::UnitY()));
+  const auto reference = object * Eigen::Quaterniond(
+    Eigen::AngleAxisd(
+      kPi,
+      Eigen::Vector3d::UnitX()));
+  const auto candidates = generate_pick_grasp_search_candidates(
+    object, reference, Eigen::Vector3d::Zero(), Eigen::Vector3d(0.5, 0, 0),
+    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.0745, 60, 85, 85,
+    PickGraspSearchSampling{50, 0, 1, 8, 48});
+  ASSERT_FALSE(candidates.empty());
+  for (const auto & candidate : candidates) {
+    const Eigen::Vector3d withdrawal = -(candidate.tcp_orientation * Eigen::Vector3d::UnitZ());
+    const double expected = std::acos(std::clamp(withdrawal.z(), -1.0, 1.0));
+    EXPECT_NEAR(candidate.withdrawal_tilt_rad, expected, 1e-12);
+    EXPECT_LE(expected, 50 * kPi / 180 + 1e-9);
+  }
+}
+
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST(PickOrientationCandidates, InclinedSymmetryPreservesObservedFaceNormal)
+{
+  const Eigen::Quaterniond object = Eigen::AngleAxisd(0.6, Eigen::Vector3d::UnitY()) *
+    Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitX());
+  const Eigen::Vector3d normal = object * Eigen::Vector3d::UnitZ();
+  for (const auto & q : twofold_pick_orientations(object)) {
+    EXPECT_LT((q * Eigen::Vector3d::UnitZ() - normal).norm(), 1e-12);
+  }
+  for (const auto & q : fourfold_pick_orientations(object)) {
+    EXPECT_LT((q * Eigen::Vector3d::UnitZ() - normal).norm(), 1e-12);
+  }
+}
+}

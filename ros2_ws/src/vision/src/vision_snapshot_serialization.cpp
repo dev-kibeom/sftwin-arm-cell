@@ -1113,6 +1113,13 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
         ",\"dimensions_m\":[" << candidate.length_m << ',' << candidate.width_m << ',' <<
         candidate.thickness_m << "],\"observed_area_ratio\":" <<
         candidate.observed_area_ratio;
+      json << ",\"reference_face_corners_m\":[";
+      for (size_t corner = 0; corner < candidate.reference_face_corners.size(); ++corner) {
+        if (corner) {json << ',';}
+        const auto & p = candidate.reference_face_corners[corner];
+        json << '[' << p.x << ',' << p.y << ',' << p.z << ']';
+      }
+      json << ']';
       json << ",\"parallel_edge_distances_m\":[";
       for (size_t side = 0; side < candidate.parallel_edge_distances_m.size(); ++side) {
         if (side) {json << ',';}

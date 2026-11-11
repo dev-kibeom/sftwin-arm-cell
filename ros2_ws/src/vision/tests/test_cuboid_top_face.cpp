@@ -15,6 +15,7 @@
 #include "arm_cell_vision/cuboid_top_face.hpp"
 #include "../src/cuboid_top_face_geometry.hpp"
 #include "../src/cuboid_unresolved.hpp"
+#include "../src/inclined_cuboid.hpp"
 
 namespace
 {
@@ -2186,4 +2187,201 @@ TEST(CuboidTopFace, LocalLatestReplayHasConsistentUniqueCandidates)
       EXPECT_FALSE(std::hypot(x.x-y.x, x.y-y.y) < 0.01 && std::abs(x.z-y.z)<0.003);
     }
   }
+}
+TEST(CuboidInclined, SingleFaceRecoversMetricDimensionsAndTilt)
+{
+  auto obs = scene();
+  const double pitch = 0.45, top = 0.06;
+  for (int r = 0; r < obs.heights.rows; ++r) {
+    for (int c = 0; c < obs.heights.cols; ++c) {
+      const auto xy = obs.origin + cv::Point2d(c, r) * obs.spacing_m;
+      if (std::abs(xy.x) <= 0.04 * std::cos(pitch) && std::abs(xy.y) <= 0.025) {
+        obs.heights.at<double>(r, c) = top - std::tan(pitch) * xy.x;
+      }
+    }
+  }
+  const auto result = detect_cuboid_top_face(obs, profile());
+  ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  const auto & candidate = result.ordered_candidates.front();
+  EXPECT_NEAR(candidate.rectangle_long_side_m, 0.08, 1e-6);
+  EXPECT_NEAR(candidate.rectangle_short_side_m, 0.05, 1e-6);
+  EXPECT_NEAR(candidate.estimated_height_m, 0.03, 1e-6);
+  const auto & q = candidate.target_pose.pose.orientation;
+  EXPECT_NEAR(2 * (q.x * q.z + q.w * q.y), std::sin(pitch), 0.02);
+  EXPECT_NEAR(1 - 2 * (q.x * q.x + q.y * q.y), std::cos(pitch), 0.02);
+  EXPECT_NEAR(candidate.target_pose.pose.position.z, top, 0.003);
+  EXPECT_EQ(candidate.confidence_grade, "HIGH");
+}
+
+namespace
+{
+void add_observed_face(
+  arm_cell_vision::cuboid_geometry::PlaneMap & map, const CuboidHeightObservation & obs,
+  cv::Vec3d center, cv::Vec3d x, cv::Vec3d y, double length, double width)
+{
+  using namespace arm_cell_vision::cuboid_geometry;
+  PlaneRegion plane;
+  plane.source_boundary_id = map.regions.size() + 1;
+  plane.normal = x.cross(y);
+  plane.center_height = {center[0], center[1], center[2]};
+  plane.plane_fitted = true; plane.status = "mixed_or_inclined";
+  plane.height = center[2];
+  ContourEvidence contour;
+  contour.outline_id = 1;
+  std::vector<cv::Vec3d> corners;
+  for (const auto & s : std::array<cv::Point2d, 4>{{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}}) {
+    const auto p = center + x * (s.x * length / 2) + y * (s.y * width / 2);
+    corners.push_back(p);
+    contour.points.emplace_back(
+      std::lround((p[0] - obs.origin.x) / obs.spacing_m),
+      std::lround((p[1] - obs.origin.y) / obs.spacing_m));
+  }
+  contour.vertices = contour.points;
+  for (size_t i = 0; i < 4; ++i) {
+    Segment line;
+    line.first = {corners[i][0], corners[i][1]};
+    line.last = {corners[(i + 1) % 4][0], corners[(i + 1) % 4][1]};
+    contour.lines.push_back(line);
+  }
+  plane.pixels.resize(
+    static_cast<size_t>(length * width * plane.normal[2] /
+    (obs.spacing_m * obs.spacing_m)));
+  map.regions.push_back(std::move(plane));
+  map.region_contours.push_back({contour});
+}
+}
+
+TEST(CuboidInclined, MultipleFacesMergeWithoutReadingDepthCells)
+{
+  using namespace arm_cell_vision::cuboid_geometry;
+  CuboidHeightObservation obs{cv::Mat(
+      1, 1, CV_64F,
+      cv::Scalar(std::numeric_limits<double>::quiet_NaN())), {-0.2, -0.2}, 0.00025, {}};
+  const double pitch = 0.45, roll = 0.4;
+  const cv::Vec3d x(std::cos(pitch), 0, -std::sin(pitch));
+  const cv::Vec3d y(std::sin(pitch) * std::sin(roll), std::cos(roll),
+    std::cos(pitch) * std::sin(roll));
+  const cv::Vec3d z = x.cross(y), center(0, 0, 0.1);
+  PlaneMap map;
+  add_observed_face(map, obs, center + z * 0.015, x, y, 0.08, 0.05);
+  add_observed_face(map, obs, center + y * 0.025, -x, z, 0.08, 0.03);
+  DetectionResult result;
+  uint32_t next = 1; size_t budget = 20000;
+  append_inclined_cuboids(result, map, obs, profile(), next, budget);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  const auto & candidate = result.ordered_candidates.front();
+  const auto & q = candidate.target_pose.pose.orientation;
+  const cv::Vec3d normal(2 * (q.x * q.z + q.w * q.y),
+    2 * (q.y * q.z - q.w * q.x), 1 - 2 * (q.x * q.x + q.y * q.y));
+  const auto & p = candidate.target_pose.pose.position;
+  EXPECT_LT(
+    cv::norm(
+      cv::Vec3d(
+        p.x, p.y,
+        p.z) - normal * (candidate.estimated_height_m / 2) - center), 0.001);
+  EXPECT_EQ(candidate.confidence_grade, "HIGH");
+  EXPECT_EQ(result.cuboid_hypotheses.size(), 2U);
+}
+
+TEST(CuboidInclined, ExhaustedSearchDoesNotReturnPartialResults)
+{
+  using namespace arm_cell_vision::cuboid_geometry;
+  auto obs = scene();
+  const cv::Vec3d x(std::cos(0.4), 0, -std::sin(0.4)), y(0, 1, 0);
+  PlaneMap map;
+  add_observed_face(map, obs, {0, 0, 0.08}, x, y, 0.08, 0.05);
+  DetectionResult result;
+  uint32_t next = 1; size_t budget = 1;
+  append_inclined_cuboids(result, map, obs, profile(), next, budget);
+  EXPECT_TRUE(result.ordered_candidates.empty());
+}
+
+TEST(CuboidInclined, PartialFaceUsesFaceAreaForMediumConfidence)
+{
+  using namespace arm_cell_vision::cuboid_geometry;
+  CuboidHeightObservation obs{cv::Mat(), {-0.2, -0.2}, 0.00025, {}};
+  const cv::Vec3d x(std::cos(0.4), 0, -std::sin(0.4)), y(0, 1, 0), center(0, 0, 0.08);
+  PlaneMap map;
+  add_observed_face(map, obs, center, x, y, 0.08, 0.05);
+  auto & contour = map.region_contours[0][0];
+  contour.points.clear(); contour.lines.clear();
+  const std::vector<cv::Point2d> local{{-0.04, -0.025}, {0.04, -0.025}, {0.04, -0.005},
+    {0, -0.005}, {0, 0.025}, {-0.04, 0.025}};
+  for (size_t i = 0; i < local.size(); ++i) {
+    const auto a = center + x * local[i].x + y * local[i].y;
+    const auto b = center + x * local[(i + 1) % local.size()].x + y *
+      local[(i + 1) % local.size()].y;
+    contour.points.emplace_back(
+      std::lround((a[0] - obs.origin.x) / obs.spacing_m),
+      std::lround((a[1] - obs.origin.y) / obs.spacing_m));
+    Segment line; line.first = {a[0], a[1]}; line.last = {b[0], b[1]};
+    contour.lines.push_back(line);
+  }
+  contour.vertices = contour.points;
+  DetectionResult result; uint32_t next = 1; size_t budget = 20000;
+  append_inclined_cuboids(result, map, obs, profile(), next, budget);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  EXPECT_EQ(result.ordered_candidates.front().confidence_grade, "MEDIUM");
+  EXPECT_FALSE(result.ordered_candidates.front().has_observed_rectangle);
+}
+
+TEST(CuboidInclined, ModeledSolidBelowTrayIsNotEligible)
+{
+  using namespace arm_cell_vision::cuboid_geometry;
+  auto obs = scene();
+  const cv::Vec3d x(std::cos(0.4), 0, -std::sin(0.4)), y(0, 1, 0);
+  PlaneMap map;
+  add_observed_face(map, obs, {0, 0, 0.005}, x, y, 0.08, 0.05);
+  DetectionResult result; uint32_t next = 1; size_t budget = 20000;
+  append_inclined_cuboids(result, map, obs, profile(), next, budget);
+  EXPECT_TRUE(result.ordered_candidates.empty());
+}
+
+TEST(CuboidInclined, FullDetectorMergesThreeVisibleFacesAndKeepsIndependentHorizontalPart)
+{
+  auto obs = scene();
+  const double pitch = 0.4, roll = 0.35;
+  const cv::Vec3d x(std::cos(pitch), 0, -std::sin(pitch));
+  const cv::Vec3d y(std::sin(pitch) * std::sin(roll), std::cos(roll),
+    std::cos(pitch) * std::sin(roll));
+  const cv::Vec3d z = x.cross(y), center(-0.1, 0, 0.07);
+  const std::array<cv::Vec3d, 3> axes{x, y, z};
+  const std::array<double, 3> lengths{0.08, 0.05, 0.03};
+  for (int r = 0; r < obs.heights.rows; ++r) {
+    for (int c = 0; c < obs.heights.cols; ++c) {
+      const auto xy = obs.origin + cv::Point2d(c, r) * obs.spacing_m;
+      for (int face_axis = 0; face_axis < 3; ++face_axis) {
+        const auto normal = axes[face_axis] * (axes[face_axis][2] > 0 ? 1 : -1);
+        if (normal[2] < 1e-6) {continue;}
+        const auto fc = center + normal * (lengths[face_axis] / 2);
+        const double height = fc[2] - (normal[0] * (xy.x - fc[0]) + normal[1] * (xy.y - fc[1])) /
+          normal[2];
+        const cv::Vec3d delta = cv::Vec3d(xy.x, xy.y, height) - center;
+        bool inside = true;
+        for (int i = 0; i < 3; ++i) {
+          inside &= std::abs(delta.dot(axes[i])) <= lengths[i] / 2 + 1e-9;
+        }
+        if (inside) {obs.heights.at<double>(r, c) = std::max(obs.heights.at<double>(r, c), height);}
+      }
+    }
+  }
+  cuboid(obs, 0.12, 0);
+  const auto result = detect_cuboid_top_face(obs, profile());
+  ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS);
+  for (const auto & p : result.cuboid_planes) {
+    std::cerr << "PLANE " << p.plane_status << " " << p.cell_count << " " << p.fitted_edge_count <<
+      " normal " << p.plane_normal[0] << " " << p.plane_normal[1] << " " << p.plane_normal[2] <<
+      "\n";
+  }
+  for (const auto & h : result.cuboid_hypotheses) {
+    std::cerr << "H " << h.candidate_id << " " << h.selection_state << " " << h.confidence_grade <<
+      " " << h.center_x_m << " " << h.center_y_m << " " << h.height_m << " " << h.length_m << " " <<
+      h.width_m << " " << h.selection_reason << "\n";
+  }
+  ASSERT_EQ(result.ordered_candidates.size(), 2U) << result.diagnostic_detail;
+  EXPECT_EQ(
+    std::count_if(
+      result.ordered_candidates.begin(), result.ordered_candidates.end(),
+      [](const auto & c) {return c.target_pose.pose.position.x < 0;}), 1);
 }
