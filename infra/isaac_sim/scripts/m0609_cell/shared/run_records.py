@@ -41,7 +41,8 @@ def remove_empty_run(run_root):
         pass
 
 
-_RUN_DIRECTORIES = {}
+# Script Editor reloads helpers between scene initialization and first Play.
+_RUN_DIRECTORIES = globals().get("_RUN_DIRECTORIES", {})
 
 
 def standalone_run_directory(artifact_root):
@@ -62,6 +63,34 @@ def standalone_run_directory(artifact_root):
                 suffix += 1
         _RUN_DIRECTORIES[key] = candidate
     return _RUN_DIRECTORIES[key]
+
+
+def pending_standalone_run_directory(artifact_root, diagnostic):
+    """Find only this process's cached run that has not become a live session."""
+    key = (os.getpid(), Path(artifact_root).resolve())
+    run_root = _RUN_DIRECTORIES.get(key)
+    if run_root is None:
+        return None
+    try:
+        data = json.loads((run_root / diagnostic / "session.json").read_text())
+    except (OSError, ValueError):
+        return None
+    if (
+        isinstance(data, dict)
+        and data.get("owner_pid") == os.getpid()
+        and data.get("session_association") == "unassociated"
+        and data.get("session_id") is None
+        and data.get("status") is None
+    ):
+        return run_root
+    return None
+
+
+def release_standalone_run_directory(artifact_root, run_root):
+    """Retire initialization state only after its live descriptor is persisted."""
+    key = (os.getpid(), Path(artifact_root).resolve())
+    if _RUN_DIRECTORIES.get(key) == run_root:
+        del _RUN_DIRECTORIES[key]
 
 
 def diagnostic_component_directory(checkout, component):

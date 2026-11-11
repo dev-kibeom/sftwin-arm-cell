@@ -7,7 +7,12 @@ from pathlib import Path
 import subprocess
 import uuid
 
-from shared.run_records import record_directory_name, remove_empty_run
+from shared.run_records import (
+    pending_standalone_run_directory,
+    record_directory_name,
+    release_standalone_run_directory,
+    remove_empty_run,
+)
 from datetime import datetime
 
 
@@ -73,20 +78,24 @@ class LiveTestSession:
         project_root = Path(
             os.environ.get("SFTWIN_PROJECT_ROOT", Path(artifact_root).resolve().parent)
         )
-        parent = Path(artifact_root) / now.strftime("%Y%m%d")
-        parent.mkdir(parents=True, exist_ok=True)
-        base = now.strftime("%H%M%S")
-        suffix = 0
-        while True:
-            run_root = parent / (base + (f"-{suffix:02d}" if suffix else ""))
-            try:
-                run_root.mkdir()
-                break
-            except FileExistsError:
-                suffix += 1
+        diagnostic = record_directory_name(project_root, "diagnostic")
+        initialized_run = pending_standalone_run_directory(artifact_root, diagnostic)
+        run_root = initialized_run
+        if run_root is None:
+            parent = Path(artifact_root) / now.strftime("%Y%m%d")
+            parent.mkdir(parents=True, exist_ok=True)
+            base = now.strftime("%H%M%S")
+            suffix = 0
+            while True:
+                run_root = parent / (base + (f"-{suffix:02d}" if suffix else ""))
+                try:
+                    run_root.mkdir()
+                    break
+                except FileExistsError:
+                    suffix += 1
+        candidate = run_root / diagnostic
         try:
-            candidate = run_root / record_directory_name(project_root, "diagnostic")
-            candidate.mkdir(parents=True)
+            candidate.mkdir(parents=True, exist_ok=initialized_run is not None)
             self.root = candidate
             self.descriptor = candidate / "session.json"
             self.data = {
@@ -144,13 +153,16 @@ class LiveTestSession:
                 },
             }
             self._write()
+            if initialized_run is not None:
+                release_standalone_run_directory(artifact_root, initialized_run)
         except (OSError, ValueError):
             temporary = candidate / "session.json.tmp"
             try:
                 temporary.unlink(missing_ok=True)
             except OSError:
                 pass
-            remove_empty_run(run_root)
+            if initialized_run is None:
+                remove_empty_run(run_root)
             raise
 
     def _write(self):
