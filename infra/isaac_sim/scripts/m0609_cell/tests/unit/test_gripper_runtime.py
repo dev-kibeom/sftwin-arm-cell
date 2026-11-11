@@ -911,13 +911,13 @@ def test_session_diagnostics_opt_in_initializes_physx_observer(monkeypatch, capl
     assert session.capture_diagnostics_enabled is True
     assert isinstance(session.physx_observer, _Observer)
     assert prepared == [""]
-    assert writer_paths == [
-        Path(__file__).resolve().parents[6]
-        / ".run_records"
-        / "diagnostic_records"
-        / "unassociated"
-        / "gripper"
-    ]
+    import re
+    from shared.run_records import run_records_root
+    assert len(writer_paths) == 1
+    relative = writer_paths[0].relative_to(run_records_root(Path(__file__).resolve().parents[6]))
+    assert re.fullmatch(r"\d{8}", relative.parts[0])
+    assert re.fullmatch(r"\d{6}(?:-\d{2,})?", relative.parts[1])
+    assert relative.parts[2:] == ("diagnostic", "gripper")
     diagnostic_init = [
         record
         for record in caplog.records

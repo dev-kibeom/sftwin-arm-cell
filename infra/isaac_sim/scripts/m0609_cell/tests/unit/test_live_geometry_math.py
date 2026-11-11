@@ -1,3 +1,4 @@
+from pathlib import Path
 import math
 
 from live_geometry_acceptance import (
@@ -73,7 +74,13 @@ def test_geometry_diagnostic_default_is_repo_local_and_override_creates_parent(
     from live_geometry_acceptance import diagnostic_output_directory
 
     default = diagnostic_output_directory()
-    assert str(default).endswith(".run_records/diagnostic/live_geometry_acceptance")
+    import re
+    from shared.run_records import run_records_root
+    checkout = Path(__file__).resolve().parents[6]
+    relative = default.relative_to(run_records_root(checkout))
+    assert re.fullmatch(r"\d{8}", relative.parts[0])
+    assert re.fullmatch(r"\d{6}(?:-\d{2,})?", relative.parts[1])
+    assert relative.parts[2:] == ("diagnostic", "live_geometry_acceptance")
     override = diagnostic_output_directory(tmp_path / "nested" / "diagnostics")
     assert override == tmp_path / "nested" / "diagnostics"
     assert override.is_dir()
