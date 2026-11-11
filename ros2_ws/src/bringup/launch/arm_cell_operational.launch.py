@@ -604,7 +604,12 @@ def compose(context):
     config = yaml.safe_load(profile_path.read_text()) or {}
     material_handoff_config = dict(config.get("material_handoff", {}))
     motion_parameters = profile_parameters(config, "motion")
-    trajectory_file = Path(motion_parameters["place_waypoint_trajectory_file"])
+    configured_trajectory = motion_parameters.get("place_waypoint_trajectory_file")
+    trajectory_file = (
+        Path(configured_trajectory)
+        if configured_trajectory
+        else artifact_directory / "trajectories/place_waypoint_home_to_place.json"
+    )
     if not trajectory_file.is_absolute():
         trajectory_file = project_checkout_root() / trajectory_file
     motion_parameters["place_waypoint_trajectory_file"] = str(trajectory_file.resolve())
@@ -806,12 +811,12 @@ def compose(context):
             on_shutdown=[OpaqueFunction(function=finish_recording_session,
                                         args=[live_session_root])]
         )))
-    if live_session_root and not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
+    if not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
         actions.insert(
             1,
             SetEnvironmentVariable(
                 "ARM_CELL_PICK_EXECUTION_RECORD_DIR",
-                str(live_session_root / "motion" / "pick_execution_records"),
+                str(motion_artifact_directory / "pick_execution_records"),
             ),
         )
 

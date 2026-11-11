@@ -126,7 +126,7 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     parameters = _node_parameters(nodes["motion_node"])
     configured = {key: parameters[key] for key in motion}
     assert parameters["place_waypoint_trajectory_file"].endswith(
-        motion["place_waypoint_trajectory_file"]
+        ".run_records/trajectories/place_waypoint_home_to_place.json"
     )
     configured.pop("place_waypoint_trajectory_file")
     expected_motion = dict(motion)
@@ -1073,3 +1073,27 @@ def test_session_indexes_selected_calibration_and_camera_topics(tmp_path):
     assert data["camera"]["camera_id"] == "real_d455_01"
     assert data["camera"]["vision_calibration"]["path"] == str(calibration)
     assert data["camera"]["vision_calibration"]["sha256"] == hashlib.sha256(calibration.read_bytes()).hexdigest()
+
+
+def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):
+    checkout = Path(os.environ["SFTWIN_PROJECT_ROOT"])
+    (checkout / "config").mkdir()
+    (checkout / "config/run_records.yaml").write_text("root: output/records\n")
+    root = checkout / "output/records"
+    module = _load_launch_module()
+    monkeypatch.delenv("ARM_CELL_PICK_EXECUTION_RECORD_DIR", raising=False)
+    monkeypatch.setattr(module, "join_live_test_session", lambda _: None)
+    monkeypatch.setattr(module, "create_recording_session", lambda *args: None)
+
+    actions = _composed_nodes(module=module)
+    motion = _node_parameters(_project_nodes(actions)["motion_node"])
+    assert motion["place_waypoint_trajectory_file"] == str(
+        root / "trajectories/place_waypoint_home_to_place.json"
+    )
+    context = LaunchContext()
+    for action in actions:
+        if isinstance(action, SetEnvironmentVariable):
+            action.execute(context)
+    assert context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"] == str(
+        root / "diagnostic_records/unassociated/motion/pick_execution_records"
+    )

@@ -216,7 +216,8 @@ motion:
   place_waypoint_approach_distance_m: 0.015
   place_waypoint_approach_direction_object: [0.0, 0.0, 1.0]
   # Generated explicitly by the Motion service; runtime only loads this file.
-  place_waypoint_trajectory_file: .run_records/trajectories/place_waypoint_home_to_place.json
+  # Default trajectory file is relative to the configured run records root.
+  place_waypoint_trajectory_file: ""
   # Fixed PLACE area from the current RawPart operating recipe; WAYPOINT uses
   # this stable area without depending on the picked object's grasp relation.
   # Values are object xyz followed by quaternion xyzw in base_link.
