@@ -256,3 +256,9 @@ RANSAC 없이 기존 연결 영역·최소제곱 평면·로컬 평면 분리를
 경사 후보의 Object Reference는 선택된 복원 기준 면의 전체 중심이며, 로컬 X/Y는 장변/단변, +Z는 바깥쪽 법선이다. BOX 중심은 `p_reference - R*[0,0,t/2]`다. 관측 부분의 무게중심으로 전체 면 중심을 대체하지 않는다. 치수는 공칭 복원값이며 `has_observed_rectangle=false`로 인계한다. 실제 면 꼭짓점은 3D 진단에 보존한다. Heightmap으로 관측할 수 없는 수직 면이나 근거가 부족한 얇은 투영은 미해결로 남는다.
 
 Motion은 기존 quaternion·면 치수·두께 인계를 사용한다. 자재 대칭은 자재 로컬 Z축에 오른쪽 곱으로 적용해 법선을 보존한다. 배포된 수평 Tray의 인출 제한 법선은 base_link +Z이며 자재 법선으로 회전시키지 않는다. 파지 접촉·IK·충돌·인출은 Motion의 기존 유한 탐색으로 검증한다.
+
+### Tray 경계에 걸친 관측과 관측 평면 후보
+
+Tray는 관측 영역 선택 기준이며 Height Grid의 절단 경계가 아니다. Tray 바닥을 높이 기준으로 유지하고, 기존 Support 허용오차보다 아래인 깊이는 Grid 생성에서 제거한다. 카메라가 관측한 바닥 위 영역까지 Grid를 확장하고, Tray 내부와 일부라도 겹치는 높이 연결 영역의 외곽 연속 부분을 Boundary Extraction과 Plane Map에 그대로 전달한다. Tray 외곽에서 인위적인 자재 외곽선을 만들지 않는다. Grid의 기존 메모리 상한은 유지한다.
+
+Recipe 기반 전체 객체의 서로 다른 자세 해석이 미해결이어도 실제 관측 평면의 Pose와 Geometry를 확정할 수 있으면 Vision이 해당 평면을 후보로 반환한다. 현재 이 경로는 같은 Outline의 수평 평면에서, 경쟁 가설의 Own Thickness가 일치하고 상부 가림이 없으며 반환 직사각형의 모든 Grid 셀이 실제 관측 평면에 포함되는 경우에 한정한다. 빈 공간·미관측 영역을 Bounding Rectangle로 채우지 않는다. 반환 XY Geometry는 관측 평면이며 전체 Recipe Footprint를 확정한 것으로 취급하지 않는다. 두께 근거는 `observed_plane_with_agreed_material_thickness`, 선택·Confidence 근거는 `observed_plane_geometry_resolved`로 보존한다. 전체 객체의 경쟁 가설은 UNRESOLVED 진단에 유지한다. Vision의 Geometry 적격성, Motion의 파지·접근·충돌·경로 판단 및 Orchestration의 작업 진행 책임은 유지한다.
