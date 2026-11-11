@@ -272,11 +272,11 @@ std::vector<std::size_t> rank_place_approach_candidates(
 
     const bool duplicate = std::any_of(
       unique_candidates.begin(), unique_candidates.end(), [&](std::size_t earlier_index) {
-      return wrap_equivalent(
+        return wrap_equivalent(
           candidate.normalized_goal, candidates[earlier_index].normalized_goal,
           joint_limits, duplicate_tolerance_rad) &&
-             candidate.object_pose_candidate_index ==
-             candidates[earlier_index].object_pose_candidate_index;
+        candidate.object_pose_candidate_index ==
+        candidates[earlier_index].object_pose_candidate_index;
       });
     if (duplicate) {
       candidate.duplicate_rejected = true;
@@ -292,11 +292,11 @@ std::vector<std::size_t> rank_place_approach_candidates(
   std::stable_sort(
     ranked.begin(), ranked.end(), [&](std::size_t left, std::size_t right) {
       const auto left_orientation_error =
-        candidates[left].tool_orientation_preference_error_rad;
+      candidates[left].tool_orientation_preference_error_rad;
       const auto right_orientation_error =
-        candidates[right].tool_orientation_preference_error_rad;
+      candidates[right].tool_orientation_preference_error_rad;
       if (left_orientation_error && right_orientation_error &&
-        *left_orientation_error != *right_orientation_error)
+      *left_orientation_error != *right_orientation_error)
       {
         return *left_orientation_error < *right_orientation_error;
       }
@@ -328,12 +328,12 @@ std::vector<std::size_t> order_place_approach_candidate_specs(
       const auto & lhs = candidates[left];
       const auto & rhs = candidates[right];
       if (lhs.tool_orientation_preference_error_rad &&
-        rhs.tool_orientation_preference_error_rad &&
-        *lhs.tool_orientation_preference_error_rad !=
-        *rhs.tool_orientation_preference_error_rad)
+      rhs.tool_orientation_preference_error_rad &&
+      *lhs.tool_orientation_preference_error_rad !=
+      *rhs.tool_orientation_preference_error_rad)
       {
         return *lhs.tool_orientation_preference_error_rad <
-               *rhs.tool_orientation_preference_error_rad;
+        *rhs.tool_orientation_preference_error_rad;
       }
       if (lhs.nominal_pose_deviation != rhs.nominal_pose_deviation) {
         return lhs.nominal_pose_deviation < rhs.nominal_pose_deviation;
@@ -361,7 +361,8 @@ PlaceApproachPlanResult plan_ranked_place_approach_candidates(
     candidate_limit == 0U || policy.planning_requests_per_candidate == 0U ||
     !std::isfinite(policy.per_candidate_planning_budget_s) ||
     policy.per_candidate_planning_budget_s <= 0.0 ||
-    !std::isfinite(policy.total_planning_budget_s) || policy.total_planning_budget_s <= 0.0)
+    (!policy.count_bounded_search &&
+    (!std::isfinite(policy.total_planning_budget_s) || policy.total_planning_budget_s <= 0.0)))
   {
     return result;
   }
@@ -374,7 +375,8 @@ PlaceApproachPlanResult plan_ranked_place_approach_candidates(
     for (std::size_t request_index = 1U;
       request_index <= policy.planning_requests_per_candidate; ++request_index)
     {
-      const double remaining_s = std::min(
+      const double remaining_s = policy.count_bounded_search ?
+        policy.per_candidate_planning_budget_s : std::min(
         policy.total_planning_budget_s - result.elapsed_planning_s,
         policy.per_candidate_planning_budget_s - candidate_elapsed_s);
       if (remaining_s <= 0.0) {return result;}
@@ -444,14 +446,17 @@ PlaceApproachPlanResult plan_place_candidates_with_fallback(
     candidates, primary_candidate_indices, policy, plan_candidate,
     max_primary_candidates);
   if (result.success || result.terminal || fallback_candidate_indices.empty() ||
-    result.elapsed_planning_s >= policy.total_planning_budget_s)
+    (!policy.count_bounded_search &&
+    result.elapsed_planning_s >= policy.total_planning_budget_s))
   {
     return result;
   }
 
   auto fallback_policy = policy;
-  fallback_policy.total_planning_budget_s = std::max(
-    0.0, policy.total_planning_budget_s - result.elapsed_planning_s);
+  if (!policy.count_bounded_search) {
+    fallback_policy.total_planning_budget_s = std::max(
+      0.0, policy.total_planning_budget_s - result.elapsed_planning_s);
+  }
   const auto fallback_result = plan_ranked_place_approach_candidates(
     candidates, fallback_candidate_indices, fallback_policy, plan_candidate,
     max_fallback_candidates);

@@ -26,7 +26,8 @@ public:
 
   LegacyExecuteTaskActionServer(
     rclcpp::Node * node, std::shared_ptr<MotionPort> motion_port,
-    std::shared_ptr<TaskExecutor> task_executor);
+    std::shared_ptr<TaskExecutor> task_executor,
+    const std::string & action_name = "/motion/execute_task", bool payload_home_only = false);
 
 private:
   struct CancellationState
@@ -46,6 +47,7 @@ private:
     const std::shared_ptr<CancellationState> cancellation_state,
     const std::shared_ptr<std::mutex> execution_mutex);
 
+  bool payload_home_only_{false};
   rclcpp::Node * node_;
   std::shared_ptr<MotionPort> motion_port_;
   std::shared_ptr<TaskExecutor> task_executor_;

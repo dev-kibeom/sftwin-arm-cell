@@ -1,3 +1,7 @@
+#include "arm_cell_motion/attached_payload.hpp"
+#include "arm_cell_motion/planning_scene_builder.hpp"
+#include <moveit/planning_scene/planning_scene.h>
+#include <moveit/robot_state/conversions.h>
 #include "arm_cell_motion/isaac_ros_motion_transport.hpp"
 
 #include <arm_cell_interfaces/msg/motion_task_result_code.hpp>
@@ -26,6 +30,15 @@ bool IsaacRosMotionTransport::submit_normalized(const NormalizedMotionRequest & 
 uint8_t IsaacRosMotionTransport::plan_normalized(
   const NormalizedMotionRequest & request, NormalizedTrajectoryPlan & plan)
 {
+  if (request.segment == MotionSegmentKind::PAYLOAD_HOME) {
+    if (!submit_normalized_once(
+        request, &home_joint_positions_,
+        place_candidate_planning_time_s_, false, &plan))
+    {
+      return normalized_failure_result();
+    }
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS;
+  }
   if (request.place_waypoint_approach) {
     std::optional<NormalizedTrajectoryPlan> cached;
     {
@@ -37,7 +50,8 @@ uint8_t IsaacRosMotionTransport::plan_normalized(
         std::lock_guard<std::mutex> state_lock(mutex_);
         last_place_failure_stage_ = "place_approach_planning";
       }
-      RCLCPP_ERROR(node_->get_logger(),
+      RCLCPP_ERROR(
+        node_->get_logger(),
         "PLACE WAYPOINT approach rejected: no valid pre-generated trajectory is loaded");
       return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
     }
@@ -49,7 +63,9 @@ uint8_t IsaacRosMotionTransport::plan_normalized(
           pose.pose.orientation.z, pose.pose.orientation.w};
         if (signature.size() != values.size()) {return false;}
         for (std::size_t index = 0; index < values.size(); ++index) {
-          if (!std::isfinite(values[index]) || std::abs(values[index] - signature[index]) > 1.0e-6) {
+          if (!std::isfinite(values[index]) ||
+            std::abs(values[index] - signature[index]) > 1.0e-6)
+          {
             return false;
           }
         }
@@ -62,9 +78,55 @@ uint8_t IsaacRosMotionTransport::plan_normalized(
         std::lock_guard<std::mutex> state_lock(mutex_);
         last_place_failure_stage_ = "place_approach_planning";
       }
-      RCLCPP_ERROR(node_->get_logger(),
+      RCLCPP_ERROR(
+        node_->get_logger(),
         "PLACE WAYPOINT approach rejected: loaded trajectory target does not match profile");
       return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+    }
+    bool validate_payload = false;
+    moveit_msgs::msg::AttachedCollisionObject payload;
+    {
+      std::lock_guard<std::mutex> payload_lock(mutex_);
+      validate_payload = object_attached_ || accepted_object_to_tcp_valid_;
+      if (validate_payload) {
+        if (!accepted_object_to_tcp_valid_) {
+          return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+        }
+        try {
+          payload = make_attached_payload(accepted_object_to_tcp_, accepted_payload_dimensions_);
+        } catch (const std::invalid_argument &) {
+          return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+        }
+      }
+    }
+    if (validate_payload) {
+      using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+      if (!planning_scene_client_ ||
+        !planning_scene_client_->wait_for_service(std::chrono::milliseconds(500)))
+      {
+        return Code::TASK_RESULT_BACKEND_ERROR;
+      }
+      auto query = std::make_shared<moveit_msgs::srv::GetPlanningScene::Request>();
+      query->components.components = pick_retract_planning_scene_components();
+      auto future = planning_scene_client_->async_send_request(query);
+      if (future.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+        return Code::TASK_RESULT_BACKEND_ERROR;
+      }
+      const auto response = future.get();
+      std::lock_guard<std::mutex> group_lock(move_group_state_->mutex);
+      if (!response || !move_group_state_->move_group) {return Code::TASK_RESULT_BACKEND_ERROR;}
+      planning_scene::PlanningScene scene(move_group_state_->move_group->getRobotModel());
+      if (!scene.setPlanningSceneMsg(response->scene)) {return Code::TASK_RESULT_BACKEND_ERROR;}
+      PlanningSceneBuilder builder(response->scene, {}, request.object_pose.header);
+      const auto diff = builder.build(PlanningScenePolicy{});
+      if (!diff.valid || !scene.setPlanningSceneDiffMsg(diff.diff) ||
+        !scene.processAttachedCollisionObjectMsg(payload)) {return Code::TASK_RESULT_BACKEND_ERROR;}
+      moveit_msgs::msg::RobotState start;
+      moveit::core::robotStateToRobotStateMsg(scene.getCurrentState(), start, true);
+      start.joint_state = cached->start_state;
+      moveit_msgs::msg::RobotTrajectory trajectory;
+      trajectory.joint_trajectory = cached->trajectory;
+      if (!scene.isPathValid(start, trajectory, "arm")) {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
     }
     plan = std::move(*cached);
     plan.request = request;
@@ -207,11 +269,12 @@ uint8_t IsaacRosMotionTransport::generate_place_waypoint_approach(
   artifact["generation_time_s"] = elapsed_s;
   artifact["points"] = nlohmann::json::array();
   for (const auto & point : selected->trajectory.points) {
-    artifact["points"].push_back({
-      {"positions", point.positions}, {"velocities", point.velocities},
-      {"accelerations", point.accelerations}, {"effort", point.effort},
-      {"time_sec", point.time_from_start.sec},
-      {"time_nanosec", point.time_from_start.nanosec}});
+    artifact["points"].push_back(
+      {
+        {"positions", point.positions}, {"velocities", point.velocities},
+        {"accelerations", point.accelerations}, {"effort", point.effort},
+        {"time_sec", point.time_from_start.sec},
+        {"time_nanosec", point.time_from_start.nanosec}});
   }
   const std::filesystem::path destination(path);
   std::error_code filesystem_error;

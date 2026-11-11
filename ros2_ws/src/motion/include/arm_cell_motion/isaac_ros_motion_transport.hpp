@@ -257,6 +257,8 @@ private:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr current_fixture_object_id_subscription_;
   rclcpp::Subscription<rosgraph_msgs::msg::Clock>::SharedPtr simulation_clock_subscription_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr gripper_status_subscription_;
+  std::vector<double> pending_payload_dimensions_;
+  std::vector<double> accepted_payload_dimensions_;
   rclcpp::Client<moveit_msgs::srv::GetPlanningScene>::SharedPtr planning_scene_client_;
   rclcpp::Client<moveit_msgs::srv::ApplyPlanningScene>::SharedPtr apply_planning_scene_client_;
   // True only after a PICK trajectory has actually started execution during
@@ -339,6 +341,9 @@ private:
   std::size_t pick_approach_global_max_requests_{3U};
   std::size_t pick_final_cartesian_max_requests_{1U};
   std::size_t pick_final_global_fallback_max_requests_{3U};
+  unsigned place_planning_num_attempts_{3U};
+  std::size_t place_ik_seed_attempts_{2U};
+  double place_ik_timeout_s_{1.0};
   std::size_t place_approach_global_max_requests_{3U};
   std::size_t place_final_cartesian_max_requests_{1U};
   std::size_t place_final_global_fallback_max_requests_{3U};

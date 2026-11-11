@@ -44,6 +44,7 @@ private:
       (expected == "PICK" && task_type == MotionTaskType::TASK_TYPE_PICK) ||
       (expected == "PLACE" && task_type == MotionTaskType::TASK_TYPE_PLACE) ||
       (expected == "RETURN_HELD" && task_type == MotionTaskType::TASK_TYPE_RETURN_HELD) ||
+      (expected == "PAYLOAD_HOME" && task_type == MotionTaskType::TASK_TYPE_PAYLOAD_HOME) ||
       (expected == "GO_HOME" && task_type == MotionTaskType::TASK_TYPE_GO_HOME) ||
       (expected == "RETRACT" && task_type == MotionTaskType::TASK_TYPE_RETRACT);
     return matches ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
@@ -149,6 +150,7 @@ MotionBtExecutionResult MotionBtExecutor::execute(
   pick_recovery.register_nodes(factory, report);
   place_execution.register_nodes(factory, blackboard, report);
   place_recovery.register_nodes(factory, goal, report);
+  blackboard->set("payload_home_operation", place_recovery.payload_home_operation());
   held_object_return.register_nodes(factory, goal, report);
   register_callback_action(
     factory, "ExecuteDirectTask", [this, &goal, &report, &motion_execution_id]() {
@@ -178,6 +180,9 @@ MotionBtExecutionResult MotionBtExecutor::execute(
     factory.registerBehaviorTreeFromFile(config_directory + file);
   }
   auto tree = factory.createTree("MotionTask", blackboard);
+  for (const auto & board : tree.blackboard_stack) {
+    board->set("payload_home_operation", place_recovery.payload_home_operation());
+  }
   std::unique_ptr<BT::PublisherZMQ> groot_publisher;
   try {
     groot_publisher = std::make_unique<BT::PublisherZMQ>(

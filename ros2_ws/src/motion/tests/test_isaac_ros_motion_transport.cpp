@@ -486,6 +486,12 @@ TEST_F(IsaacRosMotionTransportTest, StoredPlaceWaypointTrajectoryLoadsOnceAndPla
     ASSERT_EQ(plan.trajectory.points.size(), 2U);
     EXPECT_DOUBLE_EQ(plan.trajectory.points.back().time_from_start.sec, 2);
   }
+  loaded->object_attached_ = true;
+  NormalizedTrajectoryPlan missing_payload;
+  EXPECT_EQ(
+    loaded->plan_normalized(request, missing_payload),
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR);
+  loaded->object_attached_ = false;
   EXPECT_EQ(
     loaded->generate_place_waypoint_approach(request, path.string()),
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
@@ -2131,7 +2137,8 @@ TEST_F(IsaacRosMotionTransportTest, MissingAccuracyDoesNotChangeCompletedTraject
   EXPECT_EQ(accuracy.at("segment"), "RETRACT");
   EXPECT_EQ(accuracy.at("feedback_fk_tcp_pose"), accuracy.at("actual_tcp_pose"));
   EXPECT_EQ(accuracy.at("measurement_status"), "UNAVAILABLE");
-  EXPECT_EQ(accuracy.at("selected_grasp_or_place_pose_index"),
+  EXPECT_EQ(
+    accuracy.at("selected_grasp_or_place_pose_index"),
     accuracy.at("selected_planning_candidate_index"));
   EXPECT_TRUE(accuracy.at("tcp_position_error_mm").is_null());
   EXPECT_TRUE(accuracy.at("tcp_orientation_error_rad").is_null());
@@ -2139,7 +2146,8 @@ TEST_F(IsaacRosMotionTransportTest, MissingAccuracyDoesNotChangeCompletedTraject
   EXPECT_TRUE(execution.at("final_joint_position_error_max_rad").is_null());
   EXPECT_TRUE(execution.at("actual_joint_positions_rad").is_null());
   EXPECT_EQ(execution.at("goal_accuracy"), "UNAVAILABLE");
-  EXPECT_EQ(execution.at("final_command_attempt_simulation_time_s"),
+  EXPECT_EQ(
+    execution.at("final_command_attempt_simulation_time_s"),
     execution.at("final_command_attempt_simulation_time"));
   EXPECT_TRUE(execution.at("trajectory_execution_complete").get<bool>());
   EXPECT_LE(

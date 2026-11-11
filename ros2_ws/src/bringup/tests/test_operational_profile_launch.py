@@ -1137,3 +1137,13 @@ def test_failed_nested_session_creation_removes_run(tmp_path, monkeypatch):
     assert module.create_recording_session(tmp_path, 'hardware') is None
     assert not list(tmp_path.glob('[0-9]*/*'))
     assert not list(tmp_path.rglob('*.tmp'))
+
+
+def test_place_search_has_independent_pick_equivalent_initial_budgets():
+    motion = yaml.safe_load(PROFILE_PATH.read_text())["motion"]
+    assert motion["place_max_pose_candidates"] == motion["pick_grasp_pose_candidate_limit"]
+    assert motion["place_ik_seed_attempts_per_pose"] == motion["pick_ik_seed_attempts_per_grasp_pose"]
+    assert motion["place_ik_timeout_s"] == motion["pick_approach_ik_timeout_s"]
+    assert motion["place_planning_num_attempts"] == motion["planning_num_attempts"]
+    assert motion["place_candidate_planning_time_s"] == motion["planning_time_s"]
+    assert motion["place_home_retry_count"] == 1

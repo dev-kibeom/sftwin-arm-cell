@@ -43,6 +43,7 @@ BoundedPlacePoseCandidateGroups group_bounded_place_pose_candidates(
 
 struct PlaceApproachIkPolicy
 {
+  bool count_bounded_search{false};
   double ik_seed_quantum_rad{0.001};
   double seed_variation_rad{0.25};
   std::size_t max_candidates{5};

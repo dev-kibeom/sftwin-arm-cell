@@ -23,6 +23,8 @@ struct MotionGeometry
   bool place_waypoint_clearance_toward_positive_y{false};
   geometry_msgs::msg::PoseStamped place_waypoint_target_pose{};
   bool place_waypoint_configured{false};
+  std::string payload_home_bt_plugin;
+  unsigned place_home_retry_count{1U};
   bool configured{false};
 
   bool valid() const;

@@ -319,26 +319,113 @@ TEST(PlaceExecutionModule, InvalidGoalStopsBeforeBackendExecution)
   EXPECT_EQ(fixture.backend->normalized_requests, 0);
 }
 
-TEST(PlaceRecoveryModule, ApproachReleaseIsConfirmedWithoutRetreatCoupling)
+TEST(PlaceRecoveryModule, HomeRetryBudgetDoesNotOpenHeldObject)
 {
   Fixture fixture;
   fixture.report.failure_stage = "place_approach_planning";
   fixture.report.result_code = MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
-  fixture.gripper->state = HoldingState::RELEASED;
+  fixture.gripper->state = HoldingState::HELD;
   fixture.gripper->sequence = 1;
   PlaceRecovery module(fixture.support);
   BT::BehaviorTreeFactory factory;
   module.register_nodes(factory, ExecuteTask::Goal{}, fixture.report);
   auto tree = factory.createTreeFromText(
-    "<root BTCPP_format=\"3\" main_tree_to_execute=\"Recovery\"><BehaviorTree ID=\"Recovery\">"
-    "<Sequence><PlaceApproachRecoveryEligible/><ObservePlaceApproachRecoveryHolding/>"
-    "<PlaceApproachRecoveryComplete/></Sequence></BehaviorTree></root>", fixture.blackboard);
-
+    "<root main_tree_to_execute=\"Recovery\"><BehaviorTree ID=\"Recovery\">"
+    "<PreparePlaceHomeRetry/></BehaviorTree></root>", fixture.blackboard);
   EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
-  EXPECT_EQ(fixture.report.result_code, MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED);
-  EXPECT_EQ(fixture.report.object_disposition, ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
-  EXPECT_EQ(fixture.backend->released_relations, 1);
+  tree.haltTree();
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(fixture.gripper->open_count, 0U);
 }
+
+TEST(PlaceRecoveryModule, PayloadHomeUsesPlannedMotionAndNeverOpens)
+{
+  Fixture fixture;
+  fixture.gripper->state = HoldingState::HELD;
+  fixture.gripper->sequence = 1;
+  PlaceRecovery module(fixture.support);
+  BT::BehaviorTreeFactory factory;
+  module.register_nodes(factory, ExecuteTask::Goal{}, fixture.report);
+  fixture.blackboard->set("payload_home_operation", module.payload_home_operation());
+  auto tree = factory.createTreeFromText(
+    "<root main_tree_to_execute=\"Home\"><BehaviorTree ID=\"Home\">"
+    "<ReturnHomeWithPayload/></BehaviorTree></root>", fixture.blackboard);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(fixture.backend->normalized_requests, 1);
+  EXPECT_EQ(fixture.gripper->open_count, 0U);
+  EXPECT_EQ(fixture.report.object_disposition, ExecuteTask::Result::OBJECT_DISPOSITION_HELD);
+}
+
+TEST(PlaceRecoveryModule, CancellationDoesNotAuthorizeHomeRetry)
+{
+  Fixture fixture;
+  fixture.gripper->state = HoldingState::HELD;
+  fixture.report.failure_stage = "place_approach_planning";
+  fixture.report.result_code = MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
+  fixture.support.set_interruption_checker([] {return MotionTaskResultCode::TASK_RESULT_CANCELED;});
+  PlaceRecovery module(fixture.support);
+  BT::BehaviorTreeFactory factory;
+  module.register_nodes(factory, ExecuteTask::Goal{}, fixture.report);
+  auto tree = factory.createTreeFromText(
+    "<root main_tree_to_execute=\"Retry\"><BehaviorTree ID=\"Retry\">"
+    "<PreparePlaceHomeRetry/></BehaviorTree></root>", fixture.blackboard);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(fixture.backend->normalized_requests, 0);
+  EXPECT_EQ(fixture.gripper->open_count, 0U);
+}
+
+TEST(PlaceRecoveryModule, FailedPayloadHomeDoesNotReleaseOrBecomeReturnEligible)
+{
+  Fixture fixture;
+  fixture.gripper->state = HoldingState::HELD;
+  fixture.gripper->sequence = 1;
+  fixture.backend->normalized_result = MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
+  PlaceRecovery module(fixture.support);
+  BT::BehaviorTreeFactory factory;
+  module.register_nodes(factory, ExecuteTask::Goal{}, fixture.report);
+  fixture.blackboard->set("payload_home_operation", module.payload_home_operation());
+  auto tree = factory.createTreeFromText(
+    "<root main_tree_to_execute=\"Home\"><BehaviorTree ID=\"Home\">"
+    "<ReturnHomeWithPayload/></BehaviorTree></root>", fixture.blackboard);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(fixture.gripper->open_count, 0U);
+  EXPECT_EQ(fixture.report.failure_stage, "payload_home:execution");
+}
+
+TEST(PlaceRecoveryModule, ZeroRetriesDoesNotRequestHome)
+{
+  Fixture fixture;
+  auto geometry = fixture.support.geometry();
+  geometry.place_home_retry_count = 0;
+  fixture.support.set_runtime_geometry(geometry, std::chrono::milliseconds(1));
+  fixture.gripper->state = HoldingState::HELD;
+  fixture.report.failure_stage = "place_approach_planning";
+  fixture.report.result_code = MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
+  PlaceRecovery module(fixture.support);
+  BT::BehaviorTreeFactory factory;
+  module.register_nodes(factory, ExecuteTask::Goal{}, fixture.report);
+  auto tree = factory.createTreeFromText(
+    "<root main_tree_to_execute=\"Retry\"><BehaviorTree ID=\"Retry\">"
+    "<PreparePlaceHomeRetry/></BehaviorTree></root>", fixture.blackboard);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(fixture.backend->normalized_requests, 0);
+}
+
+TEST(PayloadHomePlugin, LoadsAndExecutesOwningOperation)
+{
+  BT::BehaviorTreeFactory factory;
+  factory.registerFromPlugin(PAYLOAD_HOME_PLUGIN_PATH);
+  auto board = BT::Blackboard::create();
+  unsigned calls = 0;
+  std::function<BT::NodeStatus()> operation = [&calls] {++calls; return BT::NodeStatus::SUCCESS;};
+  board->set("payload_home_operation", operation);
+  auto tree = factory.createTreeFromText(
+    "<root main_tree_to_execute=\"Home\"><BehaviorTree ID=\"Home\">"
+    "<ReturnHomeWithPayload/></BehaviorTree></root>", board);
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(calls, 1U);
+}
+
 
 TEST(PlaceRecoveryModule, ClearanceFailureUsesExistingApproachRecovery)
 {
@@ -363,6 +450,7 @@ TEST(PlaceRecoveryModule, OwnsRetreatRetryAndPreservesOriginalFailure)
   fixture.report.failure_stage = "place_retract_backend_request";
   fixture.report.result_code = MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
   fixture.report.object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_PLACED;
+  fixture.gripper->sequence = 1;
   fixture.backend->normalized_result = MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
   fixture.backend->allow_retreat_retry = true;
   ExecuteTask::Goal goal;

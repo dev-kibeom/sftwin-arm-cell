@@ -55,7 +55,14 @@ MotionGeometry read_motion_geometry(rclcpp::Node & node)
   const auto place_waypoint_direction = node.declare_parameter<std::vector<double>>(
     "place_waypoint_approach_direction_object", std::vector<double>{});
 
+  const auto place_home_retry_count = node.declare_parameter<int64_t>("place_home_retry_count", 1);
+  if (place_home_retry_count < 0 || place_home_retry_count > 20) {
+    throw std::invalid_argument("place_home_retry_count must be in [0, 20]");
+  }
   MotionGeometry geometry;
+  geometry.payload_home_bt_plugin =
+    node.declare_parameter<std::string>("payload_home_bt_plugin", "");
+  geometry.place_home_retry_count = static_cast<unsigned>(place_home_retry_count);
   geometry.observation_reference = observation_reference;
   geometry.pick_retract_distance_m = pick_retract_distance;
   if (std::isfinite(place_waypoint_clearance_boundary) &&
@@ -290,13 +297,22 @@ MotionNode::MotionNode(
       return value;
     };
   const auto place_max_pose_candidates =
-    positive_profile_limit("place_max_pose_candidates", 13, 100);
+    positive_profile_limit("place_max_pose_candidates", 48, 1000);
+  const auto place_ik_seed_attempts_per_pose = positive_profile_limit(
+    "place_ik_seed_attempts_per_pose", 2, 20);
+  const auto place_ik_timeout_s = declare_parameter<double>("place_ik_timeout_s", 1.0);
+  if (!std::isfinite(place_ik_timeout_s) || place_ik_timeout_s <= 0.0) {
+    throw std::invalid_argument("place_ik_timeout_s must be positive and finite");
+  }
   const auto pick_approach_global_max_requests = positive_profile_limit(
     "pick_approach_global_max_requests", 3, 20);
   const auto pick_final_cartesian_max_requests = positive_profile_limit(
     "pick_final_cartesian_max_requests", 1, 20);
   const auto pick_final_global_fallback_max_requests = positive_profile_limit(
     "pick_final_global_fallback_max_requests", 3, 20);
+  const auto place_planning_num_attempts = positive_profile_limit(
+    "place_planning_num_attempts", 3,
+    20);
   const auto place_approach_global_max_requests = positive_profile_limit(
     "place_approach_global_max_requests", 3, 20);
   const auto place_final_cartesian_max_requests = positive_profile_limit(
@@ -477,6 +493,11 @@ MotionNode::MotionNode(
       backend_parameters.emplace_back(
         "place_final_global_fallback_max_requests", place_final_global_fallback_max_requests);
       backend_parameters.emplace_back("planning_num_attempts", planning_num_attempts);
+      backend_parameters.emplace_back(
+        "place_ik_seed_attempts_per_pose",
+        place_ik_seed_attempts_per_pose);
+      backend_parameters.emplace_back("place_ik_timeout_s", place_ik_timeout_s);
+      backend_parameters.emplace_back("place_planning_num_attempts", place_planning_num_attempts);
       if (!backend_parameters.empty()) {
         backend_options.parameter_overrides(backend_parameters);
       }

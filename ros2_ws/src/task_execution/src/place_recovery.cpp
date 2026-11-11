@@ -3,6 +3,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "arm_cell_task_execution/bt_callback_node.hpp"
+#include "arm_cell_task_execution/payload_home_action.hpp"
 #include "arm_cell_task_execution/motion_plan_execute_action.hpp"
 
 namespace arm_cell_task_execution
@@ -24,70 +25,15 @@ bool PlaceRecovery::approach_recovery_eligible() const
     report_->failure_stage == "place_clearance_planning" ||
     report_->failure_stage == "place_clearance_execution" ||
     report_->failure_stage == "place_clearance_target_not_reached";
-  return (place_approach_failure || place_clearance_failure) &&
+  const bool place_insertion_planning_failure = report_->failure_stage ==
+    "place_insertion_planning";
+  return (place_approach_failure || place_clearance_failure || place_insertion_planning_failure) &&
          (report_->result_code ==
          MotionTaskResultCode::TASK_RESULT_IK_UNREACHABLE ||
          report_->result_code ==
          MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED ||
          report_->result_code ==
          MotionTaskResultCode::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED);
-}
-
-bool PlaceRecovery::observe_approach_recovery_holding()
-{
-  state_.approach_completed = false;
-  state_.approach_return_open_needed = false;
-  const auto observed = support_.gripper()->holding();
-  if (observed.fresh() && observed.state == HoldingState::RELEASED) {
-    support_.motion_port()->clearGraspRelationAfterRelease();
-    support_.object_state_tracker().mark_detached();
-    report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED;
-    state_.approach_completed = true;
-    return true;
-  }
-  if (observed.fresh() && observed.state == HoldingState::HELD) {
-    state_.approach_return_open_needed = true;
-    return true;
-  }
-  report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
-  return false;
-}
-
-std::uint8_t PlaceRecovery::open_approach_return()
-{
-  std::uint64_t baseline = 0;
-  report_->failure_stage = "place_approach_return_open";
-  const auto opened = support_.execute_gripper_open(baseline);
-  if (opened != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-    report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
-    report_->result_code = opened;
-    return opened;
-  }
-  state_.holding_baseline = baseline;
-  return opened;
-}
-
-std::uint8_t PlaceRecovery::confirm_approach_return()
-{
-  const auto released = support_.fresh_holding(
-    HoldingState::RELEASED, state_.holding_baseline);
-  if (released != HoldingWaitResult::CONFIRMED) {
-    report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
-    report_->failure_stage = "place_approach_return_release_confirmation";
-    report_->result_code = released == HoldingWaitResult::CANCELED ?
-      MotionTaskResultCode::TASK_RESULT_CANCELED :
-      released == HoldingWaitResult::SAFETY_PREEMPTED ?
-      MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED :
-      released == HoldingWaitResult::BACKEND_UNAVAILABLE ?
-      MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE :
-      MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
-    return report_->result_code;
-  }
-  support_.motion_port()->clearGraspRelationAfterRelease();
-  support_.object_state_tracker().mark_detached();
-  report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED;
-  state_.approach_completed = true;
-  return report_->result_code;
 }
 
 void PlaceRecovery::prepare_held_failure_recovery()
@@ -199,30 +145,112 @@ void PlaceRecovery::register_nodes(
   state_.goal = goal;
   report_ = &report;
   register_callback_action(
+    factory, "PreparePlaceHomeRetry", [this]() {
+      if (!approach_recovery_eligible() ||
+      state_.home_retries >= support_.geometry().place_home_retry_count)
+      {
+        return BT::NodeStatus::FAILURE;
+      }
+      if (support_.interruption_checker() && support_.interruption_checker()() !=
+      MotionTaskResultCode::TASK_RESULT_SUCCESS) {return BT::NodeStatus::FAILURE;}
+      if (!support_.gripper()) {
+        report_->result_code = MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
+        report_->failure_stage = "payload_home:gripper_unavailable";
+        return BT::NodeStatus::FAILURE;
+      }
+      const auto held = support_.gripper()->holding();
+      if (!held.fresh() || held.state != HoldingState::HELD) {
+        report_->failure_stage = "place_home_retry:holding_unconfirmed";
+        return BT::NodeStatus::FAILURE;
+      }
+      ++state_.home_retries;
+      state_.original_result = report_->result_code;
+      return BT::NodeStatus::SUCCESS;
+    });
+  payload_home_operation_ = [this]() {
+      if (support_.interruption_checker()) {
+        const auto interrupted = support_.interruption_checker()();
+        if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+          report_->result_code = interrupted;
+          report_->failure_stage = "payload_home:interrupted";
+          return BT::NodeStatus::FAILURE;
+        }
+      }
+      if (!support_.gripper()) {
+        report_->result_code = MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
+        report_->failure_stage = "payload_home:gripper_unavailable";
+        return BT::NodeStatus::FAILURE;
+      }
+      const auto held = support_.gripper()->holding();
+      if (!held.fresh() || held.state != HoldingState::HELD) {
+        report_->failure_stage = "payload_home:holding_unconfirmed";
+        report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
+        return BT::NodeStatus::FAILURE;
+      }
+      auto request = support_.make_motion_request(
+        state_.goal,
+        arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING,
+        report_->motion_execution_id);
+      report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_HELD;
+      request.segment = MotionSegmentKind::PAYLOAD_HOME;
+      // The backend owns the home joint target. Supply a valid pose envelope
+      // for MotionPort admission; it is not used as the home planning target.
+      request.constraints.orientation_symmetry_order = MotionOrientationSymmetry::UNIQUE;
+      request.has_unobserved_yaw_fallback = false;
+      request.unobserved_yaw_fallback_rad = 0.0;
+      request.target_pose = geometry_msgs::msg::PoseStamped{};
+      request.target_pose.header.frame_id = "base_link";
+      request.target_pose.pose.orientation.w = 1.0;
+      report_->failure_stage = "payload_home:planning";
+      const auto planned = support_.plan_motion_request(request);
+      report_->result_code = planned.result_code;
+      if (planned.result_code != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+        return BT::NodeStatus::FAILURE;
+      }
+      const auto before_execution = support_.gripper()->holding();
+      if (!before_execution.fresh() || before_execution.state != HoldingState::HELD) {
+        report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
+        report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
+        (void)support_.cancel_active_motion(request.execution_id);
+        report_->failure_stage = "payload_home:holding_lost_before_execution";
+        return BT::NodeStatus::FAILURE;
+      }
+      report_->failure_stage = "payload_home:execution";
+      const auto executed = support_.execute_planned_motion(planned.plan);
+      report_->result_code = executed.result_code;
+      if (executed.result_code == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+        const auto after = support_.gripper()->holding();
+        if (!after.fresh() || after.state != HoldingState::HELD) {
+          report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
+          report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
+          report_->failure_stage = "payload_home:holding_lost";
+        }
+      }
+      return domain_status(report_->result_code);
+    };
+  if (support_.geometry().payload_home_bt_plugin.empty()) {
+    factory.registerNodeType<PayloadHomeAction>("ReturnHomeWithPayload");
+  } else {
+    factory.registerFromPlugin(support_.geometry().payload_home_bt_plugin);
+  }
+  register_callback_action(
+    factory, "PreparePlaceApproachReturn", [this]() {
+      if (!approach_recovery_eligible()) {return BT::NodeStatus::FAILURE;}
+      if (!support_.gripper()) {return BT::NodeStatus::FAILURE;}
+      const auto held = support_.gripper()->holding();
+      if (!held.fresh() || held.state != HoldingState::HELD) {
+        report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
+        report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
+        report_->failure_stage = "place_return:holding_unconfirmed";
+        return BT::NodeStatus::FAILURE;
+      }
+      state_.original_result = report_->result_code;
+      state_.return_needed = true;
+      return BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
     factory, "PlaceApproachRecoveryEligible", [this]() {
       return approach_recovery_eligible() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-    });
-  register_callback_action(
-    factory, "ObservePlaceApproachRecoveryHolding", [this]() {
-      return observe_approach_recovery_holding() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-    });
-  register_callback_action(
-    factory, "PlaceApproachRecoveryComplete", [this]() {
-      return state_.approach_completed ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-    });
-  register_callback_action(
-    factory, "PlaceApproachReturnOpenRequired", [this]() {
-      return state_.approach_return_open_needed ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-    });
-  register_callback_action(
-    factory, "OpenPlaceApproachReturn", [this]() {
-      return open_approach_return() == MotionTaskResultCode::TASK_RESULT_SUCCESS ?
-      BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-    });
-  register_callback_action(
-    factory, "ConfirmPlaceApproachReturn", [this]() {
-      (void)confirm_approach_return();
-      return state_.approach_completed ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
     });
   register_callback_action(
     factory, "PrepareHeldPlaceFailureRecovery", [this]() {

@@ -470,6 +470,17 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   const MotionPortRequest & movement) const
 {
   NormalizedMotionRequest request;
+  if (movement.segment == MotionSegmentKind::PAYLOAD_HOME) {
+    request.task_type.value = MotionTaskType::TASK_TYPE_PLACE;
+    request.segment = movement.segment;
+    request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
+    request.motion_goal_uuid = execution_uuid_string(movement.execution_id);
+    request.movement_id = movement.movement_id;
+    request.tcp_target = movement.target_pose;
+    request.target_pose = movement.target_pose;
+    request.object_pose = movement.target_pose;
+    return request;
+  }
   const bool pick = movement.segment == MotionSegmentKind::PICK_APPROACH ||
     movement.segment == MotionSegmentKind::PICK_DESCENT ||
     movement.segment == MotionSegmentKind::PICK_RETRACT;
@@ -490,6 +501,7 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
       break;
     case MotionSegmentKind::PICK_DESCENT:
     case MotionSegmentKind::PLACE_DESCENT:
+    case MotionSegmentKind::PAYLOAD_HOME:
     case MotionSegmentKind::PLACE_CLEARANCE:
       request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
       break;

@@ -25,6 +25,10 @@
         <IsTask type="RETURN_HELD"/>
         <ReturnHeldToTray/>
       </Sequence>
+      <Sequence name="PayloadHomeTask">
+        <IsTask type="PAYLOAD_HOME"/>
+        <SubTree ID="PayloadHome"/>
+      </Sequence>
       <Sequence name="GoHomeTask">
         <IsTask type="GO_HOME"/>
         <ExecuteDirectTask/>

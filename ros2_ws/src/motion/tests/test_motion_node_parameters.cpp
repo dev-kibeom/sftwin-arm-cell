@@ -41,7 +41,10 @@ TEST(MotionNodeParameters, ValidatesRuntimeTuningAndRejectsStaticParameters)
   EXPECT_EQ(node->get_parameter("pick_grasp_pose_candidate_limit").as_int(), 48);
   EXPECT_EQ(node->get_parameter("pick_ik_seed_attempts_per_grasp_pose").as_int(), 2);
   EXPECT_EQ(node->get_parameter("planning_num_attempts").as_int(), 3);
-  EXPECT_EQ(node->get_parameter("place_max_pose_candidates").as_int(), 13);
+  EXPECT_EQ(node->get_parameter("place_max_pose_candidates").as_int(), 48);
+  EXPECT_EQ(node->get_parameter("place_home_retry_count").as_int(), 1);
+  EXPECT_EQ(node->get_parameter("place_ik_seed_attempts_per_pose").as_int(), 2);
+  EXPECT_EQ(node->get_parameter("place_planning_num_attempts").as_int(), 3);
   EXPECT_EQ(node->get_parameter("pick_approach_global_max_requests").as_int(), 3);
   EXPECT_EQ(node->get_parameter("pick_final_cartesian_max_requests").as_int(), 1);
   EXPECT_EQ(node->get_parameter("pick_final_global_fallback_max_requests").as_int(), 3);
@@ -112,7 +115,11 @@ TEST(MotionNodeParameters, RejectsPlanningFallbackLimitsOutsideSupportedRange)
 {
   if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
   for (const auto & parameter : std::vector<rclcpp::Parameter>{
-    rclcpp::Parameter("place_max_pose_candidates", 101),
+    rclcpp::Parameter("place_max_pose_candidates", 1001),
+    rclcpp::Parameter("place_home_retry_count", -1),
+    rclcpp::Parameter("place_home_retry_count", 21),
+    rclcpp::Parameter("place_ik_seed_attempts_per_pose", 0),
+    rclcpp::Parameter("place_ik_timeout_s", 0.0),
     rclcpp::Parameter("pick_approach_global_max_requests", 0),
     rclcpp::Parameter("place_final_global_fallback_max_requests", 21)})
   {

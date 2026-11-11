@@ -154,7 +154,8 @@ public:
       const bool approach = request.phase ==
         arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING;
       if ((approach && fail_place_approach_planning) ||
-        (!approach && fail_place_insertion_planning))
+        (!approach && fail_place_insertion_planning &&
+        request.segment != MotionSegmentKind::PAYLOAD_HOME))
       {
         last_place_stage = approach ? "place_approach_planning" : "place_insertion_planning";
         return MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
@@ -853,9 +854,11 @@ TEST(TaskExecutorPickPlaceTest, PlaceWaypointRequiresMeasuredYBoundaryAfterClear
   backend->reflect_clearance_pose_in_measurement = false;
   const auto geometry = waypoint_geometry();
   const PickPlaceStrategies strategies{PickPlaceStrategy::PLANNED, PickPlaceStrategy::WAYPOINT};
+  auto gripper = std::make_shared<RecordingGripperPort>(*backend);
+  gripper->refresh_observation_on_read = true;
   TaskExecutor executor(
     std::make_shared<test::LegacyBackendMotionPort>(backend, geometry),
-    std::make_shared<RecordingGripperPort>(*backend), geometry,
+    gripper, geometry,
     TaskExecutionSupport::InterruptionChecker{}, std::chrono::milliseconds(1000), strategies);
 
   const auto result = executor.execute_pnp(execute_pnp_goal(), "pnp-place-clearance-unverified");
@@ -894,7 +897,9 @@ TEST(TaskExecutorPickPlaceTest, ResolvedReturnedPlaceFailureMapsToRetryable)
 {
   auto backend = std::make_shared<RecordingBackend>();
   backend->fail_place_approach_planning = true;
-  TaskExecutor executor(backend, std::make_shared<RecordingGripperPort>(*backend),
+  auto gripper = std::make_shared<RecordingGripperPort>(*backend);
+  gripper->refresh_observation_on_read = true;
+  TaskExecutor executor(backend, gripper,
     valid_geometry());
 
   const auto result = executor.execute_pnp(execute_pnp_goal(), "pnp-returned-retry");
@@ -2106,18 +2111,21 @@ TEST(TaskExecutorPickPlaceTest, ExhaustedRetreatReplanningReturnsFailureWithPlac
     std::count(backend->events.begin(), backend->events.end(), "motion:8"), 3);
 }
 
-TEST(TaskExecutorPickPlaceTest, PlaceApproachPlanningExhaustionReturnsHeldObjectInPlace)
+TEST(TaskExecutorPickPlaceTest, PlaceApproachExhaustionRetriesViaHomeThenReturnsToTray)
 {
   auto backend = std::make_shared<RecordingBackend>();
   backend->fail_place_approach_planning = true;
   auto gripper = std::make_shared<RecordingGripperPort>(*backend);
   gripper->set_observation(HoldingState::HELD, 1U);
+  gripper->refresh_observation_on_read = true;
   TaskExecutor executor(backend, gripper, valid_geometry());
   executor.set_object_state(MotionObjectState::ATTACHED);
 
   EXPECT_EQ(executor.execute(place_goal()), MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED);
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
-  EXPECT_EQ(backend->events, (std::vector<std::string>{"motion:3", "gripper"}));
+  EXPECT_EQ(
+    backend->events, (std::vector<std::string>{
+      "motion:3", "motion:4", "motion:3", "home", "tray", "gripper"}));
   EXPECT_EQ(backend->open_calls, 1);
 }
 
@@ -2135,7 +2143,8 @@ TEST(TaskExecutorPickPlaceTest, PlaceInsertionExhaustionReturnsViaHomeAndTray)
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
   EXPECT_EQ(
     backend->events,
-    (std::vector<std::string>{"motion:3", "motion:4", "home", "tray", "gripper"}));
+    (std::vector<std::string>{"motion:3", "motion:4", "motion:4",
+      "motion:3", "motion:4", "home", "tray", "gripper"}));
   EXPECT_EQ(backend->open_calls, 1);
 }
 

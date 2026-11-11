@@ -168,6 +168,8 @@ class PlaceRecovery final
 public:
   explicit PlaceRecovery(TaskExecutionSupport & support)
   : support_(support) {}
+  const std::function<BT::NodeStatus()> & payload_home_operation() const
+  {return payload_home_operation_;}
   void register_nodes(
     BT::BehaviorTreeFactory & factory, const ExecuteTask::Goal & goal,
     TaskExecutionReport & report);
@@ -184,14 +186,10 @@ private:
     bool retreat_result_captured{false};
     bool retreat_replanned{false};
     bool return_needed{false};
-    bool approach_completed{false};
-    bool approach_return_open_needed{false};
+    unsigned home_retries{0U};
   };
 
   bool approach_recovery_eligible() const;
-  bool observe_approach_recovery_holding();
-  std::uint8_t open_approach_return();
-  std::uint8_t confirm_approach_return();
   void prepare_held_failure_recovery();
   std::uint8_t return_held_home();
   std::uint8_t finalize_held_return();
@@ -199,6 +197,7 @@ private:
   std::uint8_t execute_retreat_retry(std::uint8_t motion_result);
   std::uint8_t finalize_retreat();
 
+  std::function<BT::NodeStatus()> payload_home_operation_;
   TaskExecutionSupport & support_;
   State state_;
   TaskExecutionReport * report_{nullptr};

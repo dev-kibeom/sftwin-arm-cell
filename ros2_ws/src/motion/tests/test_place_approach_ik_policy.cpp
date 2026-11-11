@@ -13,6 +13,30 @@ namespace arm_cell_motion
 namespace
 {
 
+TEST(PlaceApproachIkPolicy, CountBudgetDoesNotSkipCandidatesAfterSlowCalls)
+{
+  PlaceApproachIkPolicy policy;
+  policy.count_bounded_search = true;
+  policy.max_candidates = 2;
+  policy.planning_requests_per_candidate = 3;
+  policy.per_candidate_planning_budget_s = 1.0;
+  policy.total_planning_budget_s = 0.1;
+  std::vector<PlaceApproachIkCandidate> candidates(2);
+  std::size_t calls = 0;
+  auto result = plan_ranked_place_approach_candidates(
+    candidates, {0, 1}, policy,
+    [&calls](const PlaceApproachIkCandidate &, double budget) {
+      ++calls;
+      EXPECT_DOUBLE_EQ(budget, 1.0);
+      PlaceApproachPlanObservation observation;
+      observation.planner_invoked = true;
+      observation.planning_duration_s = 2.0;
+      return observation;
+    });
+  EXPECT_FALSE(result.success);
+  EXPECT_EQ(calls, 6U);
+}
+
 TEST(PlaceApproachIkPolicy, ClassifiesPlannerFailuresByCodeAndObservedBudget)
 {
   using Error = moveit_msgs::msg::MoveItErrorCodes;
@@ -110,10 +134,12 @@ TEST(PlaceApproachIkPolicy, FixedUsesNominalOrientationAndFreeIncludesSideOnCand
   const auto free = generate_place_object_pose_candidates(
     desired, 0.01, 0.0, PlaceOrientationConstraint::FREE);
   ASSERT_EQ(free.size(), 13U);
-  EXPECT_TRUE(std::any_of(free.begin(), free.end(), [](const auto & candidate) {
-    return std::abs(candidate.object_pose.pose.orientation.x) > 0.7 ||
-           std::abs(candidate.object_pose.pose.orientation.y) > 0.7;
-  }));
+  EXPECT_TRUE(
+    std::any_of(
+      free.begin(), free.end(), [](const auto & candidate) {
+        return std::abs(candidate.object_pose.pose.orientation.x) > 0.7 ||
+        std::abs(candidate.object_pose.pose.orientation.y) > 0.7;
+      }));
 }
 
 TEST(PlaceApproachIkPolicy, BoundedHasSevenTenDegreeCandidatesUnlikeFree)
@@ -146,15 +172,18 @@ TEST(PlaceApproachIkPolicy, BoundedHasSevenTenDegreeCandidatesUnlikeFree)
     EXPECT_NEAR(orientation.y, desired.pose.orientation.y, 1e-12);
     EXPECT_NEAR(orientation.z, desired.pose.orientation.z, 1e-12);
     EXPECT_NEAR(orientation.w, desired.pose.orientation.w, 1e-12);
-    EXPECT_NEAR(std::abs(position.x - desired.pose.position.x) +
+    EXPECT_NEAR(
+      std::abs(position.x - desired.pose.position.x) +
       std::abs(position.y - desired.pose.position.y) +
       std::abs(position.z - desired.pose.position.z), 0.01, 1e-12);
   }
-  EXPECT_TRUE(std::any_of(bounded.begin(), bounded.end(), [](const auto & candidate) {
-    const auto & orientation = candidate.object_pose.pose.orientation;
-    return std::abs(orientation.x - 0.7071067811865476) < 1e-12 &&
-           std::abs(orientation.w - 0.7071067811865476) < 1e-12;
-  }));
+  EXPECT_TRUE(
+    std::any_of(
+      bounded.begin(), bounded.end(), [](const auto & candidate) {
+        const auto & orientation = candidate.object_pose.pose.orientation;
+        return std::abs(orientation.x - 0.7071067811865476) < 1e-12 &&
+        std::abs(orientation.w - 0.7071067811865476) < 1e-12;
+      }));
   std::vector<geometry_msgs::msg::Quaternion> unique_orientations;
   std::size_t translated_position_count = 0U;
   for (const auto & candidate : bounded) {
@@ -688,8 +717,8 @@ TEST(PlaceApproachIkPolicy, BoundedSelectionUsesFirstExecutablePrimaryCandidate)
   const auto observe = [](const PlaceApproachIkCandidate & value, double) {
       const bool is_nominal = value.seed_index == 0U;
       return PlaceApproachPlanObservation{
-        true, 1, 1U, is_nominal ? 0.8 : 0.2, is_nominal ? 0.5 : 2.0,
-        true, "valid"};
+      true, 1, 1U, is_nominal ? 0.8 : 0.2, is_nominal ? 0.5 : 2.0,
+      true, "valid"};
     };
 
   const auto selected = plan_ranked_place_approach_candidates(
@@ -882,7 +911,7 @@ TEST(PlaceApproachIkPolicy, FirstExecutableTrajectoryUsesSuppliedCandidatePriori
     candidates, {1U, 2U, 0U, 3U}, policy,
     [](const PlaceApproachIkCandidate & value, double) {
       const double duration = value.seed_index == 1U ? 4.0 :
-        (value.seed_index == 2U ? 2.0 : 0.1);
+      (value.seed_index == 2U ? 2.0 : 0.1);
       return PlaceApproachPlanObservation{true, 1, 2U, 0.1, duration, true, "valid"};
     });
 
@@ -905,8 +934,8 @@ TEST(PlaceApproachIkPolicy, RejectsUnexecutableCandidatesAndContinuesToExecutabl
     candidates, {0U, 1U, 2U, 3U}, policy,
     [](const PlaceApproachIkCandidate & value, double) {
       const double duration = value.seed_index == 0U ? 0.25 :
-        (value.seed_index == 1U ? 0.0 :
-        (value.seed_index == 2U ? std::numeric_limits<double>::infinity() : 0.5));
+      (value.seed_index == 1U ? 0.0 :
+      (value.seed_index == 2U ? std::numeric_limits<double>::infinity() : 0.5));
       const bool time_parameterized = value.seed_index != 0U;
       return PlaceApproachPlanObservation{
         true, 1, 18U, 0.1, duration, time_parameterized,
