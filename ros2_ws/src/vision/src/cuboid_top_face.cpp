@@ -849,6 +849,13 @@ DetectionResult process_cuboid_top_face(
   const double spacing = profile.cuboid.grid_resolution_m;
   auto lo = profile.workspace_roi_min_m;
   auto hi = profile.workspace_roi_max_m;
+  // One material diagonal bounds how far a Tray-crossing part can extend.
+  // This is an observation bound, not contour or connectivity inference.
+  const double margin = std::sqrt(std::inner_product(profile.dimensions_m.begin(),
+    profile.dimensions_m.end(), profile.dimensions_m.begin(), 0.0)) +
+    *std::max_element(profile.dimension_tolerance_m.begin(), profile.dimension_tolerance_m.end());
+  const std::array<double, 2> expansion_min{lo[0] - margin, lo[1] - margin};
+  const std::array<double, 2> expansion_max{hi[0] + margin, hi[1] + margin};
   const auto & info = input.camera_info;
   const auto rays = pixel_ray_lookup(info, input.depth.width, input.depth.height);
   const size_t pixel_count = static_cast<size_t>(input.depth.width) * input.depth.height;
@@ -871,10 +878,12 @@ DetectionResult process_cuboid_top_face(
     if (!std::isfinite(depth) || depth <= 0) {continue;}
     const auto & ray = rays->centers[i];
     const auto point = support_T_camera * tf2::Vector3(ray.x * depth, ray.y * depth, depth);
-    if (point.z() <= profile.support_contact_tolerance_m || point.z() > hi[2]) {continue;}
+    if (point.z() <= profile.support_contact_tolerance_m || point.z() < lo[2] ||
+      point.z() > hi[2] || point.x() < expansion_min[0] || point.x() > expansion_max[0] ||
+      point.y() < expansion_min[1] || point.y() > expansion_max[1]) {continue;}
     for (size_t axis = 0; axis < 2; ++axis) {
-      lo[axis] = std::min(lo[axis], std::floor(point[axis] / spacing) * spacing - spacing);
-      hi[axis] = std::max(hi[axis], std::ceil(point[axis] / spacing) * spacing + spacing);
+      lo[axis] = std::min(lo[axis], std::max(expansion_min[axis], std::floor(point[axis] / spacing) * spacing - spacing));
+      hi[axis] = std::max(hi[axis], std::min(expansion_max[axis], std::ceil(point[axis] / spacing) * spacing + spacing));
     }
   }
   const int cols = static_cast<int>(std::ceil((hi[0] - lo[0]) / spacing)) + 1;

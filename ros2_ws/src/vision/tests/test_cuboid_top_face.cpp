@@ -2659,3 +2659,34 @@ TEST(CuboidTopFace, DepthProjectionPreservesTrayCrossingMaterialAndDropsBelowFlo
   ASSERT_FALSE(result.cuboid_planes.empty());
   EXPECT_GT(result.cuboid_planes.front().cell_count, 200U);
 }
+
+TEST(CuboidTopFace, RemoteAndBelowRoiObservationsCannotExpandHeightGrid)
+{
+  arm_cell_vision::DetectionInput input;
+  input.detailed_diagnostics_enabled = true;
+  input.optical_to_base.transform.rotation.w = 1;
+  input.depth.width = input.depth.height = 200;
+  input.depth.encoding = "32FC1";
+  input.depth.step = 800;
+  input.depth.data.resize(160000);
+  input.camera_info.width = input.camera_info.height = 200;
+  input.camera_info.k = {20, 0, 100, 0, 20, 100, 0, 0, 1};
+  tf2::Transform support;
+  support.setIdentity();
+  support.setRotation(tf2::Quaternion(1, 0, 0, 0));
+  support.setOrigin(tf2::Vector3(0, 0, 1));
+  auto p = profile();
+  p.workspace_roi_min_m[2] = 0.02;
+  for (float depth : {0.99F, 0.97F}) {
+    // A lone remote point is either below the Z ROI or inside its Z range.
+    std::fill(input.depth.data.begin(), input.depth.data.end(), 0);
+    std::memcpy(input.depth.data.data(), &depth, 4);
+    const float below_roi = 0.99F;
+    // x ~= 0.396 m is inside the expansion limit but outside the initial ROI.
+    std::memcpy(input.depth.data.data() + 100 * input.depth.step + 108 * 4, &below_roi, 4);
+    const auto result = arm_cell_vision::process_cuboid_top_face(input, p, support);
+    ASSERT_TRUE(result.cuboid_replay_evidence);
+    EXPECT_EQ(result.cuboid_replay_evidence->rows, 241U);
+    EXPECT_EQ(result.cuboid_replay_evidence->columns, 241U);
+  }
+}
