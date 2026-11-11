@@ -139,3 +139,18 @@ def test_session_search_accepts_legacy_and_rejects_mixed_layout_ambiguity(tmp_pa
     assert find_open_session(tmp_path) is None
     legacy.write_text(json.dumps({"session_id": "legacy", "status": "closed"}))
     assert find_open_session(tmp_path)[0] == current.descriptor
+
+
+def test_custom_directories_are_used_for_creation_and_discovery(tmp_path, monkeypatch):
+    (tmp_path / 'config').mkdir()
+    (tmp_path / 'config/run_records.yaml').write_text(
+        'root: output/records\ndirectories:\n  diagnostic: logs/diag\n  snapshots: images/captures\n')
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(tmp_path))
+    from shared.run_records import run_records_root
+    root = run_records_root(tmp_path)
+    session = LiveTestSession(root)
+    assert session.root.parts[-2:] == ('logs', 'diag')
+    assert find_open_session(root)[0] == session.descriptor
+    run_root = session.root.parent.parent
+    assert session.data['artifact_locations']['vision_snapshots']['path'] == str(
+        run_root / 'images/captures')

@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import subprocess
 import uuid
+
+from shared.run_records import record_directory_name
 from datetime import datetime
 
 
@@ -82,8 +84,8 @@ class LiveTestSession:
                 break
             except FileExistsError:
                 suffix += 1
-        candidate = run_root / "diagnostic"
-        candidate.mkdir()
+        candidate = run_root / record_directory_name(project_root, "diagnostic")
+        candidate.mkdir(parents=True)
         self.root = candidate
         self.descriptor = candidate / "session.json"
         self.data = {
@@ -131,7 +133,7 @@ class LiveTestSession:
             },
             "artifact_locations": {
                 "vision_snapshots": {
-                    "path": str(run_root / "snapshots"),
+                    "path": str(run_root / record_directory_name(project_root, "snapshots")),
                     "status": "unconfirmed",
                 },
                 "rawpart_pose_recordings": {
@@ -196,11 +198,14 @@ def find_open_session(artifact_root):
     unreadable = False
     if not root.is_dir():
         return None
-    for descriptor in (
+    project_root = Path(os.environ.get("SFTWIN_PROJECT_ROOT", root.resolve().parent))
+    diagnostic = record_directory_name(project_root, "diagnostic")
+    for descriptor in set((
+        *root.glob(f"[0-9]*/[0-9]*/{diagnostic}/session.json"),
         *root.glob("[0-9]*/[0-9]*/diagnostic/session.json"),
         *root.glob("[0-9]*/[0-9]*/diagnostic_records/session.json"),
         *root.glob("diagnostic_records/[0-9]*/**/session.json"),
-    ):
+    )):
         try:
             data = json.loads(descriptor.read_text(encoding="utf-8"))
             if not isinstance(data, dict):

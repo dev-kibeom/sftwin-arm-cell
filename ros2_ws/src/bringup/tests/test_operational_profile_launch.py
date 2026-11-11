@@ -1105,3 +1105,24 @@ def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):
     record_path = Path(context.environment["ARM_CELL_PICK_EXECUTION_RECORD_DIR"])
     assert record_path.relative_to(root).parts[-3:] == ("diagnostic", "motion", "pick_execution_records")
     assert len(record_path.relative_to(root).parts) == 5
+
+
+def test_custom_directory_names_control_sessions_and_snapshots(tmp_path, monkeypatch):
+    checkout = Path(os.environ['SFTWIN_PROJECT_ROOT'])
+    (checkout / 'config').mkdir()
+    (checkout / 'config/run_records.yaml').write_text(
+        'root: output/records\ndirectories:\n  diagnostic: logs/diag\n  snapshots: images/captures\n')
+    module = _load_launch_module()
+    root = Path(module.project_artifacts_directory())
+    assert root == checkout / 'output/records'
+    session = module.create_recording_session(root, 'hardware')
+    assert session.parts[-2:] == ('logs', 'diag')
+    snapshots = module.reserve_snapshot_run_directory(root, session)
+    assert snapshots == session.parent.parent / 'images/captures'
+    assert json.loads((session / 'session.json').read_text())['recording_locations']['snapshots'] == str(snapshots)
+    data = json.loads((session / 'session.json').read_text())
+    data['owner'] = 'isaac'
+    data['participants'] = [{'process': 'isaac', 'instance_id': f'isaac-{os.getpid()}',
+                             'process_start_token': Path(f'/proc/{os.getpid()}/stat').read_text().rsplit(')', 1)[1].split()[19]}]
+    (session / 'session.json').write_text(json.dumps(data))
+    assert module._live_isaac_descriptors(root)[0][0] == session / 'session.json'

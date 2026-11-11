@@ -21,6 +21,11 @@ def run_records_config(checkout):
     return (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
 
 
+def record_directory_name(checkout, kind):
+    """Resolve the configured directory name within a run."""
+    return run_records_config(checkout).get("directories", {}).get(kind, kind)
+
+
 _RUN_DIRECTORIES = {}
 
 

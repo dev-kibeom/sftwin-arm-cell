@@ -177,12 +177,14 @@ def project_artifacts_directory():
     return str((root / Path(config.get("root", ".run_records")).expanduser()).resolve())
 
 
-def diagnostic_root(artifact_directory):
-    root = project_checkout_root()
-    config_path = root / "config/run_records.yaml"
+def record_directory_name(kind):
+    config_path = project_checkout_root() / "config/run_records.yaml"
     config = (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
-    relative = config.get("directories", {}).get("diagnostic", "diagnostic")
-    return Path(artifact_directory) / relative
+    return config.get("directories", {}).get(kind, kind)
+
+
+def diagnostic_root(artifact_directory):
+    return Path(artifact_directory) / record_directory_name("diagnostic")
 
 
 def _git_provenance():
@@ -239,11 +241,13 @@ def _live_isaac_descriptors(artifact_directory):
     descriptors = []
     unreadable = False
     if root.is_dir():
-        for descriptor in (
+        diagnostic = record_directory_name("diagnostic")
+        for descriptor in set((
+            *root.glob(f"[0-9]*/[0-9]*/{diagnostic}/session.json"),
             *root.glob("[0-9]*/[0-9]*/diagnostic/session.json"),
             *root.glob("[0-9]*/[0-9]*/diagnostic_records/session.json"),
             *root.glob("diagnostic_records/[0-9]*/**/session.json"),
-        ):
+        )):
             try:
                 data = json.loads(descriptor.read_text(encoding="utf-8"))
                 if not isinstance(data, dict):
@@ -392,7 +396,7 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
             except FileExistsError:
                 suffix += 1
         root = diagnostic_root(run_root)
-        root.mkdir()
+        root.mkdir(parents=True)
         data = {
             "schema_version": 1,
             "session_id": str(uuid.uuid4()),
@@ -428,7 +432,7 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
                 data["recording_locations"][component] = str(source)
         data["recording_locations"]["ros_logs"] = str(launch_config.log_dir)
         data["recording_locations"]["snapshots"] = str(
-            root.parent / "snapshots")
+            run_root / record_directory_name("snapshots"))
         descriptor = root / "session.json"
         temporary = descriptor.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -509,14 +513,27 @@ def finish_recording_session(context, root):
 def reserve_snapshot_run_directory(artifact_directory, session_root=None):
     """Choose the session's shared destination; writers create it on first save."""
     if session_root is not None:
-        if Path(session_root).name in ("diagnostic", "diagnostic_records"):
-            return Path(session_root).parent / "snapshots"
+        session_root = Path(session_root)
+        data = json.loads((session_root / "session.json").read_text(encoding="utf-8"))
+        recorded = data.get("artifact_locations", {}).get("vision_snapshots", {}).get("path")
+        recorded = recorded or data.get("recording_locations", {}).get("snapshots")
+        if recorded:
+            path = Path(recorded)
+            return path if path.is_absolute() else session_root / path
+        diagnostic_parts = Path(record_directory_name("diagnostic")).parts
+        if tuple(session_root.parts[-len(diagnostic_parts):]) == diagnostic_parts:
+            run_root = session_root
+            for _ in diagnostic_parts:
+                run_root = run_root.parent
+            return run_root / record_directory_name("snapshots")
+        if session_root.name in ("diagnostic", "diagnostic_records"):
+            return session_root.parent / record_directory_name("snapshots")
         # Existing descriptors keep their original artifact locations.
-        return (Path(artifact_directory) / "snapshots" /
+        return (Path(artifact_directory) / record_directory_name("snapshots") /
                 Path(session_root).parent.name / Path(session_root).name)
     now = datetime.now().astimezone()
     return (Path(artifact_directory) / now.strftime("%Y%m%d") /
-            f"{now:%H%M%S}-{now:%f}-{os.getpid()}" / "snapshots")
+            f"{now:%H%M%S}-{now:%f}-{os.getpid()}" / record_directory_name("snapshots"))
 
 
 def node_ros_arguments(
@@ -623,7 +640,7 @@ def compose(context):
         else diagnostic_root(artifact_directory) / "vision"
     )
     snapshot_run_directory = (reserve_snapshot_run_directory(artifact_directory, live_session_root)
-                              if live_session_root else artifact_directory / "snapshots")
+                              if live_session_root else artifact_directory / record_directory_name("snapshots"))
     motion_artifact_directory = (
         live_session_root / "motion"
         if live_session_root
@@ -806,7 +823,7 @@ def compose(context):
                     "diagnostics.capture_enabled": "motion" in selected_diagnostics,
                     "diagnostics.output_directory": str(motion_artifact_directory),
                     "diagnostics.snapshot_run_directory": str(
-                        snapshot_run_directory or artifact_directory / "snapshots"
+                        snapshot_run_directory or artifact_directory / record_directory_name("snapshots")
                     ),
                     "home_joint_positions": home_joint_positions,
                     "robot_description": robot_description,
