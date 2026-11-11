@@ -1,3 +1,4 @@
+#include "arm_cell_motion/attached_payload.hpp"
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -158,6 +159,19 @@ TEST_F(RequestScopedOccupancyTest, CandidateTransitionAndPlaceUseIndependentCont
   EXPECT_FALSE(collides(place_context, 1.0));
   EXPECT_TRUE(collides(place_context, 2.0));
   EXPECT_TRUE(candidate_occupancy_ids(fixed_message_).empty());
+}
+
+TEST_F(RequestScopedOccupancyTest, PayloadCollidesWhenBareToolIsClear)
+{
+  geometry_msgs::msg::Transform relation;
+  relation.rotation.w = 1.0;
+  relation.translation.x = -1.0;
+  const auto payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+  EXPECT_DOUBLE_EQ(payload.object.primitive_poses[0].position.x, 1.0);
+  EXPECT_FALSE(collides(*fixed_scene_, 1.0));
+  ASSERT_TRUE(fixed_scene_->processAttachedCollisionObjectMsg(payload));
+  EXPECT_TRUE(collides(*fixed_scene_, 1.0));
+  EXPECT_THROW(make_attached_payload(relation, {}), std::invalid_argument);
 }
 
 TEST_F(RequestScopedOccupancyTest, PlaceDiffRemovesLegacyTemporaryIdsButPreservesOtherSceneState)

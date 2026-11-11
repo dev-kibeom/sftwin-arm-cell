@@ -48,7 +48,9 @@ std::uint8_t pick_failure_stage_code(std::uint8_t result, const std::string & st
     return Stage::PICK_FAILURE_STAGE_SCENE_INTEGRITY;
   }
   if (stage.find("approach:") == 0U) {
-    if (result == Code::TASK_RESULT_IK_UNREACHABLE) {return Stage::PICK_FAILURE_STAGE_APPROACH_IK_FK;}
+    if (result == Code::TASK_RESULT_IK_UNREACHABLE) {
+      return Stage::PICK_FAILURE_STAGE_APPROACH_IK_FK;
+    }
     if (result == Code::TASK_RESULT_PATH_OBSTRUCTED ||
       result == Code::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED)
     {
@@ -87,21 +89,26 @@ public:
   void start(std::uint8_t phase)
   {
     publish(phase, 0, 0, 0, "Reported Motion execution phase");
-    thread_ = std::thread([this]() {
-      std::unique_lock<std::mutex> lock(mutex_);
-      while (running_) {
-        if (condition_.wait_for(lock, std::chrono::milliseconds(500), [this]() {return !running_;})) {
-          break;
+    thread_ = std::thread(
+      [this]() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        while (running_) {
+          if (condition_.wait_for(
+            lock, std::chrono::milliseconds(500),
+            [this]() {return !running_;}))
+          {
+            break;
+          }
+          const auto phase = phase_;
+          lock.unlock();
+          publish(phase, attempt_, retry_budget_, last_failure_, "Reported Motion execution phase");
+          lock.lock();
         }
-        const auto phase = phase_;
-        lock.unlock();
-        publish(phase, attempt_, retry_budget_, last_failure_, "Reported Motion execution phase");
-        lock.lock();
-      }
-    });
+      });
   }
 
-  void event(std::uint8_t phase, std::uint8_t attempt, std::uint8_t retry_budget,
+  void event(
+    std::uint8_t phase, std::uint8_t attempt, std::uint8_t retry_budget,
     std::uint8_t last_failure)
   {
     const auto failure = last_failure == Action::Feedback::RELEASE_FAILURE_CONFIRMATION_TIMEOUT ?
@@ -167,14 +174,16 @@ private:
 
 LegacyExecuteTaskActionServer::LegacyExecuteTaskActionServer(
   rclcpp::Node * node, std::shared_ptr<MotionPort> motion_port,
-  std::shared_ptr<TaskExecutor> task_executor)
-: node_(node), motion_port_(std::move(motion_port)),
+  std::shared_ptr<TaskExecutor> task_executor, const std::string & action_name,
+  bool payload_home_only)
+: payload_home_only_(payload_home_only), node_(node), motion_port_(std::move(motion_port)),
   task_executor_(std::move(task_executor)),
   execution_mutex_(task_executor_ ? task_executor_->execution_mutex() : nullptr)
 {
   server_ = rclcpp_action::create_server<Action>(
-    node_, "/motion/execute_task",
-    std::bind(&LegacyExecuteTaskActionServer::handle_goal, this,
+    node_, action_name,
+    std::bind(
+      &LegacyExecuteTaskActionServer::handle_goal, this,
       std::placeholders::_1, std::placeholders::_2),
     std::bind(&LegacyExecuteTaskActionServer::handle_cancel, this, std::placeholders::_1),
     std::bind(&LegacyExecuteTaskActionServer::handle_accepted, this, std::placeholders::_1));
@@ -183,6 +192,11 @@ LegacyExecuteTaskActionServer::LegacyExecuteTaskActionServer(
 rclcpp_action::GoalResponse LegacyExecuteTaskActionServer::handle_goal(
   const rclcpp_action::GoalUUID &, std::shared_ptr<const Action::Goal> goal)
 {
+  if (payload_home_only_ && (!goal ||
+    goal->task_type.value != MotionTaskType::TASK_TYPE_PAYLOAD_HOME))
+  {
+    return rclcpp_action::GoalResponse::REJECT;
+  }
   const bool processable = node_ && motion_port_ && task_executor_ && goal &&
     rclcpp::ok(node_->get_node_base_interface()->get_context());
   return processable ? rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE :
@@ -256,7 +270,8 @@ void LegacyExecuteTaskActionServer::execute(
       task_executor->set_phase_callback({});
     }
   } callback_cleanup{task_executor};
-  task_executor->set_interruption_checker([&]() {
+  task_executor->set_interruption_checker(
+    [&]() {
       {
         std::lock_guard<std::mutex> lock(cancellation_state->mutex);
         caller_canceled.store(
@@ -267,24 +282,27 @@ void LegacyExecuteTaskActionServer::execute(
       // A stopped previous execution does not preempt this new Action. MotionCore
       // still owns admission using current capability and backend inactivity.
       if (status.active_execution_id.uuid == goal_handle->get_goal_id() &&
-        (status.execution_state == arm_cell_interfaces::msg::MotionStatus::MOTION_STATE_STOPPING ||
-        status.execution_state == arm_cell_interfaces::msg::MotionStatus::MOTION_STATE_STOPPED))
+      (status.execution_state == arm_cell_interfaces::msg::MotionStatus::MOTION_STATE_STOPPING ||
+      status.execution_state == arm_cell_interfaces::msg::MotionStatus::MOTION_STATE_STOPPED))
       {
         return Code::TASK_RESULT_SAFETY_PREEMPTED;
       }
       return Code::TASK_RESULT_SUCCESS;
     });
-  task_executor->set_phase_callback([&heartbeat](
+  task_executor->set_phase_callback(
+    [&heartbeat](
       std::uint8_t phase, std::uint8_t attempt, std::uint8_t budget, std::uint8_t failure) {
-      if (attempt > 0U) {heartbeat.event(phase, attempt, budget, failure);}
-      else {heartbeat.phase(phase);}
+      if (attempt > 0U) {heartbeat.event(phase, attempt, budget, failure);} else {
+        heartbeat.phase(phase);
+      }
     });
 
   std::uint8_t result_code = Code::TASK_RESULT_BACKEND_ERROR;
   std::string exception_detail;
   heartbeat.start(arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_VALIDATING);
   try {
-    result_code = task_executor->execute(*goal_handle->get_goal(),
+    result_code = task_executor->execute(
+      *goal_handle->get_goal(),
       task_executor->object_state(), id);
   } catch (const std::exception & error) {
     exception_detail = std::string("Task Execution raised an exception: ") + error.what();
@@ -301,7 +319,8 @@ void LegacyExecuteTaskActionServer::execute(
   result->attempted_candidate_ids = task_executor->attempted_material_candidate_ids();
   result->selected_candidate_id = task_executor->outcome_material_candidate_id();
   const auto failure_stage = task_executor->last_failure_stage();
-  result->pick_failure_stage = goal_handle->get_goal()->task_type.value == MotionTaskType::TASK_TYPE_PICK ?
+  result->pick_failure_stage = goal_handle->get_goal()->task_type.value ==
+    MotionTaskType::TASK_TYPE_PICK ?
     pick_failure_stage_code(result_code, failure_stage) : Action::Result::PICK_FAILURE_STAGE_NONE;
   if (!failure_stage.empty()) {result->diagnostic_detail = "failure_stage=" + failure_stage;}
   if (!exception_detail.empty()) {

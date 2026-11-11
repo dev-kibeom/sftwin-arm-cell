@@ -56,9 +56,11 @@ public:
   }
   arm_cell_motion::MotionPortResult planAndExecuteMotion(
     const arm_cell_motion::MotionPortRequest & request) override
-  {return {request.execution_id, request.movement_id, Code::TASK_RESULT_SUCCESS,
-    arm_cell_motion::MotionFailureKind::NONE, {}, {}, true,
-    arm_cell_interfaces::msg::MotionStatus()};}
+  {
+    return {request.execution_id, request.movement_id, Code::TASK_RESULT_SUCCESS,
+      arm_cell_motion::MotionFailureKind::NONE, {}, {}, true,
+      arm_cell_interfaces::msg::MotionStatus()};
+  }
   arm_cell_motion::MotionCancelResult cancelMotion(
     const unique_identifier_msgs::msg::UUID &, const std::string &) override
   {return {true, true, arm_cell_interfaces::msg::MotionStatus()};}
@@ -117,7 +119,8 @@ public:
   bool has_cancel_execution_id() const
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    return std::any_of(cancel_execution_id_.uuid.begin(), cancel_execution_id_.uuid.end(),
+    return std::any_of(
+      cancel_execution_id_.uuid.begin(), cancel_execution_id_.uuid.end(),
       [](std::uint8_t byte) {return byte != 0U;});
   }
 
@@ -328,6 +331,45 @@ TEST(LegacyExecuteTaskActionServer, KeepsExistingEndpointAndResultContract)
   rclcpp::shutdown();
 }
 
+TEST(PayloadHomeActionServer, RejectsOtherTasksAndReturnsWithObjectHeld)
+{
+  if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
+  auto node = std::make_shared<rclcpp::Node>("payload_home_contract_test");
+  auto motion = std::make_shared<ActionMotionPort>();
+  auto gripper = std::make_shared<arm_cell_motion::FakeMotionBackendGripperPort>();
+  gripper->close();
+  auto task_executor = std::make_shared<arm_cell_task_execution::TaskExecutor>(
+    motion, gripper, arm_cell_motion::MotionGeometry{},
+    arm_cell_task_execution::TaskExecutor::InterruptionChecker{}, std::chrono::milliseconds(10));
+  arm_cell_task_execution::LegacyExecuteTaskActionServer server(
+    node.get(), motion, task_executor, "/motion/return_home_with_payload", true);
+  auto client = rclcpp_action::create_client<Action>(node, "/motion/return_home_with_payload");
+  rclcpp::executors::MultiThreadedExecutor executor;
+  executor.add_node(node);
+  std::thread spin_thread([&executor]() {executor.spin();});
+  EXPECT_TRUE(client->wait_for_action_server(std::chrono::seconds(2)));
+  Action::Goal goal;
+  goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+  auto rejected = client->async_send_goal(goal);
+  EXPECT_EQ(rejected.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+  EXPECT_EQ(rejected.get(), nullptr);
+  goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PAYLOAD_HOME;
+  auto accepted = client->async_send_goal(goal);
+  EXPECT_EQ(accepted.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+  auto handle = accepted.get();
+  EXPECT_NE(handle, nullptr);
+  if (handle) {
+    auto result = client->async_get_result(handle);
+    EXPECT_EQ(result.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+    auto wrapped = result.get();
+    EXPECT_EQ(wrapped.result->result_code.value, Code::TASK_RESULT_SUCCESS);
+    EXPECT_EQ(wrapped.result->object_disposition, Action::Result::OBJECT_DISPOSITION_HELD);
+  }
+  executor.cancel();
+  spin_thread.join();
+  rclcpp::shutdown();
+}
+
 TEST(LegacyExecuteTaskActionServer, SerializesGoalsAndRoutesCancellationFeedbackAndTerminalState)
 {
   if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
@@ -348,8 +390,8 @@ TEST(LegacyExecuteTaskActionServer, SerializesGoalsAndRoutesCancellationFeedback
   std::atomic_size_t feedback_count{0};
   rclcpp_action::Client<Action>::SendGoalOptions options;
   options.feedback_callback = [&feedback_count](
-      rclcpp_action::ClientGoalHandle<Action>::SharedPtr,
-      const std::shared_ptr<const Action::Feedback>) {++feedback_count;};
+    rclcpp_action::ClientGoalHandle<Action>::SharedPtr,
+    const std::shared_ptr<const Action::Feedback>) {++feedback_count;};
   Action::Goal goal;
   goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
   const auto goal_future = client->async_send_goal(goal, options);
@@ -423,7 +465,7 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   using PnpClient = rclcpp_action::Client<PnpAction>;
   using LegacyClient = rclcpp_action::Client<Action>;
   const auto run_pnp = [&pnp_client](PnpAction::Goal goal)
-      -> std::optional<PnpClient::WrappedResult> {
+    -> std::optional<PnpClient::WrappedResult> {
       auto goal_future = pnp_client->async_send_goal(goal);
       if (goal_future.wait_for(std::chrono::seconds(3)) != std::future_status::ready) {
         ADD_FAILURE() << "ExecutePnp goal acceptance timed out";
@@ -442,7 +484,7 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
       return result_future.get();
     };
   const auto run_legacy = [&legacy_client]()
-      -> std::optional<LegacyClient::WrappedResult> {
+    -> std::optional<LegacyClient::WrappedResult> {
       Action::Goal goal;
       goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
       auto goal_future = legacy_client->async_send_goal(goal);
@@ -501,7 +543,8 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   const auto competing_pnp_handle = competing_pnp_future.get();
   ASSERT_NE(competing_pnp_handle, nullptr);
   auto competing_pnp_result_future = pnp_client->async_get_result(competing_pnp_handle);
-  ASSERT_EQ(competing_pnp_result_future.wait_for(std::chrono::seconds(3)),
+  ASSERT_EQ(
+    competing_pnp_result_future.wait_for(std::chrono::seconds(3)),
     std::future_status::ready);
   const auto competing_pnp_result = competing_pnp_result_future.get();
   ASSERT_NE(competing_pnp_result.result, nullptr);
@@ -511,12 +554,14 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   competing_legacy_goal.task_type.value =
     arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
   auto competing_legacy_future = legacy_client->async_send_goal(competing_legacy_goal);
-  ASSERT_EQ(competing_legacy_future.wait_for(std::chrono::seconds(3)),
+  ASSERT_EQ(
+    competing_legacy_future.wait_for(std::chrono::seconds(3)),
     std::future_status::ready);
   const auto competing_legacy_handle = competing_legacy_future.get();
   ASSERT_NE(competing_legacy_handle, nullptr);
   auto competing_legacy_result_future = legacy_client->async_get_result(competing_legacy_handle);
-  ASSERT_EQ(competing_legacy_result_future.wait_for(std::chrono::seconds(3)),
+  ASSERT_EQ(
+    competing_legacy_result_future.wait_for(std::chrono::seconds(3)),
     std::future_status::ready);
   const auto competing_legacy_result = competing_legacy_result_future.get();
   ASSERT_NE(competing_legacy_result.result, nullptr);
@@ -526,7 +571,8 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   ASSERT_EQ(cancel_future.wait_for(std::chrono::seconds(3)), std::future_status::ready);
   EXPECT_EQ(cancel_future.get()->return_code, action_msgs::srv::CancelGoal::Response::ERROR_NONE);
   auto canceled_result_future = pnp_client->async_get_result(cancel_goal_handle);
-  ASSERT_EQ(canceled_result_future.wait_for(std::chrono::seconds(5)),
+  ASSERT_EQ(
+    canceled_result_future.wait_for(std::chrono::seconds(5)),
     std::future_status::ready);
   const auto canceled_result = canceled_result_future.get();
   ASSERT_NE(canceled_result.result, nullptr);
@@ -547,7 +593,8 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   EXPECT_EQ(exception_result->code, rclcpp_action::ResultCode::ABORTED);
   EXPECT_EQ(exception_result->result->pnp_outcome, PnpAction::Result::PNP_OUTCOME_FAILED);
   EXPECT_EQ(exception_result->result->result_code.value, Code::TASK_RESULT_BACKEND_ERROR);
-  EXPECT_NE(exception_result->result->diagnostic_detail.find("lifecycle motion exception"),
+  EXPECT_NE(
+    exception_result->result->diagnostic_detail.find("lifecycle motion exception"),
     std::string::npos);
   EXPECT_FALSE(exception_result->result->material_placed);
   expect_callbacks_cleared();
@@ -565,9 +612,11 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   ASSERT_NE(safety_exception->result, nullptr);
   EXPECT_EQ(safety_exception->code, rclcpp_action::ResultCode::ABORTED);
   EXPECT_EQ(safety_exception->result->result_code.value, Code::TASK_RESULT_SAFETY_PREEMPTED);
-  EXPECT_EQ(safety_exception->result->pnp_outcome,
+  EXPECT_EQ(
+    safety_exception->result->pnp_outcome,
     PnpAction::Result::PNP_OUTCOME_SAFETY_PREEMPTED);
-  EXPECT_NE(safety_exception->result->diagnostic_detail.find("exception after Safety Stop"),
+  EXPECT_NE(
+    safety_exception->result->diagnostic_detail.find("exception after Safety Stop"),
     std::string::npos);
   expect_callbacks_cleared();
 
@@ -586,7 +635,8 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
 
   // A later task must not rewrite the interrupted PICK's terminal result.
   EXPECT_EQ(safety_exception->result->result_code.value, Code::TASK_RESULT_SAFETY_PREEMPTED);
-  EXPECT_EQ(safety_exception->result->pnp_outcome,
+  EXPECT_EQ(
+    safety_exception->result->pnp_outcome,
     PnpAction::Result::PNP_OUTCOME_SAFETY_PREEMPTED);
 
   motion->set_next_behavior(LifecycleActionMotionPort::NextBehavior::THROW_PLACE_RETRACT);
@@ -597,9 +647,11 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   EXPECT_EQ(post_release_exception->result->pnp_outcome, PnpAction::Result::PNP_OUTCOME_FAILED);
   EXPECT_EQ(post_release_exception->result->result_code.value, Code::TASK_RESULT_BACKEND_ERROR);
   EXPECT_TRUE(post_release_exception->result->material_placed);
-  EXPECT_EQ(post_release_exception->result->object_disposition,
+  EXPECT_EQ(
+    post_release_exception->result->object_disposition,
     Action::Result::OBJECT_DISPOSITION_PLACED);
-  EXPECT_NE(post_release_exception->result->diagnostic_detail.find("post-release motion exception"),
+  EXPECT_NE(
+    post_release_exception->result->diagnostic_detail.find("post-release motion exception"),
     std::string::npos);
   expect_callbacks_cleared();
 
@@ -615,7 +667,8 @@ TEST(ExecutePnpActionServer, ReusesSharedExecutorSafelyAcrossTerminalCancelExcep
   ASSERT_NE(legacy_exception->result, nullptr);
   EXPECT_EQ(legacy_exception->code, rclcpp_action::ResultCode::ABORTED);
   EXPECT_EQ(legacy_exception->result->result_code.value, Code::TASK_RESULT_BACKEND_ERROR);
-  EXPECT_NE(legacy_exception->result->diagnostic_detail.find("legacy lifecycle motion exception"),
+  EXPECT_NE(
+    legacy_exception->result->diagnostic_detail.find("legacy lifecycle motion exception"),
     std::string::npos);
   expect_callbacks_cleared();
 
@@ -641,15 +694,15 @@ TEST(LegacyExecuteTaskActionServer, RecoveryHomeUsesMotionCoreAdmissionAfterPrev
     std::uint8_t expected;
   };
   for (const auto scenario : {
-      Scenario{"stopping", false, true, Capability::MOTION_NORMAL, Code::TASK_RESULT_BUSY},
-      Scenario{"stopped_unconfirmed", true, false, Capability::MOTION_NORMAL,
-        Code::TASK_RESULT_BUSY},
-      Scenario{"reset_complete", true, true, Capability::MOTION_NORMAL,
-        Code::TASK_RESULT_SUCCESS},
-      Scenario{"no_permission", true, true, Capability::MOTION_NONE,
-        Code::TASK_RESULT_PERMISSION_DENIED},
-      Scenario{"recovery_only", true, true, Capability::MOTION_RECOVERY_ONLY,
-        Code::TASK_RESULT_PERMISSION_DENIED}})
+    Scenario{"stopping", false, true, Capability::MOTION_NORMAL, Code::TASK_RESULT_BUSY},
+    Scenario{"stopped_unconfirmed", true, false, Capability::MOTION_NORMAL,
+      Code::TASK_RESULT_BUSY},
+    Scenario{"reset_complete", true, true, Capability::MOTION_NORMAL,
+      Code::TASK_RESULT_SUCCESS},
+    Scenario{"no_permission", true, true, Capability::MOTION_NONE,
+      Code::TASK_RESULT_PERMISSION_DENIED},
+    Scenario{"recovery_only", true, true, Capability::MOTION_RECOVERY_ONLY,
+      Code::TASK_RESULT_PERMISSION_DENIED}})
   {
     SCOPED_TRACE(scenario.name);
     if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
@@ -666,16 +719,21 @@ TEST(LegacyExecuteTaskActionServer, RecoveryHomeUsesMotionCoreAdmissionAfterPrev
     safety.max_velocity_scale = 1.0F;
     safety.max_acceleration_scale = 1.0F;
     motion->update_safety_state(safety, arm_cell_motion::MotionCore::Clock::now());
-    ASSERT_EQ(motion->executeLegacyMovement(Type::TASK_TYPE_GO_HOME,
-      "01000000000000000000000000000000", "previous-movement"), Code::TASK_RESULT_SUCCESS);
+    ASSERT_EQ(
+      motion->executeLegacyMovement(
+        Type::TASK_TYPE_GO_HOME,
+        "01000000000000000000000000000000", "previous-movement"), Code::TASK_RESULT_SUCCESS);
     unique_identifier_msgs::msg::UUID stop_id;
     stop_id.uuid[0] = 2;
-    ASSERT_TRUE(motion->request_stop(stop_id,
-      arm_cell_interfaces::msg::StopMode::STOP_MODE_EMERGENCY));
+    ASSERT_TRUE(
+      motion->request_stop(
+        stop_id,
+        arm_cell_interfaces::msg::StopMode::STOP_MODE_EMERGENCY));
     backend->set_execution_active(false);
     backend->set_inactivity_confirmed(true);
     if (scenario.refresh_stop) {motion->refresh_stop_state();}
-    ASSERT_EQ(motion->status().execution_state,
+    ASSERT_EQ(
+      motion->status().execution_state,
       scenario.refresh_stop ? Status::MOTION_STATE_STOPPED : Status::MOTION_STATE_STOPPING);
     // Backend evidence may be lost after the last STOPPED publication.
     backend->set_inactivity_confirmed(scenario.backend_inactive);
@@ -687,7 +745,8 @@ TEST(LegacyExecuteTaskActionServer, RecoveryHomeUsesMotionCoreAdmissionAfterPrev
     auto task_executor = std::make_shared<arm_cell_task_execution::TaskExecutor>(
       motion, gripper, geometry,
       arm_cell_task_execution::TaskExecutor::InterruptionChecker{}, std::chrono::milliseconds(10));
-    arm_cell_task_execution::LegacyExecuteTaskActionServer server(node.get(), motion, task_executor);
+    arm_cell_task_execution::LegacyExecuteTaskActionServer server(node.get(), motion,
+      task_executor);
     auto client = rclcpp_action::create_client<Action>(node, "/motion/execute_task");
     rclcpp::executors::MultiThreadedExecutor executor;
     executor.add_node(node);
@@ -711,7 +770,8 @@ TEST(LegacyExecuteTaskActionServer, RecoveryHomeUsesMotionCoreAdmissionAfterPrev
     const auto result = result_future.get();
     ASSERT_NE(result.result, nullptr);
     EXPECT_EQ(result.result->result_code.value, scenario.expected);
-    EXPECT_EQ(backend->execute_task_calls() - backend_calls,
+    EXPECT_EQ(
+      backend->execute_task_calls() - backend_calls,
       scenario.expected == Code::TASK_RESULT_SUCCESS ? 1 : 0);
   }
 }
@@ -741,7 +801,8 @@ TEST(ExecutePnpActionServer, ResetAndNewHomePreserveInterruptedPickResult)
   auto task_executor = std::make_shared<arm_cell_task_execution::TaskExecutor>(
     motion, backend->gripper_port(), geometry);
   arm_cell_task_execution::ExecutePnpActionServer pnp_server(node.get(), motion, task_executor);
-  arm_cell_task_execution::LegacyExecuteTaskActionServer home_server(node.get(), motion, task_executor);
+  arm_cell_task_execution::LegacyExecuteTaskActionServer home_server(node.get(), motion,
+    task_executor);
   auto pnp_client = rclcpp_action::create_client<PnpAction>(node, "/task_execution/execute_pnp");
   auto home_client = rclcpp_action::create_client<Action>(node, "/motion/execute_task");
   rclcpp::executors::MultiThreadedExecutor executor;
@@ -773,8 +834,10 @@ TEST(ExecutePnpActionServer, ResetAndNewHomePreserveInterruptedPickResult)
   motion->update_safety_state(safety, arm_cell_motion::MotionCore::Clock::now());
   unique_identifier_msgs::msg::UUID stop_id;
   stop_id.uuid[0] = 3;
-  ASSERT_TRUE(motion->request_stop(stop_id,
-    arm_cell_interfaces::msg::StopMode::STOP_MODE_EMERGENCY));
+  ASSERT_TRUE(
+    motion->request_stop(
+      stop_id,
+      arm_cell_interfaces::msg::StopMode::STOP_MODE_EMERGENCY));
   ASSERT_TRUE(backend->wait_until_interruption_ready());
   backend->set_execution_active(false);
   backend->set_inactivity_confirmed(true);

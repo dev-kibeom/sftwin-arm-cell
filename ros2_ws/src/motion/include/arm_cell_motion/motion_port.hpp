@@ -42,7 +42,8 @@ enum class MotionSegmentKind : std::uint8_t
   PLACE_RETRACT,
   DISTURB_APPROACH,
   DISTURB_PUSH,
-  DISTURB_RETRACT
+  DISTURB_RETRACT,
+  PAYLOAD_HOME
 };
 
 enum class MotionFailureKind : std::uint8_t

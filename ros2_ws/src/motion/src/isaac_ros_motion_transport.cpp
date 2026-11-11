@@ -1,3 +1,4 @@
+#include "arm_cell_motion/attached_payload.hpp"
 #include "arm_cell_motion/candidate_occupancy.hpp"
 #include "arm_cell_motion/isaac_ros_motion_transport.hpp"
 #include "arm_cell_motion/planning_start_state.hpp"
@@ -1072,7 +1073,9 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
           {"attempts", retained_final_count > 0U ? nlohmann::json::array({attempts.back()}) :
             nlohmann::json::array()},
           {"candidate_switch_occurred", material.value("candidate_switch_occurred", false)},
-          {"multiple_material_candidates_searched", material.value("candidate_switch_occurred", false)},
+          {"multiple_material_candidates_searched", material.value(
+              "candidate_switch_occurred",
+              false)},
           {"final_target_candidate_id", material.value("final_target_candidate_id", std::string{})},
           {"acquisition_id", material.value("acquisition_id", vision_acquisition_id)},
           {"grasp_pose_candidates_reference", "motion_planning_details"},
@@ -1662,13 +1665,22 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
     throw std::invalid_argument(
             "place_tray_return_joint_positions must be finite and follow arm_joint_names");
   }
-  place_pose_candidate_limit_ = declare_positive_limit("place_max_pose_candidates", 13);
+  place_pose_candidate_limit_ = declare_positive_limit("place_max_pose_candidates", 48);
+  place_ik_seed_attempts_ = declare_positive_limit("place_ik_seed_attempts_per_pose", 2);
+  if (!node_->has_parameter("place_ik_timeout_s")) {
+    node_->declare_parameter<double>("place_ik_timeout_s", 1.0);
+  }
+  place_ik_timeout_s_ = node_->get_parameter("place_ik_timeout_s").as_double();
+  if (!std::isfinite(place_ik_timeout_s_) || place_ik_timeout_s_ <= 0.0) {
+    throw std::invalid_argument("place_ik_timeout_s must be positive and finite");
+  }
   pick_approach_global_max_requests_ = declare_stage_limit(
     "pick_approach_global_max_requests", 3);
   pick_final_cartesian_max_requests_ = declare_stage_limit(
     "pick_final_cartesian_max_requests", 1);
   pick_final_global_fallback_max_requests_ = declare_stage_limit(
     "pick_final_global_fallback_max_requests", 3);
+  place_planning_num_attempts_ = declare_stage_limit("place_planning_num_attempts", 3);
   place_approach_global_max_requests_ = declare_stage_limit(
     "place_approach_global_max_requests", 3);
   place_final_cartesian_max_requests_ = declare_stage_limit(
@@ -1952,6 +1964,7 @@ bool IsaacRosMotionTransport::commit_pending_grasp_relation()
     if (!pending_object_to_tcp_valid_) {
       return false;
     }
+    accepted_payload_dimensions_ = pending_payload_dimensions_;
     accepted_object_to_tcp_ = pending_object_to_tcp_;
     accepted_object_to_tcp_valid_ = true;
     pending_object_to_tcp_valid_ = false;
@@ -1975,6 +1988,7 @@ void IsaacRosMotionTransport::clear_grasp_relation_after_release()
   std::lock_guard<std::mutex> lock(mutex_);
   pending_object_to_tcp_valid_ = false;
   accepted_object_to_tcp_valid_ = false;
+  accepted_payload_dimensions_.clear();
 }
 
 void IsaacRosMotionTransport::configure_waypoint_mode(
@@ -3210,6 +3224,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       }
     }
   }
+  if (request.segment == MotionSegmentKind::PAYLOAD_HOME) {
+    std::lock_guard<std::mutex> candidate_lock(mutex_);
+    place_candidate_pose_floor_ = 0U;
+    selected_place_pose_valid_ = false;
+  }
   if (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE) {
     std::lock_guard<std::mutex> place_pose_lock(mutex_);
     if (request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING) {
@@ -3387,7 +3406,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       return restored;
     };
 
-  const bool cartesian_primitive = !(request.segment == MotionSegmentKind::PLACE_CLEARANCE &&
+  const bool cartesian_primitive = request.segment != MotionSegmentKind::PAYLOAD_HOME &&
+    !(request.segment == MotionSegmentKind::PLACE_CLEARANCE &&
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE) &&
     uses_cartesian_manipulation(request.task_type.value, request.phase);
   const char * primitive_type = cartesian_primitive ? "CARTESIAN" : "GLOBAL";
@@ -3455,6 +3475,31 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       retract_exception_context_result = "SCENE_SERVICE_UNAVAILABLE";
     }
     if (has_scene_snapshot) {
+      std::optional<moveit_msgs::msg::AttachedCollisionObject> payload;
+      {
+        std::lock_guard<std::mutex> payload_lock(mutex_);
+        const bool held_place = request.task_type.value ==
+          arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE &&
+          request.phase != arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING &&
+          !request.is_disturbance &&
+          (!request.place_waypoint_approach || accepted_object_to_tcp_valid_);
+        if (held_place) {
+          if (!accepted_object_to_tcp_valid_) {
+            normalized_failure_result_ =
+              arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+            return false;
+          }
+          try {
+            payload = make_attached_payload(accepted_object_to_tcp_, accepted_payload_dimensions_);
+          } catch (const std::invalid_argument & error) {
+            normalized_failure_result_ =
+              arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+            RCLCPP_ERROR(node_->get_logger(), "Payload planning rejected: %s", error.what());
+            return false;
+          }
+          scene_snapshot.robot_state.attached_collision_objects.push_back(*payload);
+        }
+      }
       request_validation_scene = std::make_shared<planning_scene::PlanningScene>(robot_model);
       if (!request_validation_scene->setPlanningSceneMsg(scene_snapshot)) {
         request_validation_scene.reset();
@@ -3476,6 +3521,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           retract_exception_context_result = manipulation_scene.failure_reason;
         } else {
           manipulation_scene_diff = manipulation_scene.diff;
+          if (payload) {
+            manipulation_scene_diff.robot_state.attached_collision_objects = {*payload};
+          }
         }
         const bool add_candidate_occupancy = vision_collision_scope_required &&
           request.phase ==
@@ -3490,6 +3538,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           retract_exception_context_result = path_scene.failure_reason;
         } else {
           planning_request_scene_diff = path_scene.diff;
+          if (payload) {
+            planning_request_scene_diff.robot_state.attached_collision_objects = {*payload};
+          }
           request_candidate_ids = path_scene.candidate_ids;
         }
         if (!add_candidate_occupancy && vision_collision_scope_required) {
@@ -3618,7 +3669,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       return false;
     }
   }
-  moveit::core::RobotState planning_start_state(*current_state);
+  moveit::core::RobotState planning_start_state(request_validation_scene ?
+    request_validation_scene->getCurrentState() : *current_state);
   apply_measured_joint_positions(planning_start_state, arm_joint_names_, latest_measured_start);
   if (request.has_start_joint_state) {
     std::vector<double> requested_start;
@@ -3821,7 +3873,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     }
     move_group_state_->move_group->setPlanningTime(budget_s);
     const auto result = plan_with_num_attempts(
-      *move_group_state_->move_group, planning_num_attempts_, [&]() {
+      *move_group_state_->move_group, place_planning_num_attempts_, [&]() {
         if (planning_scene_context_required) {
           return plan_with_request_scene_diff(
             *move_group_state_->move_group, plan, planning_request_scene_diff,
@@ -4334,7 +4386,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           if (remaining <= 0.0) {break;}
           move_group_state_->move_group->setPlanningTime(remaining);
           const auto global_result = plan_with_num_attempts(
-            *move_group_state_->move_group, planning_num_attempts_, [&]() {
+            *move_group_state_->move_group,
+            request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ?
+            planning_num_attempts_ : place_planning_num_attempts_, [&]() {
               if (pick_retract_collision_exception || vision_collision_scope_required) {
                 return plan_with_request_scene_diff(
                   *move_group_state_->move_group, fallback_plan, manipulation_scene_diff,
@@ -4528,6 +4582,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE;
     if (place_global_approach) {
       PlaceApproachIkPolicy ik_policy;
+      ik_policy.count_bounded_search = !qualify_place_target && budget_s <= 0.0;
+      ik_policy.max_candidates = place_ik_seed_attempts_;
+      ik_policy.ik_timeout_s = place_ik_timeout_s_;
       ik_policy.per_candidate_planning_budget_s = place_candidate_planning_time_s_;
       ik_policy.total_planning_budget_s = budget_s > 0.0 ?
         std::min(place_total_planning_time_s_, budget_s) : place_total_planning_time_s_;
@@ -4718,7 +4775,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           append_json_number(evidence, planning_scales.max_acceleration);
           evidence << ",\"moveit_planning_time_s\":";
           append_json_number(evidence, planning_time_s_);
-          evidence << ",\"moveit_num_planning_attempts\":" << planning_num_attempts_;
+          evidence << ",\"count_bounded_search\":" <<
+            (ik_policy.count_bounded_search ? "true" : "false");
+          evidence << ",\"moveit_num_planning_attempts\":" << place_planning_num_attempts_;
           evidence << ",\"per_candidate_budget_s\":";
           append_json_number(evidence, ik_policy.per_candidate_planning_budget_s);
           evidence << ",\"total_candidate_budget_s\":";
@@ -4981,7 +5040,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
 
           moveit::core::RobotState ik_seed_state(
-            qualify_place_target ? planning_start_state : *current_state);
+            planning_start_state);
           ik_seed_state.setJointGroupPositions(joint_group, candidate.seed_positions);
           ik_seed_state.update();
           moveit::core::RobotState ik_solution(ik_seed_state);
@@ -5010,7 +5069,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
 
           moveit::core::RobotState endpoint_state(
-            qualify_place_target ? planning_start_state : *current_state);
+            planning_start_state);
           endpoint_state.setJointGroupPositions(joint_group, evaluated.normalized_goal);
           endpoint_state.update();
           if (!endpoint_state.satisfiesBounds(joint_group)) {
@@ -5147,7 +5206,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           move_group_state_->move_group->setPlanningTime(budget_s);
           const auto planning_start = std::chrono::steady_clock::now();
           const auto result = plan_with_num_attempts(
-            *move_group_state_->move_group, planning_num_attempts_, [&]() {
+            *move_group_state_->move_group, place_planning_num_attempts_, [&]() {
               if (planning_scene_context_required) {
                 return plan_with_request_scene_diff(
                   *move_group_state_->move_group, candidate_plan,
@@ -5584,7 +5643,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             auto goal = request.target_pose;
             goal.pose.orientation = quaternion_message(candidate.tcp_orientation);
             const Eigen::Vector3d offset =
-              object_orientation.normalized() * candidate.grasp_position_offset_object;
+            object_orientation.normalized() * candidate.grasp_position_offset_object;
             goal.pose.position.x += offset.x();
             goal.pose.position.y += offset.y();
             goal.pose.position.z += offset.z();
@@ -5606,7 +5665,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             return clearance.valid && clearance.allowed;
           });
         constexpr std::size_t preferred_pose_limit = 10U;
-        preferred_pose_end = std::min(preferred_pose_limit, static_cast<std::size_t>(
+        preferred_pose_end = std::min(
+          preferred_pose_limit, static_cast<std::size_t>(
             first_deferred - grasp_pose_candidates.begin()));
       }
       auto planning_context = std::make_shared<PlanningContext>();
@@ -6584,6 +6644,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           selected_pick_retract_pose_ = selected_candidate.target_pose;
           offset_tcp_insertion_axis(
             selected_pick_retract_pose_, request.insertion_axis_tcp, request.retract_distance_m);
+          pending_payload_dimensions_ = {request.rectangle_long_side_m,
+            request.rectangle_short_side_m, request.estimated_object_height_m};
           selected_pick_pose_valid_ = true;
         }
         stage_selected_pick_grasp_relation(

@@ -1,16 +1,13 @@
 <root>
+  <BehaviorTree ID="PayloadHome">
+    <ReturnHomeWithPayload/>
+  </BehaviorTree>
   <BehaviorTree ID="PlaceApproachFailureRecovery">
     <Sequence name="PlaceApproachFailureRecovery">
-      <PlaceApproachRecoveryEligible/>
-      <ObservePlaceApproachRecoveryHolding/>
-      <Fallback name="PlaceApproachReturn">
-        <PlaceApproachRecoveryComplete/>
-        <Sequence name="OpenHeldObjectAtFailedApproach">
-          <PlaceApproachReturnOpenRequired/>
-          <OpenPlaceApproachReturn/>
-          <ConfirmPlaceApproachReturn/>
-        </Sequence>
-      </Fallback>
+      <PreparePlaceApproachReturn/>
+      <ReturnHeldPlaceHome/>
+      <ReturnHeldToTray/>
+      <FinalizeHeldPlaceReturn/>
     </Sequence>
   </BehaviorTree>
 

@@ -41,11 +41,16 @@ int main(int argc, char ** argv)
     std::function<void(
       arm_cell_task_execution::ExecuteDisturbActionServer::MotionStartPhase)>{},
     arm_cell_task_execution::ExecuteDisturbActionServer::DisturbExecutor{
-      [task_executor](const arm_cell_motion::MotionDisturbRequest & request) {
-        return task_executor->execute_disturb(request);
-      }});
+    [task_executor](const arm_cell_motion::MotionDisturbRequest & request) {
+      return task_executor->execute_disturb(request);
+    }});
   auto action_server = std::make_shared<arm_cell_task_execution::LegacyExecuteTaskActionServer>(
     motion.get(), motion->motion_core(), task_executor);
+
+  auto payload_home_server =
+    std::make_shared<arm_cell_task_execution::LegacyExecuteTaskActionServer>(
+    motion.get(), motion->motion_core(), task_executor,
+    "/motion/return_home_with_payload", true);
 
   rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4);
   executor.add_node(motion);
@@ -59,8 +64,7 @@ int main(int argc, char ** argv)
     initialization_error = std::current_exception();
     rclcpp::shutdown();
   }
-  if (!initialization_error) {executor_thread.join();}
-  else {
+  if (!initialization_error) {executor_thread.join();} else {
     executor_thread.join();
     std::rethrow_exception(initialization_error);
   }

@@ -1,5 +1,8 @@
 # [SF-Twin] ARM Cell 현행 통합 작업 실행 동작 — 이관 원본
 
+> PLACE 접근 실패 복구와 탐색 예산은 [Place 부착 자재 복구](place-payload-recovery.md)를 따른다. 아래의 이전 PLACE Approach 현재 위치 OPEN 흐름은 대체되었다. PICK의 현재 위치 복구 정책은 그대로 유지한다.
+
+
 - **범위:** 현행 `PICK / PLACE / GO_HOME / RETRACT` 통합 구현의 보존할 상세 동작
 - **현행 구현 Owner:** `ARM Cell Motion`
 - **목표 책임:** PnP 공정·후보 전환·Gripper·작업 복구는 `ARM Cell Task Execution`; IK·Planning·Trajectory·측정 완료는 `ARM Cell Motion`

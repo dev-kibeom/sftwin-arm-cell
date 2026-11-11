@@ -162,7 +162,13 @@ motion:
   # Actual IK solver seed attempts for one Grasp Pose Candidate.
   pick_ik_seed_attempts_per_grasp_pose: 2
   # PLACE's current deterministic FREE/BOUNDED generator yields at most 13 poses.
-  place_max_pose_candidates: 13
+  place_max_pose_candidates: 48
+  place_ik_seed_attempts_per_pose: 2
+  place_ik_timeout_s: 1.0
+  place_home_retry_count: 1
+  # Empty uses the built-in BT action; an absolute shared-library path loads a replacement.
+  payload_home_bt_plugin: ""
+  place_planning_num_attempts: 3
   # Per-approach path planning timeout; does not limit the whole PICK search.
   # Neither value is a Motion action or trajectory completion deadline.
   planning_time_s: 15.0
@@ -189,6 +195,8 @@ motion:
   # path; final acceleration calibration remains in M11-W01.
   planning_max_acceleration_rad_s2: 5.0
   place_candidate_planning_time_s: 15.0
+  # Legacy budget used only by explicit qualification/waypoint generation,
+  # never as an overall deadline for production PLACE search.
   place_total_planning_time_s: 60.0
   # Motion-owned joint targets (radians, flattened in arm_joint_names order).
   # Fixed tray return target, in arm_joint_names order (radians).

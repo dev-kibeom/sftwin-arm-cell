@@ -51,6 +51,12 @@ ament_target_dependencies(${PROJECT_NAME}_core
 )
 target_link_libraries(${PROJECT_NAME}_core arm_cell_motion::arm_cell_motion_core nlohmann_json::nlohmann_json)
 
+add_library(payload_home_bt_plugin SHARED src/payload_home_plugin.cpp)
+target_include_directories(payload_home_bt_plugin PRIVATE include)
+target_compile_definitions(payload_home_bt_plugin PRIVATE BT_PLUGIN_EXPORT)
+ament_target_dependencies(payload_home_bt_plugin behaviortree_cpp_v3)
+install(TARGETS payload_home_bt_plugin LIBRARY DESTINATION lib)
+
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY config/ DESTINATION share/${PROJECT_NAME}/config)
 install(TARGETS ${PROJECT_NAME}_core EXPORT export_${PROJECT_NAME}
@@ -91,6 +97,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_execution_module_boundaries tests/test_execution_module_boundaries.cpp)
   target_link_libraries(test_execution_module_boundaries ${PROJECT_NAME}_core)
+  target_compile_definitions(test_execution_module_boundaries PRIVATE
+    PAYLOAD_HOME_PLUGIN_PATH="$<TARGET_FILE:payload_home_bt_plugin>")
+  add_dependencies(test_execution_module_boundaries payload_home_bt_plugin)
   ament_target_dependencies(test_execution_module_boundaries arm_cell_interfaces behaviortree_cpp_v3)
 
   ament_add_gtest(test_candidate_search_control tests/test_candidate_search_control.cpp)

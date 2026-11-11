@@ -1,52 +1,60 @@
 <root>
   <BehaviorTree ID="PlaceExecution">
     <Sequence name="PlaceExecution">
-      <ValidatePlaceGoal/>
-      <RecoverOnFailure name="PlaceApproachAndRecovery">
-        <Sequence name="PlanAndExecutePlaceApproach">
-          <Fallback name="PlaceWaypointPreparation">
-            <Sequence name="PreparePlaceWaypoint">
-              <IsPlaceWaypointStrategy/>
-              <PreparePlaceWaypointClearance/>
-              <Fallback name="ClearanceIfRequired">
-                <PlaceWaypointClearanceNotNeeded/>
-                <Sequence name="PlanAndExecutePlaceWaypointClearance">
-                  <PlanPlaceWaypointClearance/>
-                  <ExecutePlaceWaypointClearance/>
+      <ValidatePlaceGoal />
+      <RecoverOnFailure name="PlacePlanningAndRecovery">
+        <RetryWhileAllowed name="PlaceHomeRetries">
+          <Sequence name="PlanAndExecutePlaceBeforeRelease">
+            <Sequence name="PlanAndExecutePlaceApproach">
+              <Fallback name="PlaceWaypointPreparation">
+                <Sequence name="PreparePlaceWaypoint">
+                  <IsPlaceWaypointStrategy />
+                  <PreparePlaceWaypointClearance />
+                  <Fallback name="ClearanceIfRequired">
+                    <PlaceWaypointClearanceNotNeeded />
+                    <Sequence name="PlanAndExecutePlaceWaypointClearance">
+                      <PlanPlaceWaypointClearance />
+                      <ExecutePlaceWaypointClearance />
+                    </Sequence>
+                  </Fallback>
+                  <ExecutePlaceWaypointHome />
                 </Sequence>
+                <IsPlacePlannedStrategy />
               </Fallback>
-              <ExecutePlaceWaypointHome/>
+              <PlanPlaceApproach />
+              <ExecutePlaceApproach />
             </Sequence>
-            <IsPlacePlannedStrategy/>
-          </Fallback>
-          <PlanPlaceApproach/>
-          <ExecutePlaceApproach/>
-        </Sequence>
-        <SubTree ID="PlaceApproachFailureRecovery"/>
-      </RecoverOnFailure>
-      <RecoverOnFailure name="PlaceInsertionAndRecovery">
-        <RetryWhileAllowed name="PlacePlanningCandidates">
-          <Sequence name="PlanAndExecutePlaceInsertion">
-            <PlanPlaceInsertion/>
-            <ExecutePlaceInsertion/>
+            <RetryWhileAllowed name="PlacePlanningCandidates">
+              <Sequence name="PlanAndExecutePlaceInsertion">
+                <PlanPlaceInsertion />
+                <ExecutePlaceInsertion />
+              </Sequence>
+              <AdvancePlacePlanningCandidate />
+            </RetryWhileAllowed>
           </Sequence>
-          <AdvancePlacePlanningCandidate/>
+          <Sequence name="RetryPlaceViaHome">
+            <PreparePlaceHomeRetry />
+            <SubTree ID="PayloadHome" />
+          </Sequence>
         </RetryWhileAllowed>
-        <SubTree ID="PlaceHeldObjectRecovery"/>
+        <Fallback name="PlacePlanningOrExecutionRecovery">
+          <SubTree ID="PlaceApproachFailureRecovery" />
+          <SubTree ID="PlaceHeldObjectRecovery" />
+        </Fallback>
       </RecoverOnFailure>
-      <BeginPlaceReleaseRetries/>
+      <BeginPlaceReleaseRetries />
       <RecoverOnFailure name="PlaceReleaseConfirmation">
         <RetryWhileAllowed name="PlaceReleaseRetries">
           <Sequence name="OpenAndConfirmPlaceRelease">
-            <ExecutePlaceReleaseAttempt/>
-            <PlaceReleaseConfirmed/>
+            <ExecutePlaceReleaseAttempt />
+            <PlaceReleaseConfirmed />
           </Sequence>
-          <ContinuePlaceReleaseRetries/>
+          <ContinuePlaceReleaseRetries />
         </RetryWhileAllowed>
-        <FinalizePlaceRelease/>
+        <FinalizePlaceRelease />
       </RecoverOnFailure>
-      <ReleasePlacedObject/>
-      <SubTree ID="PlaceRetreatRecovery"/>
+      <ReleasePlacedObject />
+      <SubTree ID="PlaceRetreatRecovery" />
     </Sequence>
   </BehaviorTree>
 </root>

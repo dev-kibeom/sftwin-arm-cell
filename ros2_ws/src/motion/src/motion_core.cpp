@@ -116,6 +116,7 @@ uint8_t task_type_for_motion_segment(MotionSegmentKind segment)
       return MotionTaskType::TASK_TYPE_PICK;
     case MotionSegmentKind::PLACE_APPROACH:
     case MotionSegmentKind::PLACE_DESCENT:
+    case MotionSegmentKind::PAYLOAD_HOME:
     case MotionSegmentKind::PLACE_CLEARANCE:
     case MotionSegmentKind::PLACE_RETRACT:
     case MotionSegmentKind::DISTURB_APPROACH:
@@ -782,6 +783,7 @@ MotionPortResult MotionCore::planAndExecuteMotion(const MotionPortRequest & requ
     request.segment == MotionSegmentKind::PICK_RETRACT ||
     request.segment == MotionSegmentKind::PLACE_APPROACH ||
     request.segment == MotionSegmentKind::PLACE_DESCENT ||
+    request.segment == MotionSegmentKind::PAYLOAD_HOME ||
     request.segment == MotionSegmentKind::PLACE_CLEARANCE ||
     request.segment == MotionSegmentKind::PLACE_RETRACT ||
     request.segment == MotionSegmentKind::DISTURB_APPROACH ||
@@ -854,6 +856,7 @@ MotionPlanningResult MotionCore::planMotion(const MotionPortRequest & request)
     request.segment == MotionSegmentKind::PICK_RETRACT ||
     request.segment == MotionSegmentKind::PLACE_APPROACH ||
     request.segment == MotionSegmentKind::PLACE_DESCENT ||
+    request.segment == MotionSegmentKind::PAYLOAD_HOME ||
     request.segment == MotionSegmentKind::PLACE_CLEARANCE ||
     request.segment == MotionSegmentKind::PLACE_RETRACT ||
     request.segment == MotionSegmentKind::DISTURB_APPROACH ||
