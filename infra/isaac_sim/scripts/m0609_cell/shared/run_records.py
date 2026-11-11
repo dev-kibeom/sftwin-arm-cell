@@ -2,9 +2,15 @@
 
 from pathlib import Path
 
+import yaml
+
 from shared.script_editor_bootstrap import discover_module_root
 
-ARTIFACT_ROOT_RELATIVE_PATH = Path(".local_artifacts/m0609_cell")
+def run_records_root(checkout):
+    """Resolve the configured record root relative to the checkout."""
+    config_path = checkout / "config/run_records.yaml"
+    config = (yaml.safe_load(config_path.read_text()) or {}) if config_path.is_file() else {}
+    return (checkout / Path(config.get("root", ".run_records")).expanduser()).resolve()
 
 
 def project_root(script_path, environ=None):
@@ -27,11 +33,11 @@ def project_relative_path(value, script_path, environ=None):
     return path if path.is_absolute() else project_root(script_path, environ) / path
 
 
-def default_artifact_path(tool, filename, script_path, environ=None):
+def default_run_record_path(tool, filename, script_path, environ=None):
     """Return and create the parent for a stable tool-owned output file."""
     path = (
-        project_root(script_path, environ)
-        / ARTIFACT_ROOT_RELATIVE_PATH
+        run_records_root(project_root(script_path, environ))
+        / "m0609_cell"
         / tool
         / filename
     )
@@ -39,19 +45,19 @@ def default_artifact_path(tool, filename, script_path, environ=None):
     return path
 
 
-def default_artifact_directory(tool, script_path, environ=None):
+def default_run_record_directory(tool, script_path, environ=None):
     """Return and create a stable tool-owned output directory."""
-    directory = project_root(script_path, environ) / ARTIFACT_ROOT_RELATIVE_PATH / tool
+    directory = run_records_root(project_root(script_path, environ)) / "m0609_cell" / tool
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 
 
 def output_path(override, tool, filename, script_path, environ=None):
-    """Use an explicit operator path or the stable local artifact path."""
+    """Use an explicit operator path or the default run record path."""
     path = (
         Path(override).expanduser()
         if override
-        else default_artifact_path(tool, filename, script_path, environ)
+        else default_run_record_path(tool, filename, script_path, environ)
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     return path

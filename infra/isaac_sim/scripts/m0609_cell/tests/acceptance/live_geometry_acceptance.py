@@ -43,7 +43,7 @@ from depth_semantics import (
     classify_depth_samples,
     verify_declared_optical_z_for_coplanar_samples,
 )
-from shared.local_artifacts import default_artifact_directory
+from shared.run_records import default_run_record_directory
 
 
 RGB = "/camera/color/image_raw"
@@ -201,7 +201,7 @@ def diagnostic_output_directory(override=None, script_path=None, environ=None):
     directory = (
         Path(override).expanduser()
         if override
-        else default_artifact_directory(
+        else default_run_record_directory(
             "live_geometry_acceptance",
             script_path if script_path is not None else __file__,
             environ,

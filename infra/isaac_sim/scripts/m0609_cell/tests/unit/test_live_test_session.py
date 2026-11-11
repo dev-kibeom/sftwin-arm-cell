@@ -49,7 +49,7 @@ def test_session_descriptor_uses_unique_path_and_stop_closes(tmp_path, monkeypat
 
 
 def test_join_requires_one_open_session_and_never_selects_closed_session(tmp_path):
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session = LiveTestSession(artifact_root)
     found = find_open_session(artifact_root)
     assert found[0] == session.descriptor
@@ -116,7 +116,7 @@ def test_incomplete_descriptor_is_not_replaced_with_clean_close(tmp_path):
 def test_join_write_failure_leaves_session_usable_and_unassociated(
     tmp_path, monkeypatch
 ):
-    artifact_root = tmp_path / ".local_artifacts"
+    artifact_root = tmp_path / ".run_records"
     session = LiveTestSession(artifact_root)
     monkeypatch.setattr(
         session_module.os,

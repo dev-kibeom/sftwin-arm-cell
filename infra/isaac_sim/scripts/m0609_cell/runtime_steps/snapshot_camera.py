@@ -10,10 +10,10 @@ module_root = (
 )
 if str(module_root) not in sys.path:
     sys.path.insert(0, str(module_root))
-import shared.local_artifacts as local_artifacts
+import shared.run_records as run_records
 import camera_tooling.stage_inspector as stage_inspector
 
-importlib.reload(local_artifacts)
+importlib.reload(run_records)
 importlib.reload(stage_inspector)
 output = stage_inspector.script_editor_output_path(os.environ, __file__)
 stage_inspector.inspect_stage(

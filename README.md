@@ -190,8 +190,10 @@ Compose는 호스트 Isaac 사용자와 같은 UID/GID로 기록합니다(기본
 아래 명령은 기존 기록을 삭제하지 않고 소유자만 변경합니다.
 
 ```bash
-sudo chown -R "$(id -u):$(id -g)" .local_artifacts
+sudo chown -R "$(id -u):$(id -g)" .run_records
 ```
+
+진단 기록과 스냅샷의 저장 루트는 `config/run_records.yaml`의 `root`로 설정합니다. 상대 경로는 저장소 루트 기준입니다.
 
 C++ 소스 변경 후에는 기존 Compose 실행을 종료하고 `docker compose up --build`로
 이미지를 다시 빌드해 컨테이너를 교체합니다. 저장소 bind mount는 `/arm_cell`의 Python

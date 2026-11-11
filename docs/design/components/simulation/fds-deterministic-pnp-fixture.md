@@ -145,7 +145,7 @@ Production Capture 제한은 [`operational_profile.yaml`](../../../../ros2_ws/sr
 
 Capture는 계속해서 TCP-local Volume 내부 Object Center, Motion 선택 Pose 대비 실제 TCP Position Error, 접촉 폭 오차, 적격 Object **정확히 하나**를 요구한다. Production Demo Position Tolerance **60mm**, Validation **15mm**, Width Tolerance **2mm**, Production Capture Volume **120×120×120mm**를 유지한다. Symmetry는 Position·Volume·Width·Uniqueness 어느 조건도 우회하지 않는다.
 
-Adapter는 Goal과 연결된 불변 Capture Diagnostic Record를 `.local_artifacts/capture_diagnostic_records/<goal_uuid>.json`에 보존한다. 각 판정의 실제 값·설정 제한·Pass/Fail, 선택 Object의 Grasp-frame Reference 및 Attachment/HELD 전이를 기록해 거부된 Capture를 재구성할 수 있어야 한다. 내부 Prim Identity는 Isaac 소유의 비공개 Record 안에만 남긴다.
+Adapter는 Goal과 연결된 불변 Capture Diagnostic Record를 `.run_records/capture_diagnostic_records/<goal_uuid>.json`에 보존한다. 각 판정의 실제 값·설정 제한·Pass/Fail, 선택 Object의 Grasp-frame Reference 및 Attachment/HELD 전이를 기록해 거부된 Capture를 재구성할 수 있어야 한다. 내부 Prim Identity는 Isaac 소유의 비공개 Record 안에만 남긴다.
 
 Registration 이후 Capture 수락 전에는 우발 접촉에도 등록 Fixture Pose가 선언된 Validation Tolerance 안에 있어야 한다. 소유권 전환의 순서는 다음과 같다.
 

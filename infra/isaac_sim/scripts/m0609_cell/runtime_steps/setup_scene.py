@@ -173,14 +173,14 @@ def _start_live_test_session():
     if _live_test_session is not None:
         return
     try:
+        from shared.run_records import run_records_root
         from shared.live_test_session import LiveTestSession
 
         from shared.environment_setup import resolve_diagnostics_selection
 
         selected = resolve_diagnostics_selection()
         _live_test_session = LiveTestSession(
-            Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
-            / ".local_artifacts",
+            run_records_root(Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()),
             selected,
         )
         os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"] = str(_live_test_session.descriptor)
@@ -290,6 +290,7 @@ atexit.register(_close_material_supply_adapter)
 
 
 def _start_material_supply_adapter(context):
+    from shared.run_records import run_records_root
     """Connect the Isaac supply realization to Integration's accepted event."""
     global _material_supply_adapter
     global _material_supply_update_subscription
@@ -332,7 +333,7 @@ def _start_material_supply_adapter(context):
                 context.amr_tray_z + 0.0225,
             ),
             artifact_directory=(
-                project_root / ".local_artifacts/diagnostic_records/unassociated/simulation"
+                run_records_root(project_root) / "diagnostic_records/unassociated/simulation"
             ),
             timeline=omni.timeline.get_timeline_interface(),
         )

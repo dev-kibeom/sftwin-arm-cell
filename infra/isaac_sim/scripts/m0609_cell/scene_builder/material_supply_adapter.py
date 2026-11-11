@@ -9,6 +9,7 @@ import secrets
 import uuid
 from dataclasses import asdict
 from pathlib import Path
+from shared.run_records import run_records_root
 from typing import Any
 
 from scene_builder.material_supply import MaterialSupplyProfile, sample_initial_poses
@@ -55,16 +56,20 @@ class IsaacMaterialSupplyAdapter:
         profile: MaterialSupplyProfile,
         shelf_origin_m: tuple[float, float, float],
         delivery_deadline_ms: int,
-        artifact_directory: Path = Path(
-            ".local_artifacts/diagnostic_records/unassociated/simulation"
-        ),
+        artifact_directory: Path | None = None,
         timeline: Any | None = None,
     ) -> None:
         self.stage = stage
         self.sidecar = sidecar
         self.timeline = timeline
         self.profile = profile
-        self.pose_recorder = RawPartPoseRecorder(stage, artifact_directory)
+        self.pose_recorder = RawPartPoseRecorder(
+            stage,
+            artifact_directory if artifact_directory is not None else (
+                run_records_root(Path(__file__).resolve().parents[5])
+                / "diagnostic_records/unassociated/simulation"
+            ),
+        )
         self.shelf_origin_m = shelf_origin_m
         if type(delivery_deadline_ms) is not int or delivery_deadline_ms <= 0:
             raise ValueError("delivery_deadline_ms must be a positive integer")

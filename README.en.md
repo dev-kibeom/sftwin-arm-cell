@@ -151,8 +151,10 @@ If earlier runs left records owned by another user, stop Isaac and Compose befor
 repairing ownership once. This preserves existing records:
 
 ```bash
-sudo chown -R "$(id -u):$(id -g)" .local_artifacts
+sudo chown -R "$(id -u):$(id -g)" .run_records
 ```
+
+Set the root for diagnostics and snapshots with `root` in `config/run_records.yaml`. Relative paths are resolved from the repository root.
 
 Compose builds the ROS workspace image and starts `arm_cell_bringup` with the Python 3.10 sidecars. It uses Linux host networking, `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, and Fast DDS UDPv4 transport by default. Keep the ROS domain and RMW settings consistent between Isaac Sim and the container. Follow logs with `docker compose logs -f arm-cell`; stop with `Ctrl+C` in the Compose terminal or run `docker compose down`.
 

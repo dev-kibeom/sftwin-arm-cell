@@ -6,6 +6,7 @@
 **/log/
 **/cache/
 .local_artifacts/
+.run_records/
 .env
 .env.*
 !.env.example

@@ -84,22 +84,22 @@ std::filesystem::path project_snapshot_artifact_root()
 {
   const auto * configured_root = std::getenv("SFTWIN_PROJECT_ROOT");
   if (configured_root && *configured_root) {
-    return std::filesystem::path(configured_root) / ".local_artifacts" /
+    return std::filesystem::path(configured_root) / ".run_records" /
            "snapshots";
   }
   std::error_code error;
   auto directory = std::filesystem::current_path(error);
-  if (error) {return std::filesystem::path(".local_artifacts") / "snapshots";}
+  if (error) {return std::filesystem::path(".run_records") / "snapshots";}
   while (true) {
     if (std::filesystem::exists(directory / ".git", error) && !error) {
-      return directory / ".local_artifacts" / "snapshots";
+      return directory / ".run_records" / "snapshots";
     }
     const auto parent = directory.parent_path();
     if (parent == directory || parent.empty()) {break;}
     directory = parent;
     error.clear();
   }
-  return std::filesystem::path(".local_artifacts") / "snapshots";
+  return std::filesystem::path(".run_records") / "snapshots";
 }
 
 }  // namespace

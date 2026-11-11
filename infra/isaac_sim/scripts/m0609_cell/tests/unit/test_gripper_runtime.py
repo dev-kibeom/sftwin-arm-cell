@@ -913,7 +913,7 @@ def test_session_diagnostics_opt_in_initializes_physx_observer(monkeypatch, capl
     assert prepared == [""]
     assert writer_paths == [
         Path(__file__).resolve().parents[6]
-        / ".local_artifacts"
+        / ".run_records"
         / "diagnostic_records"
         / "unassociated"
         / "gripper"
