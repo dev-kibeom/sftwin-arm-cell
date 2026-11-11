@@ -3282,11 +3282,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     }
   }
   std::lock_guard<std::mutex> lock(move_group_state_->mutex);
-  RCLCPP_DEBUG(
-    node_->get_logger(),
-    "%s motion is preparing its %s phase from the %s observation reference",
-    motion_task_type_name(request.task_type.value),
-    motion_task_phase_name(request.phase),
+  RCLCPP_DEBUG(node_->get_logger(), "%s preparing phase=%s%s%s",
+    motion_console_name(motion_task_type_name(request.task_type.value)).c_str(),
+    motion_console_name(motion_task_phase_name(request.phase)).c_str(),
+    request.observation_reference.empty() ? "" : " reference=",
     request.observation_reference.c_str());
   if (move_group_state_->required && !move_group_state_->ready) {
     record_place_preplanning_failure("preconditions_not_met", "move_group_not_ready");
@@ -5031,8 +5030,24 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       moveit::planning_interface::MoveGroupInterface::Plan selected_plan;
       std::unordered_map<std::size_t, moveit::planning_interface::MoveGroupInterface::Plan>
       candidate_plans;
+      // Observation only, at existing candidate boundaries: no timer thread or new timeout.
+      const CartesianPlanningTimer place_search_timer;
+      std::size_t place_candidates_attempted = 0U;
+      bool place_delay_reported = false;
+      const auto observe_place_delay = [&]() {
+          const auto elapsed_s = place_search_timer.elapsed_s();
+          if (!place_delay_reported && elapsed_s >= 30.0) {
+            place_delay_reported = true;
+            RCLCPP_WARN(node_->get_logger(),
+              "[Motion] PLACE %s delayed: elapsed=%.1fs candidates=%zu",
+              qualify_place_target ? "target qualification" : "planning",
+              elapsed_s, place_candidates_attempted);
+          }
+        };
       const auto plan_candidate =
         [&](const PlaceApproachIkCandidate & candidate, double budget_s) {
+          observe_place_delay();
+          ++place_candidates_attempted;
           moveit::planning_interface::MoveGroupInterface::Plan candidate_plan;
           const auto candidate_index = static_cast<std::size_t>(&candidate - candidates.data());
           auto & evaluated = candidates[candidate_index];
@@ -5315,10 +5330,16 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
           if (observed.terminal) {qualification.terminal = true; break;}
         }
+        observe_place_delay();
         capture_place_plan_evaluation(
           qualification, qualification.success ?
           "valid_recipe_target_candidate_found" : "no_valid_target_within_search_budget");
         if (discard_if_interrupted()) {return false;}
+        if (place_delay_reported && qualification.success) {
+          RCLCPP_INFO(node_->get_logger(),
+            "[Motion] PLACE target qualification recovered: elapsed=%.1fs candidates=%zu",
+            place_search_timer.elapsed_s(), place_candidates_attempted);
+        }
         if (!qualification.success) {
           std::lock_guard<std::mutex> result_lock(mutex_);
           normalized_failure_result_ = infrastructure_failure ?
@@ -5337,10 +5358,16 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         plan_ranked_place_approach_candidates(
         candidates, planning_candidate_indices, ik_policy, plan_candidate,
         0U);
+      observe_place_delay();
       if (discard_if_interrupted()) {
         capture_place_plan_evaluation(place_plan_result, "safety_preempted_results_discarded");
         restore_grasp_contact_policy();
         return false;
+      }
+      if (place_delay_reported && place_plan_result.success) {
+        RCLCPP_INFO(node_->get_logger(),
+          "[Motion] PLACE planning recovered: elapsed=%.1fs candidates=%zu",
+          place_search_timer.elapsed_s(), place_candidates_attempted);
       }
       // Only exhausted candidate-search failures before trajectory submission are eligible.
       // A candidate-local IK or endpoint collision rejection does not prove that HOME cannot
@@ -5423,9 +5450,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           selected_place_retract_pose_ = request.retract_target;
           selected_place_pose_valid_ = true;
         }
-        RCLCPP_DEBUG(
-          node_->get_logger(),
-          "PLACE approach planning found a valid trajectory among the available candidates");
+
       } else {
         RCLCPP_WARN(
           node_->get_logger(),
@@ -6686,11 +6711,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           return false;
         }
       }
-      RCLCPP_DEBUG(
-        node_->get_logger(),
-        "%s approach planning selected a collision-free trajectory using joint distance, "
-        "trajectory duration, and orientation deviation",
-        pick_approach ? "PICK" : "PLACE");
+
     } else if (place_clearance) {
       const double margin = request.place_waypoint_clearance_y_margin_m;
       if (!std::isfinite(margin) || margin <= 1.0e-6) {
@@ -6785,10 +6806,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     return false;
   }
   if (discard_if_interrupted()) {return false;}
-  RCLCPP_DEBUG(
-    node_->get_logger(), "Motion planning %s for the %s phase",
-    planning_succeeded ? "produced a valid trajectory" : "did not produce a valid trajectory",
-    motion_task_phase_name(request.phase));
+  if (!planning_succeeded) {
+    RCLCPP_DEBUG(node_->get_logger(), "Motion planning failed: phase=%s",
+      motion_console_name(motion_task_phase_name(request.phase)).c_str());
+  }
   if (!plan.trajectory_.joint_trajectory.points.empty() &&
     !plan.trajectory_.joint_trajectory.joint_names.empty() &&
     plan.trajectory_.joint_trajectory.joint_names != arm_joint_names_)
@@ -6846,15 +6867,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       return false;
     }
   }
-  if (request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING &&
-    (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ||
-    request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE))
-  {
-    RCLCPP_DEBUG(
-      node_->get_logger(), "%s final path selected strategy=%s",
-      request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ?
-      "PICK" : "PLACE", selected_final_strategy.c_str());
-  }
   {
     std::lock_guard<std::mutex> lock(mutex_);
     last_executed_path_selection_ = {
@@ -6862,9 +6874,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   }
   RCLCPP_DEBUG(
     node_->get_logger(),
-    "Motion generated a %s trajectory for %s with %s endpoint continuity",
-    primitive_type, motion_task_phase_name(request.phase),
-    continuity.valid ? "valid" : "invalid");
+    "Motion plan ready: task=%s phase=%s path=%s strategy=%s",
+    motion_console_name(motion_task_type_name(request.task_type.value)).c_str(),
+    motion_console_name(motion_task_phase_name(request.phase)).c_str(), primitive_type, selected_final_strategy.c_str());
   if (plan_output) {
     if (discard_if_interrupted()) {return false;}
     plan_output->request = request;
@@ -6947,10 +6959,6 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
     const auto & final_time = points.back().time_from_start;
     const auto validation = validate_time_parameterized_trajectory(
       trajectory, velocity_limits, planning_max_acceleration_rad_s2_);
-    RCLCPP_DEBUG(
-      node_->get_logger(),
-      "Motion trajectory validation %s: %s",
-      validation.valid ? "passed" : "failed", validation.reason.c_str());
     if (!validation.valid) {
       if (place_recovery_waypoint) {place_recovery_waypoint_reason_ = validation.reason;}
       RCLCPP_WARN(
@@ -7056,7 +7064,6 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
       }
       return false;
     }
-    RCLCPP_DEBUG(node_->get_logger(), "Motion trajectory execution began");
     return true;
   }
   const auto & final_positions = trajectory.points.back().positions;
@@ -8338,8 +8345,6 @@ bool IsaacRosMotionTransport::command_normalized_gripper(double opening)
   }
   std_msgs::msg::Float64 command;
   command.data = opening * kFullyOpenWidthMm;
-  RCLCPP_DEBUG(
-    node_->get_logger(), "Motion issued a logical gripper opening command");
   gripper_publisher_->publish(command);
   std::lock_guard<std::mutex> lock(mutex_);
   gripper_active_ = true;

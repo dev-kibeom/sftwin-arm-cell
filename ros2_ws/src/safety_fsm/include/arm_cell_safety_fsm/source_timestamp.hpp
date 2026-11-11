@@ -35,13 +35,13 @@ inline void log_source_timestamp_quality_event(
 {
   switch (event) {
     case SourceTimestampQualityEvent::ANOMALY_ENTERED:
-      RCLCPP_WARN(
+      RCLCPP_DEBUG(
         logger,
         "%s source timestamp became implausible; timestamp quality remains diagnostic-only",
         source);
       break;
     case SourceTimestampQualityEvent::RECOVERED:
-      RCLCPP_INFO(logger, "%s source timestamp quality recovered", source);
+      RCLCPP_DEBUG(logger, "%s source timestamp quality recovered", source);
       break;
     case SourceTimestampQualityEvent::NONE:
       break;

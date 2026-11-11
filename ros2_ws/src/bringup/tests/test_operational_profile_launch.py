@@ -335,7 +335,9 @@ def test_planning_scene_debug_is_suppressed_selectively_and_can_be_restored():
     )
 
     assert "moveit_planning_scene.planning_scene:=info" in default_arguments
+    assert "moveit_robot_state.conversions:=info" in default_arguments
     assert "moveit_planning_scene.planning_scene:=debug" in diagnostic_arguments
+    assert "moveit_robot_state.conversions:=debug" in diagnostic_arguments
     for arguments in (default_arguments, diagnostic_arguments):
         assert "motion_node:=debug" in arguments
         assert "motion_core:=debug" in arguments

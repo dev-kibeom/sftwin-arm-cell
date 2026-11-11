@@ -147,7 +147,7 @@ def test_static_scene_artifact_matches_canonical_manifest():
         artifact["source"]["selection_sha256"]
         == hashlib.sha256(generator.canonical_bytes(selection).encode()).hexdigest()
     )
-    assert len(artifact["objects"]) == 22
+    assert len(artifact["objects"]) == len(selection["selected_ids"])
     assert not any(
         "dimensions" in json.dumps(value) or "pose" in json.dumps(value)
         for value in selection.values()
@@ -184,45 +184,10 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
         "amr_tray_rail_rear",
         "amr_tray_marker_post",
     } <= objects.keys()
-    assert objects["cnc_front_left"]["geometry"] == {
-        "dimensions_m": [0.08, 0.07, 0.66],
-        "type": "box",
-    }
-    assert objects["cnc_front_left"]["pose"]["position_m"] == [0.30, 0.305, 0.92]
-    assert objects["cnc_front_top"]["geometry"] == {
-        "dimensions_m": [1.08, 0.07, 0.13],
-        "type": "box",
-    }
-    assert objects["cnc_front_top"]["pose"]["position_m"] == [0.82, 0.305, 1.22]
-    assert objects["camera_rig_post_left"]["geometry"] == {
-        "dimensions_m": [0.055, 0.055, 1.9],
-        "type": "box",
-    }
-    assert objects["camera_rig_post_left"]["pose"]["position_m"] == [
-        -0.56,
-        -0.35,
-        0.95,
-    ]
-    assert objects["camera_rig_post_right"]["geometry"] == {
-        "dimensions_m": [0.055, 0.055, 1.9],
-        "type": "box",
-    }
-    assert objects["camera_rig_post_right"]["pose"]["position_m"] == [
-        0.96,
-        -0.35,
-        0.95,
-    ]
-    expected_rails = {
-        "amr_tray_rail_left": ([0.02, 0.4416, 0.08], [-0.112, -0.85, 0.68]),
-        "amr_tray_rail_right": ([0.02, 0.4416, 0.08], [0.512, -0.85, 0.68]),
-        "amr_tray_rail_rear": ([0.6336, 0.02, 0.08], [0.2, -0.634, 0.68]),
-    }
-    for object_id, (dimensions, position) in expected_rails.items():
-        assert objects[object_id]["geometry"] == {
-            "dimensions_m": dimensions,
-            "type": "box",
-        }
-        assert objects[object_id]["pose"]["position_m"] == position
+    # Geometry is owned by the canonical manifest. The full equality above
+    # checks every selected object's dimensions and pose without a second copy
+    # of installation coordinates in this test. Required IDs remain explicit
+    # to catch accidental loss of collision coverage from the selection.
     assert not {
         "amr_raw_slot_support",
         "amr_raw_slot_marker_guard",

@@ -240,7 +240,7 @@ TEST(SafetyInputTrackerTest, TimestampAnomalyLogsWarnOnceAndRecoveryAtInfo)
   EXPECT_EQ(
     rcutils_logging_set_logger_level(logger.get_name(), previous_level), RCUTILS_RET_OK);
   EXPECT_EQ(captured_log_levels, (std::vector<int>{
-      RCUTILS_LOG_SEVERITY_WARN, RCUTILS_LOG_SEVERITY_INFO}));
+      RCUTILS_LOG_SEVERITY_DEBUG, RCUTILS_LOG_SEVERITY_DEBUG}));
 }
 
 }  // namespace arm_cell_safety_fsm

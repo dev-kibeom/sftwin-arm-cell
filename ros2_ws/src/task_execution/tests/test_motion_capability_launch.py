@@ -25,8 +25,8 @@ def generate_test_description():
         launch.LaunchDescription(
             [
                 Node(
-                    package="arm_cell_motion",
-                    executable="motion_node",
+                    package="arm_cell_task_execution",
+                    executable="task_execution_node",
                     name="motion_node",
                     parameters=[
                         {

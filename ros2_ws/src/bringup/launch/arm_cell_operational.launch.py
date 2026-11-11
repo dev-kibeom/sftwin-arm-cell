@@ -566,12 +566,11 @@ def node_ros_arguments(
         for logger_setting in MOVEIT_RAW_LOG_LEVELS:
             arguments.extend(["--log-level", logger_setting])
         arguments.extend(["--log-level", "move_group_interface:=warn"])
-        arguments.extend(
-            [
-                "--log-level",
-                f"{PLANNING_SCENE_LOGGER}:={planning_scene_log_level}",
-            ]
-        )
+        # These independent MoveIt namespaces otherwise inherit global DEBUG.
+        # Reuse the existing detail override; retain their WARN/ERROR output.
+        for logger_name in (PLANNING_SCENE_LOGGER, "moveit_robot_state.conversions",
+                            "moveit_robot_state.robot_state"):
+            arguments.extend(["--log-level", f"{logger_name}:={planning_scene_log_level}"])
     if log_level == "debug":
         for logger_name in PROJECT_DEBUG_LOGGERS.get(package, ()):
             arguments.extend(["--log-level", f"{logger_name}:=debug"])
@@ -955,7 +954,7 @@ def generate_launch_description():
                 "planning_scene_log_level",
                 default_value="info",
                 description=(
-                    "MoveIt Planning Scene logger level; set to debug to inspect "
+                    "MoveIt Planning Scene and RobotState logger level; set to debug to inspect "
                     "temporary Scene construction during diagnostics"
                 ),
             ),

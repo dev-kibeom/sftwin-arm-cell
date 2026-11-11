@@ -176,7 +176,7 @@ private:
     material_adapter_support::publish_readiness(*this, readiness_publisher_, pending);
     accepted_publisher_->publish(trigger);
     RCLCPP_INFO(
-      get_logger(), "material handoff accepted type=%s quantity=%u",
+      get_logger(), "[Material] Supply preparing: %s quantity=%u",
       trigger.material_type.c_str(), trigger.quantity);
   }
 
@@ -203,9 +203,9 @@ private:
     }
     switch (observation.disposition) {
       case Disposition::kCompleted:
-        RCLCPP_INFO(
-          get_logger(), "material handoff supply completed requested=%u supplied=%u",
-          completion.requested_quantity, completion.supplied_quantity);
+        RCLCPP_DEBUG(
+          get_logger(), "Material supply completed: %s %u/%u",
+          completion.material_type.c_str(), completion.supplied_quantity, completion.requested_quantity);
         break;
       case Disposition::kDeliveryMismatch:
         RCLCPP_DEBUG(get_logger(), "transfer completion ignored reason=delivery_mismatch");

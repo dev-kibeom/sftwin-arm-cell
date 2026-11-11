@@ -1,4 +1,5 @@
 #include "arm_cell_orchestration/cycle_coordinator.hpp"
+#include "arm_cell_orchestration/pnp_progress.hpp"
 #include "arm_cell_orchestration/vision_request_timeout.hpp"
 #include "arm_cell_orchestration/execute_cycle_terminal.hpp"
 #include "arm_cell_orchestration/failure_trace_record.hpp"
@@ -48,6 +49,46 @@ namespace arm_cell_orchestration
 
 namespace
 {
+// Keep diagnostic Enum names stable; trim implementation prefixes only at console sites.
+const char * console_enum_name(const char * name)
+{
+  for (const char * prefix : {"TASK_TYPE_", "TASK_RESULT_", "MISSION_EXIT_", "DETECT_RESULT_"}) {
+    const auto length = std::strlen(prefix);
+    if (std::strncmp(name, prefix, length) == 0) {return name + length;}
+  }
+  return name;
+}
+
+const char * motion_phase_console_name(std::uint8_t value)
+{
+  using Phase = arm_cell_interfaces::msg::MotionTaskPhase;
+  switch (value) {
+    case Phase::TASK_PHASE_VALIDATING: return "validate";
+    case Phase::TASK_PHASE_PLANNING: return "plan";
+    case Phase::TASK_PHASE_APPROACHING: return "approach";
+    case Phase::TASK_PHASE_EXECUTING: return "execute";
+    case Phase::TASK_PHASE_GRIPPER: return "gripper";
+    case Phase::TASK_PHASE_ATTACHING: return "attach";
+    case Phase::TASK_PHASE_DETACHING: return "detach";
+    case Phase::TASK_PHASE_RETRACTING: return "retract";
+    case Phase::TASK_PHASE_COMPLETING: return "complete";
+    default: return "unknown";
+  }
+}
+
+const char * pnp_outcome_name(std::uint8_t outcome)
+{
+  using Result = arm_cell_interfaces::action::ExecutePnp::Result;
+  switch (outcome) {
+    case Result::PNP_OUTCOME_COMPLETED: return "success";
+    case Result::PNP_OUTCOME_RETRYABLE: return "retryable";
+    case Result::PNP_OUTCOME_FAILED: return "failed";
+    case Result::PNP_OUTCOME_SAFETY_PREEMPTED: return "safety_preempted";
+    case Result::PNP_OUTCOME_CANDIDATES_EXHAUSTED: return "candidates_exhausted";
+    default: return "unknown";
+  }
+}
+
 constexpr auto kMotionStatusFreshnessTimeout = std::chrono::milliseconds(1000);
 constexpr std::size_t kDiagnosticQueueCapacity = 128;
 constexpr std::size_t kDiagnosticRecordLimit = 4096;
@@ -417,7 +458,7 @@ public:
           });
           std::thread([this, handle, coordinator, key, vision_result_code]() {
             const auto & goal = *handle->get_goal();
-            RCLCPP_INFO(get_logger(), "mission started quantity=%u",
+            RCLCPP_INFO(get_logger(), "[Mission] Started: %u materials",
                         goal.quantity);
             execute_goal(handle, coordinator, key, vision_result_code);
           }).detach();
@@ -705,11 +746,11 @@ private:
 
     if (!admission) {
       if (admission_wait_ended) {
-        RCLCPP_INFO(get_logger(), "material admission wait ended reason=%s",
+        RCLCPP_DEBUG(get_logger(), "material admission wait ended reason=%s",
                     admission_wait_end_reason.c_str());
       }
       if (admission_wait_changed) {
-        RCLCPP_INFO(get_logger(),
+        RCLCPP_DEBUG(get_logger(),
                     admission_wait_started
                         ? "material admission wait entered reason=%s"
                         : "material admission wait reason changed reason=%s",
@@ -718,7 +759,7 @@ private:
       return;
     }
     if (admission_wait_ended) {
-      RCLCPP_INFO(get_logger(),
+      RCLCPP_DEBUG(get_logger(),
                   "material admission wait ended reason=admitted");
     }
 
@@ -851,7 +892,7 @@ private:
           get_logger(),
           "mission terminated "
           "exit_reason=%s reason=recipe_configuration_terminal diagnostic=%s",
-          mission_exit_reason_name(result.exit_reason.value),
+          console_enum_name(mission_exit_reason_name(result.exit_reason.value)),
           result.diagnostic_detail.c_str());
     }
     if (result.motion_failure) {
@@ -860,11 +901,11 @@ private:
       RCLCPP_ERROR(get_logger(),
                    "Mission failed during Motion execution task=%s reason=%s "
                    "exit_reason=%s cause=%s processed=%llu/%u",
-                   motion_task_type_name(failure.task_type),
+                   console_enum_name(motion_task_type_name(failure.task_type)),
                    motion_result_code_field(failure.code.value,
                                             failure.result_code_available)
                        .c_str(),
-                   mission_exit_reason_name(result.exit_reason.value),
+                   console_enum_name(mission_exit_reason_name(result.exit_reason.value)),
                    failure.diagnostic_detail.c_str(),
                    static_cast<unsigned long long>(result.processed_count),
                    goal.quantity);
@@ -875,17 +916,17 @@ private:
     {
       const auto & goal = *handle->get_goal();
       RCLCPP_INFO(get_logger(),
-                  "mission completed exit_reason=%s processed=%llu/%u",
-                  mission_exit_reason_name(result.exit_reason.value),
-                  static_cast<unsigned long long>(result.processed_count),
-                  goal.quantity);
+                  "[Mission] Completed: %llu/%u reason=%s",
+                  static_cast<unsigned long long>(result.processed_count), goal.quantity,
+                  result.exit_reason.value == arm_cell_interfaces::msg::MissionExitReason::
+                    MISSION_EXIT_DEPLETED ? "supply_depleted" : "quantity_reached");
     } else if (result.exit_reason.value ==
       arm_cell_interfaces::msg::MissionExitReason::MISSION_EXIT_CANCELED)
     {
       const auto & goal = *handle->get_goal();
       RCLCPP_INFO(get_logger(),
                   "mission canceled exit_reason=%s processed=%llu/%u",
-                  mission_exit_reason_name(result.exit_reason.value),
+                  console_enum_name(mission_exit_reason_name(result.exit_reason.value)),
                   static_cast<unsigned long long>(result.processed_count),
                   goal.quantity);
     } else if (result.exit_reason.value ==
@@ -905,17 +946,17 @@ private:
         RCLCPP_ERROR(get_logger(),
                      "mission operation failed exit_reason=%s causal_owner=%s "
                      "causal_result_code=%s diagnostic=%s",
-                     mission_exit_reason_name(result.exit_reason.value),
+                     console_enum_name(mission_exit_reason_name(result.exit_reason.value)),
                      causal_owner,
-                     detect_target_result_code_name(*vision_result_code),
+                     console_enum_name(detect_target_result_code_name(*vision_result_code)),
                      result.diagnostic_detail.c_str());
       } else {
         RCLCPP_ERROR(get_logger(),
                      "mission operation failed exit_reason=%s causal_owner=%s "
                      "causal_result=%s diagnostic=%s",
-                     mission_exit_reason_name(result.exit_reason.value),
+                     console_enum_name(mission_exit_reason_name(result.exit_reason.value)),
                      causal_owner,
-                     mission_exit_reason_name(result.exit_reason.value),
+                     console_enum_name(mission_exit_reason_name(result.exit_reason.value)),
                      result.diagnostic_detail.c_str());
       }
     }
@@ -943,6 +984,9 @@ private:
       arm_cell_interfaces::msg::MissionPhase::MISSION_PHASE_UNKNOWN);
     auto processed_count = std::make_shared<uint64_t>(0U);
     auto retry_count = std::make_shared<uint8_t>(0U);
+    // Per-mission observations only; never used for admission or execution decisions.
+    auto pnp_progress = std::make_shared<PnpProgress>();
+    auto initial_home_completed = std::make_shared<bool>(false);
     auto interruption_count = std::make_shared<uint32_t>(0U);
     auto first_interruption_reason =
       std::make_shared<arm_cell_interfaces::msg::MissionExitReason>();
@@ -984,7 +1028,7 @@ private:
         if (result_code ==
           arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS)
         {
-          RCLCPP_INFO(get_logger(), "Vision target acquired");
+          RCLCPP_DEBUG(get_logger(), "Vision target acquired");
         }
       };
     const auto logger_level = rcutils_logging_get_logger_level(get_logger().get_name());
@@ -1041,15 +1085,40 @@ private:
     callbacks.execute_disturb = [this, key](const DisturbAction::Goal & goal) {
         return execute_disturb(key, goal);
       };
-    callbacks.execute_task_scoped = [this, handle, key, selected_recipe_id](
+    callbacks.execute_task_scoped = [this, handle, key, selected_recipe_id, initial_home_completed](
       const MotionAction::Goal & goal, const CycleCoordinator::MotionFeedbackFn & feedback,
       const CycleCoordinator::Submission & submission) {
-        return execute_task(handle, key, goal, *selected_recipe_id, feedback, submission);
+        auto result = execute_task(handle, key, goal, *selected_recipe_id, feedback, submission);
+        if (!*initial_home_completed && goal.task_type.value ==
+          arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME &&
+          result.action_terminal == "SUCCEEDED" && result.result_code_available &&
+          result.code.value == arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS)
+        {
+          *initial_home_completed = true;
+          RCLCPP_INFO(get_logger(), "[Mission] Initial HOME completed");
+        }
+        return result;
       };
-    callbacks.execute_pnp_scoped = [this, key, selected_recipe_id](
+    callbacks.execute_pnp_scoped = [this, key, selected_recipe_id, pnp_progress,
+      processed_count, handle](
       const PnpAction::Goal & goal, const CycleCoordinator::PnpFeedbackFn & feedback,
       const CycleCoordinator::Submission & submission) {
-        return execute_pnp(key, goal, *selected_recipe_id, feedback, submission);
+        const auto started = std::chrono::steady_clock::now();
+        auto result = execute_pnp(key, goal, *selected_recipe_id, feedback, submission);
+        pnp_progress->elapsed_s = std::chrono::duration<double>(
+          std::chrono::steady_clock::now() - started).count();
+        pnp_progress->completed = result.action_terminal == "SUCCEEDED" &&
+          result.outcome == PnpAction::Result::PNP_OUTCOME_COMPLETED && result.material_placed;
+        if (!pnp_progress->completed && !result.material_placed) {
+          RCLCPP_WARN(get_logger(),
+            "[PnP] Attempt ended: outcome=%s elapsed=%.1fs processed=%llu/%u%s%s",
+            result.action_terminal == "CANCELED" ? "canceled" :
+            result.result_code_available ? pnp_outcome_name(result.outcome) : "unavailable",
+            pnp_progress->elapsed_s, static_cast<unsigned long long>(*processed_count),
+            handle->get_goal()->quantity, result.diagnostic_detail.empty() ? "" : " detail=",
+            result.diagnostic_detail.c_str());
+        }
+        return result;
       };
     callbacks.execute_disturb_scoped = [this, key](const DisturbAction::Goal & goal,
       const CycleCoordinator::Submission & submission) {
@@ -1144,6 +1213,8 @@ private:
                                              result.result_code_available)
                         .c_str(),
                     result.diagnostic_detail.c_str());
+      } else {
+        RCLCPP_INFO(get_logger(), "[Mission] Controlled RETRACT recovery completed");
       }
       RCLCPP_DEBUG(get_logger(),
                    "controlled recovery result "
@@ -1212,7 +1283,7 @@ private:
             arm_cell_interfaces::msg::MissionPhase::MISSION_PHASE_RETRACTING ? "RETRACT" :
             "FINISHED";
           if (phase != arm_cell_interfaces::msg::MissionPhase::MISSION_PHASE_FINISHED) {
-            RCLCPP_INFO(get_logger(),
+            RCLCPP_DEBUG(get_logger(),
                         "mission phase started phase=%s processed=%llu/%u",
                         name, static_cast<unsigned long long>(*processed_count),
                         goal.quantity);
@@ -1221,7 +1292,7 @@ private:
         }
       };
     callbacks.publish_processed_count = [this, handle, processed_count, retry_count,
-      decorate_feedback](
+      pnp_progress, decorate_feedback](
       uint64_t count) {
         *processed_count = count;
         {
@@ -1243,6 +1314,17 @@ private:
                 static_cast<unsigned long long>(count));
           }
         }
+        // Coordinator invokes this only after the PnP terminal result commits material_placed.
+        if (const auto summary = pnp_progress->commit(count)) {
+          if (summary->completed) {
+            RCLCPP_INFO(get_logger(), "[PnP] Cycle %llu/%u completed: %.1fs",
+              static_cast<unsigned long long>(count), handle->get_goal()->quantity, summary->elapsed_s);
+          } else {
+            RCLCPP_WARN(get_logger(),
+              "[PnP] Material placed; cycle incomplete: processed=%llu/%u elapsed=%.1fs",
+              static_cast<unsigned long long>(count), handle->get_goal()->quantity, summary->elapsed_s);
+          }
+        }
         auto feedback = std::make_shared<ExecuteCycle::Feedback>();
         feedback->phase.value = arm_cell_interfaces::msg::MissionPhase::MISSION_PHASE_PLACING;
         decorate_feedback(*feedback);
@@ -1253,6 +1335,11 @@ private:
     callbacks.publish_retry_count = [this, handle, previous_phase, processed_count, retry_count,
       decorate_feedback](
       uint8_t count) {
+        if (count > *retry_count) {
+          RCLCPP_INFO(get_logger(), "[Mission] Retry started: attempt=%u processed=%llu/%u",
+            static_cast<unsigned>(count), static_cast<unsigned long long>(*processed_count),
+            handle->get_goal()->quantity);
+        }
         *retry_count = count;
         auto feedback = std::make_shared<ExecuteCycle::Feedback>();
         feedback->phase.value = *previous_phase;
@@ -1434,7 +1521,7 @@ private:
       RCLCPP_DEBUG(get_logger(),
                    "vision request rejected "
                    "result_code=%s reason=invalid_timeout",
-                   detect_target_result_code_name(response.result_code.value));
+                   console_enum_name(detect_target_result_code_name(response.result_code.value)));
       return response;
     }
     RCLCPP_DEBUG(get_logger(), "vision request dispatched");
@@ -1475,7 +1562,7 @@ private:
       decision_time - orchestration_wait_start).count();
     RCLCPP_DEBUG(
         get_logger(), "Vision response received result=%s elapsed_ms=%.0f",
-        detect_target_result_code_name(vision_response.result_code.value),
+        console_enum_name(detect_target_result_code_name(vision_response.result_code.value)),
         response_wait_ms);
     return vision_response;
   }
@@ -1702,7 +1789,7 @@ private:
     }
     RCLCPP_DEBUG(
         get_logger(), "mission motion dispatch recipe_id=%s task_type=%s",
-        recipe_id.c_str(), motion_task_type_name(goal.task_type.value));
+        recipe_id.c_str(), console_enum_name(motion_task_type_name(goal.task_type.value)));
     if (!motion_client_->wait_for_action_server(std::chrono::seconds(1))) {
       result.diagnostic_detail = "Motion action unavailable";
       result.result_code_available = false;
@@ -1779,7 +1866,7 @@ private:
               const auto failure_name = motion_feedback->release_last_failure ==
                 arm_cell_interfaces::action::ExecuteTask::Feedback::
                 RELEASE_FAILURE_CONFIRMATION_TIMEOUT ? "release_confirmation_timeout" : "none";
-              RCLCPP_INFO(
+              RCLCPP_DEBUG(
                   get_logger(),
                   "PLACE release OPEN progress "
                   " attempt=%u/%u last_failure=%s",
@@ -1802,10 +1889,10 @@ private:
               record.wait_elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 feedback_supervision->last_gap()).count();
               record_motion_diagnostic(record);
-              RCLCPP_WARN(get_logger(),
+              RCLCPP_INFO(get_logger(),
                           "Motion feedback recovered "
-                          " phase=%u after %.3f seconds",
-                          static_cast<unsigned>(motion_feedback->phase.value),
+                          " phase=%s after %.3f seconds",
+                          motion_phase_console_name(motion_feedback->phase.value),
                           std::chrono::duration<double>(
                               feedback_supervision->last_gap())
                               .count());
@@ -1855,7 +1942,7 @@ private:
       accepted_record.motion_execution_id.begin());
     record_motion_diagnostic(accepted_record);
     RCLCPP_DEBUG(get_logger(), "mission motion accepted task_type=%s",
-                 motion_task_type_name(goal.task_type.value));
+                 console_enum_name(motion_task_type_name(goal.task_type.value)));
     auto result_future = motion_client_->async_get_result(goal_handle);
     RCLCPP_DEBUG(get_logger(),
                  "Motion result wait started reason=awaiting_terminal_result");
@@ -1948,13 +2035,13 @@ private:
       RCLCPP_ERROR(get_logger(),
                    "Motion Action terminal state conflicts with its task "
                    "Result action_terminal=%s result=%s",
-                   action_terminal, motion_result_code_name(result.code.value));
+                   action_terminal, console_enum_name(motion_result_code_name(result.code.value)));
     }
     RCLCPP_DEBUG(get_logger(),
                  "Motion result wait ended action_terminal=%s result=%s",
                  action_terminal,
                  result.result_code_available
-                     ? motion_result_code_name(result.code.value)
+                     ? console_enum_name(motion_result_code_name(result.code.value))
                      : "UNAVAILABLE");
     if (result.code.value == arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS) {
       const char * operation =
@@ -1966,9 +2053,9 @@ private:
         goal.task_type.value ==
         arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_RETRACT ? "RETRACT" :
         "UNKNOWN";
-      RCLCPP_INFO(get_logger(),
+      RCLCPP_DEBUG(get_logger(),
                   "mission operation completed operation=%s result=%s",
-                  operation, motion_result_code_name(result.code.value));
+                  operation, console_enum_name(motion_result_code_name(result.code.value)));
     }
     cancellation_registry_.clear_active_action(key, motion_submission);
     if (result.result_code_available &&
@@ -1978,7 +2065,7 @@ private:
                    "Motion returned unexpected BUSY; mission operation will "
                    "fail without resubmission "
                    " result=%s reason=%s",
-                   motion_result_code_name(result.code.value),
+                   console_enum_name(motion_result_code_name(result.code.value)),
                    result.diagnostic_detail.c_str());
     }
     return result;
@@ -2122,8 +2209,9 @@ private:
       result.diagnostic_detail = "ExecutePnp COMPLETED result omitted material_placed";
     }
     RCLCPP_DEBUG(get_logger(),
-      "ExecutePnp terminal recipe_id=%s goal_uuid=%s outcome=%u material_placed=%s action=%s",
-      recipe_id.c_str(), result.goal_uuid.c_str(), static_cast<unsigned>(result.outcome),
+      "ExecutePnp terminal recipe_id=%s goal_uuid=%s outcome=%s material_placed=%s action=%s",
+      recipe_id.c_str(), result.goal_uuid.c_str(),
+      result.action_terminal == "CANCELED" ? "canceled" : pnp_outcome_name(result.outcome),
       result.material_placed ? "true" : "false", result.action_terminal.c_str());
     cancellation_registry_.clear_active_action(key, submission);
     return result;
@@ -2243,8 +2331,12 @@ private:
     result.outcome = wrapped.result->outcome.value;
     result.diagnostic_detail = wrapped.result->diagnostic_detail;
     RCLCPP_DEBUG(get_logger(),
-      "ExecuteDisturb terminal acquisition_id=%s outcome=%u action=%s",
-      goal.acquisition_id.c_str(), static_cast<unsigned>(result.outcome),
+      "ExecuteDisturb terminal acquisition_id=%s outcome=%s action=%s",
+      goal.acquisition_id.c_str(),
+      result.outcome == arm_cell_interfaces::msg::DisturbanceOutcome::OUTCOME_COMPLETED ? "success" :
+      result.outcome == arm_cell_interfaces::msg::DisturbanceOutcome::OUTCOME_CANCELED ? "canceled" :
+      result.outcome == arm_cell_interfaces::msg::DisturbanceOutcome::OUTCOME_SAFETY_PREEMPTED ?
+      "safety_preempted" : "failed",
       result.action_terminal.c_str());
     cancellation_registry_.clear_active_action(key, submission);
     return result;

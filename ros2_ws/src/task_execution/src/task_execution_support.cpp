@@ -5,6 +5,7 @@
 #include <thread>
 
 #include <rclcpp/rclcpp.hpp>
+#include "arm_cell_motion/motion_result_code_name.hpp"
 
 namespace arm_cell_task_execution
 {
@@ -303,7 +304,7 @@ std::uint8_t TaskExecutionSupport::execute_gripper_close(std::uint64_t & baselin
   if (!gripper_port_) {return Result::TASK_RESULT_GRASP_FAILURE;}
   baseline_sequence = holding_sequence();
   const auto result = gripper_port_->close();
-  RCLCPP_DEBUG(rclcpp::get_logger("task_executor"), "gripper close command issued: result=%u", result);
+  RCLCPP_DEBUG(rclcpp::get_logger("task_executor"), "gripper close command issued: result=%s", motion_console_result(result).c_str());
   if (result != Result::TASK_RESULT_SUCCESS && gripper_port_->active()) {gripper_port_->stop();}
   return map_object_operation_result(result);
 }
@@ -322,7 +323,7 @@ std::uint8_t TaskExecutionSupport::execute_gripper_open(
   if (!gripper_port_) {return Result::TASK_RESULT_GRASP_FAILURE;}
   baseline_sequence = holding_sequence();
   const auto result = gripper_port_->open();
-  RCLCPP_DEBUG(rclcpp::get_logger("task_executor"), "gripper open command issued: result=%u", result);
+  RCLCPP_DEBUG(rclcpp::get_logger("task_executor"), "gripper open command issued: result=%s", motion_console_result(result).c_str());
   if (result != Result::TASK_RESULT_SUCCESS && gripper_port_->active()) {gripper_port_->stop();}
   return map_object_operation_result(result);
 }

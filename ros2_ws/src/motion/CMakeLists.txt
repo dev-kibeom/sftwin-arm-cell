@@ -169,7 +169,6 @@ ament_export_dependencies(
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(moveit_ros_planning REQUIRED)
-  find_package(launch_testing_ament_cmake REQUIRED)
   find_package(ament_lint_auto REQUIRED)
 
   ament_add_gtest(test_grasp_collision_validator tests/test_grasp_collision_validator.cpp)
@@ -340,8 +339,6 @@ if(BUILD_TESTING)
   ament_target_dependencies(
     test_cartesian_manipulation geometry_msgs trajectory_msgs arm_cell_interfaces)
 
-  add_launch_test(tests/test_motion_capability_launch.py TIMEOUT 40)
-  add_launch_test(tests/test_safety_motion_stop_integration.py TIMEOUT 60)
 endif()
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})

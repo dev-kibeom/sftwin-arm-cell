@@ -217,11 +217,11 @@ class TestOrchestrationNodeAdmission(unittest.TestCase):
 
         self.release_motion.set()
         proc_output.assertWaitFor(
-            "TASK_RESULT_BUSY",
+            "result=BUSY",
             process=orchestration,
         )
         proc_output.assertWaitFor(
-            "MISSION_EXIT_MOTION_ERROR",
+            "exit_reason=MOTION_ERROR",
             process=orchestration,
         )
         self.assertEqual(self.motion_goal_count, 1)

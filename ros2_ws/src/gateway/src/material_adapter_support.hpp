@@ -43,9 +43,10 @@ inline void publish_readiness(
   const char * blocking_reason = nullptr)
 {
   if (readiness.valid && readiness.material_ready) {
-    RCLCPP_INFO(node.get_logger(), "material readiness changed state=READY");
+    RCLCPP_INFO(node.get_logger(), "[Material] Supply ready: %s %u/%u",
+      readiness.material_type.c_str(), readiness.quantity, readiness.quantity);
   } else if (blocking_reason == nullptr) {
-    RCLCPP_INFO(node.get_logger(), "material readiness wait started reason=awaiting_transfer_completion");
+    RCLCPP_DEBUG(node.get_logger(), "material readiness wait started reason=awaiting_transfer_completion");
   } else {
     RCLCPP_WARN(node.get_logger(), "material readiness cannot be confirmed reason=%s", blocking_reason);
   }
