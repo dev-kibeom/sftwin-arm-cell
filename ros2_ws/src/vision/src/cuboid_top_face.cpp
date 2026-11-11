@@ -438,6 +438,66 @@ DetectionResult detect_cuboid_top_face(
   result.rawpart_candidate_count -= std::min<uint64_t>(
     result.rawpart_candidate_count, cross_height_duplicates);
   const auto selections = select_hypotheses(accepted, obs, profile, search_operations);
+  std::vector<Fit> observed_planes;
+  for (size_t index = 0; index < patches.size(); ++index) {
+    const auto & patch = patches[index];
+    std::vector<const Fit *> alternatives;
+    for (const auto & fit : accepted) {
+      if (fit.patch_index == index && selections.at(fit.candidate_id).state == "UNRESOLVED") {
+        alternatives.push_back(&fit);
+      }
+    }
+    if (alternatives.size() < 2 || patch.status != "horizontal" || patch.pixels.empty() ||
+      search_operations == 0 ||
+      (2 * (accepted.size() + observed_planes.size() + 1) + transient_mask_slots) *
+      obs.heights.total() > mask_byte_limit) {continue;}
+    const double thickness = alternatives.front()->face.thickness;
+    if (std::any_of(alternatives.begin(), alternatives.end(), [&](const Fit * fit) {
+        return fit->covered_by_upper_surface || fit->outline_id != alternatives.front()->outline_id ||
+               std::abs(fit->face.thickness - thickness) > 1e-9;
+      })) {continue;}
+    std::vector<cv::Point2f> points;
+    for (const auto & pixel : patch.pixels) {
+      const auto xy = obs.origin + cv::Point2d(pixel) * obs.spacing_m;
+      points.emplace_back(xy.x, xy.y);
+    }
+    const auto rectangle = cv::minAreaRect(points);
+    if (std::min(rectangle.size.width, rectangle.size.height) <=
+      2 * profile.cuboid.line_residual_limit_px * obs.spacing_m) {continue;}
+    const auto & reference = *alternatives.front();
+    if (std::max(rectangle.size.width, rectangle.size.height) >
+      std::max(reference.face.length, reference.face.width) +
+      std::max(reference.face.length_tolerance, reference.face.width_tolerance) ||
+      std::min(rectangle.size.width, rectangle.size.height) >
+      std::min(reference.face.length, reference.face.width) +
+      std::max(reference.face.length_tolerance, reference.face.width_tolerance)) {continue;}
+    Fit plane = *alternatives.front();
+    plane.candidate_id = next_candidate_id++;
+    plane.center = plane.observed_center = cv::Point2d(rectangle.center);
+    plane.yaw = rectangle.angle * pi / 180.0;
+    plane.face.length = plane.measured_length = rectangle.size.width;
+    plane.face.width = plane.measured_width = rectangle.size.height;
+    plane.mask = footprint(plane, obs);
+    plane.mask_cell_count = cv::countNonZero(plane.mask);
+    cv::Mat cells = cv::Mat::zeros(obs.heights.size(), CV_8U);
+    for (const auto & pixel : patch.pixels) {cells.at<uint8_t>(pixel) = 255;}
+    // Only a filled, measured rectangle is handed off. A bounding box around an
+    // L shape, hole, disconnected material or unseen area is not a surface.
+    if (cv::countNonZero(plane.mask & ~cells) != 0) {continue;}
+    plane.observed_cell_ids.clear();
+    for (const auto & pixel : patch.pixels) {
+      plane.observed_cell_ids.push_back(pixel.y * obs.heights.cols + pixel.x);
+    }
+    std::sort(plane.observed_cell_ids.begin(), plane.observed_cell_ids.end());
+    plane.area = 1;
+    plane.boundary = 1;
+    plane.rectangle_measured = true;
+    plane.observed_plane_reference = true;
+    plane.is_partial_reconstruction = false;
+    cv::dilate(plane.mask, plane.tolerant, cv::Mat::ones(3, 3, CV_8U));
+    observed_planes.push_back(std::move(plane));
+  }
+
   hypothesis_stage.auxiliary_counts["shared_evaluation_limit"] = initial_operations;
   hypothesis_stage.auxiliary_counts["shared_evaluations_used"] = initial_operations - search_operations;
   hypothesis_stage.auxiliary_counts["retained_fit_mask_bytes"] = 2 * accepted.size() * obs.heights.total();
@@ -475,6 +535,35 @@ DetectionResult detect_cuboid_top_face(
     }), accepted.end());
   // This counter is the post-normalization, post-conflict candidate set. Raw
   // proposal volume and discarded duplicates remain available in stage stats.
+  for (const auto & plane : observed_planes) {
+    if (std::any_of(accepted.begin(), accepted.end(), [&](const Fit & fit) {
+        return materially_overlaps(plane, fit, obs.spacing_m);
+      })) {continue;}
+    accepted.push_back(plane);
+    models.push_back(plane);
+    CuboidHypothesisVisualization diagnostic;
+    diagnostic.candidate_id = plane.candidate_id;
+    diagnostic.patch_index = plane.patch_index;
+    diagnostic.source_boundary_id = plane.source_boundary_id;
+    diagnostic.outline_id = plane.outline_id;
+    diagnostic.height_m = plane.top;
+    diagnostic.center_x_m = plane.center.x;
+    diagnostic.center_y_m = plane.center.y;
+    diagnostic.yaw_rad = plane.yaw;
+    diagnostic.length_m = plane.face.length;
+    diagnostic.width_m = plane.face.width;
+    diagnostic.thickness_m = plane.face.thickness;
+    diagnostic.observed_area_ratio = plane.area;
+    diagnostic.boundary_support = plane.boundary;
+    diagnostic.observed_support_cells = plane.observed_cell_ids.size();
+    diagnostic.selection_state = "SELECTED";
+    diagnostic.selection_reason = "observed_plane_geometry_resolved";
+    diagnostic.disposition = "qualified_geometry";
+    diagnostic.reason = "observed_plane_geometry_resolved";
+    diagnostic.confidence_grade = "HIGH";
+    diagnostic.confidence_reason = "observed_plane_geometry_resolved";
+    result.cuboid_hypotheses.push_back(std::move(diagnostic));
+  }
   result.rawpart_candidate_count = accepted.size();
   inherit_normalized_confidence(result.cuboid_hypotheses);
   if (accepted.empty()) {
@@ -486,6 +575,7 @@ DetectionResult detect_cuboid_top_face(
     patch.partitioned_candidate_count = std::count_if(accepted.begin(), accepted.end(),
         [&](const Fit & fit) {return fit.patch_index == &patch - result.cuboid_planes.data();});
   }
+  *eligibility_stage.input_count += observed_planes.size();
   *eligibility_stage.output_count = accepted.size();
   *eligibility_stage.rejected_count = *eligibility_stage.input_count - *eligibility_stage.output_count;
   eligibility_stage.auxiliary_counts["evaluated_height_patches"] = patches.size();
@@ -649,7 +739,8 @@ DetectionResult detect_cuboid_top_face(
     DetectionResult candidate;
     candidate.algorithm = "cuboid_top_face";
     candidate.processing_stage = "target_pose_estimation";
-    candidate.thickness_evidence = "material_face_hypothesis";
+    candidate.thickness_evidence = fit.observed_plane_reference ?
+      "observed_plane_with_agreed_material_thickness" : "material_face_hypothesis";
     candidate.result_code = Code::DETECT_RESULT_SUCCESS;
     candidate.has_target_pose = true;
     const auto model = handoff_model(fit);
@@ -684,7 +775,8 @@ DetectionResult detect_cuboid_top_face(
       profile.cuboid.height_tolerance_m);
     candidate.confidence_grade = fit.area >= profile.high_confidence_observed_area_ratio ? "HIGH" :
       fit.area >= profile.medium_confidence_observed_area_ratio ? "MEDIUM" : "LOW";
-    candidate.confidence_reason = candidate.confidence_grade == "HIGH" ?
+    candidate.confidence_reason = fit.observed_plane_reference ? "observed_plane_geometry_resolved" :
+      candidate.confidence_grade == "HIGH" ?
       "observed_area_ratio_meets_high_threshold" :
       candidate.confidence_grade == "MEDIUM" ?
       "observed_area_ratio_meets_medium_threshold" :
@@ -755,8 +847,45 @@ DetectionResult process_cuboid_top_face(
   const tf2::Transform & support_T_camera)
 {
   const double spacing = profile.cuboid.grid_resolution_m;
-  const auto & lo = profile.workspace_roi_min_m;
-  const auto & hi = profile.workspace_roi_max_m;
+  auto lo = profile.workspace_roi_min_m;
+  auto hi = profile.workspace_roi_max_m;
+  // One material diagonal bounds how far a Tray-crossing part can extend.
+  // This is an observation bound, not contour or connectivity inference.
+  const double margin = std::sqrt(std::inner_product(profile.dimensions_m.begin(),
+    profile.dimensions_m.end(), profile.dimensions_m.begin(), 0.0)) +
+    *std::max_element(profile.dimension_tolerance_m.begin(), profile.dimension_tolerance_m.end());
+  const std::array<double, 2> expansion_min{lo[0] - margin, lo[1] - margin};
+  const std::array<double, 2> expansion_max{hi[0] + margin, hi[1] + margin};
+  const auto & info = input.camera_info;
+  const auto rays = pixel_ray_lookup(info, input.depth.width, input.depth.height);
+  const size_t pixel_count = static_cast<size_t>(input.depth.width) * input.depth.height;
+  const auto read_depth = [&](size_t i) {
+      const size_t r = i / input.depth.width, c = i % input.depth.width;
+      float depth = 0;
+      if (input.depth.encoding == "32FC1") {
+        std::memcpy(&depth, input.depth.data.data() + r * input.depth.step + c * 4, 4);
+      } else {
+        uint16_t mm;
+        std::memcpy(&mm, input.depth.data.data() + r * input.depth.step + c * 2, 2);
+        depth = mm / 1000.0F;
+      }
+      return depth;
+    };
+  // Size the observation grid from measured above-floor material, before any
+  // Tray selection. Keep the calibrated floor around the original workspace.
+  for (size_t i = 0; i < pixel_count; ++i) {
+    const float depth = read_depth(i);
+    if (!std::isfinite(depth) || depth <= 0) {continue;}
+    const auto & ray = rays->centers[i];
+    const auto point = support_T_camera * tf2::Vector3(ray.x * depth, ray.y * depth, depth);
+    if (point.z() <= profile.support_contact_tolerance_m || point.z() < lo[2] ||
+      point.z() > hi[2] || point.x() < expansion_min[0] || point.x() > expansion_max[0] ||
+      point.y() < expansion_min[1] || point.y() > expansion_max[1]) {continue;}
+    for (size_t axis = 0; axis < 2; ++axis) {
+      lo[axis] = std::min(lo[axis], std::max(expansion_min[axis], std::floor(point[axis] / spacing) * spacing - spacing));
+      hi[axis] = std::max(hi[axis], std::min(expansion_max[axis], std::ceil(point[axis] / spacing) * spacing + spacing));
+    }
+  }
   const int cols = static_cast<int>(std::ceil((hi[0] - lo[0]) / spacing)) + 1;
   const int rows = static_cast<int>(std::ceil((hi[1] - lo[1]) / spacing)) + 1;
   if (rows <= 0 || cols <= 0 || static_cast<int64_t>(rows) * cols > 4000000) {
@@ -766,10 +895,7 @@ DetectionResult process_cuboid_top_face(
       rows, cols, CV_64F,
       cv::Scalar(std::numeric_limits<double>::quiet_NaN())), {lo[0], lo[1]}, spacing, {}};
   obs.image_boundary = cv::Mat::zeros(rows, cols, CV_8U);
-  const auto & info = input.camera_info;
-  // Only camera rays are cached; support calibration and Tray ROI remain current per observation.
-  const auto rays = pixel_ray_lookup(info, input.depth.width, input.depth.height);
-  const size_t pixel_count = static_cast<size_t>(input.depth.width) * input.depth.height;
+
   for (size_t i = 0; i < pixel_count; ++i) {
     const size_t r = i / input.depth.width, c = i % input.depth.width;
     float depth = 0;
@@ -784,6 +910,7 @@ DetectionResult process_cuboid_top_face(
     const auto p = support_T_camera * tf2::Vector3(
       center_ray.x * depth, center_ray.y * depth,
       depth);
+    if (p.z() < -profile.support_contact_tolerance_m || p.z() > hi[2]) {continue;}
     if (p.x() < lo[0] || p.x() > hi[0] || p.y() < lo[1] || p.y() > hi[1]) {continue;}
     std::vector<cv::Point2f> cell_polygon;
     for (size_t corner = 0; corner < 4; ++corner) {

@@ -367,12 +367,9 @@ static std::vector<PlaneRegion> connected_observations(
   for (int r = 0; r < obs.heights.rows; ++r) {
     for (int c = 0; c < obs.heights.cols; ++c) {
       const double z = obs.heights.at<double>(r, c);
-      const auto xy = obs.origin + cv::Point2d(c, r) * obs.spacing_m;
       if ((!allowed_cells || allowed_cells->at<uint8_t>(r, c)) &&
         std::isfinite(z) && z > profile.support_contact_tolerance_m &&
-        z >= profile.workspace_roi_min_m[2] && z <= profile.workspace_roi_max_m[2] &&
-        xy.x >= profile.workspace_roi_min_m[0] && xy.x <= profile.workspace_roi_max_m[0] &&
-        xy.y >= profile.workspace_roi_min_m[1] && xy.y <= profile.workspace_roi_max_m[1])
+        z >= profile.workspace_roi_min_m[2] && z <= profile.workspace_roi_max_m[2])
       {available.at<uint8_t>(r, c) = 255;}
     }
   }
@@ -399,6 +396,18 @@ static std::vector<PlaneRegion> connected_observations(
           }
         }
       }
+      // The Tray selects connected observations; it never cuts their contours.
+      const bool tray_configured = profile.tray_roi_max_m[0] > profile.tray_roi_min_m[0] &&
+        profile.tray_roi_max_m[1] > profile.tray_roi_min_m[1];
+      const bool intersects_tray = std::any_of(patch.pixels.begin(), patch.pixels.end(),
+        [&](const cv::Point & pixel) {
+          const auto xy = obs.origin + cv::Point2d(pixel) * obs.spacing_m;
+          return xy.x >= (tray_configured ? profile.tray_roi_min_m[0] : profile.workspace_roi_min_m[0]) &&
+                 xy.x <= (tray_configured ? profile.tray_roi_max_m[0] : profile.workspace_roi_max_m[0]) &&
+                 xy.y >= (tray_configured ? profile.tray_roi_min_m[1] : profile.workspace_roi_min_m[1]) &&
+                 xy.y <= (tray_configured ? profile.tray_roi_max_m[1] : profile.workspace_roi_max_m[1]);
+        });
+      if (!intersects_tray) {continue;}
       patch.source_boundary_id = pick_boundary_id++;
       patches.push_back(std::move(patch));
     }
@@ -1122,12 +1131,10 @@ std::string evaluate_outline(
   cv::erode(fit.mask, interior, uncertainty_kernel);
   bool partial = cv::countNonZero(interior & ~observed_tolerant) > 0;
   for (const auto & point : corners(fit)) {
-    if (point.x < std::max(obs.origin.x, profile.workspace_roi_min_m[0]) - epsilon ||
-      point.y < std::max(obs.origin.y, profile.workspace_roi_min_m[1]) - epsilon ||
-      point.x > std::min(obs.origin.x + (obs.heights.cols - 1) * obs.spacing_m,
-        profile.workspace_roi_max_m[0]) + epsilon ||
-      point.y > std::min(obs.origin.y + (obs.heights.rows - 1) * obs.spacing_m,
-        profile.workspace_roi_max_m[1]) + epsilon) {partial = true;}
+    if (point.x < obs.origin.x - epsilon ||
+      point.y < obs.origin.y - epsilon ||
+      point.x > (obs.origin.x + (obs.heights.cols - 1) * obs.spacing_m) + epsilon ||
+      point.y > (obs.origin.y + (obs.heights.rows - 1) * obs.spacing_m) + epsilon) {partial = true;}
   }
   if (!obs.image_boundary.empty() && cv::countNonZero(interior & obs.image_boundary)) {
     partial = true;

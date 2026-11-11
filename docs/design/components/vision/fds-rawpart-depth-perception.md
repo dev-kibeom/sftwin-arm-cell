@@ -128,6 +128,10 @@ Vision은 선택 상태가 SELECTED인 적격 HIGH와 MEDIUM 후보를 단일 `m
 
 Snapshot·Diagnostic은 실제 선택 Evaluation을 재사용하고 계산한 Hypothesis·Count·Acceptance/Rejection Evidence·Absence Decision만 담는다. 표시를 위해 Candidate를 추가 생성하거나 Matching을 재실행해서는 안 된다(SHALL NOT). `Pick-eligible`은 Geometry와 Observation Quality가 검증됐다는 뜻이지 Motion Reachability·Clearance·Grasp Feasibility 검증이 아니다.
 
+전체 Recipe 복원의 자세가 미해결이어도 실제 관측 평면의 Pose·Geometry가 확정되면 Vision은 그 평면을 별도 SELECTED 후보로 반환할 수 있다. 반환 범위는 실제 관측 직사각형이며 미관측 Recipe Footprint를 채우지 않는다. 경쟁 가설이 자체 두께에 동의하는 경우만 기존 두께 필드를 사용하고, 관측 평면 근거를 진단에 보존한다. 상세 적격성은 Cuboid Algorithm을 따른다. 전체 객체 복원의 UNRESOLVED 진단과 관측 평면 후보의 적격성은 구분하며, Motion·Orchestration 책임은 변경하지 않는다.
+
+Tray 내부와 겹치는 관측 연결 영역은 Tray 밖으로 이어진 부분까지 Plane Map에 보존한다. Tray는 영역 선택 기준이며 자재 Contour의 절단선이 아니다. Tray 바닥 기준 Support 허용오차보다 낮은 깊이는 Height Grid 생성 단계에서 제외한다.
+
 ### 2.5 RawPart Observation Pose 기준
 
 선택 Candidate 안에서 Vision은 Support-relative Height·Surface Normal·Configured Workpiece Profile의 일관성으로 관측된 상판을 식별한다. Robust Plane Fit은 Depth Noise와 Boundary Outlier를 거부할 수 있다. 완전·부분 관측 모두 선택 Algorithm이 요구하는 실제 관측 L자 Edge 지지와 기존 Profile의 Observation Quality를 평가 근거로 사용한다. 전체 상판 Coverage는 모든 후보에 적용하는 필수조건이 아니다. 모서리 위치를 안정적으로 평가할 수 없는 Insufficient·Geometrically Inconsistent Evidence는 Geometry/Temporary Observation Failure이지 Success/Depletion이 아니다. 상부 가림은 후보 존재 근거를 없애지 않으며 확실성 등급에 반영한다.

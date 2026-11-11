@@ -57,6 +57,7 @@ struct Fit
   double observed_top = 0.0;
   bool is_partial_reconstruction = false;
   bool rectangle_measured = false;
+  bool observed_plane_reference = false;
   bool covered_by_upper_surface = false;
   cv::Point2d anchor;
   std::string tray_support_evidence;

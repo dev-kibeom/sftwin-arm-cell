@@ -1027,7 +1027,7 @@ TEST(CuboidTopFace, FullyObservedTopTouchingGridBoundaryRemainsHigh)
   EXPECT_EQ(result.ordered_candidates.front().confidence_grade, "HIGH");
 }
 
-TEST(CuboidTopFace, ShortEdgesDoNotDetermineRecipeLongAndShortSideMapping)
+TEST(CuboidTopFace, ShortEdgesPreserveRecipeAmbiguityButReturnMeasuredPlane)
 {
   auto observation = scene();
   partial_rectangle_at_recipe_corner(observation, 0.02, 0.02);
@@ -1040,9 +1040,11 @@ TEST(CuboidTopFace, ShortEdgesDoNotDetermineRecipeLongAndShortSideMapping)
   }
   const auto first = detect_cuboid_top_face(observation, profile(), true);
   const auto repeated = detect_cuboid_top_face(observation, profile(), true);
-  EXPECT_FALSE(first.has_target_pose) << first.diagnostic_detail;
-  EXPECT_EQ(first.result_code, Code::DETECT_RESULT_GEOMETRY_ERROR);
-  EXPECT_FALSE(first.disturbance_candidates.empty());
+  EXPECT_EQ(first.result_code, Code::DETECT_RESULT_SUCCESS);
+  ASSERT_EQ(first.ordered_candidates.size(), 1U);
+  EXPECT_EQ(first.ordered_candidates.front().confidence_reason, "observed_plane_geometry_resolved");
+  EXPECT_TRUE(std::any_of(first.cuboid_hypotheses.begin(), first.cuboid_hypotheses.end(),
+    [](const auto & h) {return h.selection_state == "UNRESOLVED";}));
   EXPECT_EQ(first.diagnostic_detail, repeated.diagnostic_detail);
 }
 
@@ -2537,4 +2539,154 @@ TEST(CuboidDiagnosticNormalization, CompetitorReferencesUseUniqueCanonicalIds)
   EXPECT_EQ(hypotheses[1].competing_candidate_ids, std::vector<uint32_t>{3});
   EXPECT_EQ(hypotheses[2].competing_candidate_ids, std::vector<uint32_t>{2});
   EXPECT_EQ(hypotheses[3].competing_candidate_ids, std::vector<uint32_t>{3});
+}
+
+TEST(CuboidTopFace, TraySelectsWholeCrossingPlaneWithoutCuttingItsContour)
+{
+  auto obs = scene();
+  cuboid(obs, 0.04, 0);
+  cuboid(obs, -0.15, 0);
+  auto p = profile();
+  p.tray_roi_min_m = {0, -0.1};
+  p.tray_roi_max_m = {0.02, 0.1};
+  p.workspace_roi_min_m[0] = 0;
+  p.workspace_roi_max_m[0] = 0.02;
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_EQ(result.ordered_candidates.size(), 1U) << result.diagnostic_detail;
+  EXPECT_NEAR(result.ordered_candidates.front().target_pose.pose.position.x, 0.04, obs.spacing_m);
+  EXPECT_GT(result.ordered_candidates.front().rectangle_long_side_m, 0.07);
+}
+
+TEST(CuboidTopFace, AmbiguousRecipeAxesCanReturnMeasuredPlaneWithAgreedThickness)
+{
+  auto obs = scene();
+  obs.heights.setTo(std::numeric_limits<double>::quiet_NaN());
+  for (int row = 171; row <= 200; ++row) {
+    for (int col = 145; col <= 173; ++col) {obs.heights.at<double>(row, col) = 0.06647;}
+  }
+  auto p = profile();
+  p.dimensions_m = {0.07, 0.07, 0.08};
+  p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.support_contact_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003;
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_FALSE(result.ordered_candidates.empty()) << result.diagnostic_detail;
+  const auto & candidate = result.ordered_candidates.front();
+  EXPECT_TRUE(candidate.has_observed_rectangle);
+  EXPECT_LE(candidate.rectangle_long_side_m, 0.075 + 1e-6);
+  EXPECT_NEAR(candidate.target_pose.pose.position.x, 0.0975, obs.spacing_m);
+  EXPECT_NEAR(candidate.target_pose.pose.position.y, 0.16375, obs.spacing_m);
+}
+
+TEST(CuboidTopFace, LocalObservedPlaneReplayReturnsMeasuredSurface)
+{
+  const char * prefix = std::getenv("ARM_CELL_OBSERVED_PLANE_REPLAY");
+  if (!prefix) {GTEST_SKIP() << "Set ARM_CELL_OBSERVED_PLANE_REPLAY to acquisition 15 prefix";}
+  CuboidHeightObservation obs{cv::Mat(161, 241, CV_64F), {-0.3, -0.2}, 0.0025,
+    cv::Mat(161, 241, CV_8U)};
+  std::ifstream grid(std::string(prefix) + ".height_grid.f64le", std::ios::binary);
+  ASSERT_TRUE(grid.read(reinterpret_cast<char *>(obs.heights.data), obs.heights.total() * 8));
+  std::ifstream mask(std::string(prefix) + ".image_boundary.u8", std::ios::binary);
+  ASSERT_TRUE(mask.read(reinterpret_cast<char *>(obs.image_boundary.data), obs.heights.total()));
+  auto p = profile();
+  p.dimensions_m = {0.07, 0.07, 0.08};
+  p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.workspace_roi_min_m = {-0.3, -0.2, 0.01};
+  p.workspace_roi_max_m = {0.3, 0.2, 1};
+  p.support_contact_tolerance_m = 0.01;
+  p.top_surface_geometry_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003;
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  ASSERT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
+  ASSERT_EQ(result.ordered_candidates.size(), 1U);
+  const auto & candidate = result.ordered_candidates.front();
+  EXPECT_EQ(candidate.confidence_reason, "observed_plane_geometry_resolved");
+  EXPECT_NEAR(candidate.target_pose.pose.position.x, 0.0975, obs.spacing_m);
+  EXPECT_NEAR(candidate.target_pose.pose.position.y, 0.16375, obs.spacing_m);
+  EXPECT_NEAR(candidate.target_pose.pose.position.z, 0.06647, 0.001);
+  EXPECT_LE(candidate.rectangle_long_side_m, 0.075);
+}
+
+TEST(CuboidTopFace, ObservedPlaneDoesNotFillUnobservedInteriorHole)
+{
+  auto obs = scene();
+  cuboid(obs, 0, 0, 0, 0, 0.07, 0.0725, 0.06647);
+  obs.heights.at<double>(120, 120) = std::numeric_limits<double>::quiet_NaN();
+  auto p = profile();
+  p.dimensions_m = {0.07, 0.07, 0.08};
+  p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.support_contact_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003;
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  EXPECT_TRUE(std::none_of(result.ordered_candidates.begin(), result.ordered_candidates.end(),
+    [](const auto & c) {return c.confidence_reason == "observed_plane_geometry_resolved";}));
+}
+
+TEST(CuboidTopFace, DepthProjectionPreservesTrayCrossingMaterialAndDropsBelowFloor)
+{
+  arm_cell_vision::DetectionInput input;
+  input.detailed_diagnostics_enabled = true;
+  input.optical_to_base.transform.rotation.w = 1;
+  input.depth.width = input.depth.height = 200;
+  input.depth.encoding = "32FC1";
+  input.depth.step = 200 * 4;
+  input.depth.data.resize(200 * input.depth.step);
+  input.camera_info.width = input.camera_info.height = 200;
+  input.camera_info.k = {200, 0, 100, 0, 200, 100, 0, 0, 1};
+  for (size_t y = 0; y < 200; ++y) {
+    for (size_t x = 0; x < 200; ++x) {
+      const float depth = x >= 100 && x <= 117 && y >= 94 && y <= 106 ? 0.97F : 1.1F;
+      std::memcpy(input.depth.data.data() + y * input.depth.step + x * 4, &depth, 4);
+    }
+  }
+  tf2::Transform support;
+  support.setIdentity();
+  support.setRotation(tf2::Quaternion(1, 0, 0, 0));
+  support.setOrigin(tf2::Vector3(0, 0, 1));
+  auto p = profile();
+  p.tray_roi_min_m = {0, -0.1};
+  p.tray_roi_max_m = {0.02, 0.1};
+  p.workspace_roi_min_m[0] = 0;
+  p.workspace_roi_max_m[0] = 0.02;
+  const auto result = arm_cell_vision::process_cuboid_top_face(input, p, support);
+  ASSERT_TRUE(result.cuboid_replay_evidence);
+  const auto & grid = result.cuboid_replay_evidence->height_grid_m;
+  // The only finite samples are material; the background is below the Tray.
+  double minimum = 0, maximum = 0;
+  cv::minMaxLoc(grid, &minimum, &maximum);
+  EXPECT_GE(minimum, -p.support_contact_tolerance_m);
+  EXPECT_NEAR(maximum, 0.03, 0.001);
+  ASSERT_FALSE(result.cuboid_planes.empty());
+  EXPECT_GT(result.cuboid_planes.front().cell_count, 200U);
+}
+
+TEST(CuboidTopFace, RemoteAndBelowRoiObservationsCannotExpandHeightGrid)
+{
+  arm_cell_vision::DetectionInput input;
+  input.detailed_diagnostics_enabled = true;
+  input.optical_to_base.transform.rotation.w = 1;
+  input.depth.width = input.depth.height = 200;
+  input.depth.encoding = "32FC1";
+  input.depth.step = 800;
+  input.depth.data.resize(160000);
+  input.camera_info.width = input.camera_info.height = 200;
+  input.camera_info.k = {20, 0, 100, 0, 20, 100, 0, 0, 1};
+  tf2::Transform support;
+  support.setIdentity();
+  support.setRotation(tf2::Quaternion(1, 0, 0, 0));
+  support.setOrigin(tf2::Vector3(0, 0, 1));
+  auto p = profile();
+  p.workspace_roi_min_m[2] = 0.02;
+  for (float depth : {0.99F, 0.97F}) {
+    // A lone remote point is either below the Z ROI or inside its Z range.
+    std::fill(input.depth.data.begin(), input.depth.data.end(), 0);
+    std::memcpy(input.depth.data.data(), &depth, 4);
+    const float below_roi = 0.99F;
+    // x ~= 0.396 m is inside the expansion limit but outside the initial ROI.
+    std::memcpy(input.depth.data.data() + 100 * input.depth.step + 108 * 4, &below_roi, 4);
+    const auto result = arm_cell_vision::process_cuboid_top_face(input, p, support);
+    ASSERT_TRUE(result.cuboid_replay_evidence);
+    EXPECT_EQ(result.cuboid_replay_evidence->rows, 241U);
+    EXPECT_EQ(result.cuboid_replay_evidence->columns, 241U);
+  }
 }

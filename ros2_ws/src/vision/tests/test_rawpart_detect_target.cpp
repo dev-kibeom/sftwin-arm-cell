@@ -666,7 +666,7 @@ TEST(RawPartDetectTarget, UniqueRoiAndCameraClippedGeometryIsMedium)
     << outside_result.diagnostic_detail;
   EXPECT_LE(
     outside_result.ordered_candidates.at(0).target_pose.pose.position.x, profile.workspace_roi_max_m[0]);
-  EXPECT_FALSE(outside_result.ordered_candidates.at(0).has_observed_rectangle);
+  EXPECT_TRUE(outside_result.ordered_candidates.at(0).has_observed_rectangle);
 
   auto clipped_at_image_edge = rgbd_input(true);
   clear_candidate(clipped_at_image_edge, 122, 112, 76, 76);
@@ -676,7 +676,8 @@ TEST(RawPartDetectTarget, UniqueRoiAndCameraClippedGeometryIsMedium)
   profile.algorithm = "cuboid_top_face";
   profile.dimensions_m = {0.07, 0.07, 0.07};
   profile.workspace_roi_min_m[0] = -0.20;
-  profile.tray_roi_min_m = {-0.08, -0.08};
+  // Keep the camera-clipped material inside the Tray selection region.
+  profile.tray_roi_min_m = {-0.20, -0.08};
   profile.tray_roi_max_m = {0.08, 0.08};
   const auto clipped_result = process_with_fixture_calibration(
     clipped_at_image_edge, "RawPart", {profile});
