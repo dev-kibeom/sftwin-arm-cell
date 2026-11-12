@@ -190,38 +190,10 @@ def build_environment(context):
             mat_frame,
         )
 
-    for name, x in [("Left", -0.57), ("Right", 0.97)]:
-        fixed_box(
-            f"{CELL_ROOT}/Safety/AMRInterface/{name}Post",
-            f"amr_interface_{name.lower()}",
-            [x, -0.38, 0.66],
-            [0.075, 0.075, 1.20],
-            COLORS["charcoal"],
-            mat_frame,
-        )
-        create_sphere(
-            stage,
-            f"{CELL_ROOT}/Safety/AMRInterface/{name}LED",
-            0.022,
-            [x, -0.43, 1.18],
-            COLORS["green"],
-            mat_green,
-        )
-
-    fixed_box(
-        f"{CELL_ROOT}/Safety/AMRInterface/BeamIndicator",
-        "amr_light_curtain_indicator",
-        [0.20, -0.395, 0.52],
-        [1.42, 0.012, 0.012],
-        COLORS["cyan"],
-        mat_cyan,
-    )
-    set_custom_data(
-        stage,
-        f"{CELL_ROOT}/Safety/AMRInterface",
-        "sf_twin:role",
-        "amr_logistics_safety_interface",
-    )
+    context.materials = {
+        name: value for name, value in locals().items() if name.startswith("mat_")
+    }
+    build_amr_interface(context)
 
     # -----------------------------------------------------------------------------
     # 3. CNC mockup - rear machine side
@@ -373,8 +345,53 @@ def build_environment(context):
     ]:
         set_custom_data(stage, p, "sf_twin:role", role)
 
-    context.materials = {
-        name: value for name, value in locals().items() if name.startswith("mat_")
-    }
     context.cnc_x = cnc_x
     context.cnc_y = cnc_y
+
+
+def build_amr_interface(context):
+    """Mount the safety interface beside the manifest-backed camera posts."""
+    stage = context.stage
+    CELL_ROOT = context.cell_root
+    COLORS = context.colors
+    fixed_box = context.fixed_box
+    create_sphere = context.create_sphere
+    set_custom_data = context.set_custom_data
+    mat_frame = context.materials["mat_frame"]
+    mat_green = context.materials["mat_green"]
+    mat_cyan = context.materials["mat_cyan"]
+    # Preserve the mounting offset of the original left interface on both sides.
+    left_x = context.static_geometry["camera_rig_post_left"]["pose"]["position_m"][0] - 0.01
+    right_x = context.static_geometry["camera_rig_post_right"]["pose"]["position_m"][0] + 0.01
+    for name, x in [("Left", left_x), ("Right", right_x)]:
+        fixed_box(
+            f"{CELL_ROOT}/Safety/AMRInterface/{name}Post",
+            f"amr_interface_{name.lower()}",
+            [x, -0.38, 0.66],
+            [0.075, 0.075, 1.20],
+            COLORS["charcoal"],
+            mat_frame,
+        )
+        create_sphere(
+            stage,
+            f"{CELL_ROOT}/Safety/AMRInterface/{name}LED",
+            0.022,
+            [x, -0.43, 1.18],
+            COLORS["green"],
+            mat_green,
+        )
+
+    fixed_box(
+        f"{CELL_ROOT}/Safety/AMRInterface/BeamIndicator",
+        "amr_light_curtain_indicator",
+        [(left_x + right_x) / 2, -0.395, 0.52],
+        [right_x - left_x - 0.12, 0.012, 0.012],
+        COLORS["cyan"],
+        mat_cyan,
+    )
+    set_custom_data(
+        stage,
+        f"{CELL_ROOT}/Safety/AMRInterface",
+        "sf_twin:role",
+        "amr_logistics_safety_interface",
+    )

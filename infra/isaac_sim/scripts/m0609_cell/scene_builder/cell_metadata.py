@@ -46,8 +46,8 @@ def build_status_hardware(context):
     fixed_box(
         f"{CELL_ROOT}/Status/EStop/Pedestal",
         "estop_pedestal",
-        [-0.94, -0.74, 0.72],
-        [0.11, 0.11, 1.15],
+        [-0.94, -0.74, 0.6475],
+        [0.11, 0.11, 1.295],
         COLORS["charcoal"],
         mat_frame,
     )
