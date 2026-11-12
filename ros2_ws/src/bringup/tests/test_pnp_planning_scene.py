@@ -19,7 +19,7 @@ def module():
 def handoff():
     return {
         "run_id": "run-1",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "request": {
             "pose": {
                 "frame_id": "base_link",
@@ -40,7 +40,7 @@ def test_fixture_world_object_converts_registered_top_to_box_center():
 
     collision = loaded.make_fixture_collision_object(fixture_handoff)
 
-    assert collision.id == "wu14_fixture_run-1_cube_profile"
+    assert collision.id == "wu14_fixture_run-1_TestCube"
     assert collision.header.frame_id == "base_link"
     assert collision.primitives[0].dimensions == pytest.approx([0.07, 0.07, 0.08])
     assert collision.pose.position.x == pytest.approx(0.2)
@@ -78,7 +78,7 @@ def test_registered_top_pose_is_not_mutated_by_planning_scene_conversion():
 def test_lifecycle_is_fail_closed_and_has_explicit_attachment_transitions():
     loaded = module()
     lifecycle = loaded.FixturePlanningSceneLifecycle(
-        "wu14_fixture_run-1_cube_profile", cleanup_delay_s=3.0
+        "wu14_fixture_run-1_TestCube", cleanup_delay_s=3.0
     )
 
     assert lifecycle.state == loaded.LifecycleState.WORLD

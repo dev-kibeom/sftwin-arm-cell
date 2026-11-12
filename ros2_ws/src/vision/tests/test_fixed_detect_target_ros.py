@@ -27,7 +27,7 @@ def _pose(frame_id="base_link", x=0.2, y=-0.1, z=0.35, stamp=(7, 123456789)):
 
 
 def _registration(
-    target_id="cube_profile",
+    target_id="TestCube",
     run_id="run-1",
     pose=None,
     orientation_symmetry_order=1,
@@ -45,7 +45,7 @@ def _registration(
     return request
 
 
-def _detect(target_id="cube_profile"):
+def _detect(target_id="TestCube"):
     request = DetectTarget.Request()
     request.target_id = target_id
     request.timeout.sec = 1
@@ -79,7 +79,7 @@ class FixedVisionRosHarness:
                 "fixed_detect_target_node",
                 "--ros-args",
                 "-p",
-                "target_id:=cube_profile",
+                "target_id:=TestCube",
             ],
             env=self.environment,
             start_new_session=True,

@@ -4,7 +4,7 @@
 
 - **범위:** DetectTarget 요청별 원본 Camera Depth 관측의 안정화 판단
 - **Owner:** ARM Cell Material Detection
-- **상위 계약:** [Vision CDS](../components/vision/cds.md), [DetectTarget FDS](../components/vision/fds-detect-target.md), [Frame Ingress FDS](../components/vision/fds-frame-ingress.md), [RawPart FDS](../components/vision/fds-rawpart-depth-perception.md)
+- **상위 계약:** [Vision CDS](../components/vision/cds.md), [DetectTarget FDS](../components/vision/fds-detect-target.md), [Frame Ingress FDS](../components/vision/fds-frame-ingress.md), [TestCube FDS](../components/vision/fds-rawpart-depth-perception.md)
 
 ## 목적
 

@@ -297,6 +297,8 @@ public:
   : Node("orchestration_node", options)
   {
     mission_target_id_ = declare_parameter<std::string>("mission_target_id", "");
+    material_admission_gate_.set_material_types(declare_parameter<std::vector<std::string>>(
+      "material_types", std::vector<std::string>{mission_target_id_}));
     const auto recipe_directory = declare_parameter<std::string>("recipe_directory", "");
     if (mission_target_id_.empty() || recipe_directory.empty()) {
       throw std::invalid_argument("mission target_id and recipe_directory are required");
@@ -710,7 +712,7 @@ private:
       unique_identifier_msgs::msg::UUID current_delivery_id;
       const auto now = MaterialAdmissionGate::Clock::now();
       admission = material_admission_gate_.try_admit(
-        safety_observation_locked(now), mission_target_id_, &block_reason,
+        safety_observation_locked(now), std::string{}, &block_reason,
         &current_delivery_id, vision_calibration_block_reason_locked(now));
       const auto current_key = delivery_identity_key(current_delivery_id);
       if (!admission) {
@@ -1298,7 +1300,7 @@ private:
         {
           std::lock_guard<std::mutex> lock(recovery_mutex_);
           const auto accounting_result = material_admission_gate_.record_successful_place(
-            uuid_key(handle->get_goal_id()), count);
+            uuid_key(handle->get_goal_id()), count, handle->get_goal()->target_id);
           if (accounting_result == MaterialAdmissionGate::PlaceCommitResult::DUPLICATE) {
             RCLCPP_DEBUG(get_logger(),
                          "duplicate PLACE accounting callback ignored "
@@ -2345,10 +2347,6 @@ private:
   RecipeLoadResult load_recipe(
     const std::string & target_id) const
   {
-    if (target_id != mission_target_id_) {
-      return RecipeLoadResult{
-        std::nullopt, RecipeDiagnosticReason::TARGET_MISMATCH, std::filesystem::path{}};
-    }
     return recipe_repository_->load(target_id);
   }
 

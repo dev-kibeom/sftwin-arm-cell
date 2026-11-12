@@ -119,32 +119,32 @@ protected:
       rclcpp::Parameter("calibration_file", selected_calibration_.string()),
       rclcpp::Parameter("camera_info_topic", "/camera/color/camera_info"),
       rclcpp::Parameter("sync_slop_ms", 10.0),
-      rclcpp::Parameter("detector_profiles.RawPart.target_id", std::string("RawPart")),
-      rclcpp::Parameter("detector_profiles.RawPart.material_id", std::string("RawPart")),
-      rclcpp::Parameter("material_definitions.RawPart.shape", std::string("box")),
-      rclcpp::Parameter("material_definitions.RawPart.nominal_dimensions_m",
+      rclcpp::Parameter("detector_profiles.TestCube.target_id", std::string("TestCube")),
+      rclcpp::Parameter("detector_profiles.TestCube.material_id", std::string("TestCube")),
+      rclcpp::Parameter("material_definitions.TestCube.shape", std::string("box")),
+      rclcpp::Parameter("material_definitions.TestCube.nominal_dimensions_m",
         std::vector<double>{0.07, 0.07, 0.08}),
-      rclcpp::Parameter("detector_profiles.RawPart.dimension_tolerance_m",
+      rclcpp::Parameter("detector_profiles.TestCube.dimension_tolerance_m",
         std::vector<double>{0.01, 0.01, 0.01}),
-      rclcpp::Parameter("detector_profiles.RawPart.workspace_roi_m.x",
+      rclcpp::Parameter("detector_profiles.TestCube.workspace_roi_m.x",
         std::vector<double>{-0.3, 0.3}),
-      rclcpp::Parameter("detector_profiles.RawPart.workspace_roi_m.y",
+      rclcpp::Parameter("detector_profiles.TestCube.workspace_roi_m.y",
         std::vector<double>{-0.2, 0.2}),
-      rclcpp::Parameter("detector_profiles.RawPart.workspace_roi_m.z",
+      rclcpp::Parameter("detector_profiles.TestCube.workspace_roi_m.z",
         std::vector<double>{0.01, 0.12}),
-      rclcpp::Parameter("detector_profiles.RawPart.tray_roi_m.x",
+      rclcpp::Parameter("detector_profiles.TestCube.tray_roi_m.x",
         std::vector<double>{-0.3, 0.3}),
-      rclcpp::Parameter("detector_profiles.RawPart.tray_roi_m.y",
+      rclcpp::Parameter("detector_profiles.TestCube.tray_roi_m.y",
         std::vector<double>{-0.2, 0.2}),
-      rclcpp::Parameter("detector_profiles.RawPart.support_contact_tolerance_m", 0.01),
-      rclcpp::Parameter("detector_profiles.RawPart.top_surface_geometry_tolerance_m", 0.01),
-      rclcpp::Parameter("detector_profiles.RawPart.fiducial.dictionary", std::string("DICT_4X4_50")),
-      rclcpp::Parameter("detector_profiles.RawPart.fiducial.marker_id", int64_t{0}),
-      rclcpp::Parameter("detector_profiles.RawPart.fiducial.size_m", 0.04),
-      rclcpp::Parameter("detector_profiles.RawPart.fiducial.pose_translation_scale", 1.0011),
-      rclcpp::Parameter("detector_profiles.RawPart.fiducial.marker_in_support.position_m",
+      rclcpp::Parameter("detector_profiles.TestCube.support_contact_tolerance_m", 0.01),
+      rclcpp::Parameter("detector_profiles.TestCube.top_surface_geometry_tolerance_m", 0.01),
+      rclcpp::Parameter("detector_profiles.TestCube.fiducial.dictionary", std::string("DICT_4X4_50")),
+      rclcpp::Parameter("detector_profiles.TestCube.fiducial.marker_id", int64_t{0}),
+      rclcpp::Parameter("detector_profiles.TestCube.fiducial.size_m", 0.04),
+      rclcpp::Parameter("detector_profiles.TestCube.fiducial.pose_translation_scale", 1.0011),
+      rclcpp::Parameter("detector_profiles.TestCube.fiducial.marker_in_support.position_m",
         std::vector<double>{0.0, -0.2525, 0.1101}),
-      rclcpp::Parameter("detector_profiles.RawPart.fiducial.marker_in_support.rpy_rad",
+      rclcpp::Parameter("detector_profiles.TestCube.fiducial.marker_in_support.rpy_rad",
         std::vector<double>{0.0, 0.0, 0.0})});
 
     vision_ = arm_cell_vision::make_detect_target_node(options);
@@ -347,7 +347,7 @@ TEST_F(DetectTargetNodeRosBoundaryTest, OverlappingRequestsReturnBusyWithoutRepl
   ASSERT_TRUE(detect_client_->wait_for_service(2s));
 
   auto active_request = std::make_shared<arm_cell_interfaces::srv::DetectTarget::Request>();
-  active_request->target_id = "RawPart";
+  active_request->target_id = "TestCube";
   active_request->algorithm = "cuboid_top_face";
   active_request->timeout.sec = 1;
   auto active_response = detect_client_->async_send_request(active_request);
@@ -379,7 +379,7 @@ TEST_F(DetectTargetNodeRosBoundaryTest, DetectionUsesTheObservationThatCompletes
 
   ASSERT_TRUE(detect_client_->wait_for_service(2s));
   auto request = std::make_shared<arm_cell_interfaces::srv::DetectTarget::Request>();
-  request->target_id = "RawPart";
+  request->target_id = "TestCube";
   request->algorithm = "cuboid_top_face";
   request->timeout.sec = 3;
   auto response_future = detect_client_->async_send_request(request);
@@ -464,7 +464,7 @@ TEST_F(DetectTargetNodeWithoutTransformTest, MissingTransformCannotProduceDetect
   ASSERT_TRUE(detect_client_->wait_for_service(2s));
 
   auto request = std::make_shared<arm_cell_interfaces::srv::DetectTarget::Request>();
-  request->target_id = "RawPart";
+  request->target_id = "TestCube";
   request->algorithm = "cuboid_top_face";
   request->timeout.sec = 1;
   auto response_future = detect_client_->async_send_request(request);

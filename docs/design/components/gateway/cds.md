@@ -51,7 +51,7 @@ classDiagram
 | 수락 결과 | 수락·거부 상태와 실제 거부 원인 보고, 수락 Trigger를 `/integration/accepted_handoff`로 인계 | Trigger·Receipt의 필드 의미는 External Handoff ICD |
 | 공급 근거 | Delivery ID별 VDA 문맥 및 `/material_supply/transfer_completion` 검증 | AMR/PackML/상태 사실은 VDA, 자재 공급 실행과 완료 판정 알고리즘은 Provider |
 | OT 전달 | 적격한 완료 근거에 대해 `/integration/material_readiness` 제공 | 데이터·전송·중복 의미는 Material Readiness ICD, Mission Admission은 Orchestration |
-| 환경 | Simulation/Production 공통 검증 기준 적용 | Isaac Material Supply는 RawPart 생성·Physics Drop·완료 보고, Production 공급자는 실제 장비 기준으로 완료 보고 |
+| 환경 | Simulation/Production 공통 검증 기준 적용 | Isaac Material Supply는 선택한 cuboid 자재 생성·Physics Drop·완료 보고, Production 공급자는 실제 장비 기준으로 완료 보고 |
 
 ## 3. Authority와 비책임
 

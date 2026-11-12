@@ -1144,92 +1144,98 @@ private:
 
   std::vector<DetectorProfile> load_detector_profiles()
   {
-    const auto prefix = std::string("detector_profiles.RawPart.");
-    DetectorProfile profile;
-    auto & c = profile.cuboid;
-    c.grid_resolution_m = declare_parameter<double>(
-      prefix + "cuboid.grid_resolution_m",
-      c.grid_resolution_m);
-    c.height_tolerance_m = declare_parameter<double>(
-      prefix + "cuboid.height_tolerance_m",
-      c.height_tolerance_m);
-    c.line_residual_limit_px = declare_parameter<double>(
-      prefix + "cuboid.line_residual_limit_px",
-      c.line_residual_limit_px);
-    c.minimum_line_support = declare_parameter<double>(
-      prefix + "cuboid.minimum_line_support",
-      c.minimum_line_support);
-    validate_cuboid_config(c);
-    profile.target_id = declare_parameter<std::string>(prefix + "target_id", "");
-    profile.material_id = declare_parameter<std::string>(prefix + "material_id", "");
-    profile.shape = declare_parameter<std::string>(
-      "material_definitions.RawPart.shape", "");
-    const auto dimensions = declare_parameter<std::vector<double>>(
-      "material_definitions.RawPart.nominal_dimensions_m", std::vector<double>{});
-    const auto dimension_tolerance = declare_parameter<std::vector<double>>(
-      prefix + "dimension_tolerance_m", std::vector<double>{});
-    const auto roi_x = declare_parameter<std::vector<double>>(
-      prefix + "workspace_roi_m.x", std::vector<double>{});
-    const auto roi_y = declare_parameter<std::vector<double>>(
-      prefix + "workspace_roi_m.y", std::vector<double>{});
-    const auto roi_z = declare_parameter<std::vector<double>>(
-      prefix + "workspace_roi_m.z", std::vector<double>{});
-    const auto tray_roi_x = declare_parameter<std::vector<double>>(
-      prefix + "tray_roi_m.x", std::vector<double>{});
-    const auto tray_roi_y = declare_parameter<std::vector<double>>(
-      prefix + "tray_roi_m.y", std::vector<double>{});
-    if (tray_roi_x.size() != 2 || tray_roi_y.size() != 2) {
-      throw std::invalid_argument("RawPart tray_roi_m x and y must each contain two bounds");
+    std::vector<DetectorProfile> profiles;
+    const auto material_ids = declare_parameter<std::vector<std::string>>(
+      "material_ids", std::vector<std::string>{"TestCube"});
+    for (const auto & material_id : material_ids) {
+      const auto prefix = std::string("detector_profiles.") + material_id + ".";
+      DetectorProfile profile;
+      auto & c = profile.cuboid;
+      c.grid_resolution_m = declare_parameter<double>(
+        prefix + "cuboid.grid_resolution_m",
+        c.grid_resolution_m);
+      c.height_tolerance_m = declare_parameter<double>(
+        prefix + "cuboid.height_tolerance_m",
+        c.height_tolerance_m);
+      c.line_residual_limit_px = declare_parameter<double>(
+        prefix + "cuboid.line_residual_limit_px",
+        c.line_residual_limit_px);
+      c.minimum_line_support = declare_parameter<double>(
+        prefix + "cuboid.minimum_line_support",
+        c.minimum_line_support);
+      validate_cuboid_config(c);
+      profile.target_id = declare_parameter<std::string>(prefix + "target_id", "");
+      profile.material_id = declare_parameter<std::string>(prefix + "material_id", "");
+      profile.shape = declare_parameter<std::string>(
+        "material_definitions." + material_id + ".shape", "");
+      const auto dimensions = declare_parameter<std::vector<double>>(
+        "material_definitions." + material_id + ".nominal_dimensions_m", std::vector<double>{});
+      const auto dimension_tolerance = declare_parameter<std::vector<double>>(
+        prefix + "dimension_tolerance_m", std::vector<double>{});
+      const auto roi_x = declare_parameter<std::vector<double>>(
+        prefix + "workspace_roi_m.x", std::vector<double>{});
+      const auto roi_y = declare_parameter<std::vector<double>>(
+        prefix + "workspace_roi_m.y", std::vector<double>{});
+      const auto roi_z = declare_parameter<std::vector<double>>(
+        prefix + "workspace_roi_m.z", std::vector<double>{});
+      const auto tray_roi_x = declare_parameter<std::vector<double>>(
+        prefix + "tray_roi_m.x", std::vector<double>{});
+      const auto tray_roi_y = declare_parameter<std::vector<double>>(
+        prefix + "tray_roi_m.y", std::vector<double>{});
+      if (tray_roi_x.size() != 2 || tray_roi_y.size() != 2) {
+        throw std::invalid_argument("Cuboid tray_roi_m x and y must each contain two bounds");
+      }
+      const auto marker_position = declare_parameter<std::vector<double>>(
+        prefix + "fiducial.marker_in_support.position_m", std::vector<double>{});
+      const auto marker_rpy = declare_parameter<std::vector<double>>(
+        prefix + "fiducial.marker_in_support.rpy_rad", std::vector<double>{});
+      const auto copy_three = [](const std::vector<double> & source,
+          std::array<double, 3> & target) {
+          if (source.size() == target.size()) {
+            std::copy(source.begin(), source.end(), target.begin());
+          }
+        };
+      const auto copy_roi = [](const std::vector<double> & source,
+          size_t axis, std::array<double, 3> & minimum, std::array<double, 3> & maximum) {
+          if (source.size() == 2) {
+            minimum[axis] = source[0];
+            maximum[axis] = source[1];
+          }
+        };
+      copy_three(dimensions, profile.dimensions_m);
+      copy_three(dimension_tolerance, profile.dimension_tolerance_m);
+      copy_three(marker_position, profile.marker_in_support_m);
+      copy_three(marker_rpy, profile.marker_rpy_in_support_rad);
+      copy_roi(roi_x, 0, profile.workspace_roi_min_m, profile.workspace_roi_max_m);
+      copy_roi(roi_y, 1, profile.workspace_roi_min_m, profile.workspace_roi_max_m);
+      copy_roi(roi_z, 2, profile.workspace_roi_min_m, profile.workspace_roi_max_m);
+      std::array<double, 3> tray_roi_min{};
+      std::array<double, 3> tray_roi_max{};
+      copy_roi(tray_roi_x, 0, tray_roi_min, tray_roi_max);
+      copy_roi(tray_roi_y, 1, tray_roi_min, tray_roi_max);
+      profile.tray_roi_min_m = {tray_roi_min[0], tray_roi_min[1]};
+      profile.tray_roi_max_m = {tray_roi_max[0], tray_roi_max[1]};
+      profile.support_contact_tolerance_m = declare_parameter<double>(
+        prefix + "support_contact_tolerance_m", 0.0);
+      profile.top_surface_geometry_tolerance_m = declare_parameter<double>(
+        prefix + "top_surface_geometry_tolerance_m", 0.0);
+      profile.high_confidence_observed_area_ratio = declare_parameter<double>(
+        prefix + "high_confidence_observed_area_ratio", 0.80);
+      profile.medium_confidence_observed_area_ratio = declare_parameter<double>(
+        prefix + "medium_confidence_observed_area_ratio", 0.55);
+      profile.minimum_observation_coverage = declare_parameter<double>(
+        prefix + "minimum_observation_coverage", 0.55);
+      profile.fiducial_dictionary = declare_parameter<std::string>(
+        prefix + "fiducial.dictionary", "");
+      profile.fiducial_marker_id = static_cast<int>(declare_parameter<int64_t>(
+          prefix + "fiducial.marker_id", -1));
+      profile.fiducial_size_m = declare_parameter<double>(
+        prefix + "fiducial.size_m", 0.0);
+      profile.fiducial_pose_translation_scale = declare_parameter<double>(
+        prefix + "fiducial.pose_translation_scale", 1.0);
+      profiles.push_back(profile);
     }
-    const auto marker_position = declare_parameter<std::vector<double>>(
-      prefix + "fiducial.marker_in_support.position_m", std::vector<double>{});
-    const auto marker_rpy = declare_parameter<std::vector<double>>(
-      prefix + "fiducial.marker_in_support.rpy_rad", std::vector<double>{});
-    const auto copy_three = [](const std::vector<double> & source,
-        std::array<double, 3> & target) {
-        if (source.size() == target.size()) {
-          std::copy(source.begin(), source.end(), target.begin());
-        }
-      };
-    const auto copy_roi = [](const std::vector<double> & source,
-        size_t axis, std::array<double, 3> & minimum, std::array<double, 3> & maximum) {
-        if (source.size() == 2) {
-          minimum[axis] = source[0];
-          maximum[axis] = source[1];
-        }
-      };
-    copy_three(dimensions, profile.dimensions_m);
-    copy_three(dimension_tolerance, profile.dimension_tolerance_m);
-    copy_three(marker_position, profile.marker_in_support_m);
-    copy_three(marker_rpy, profile.marker_rpy_in_support_rad);
-    copy_roi(roi_x, 0, profile.workspace_roi_min_m, profile.workspace_roi_max_m);
-    copy_roi(roi_y, 1, profile.workspace_roi_min_m, profile.workspace_roi_max_m);
-    copy_roi(roi_z, 2, profile.workspace_roi_min_m, profile.workspace_roi_max_m);
-    std::array<double, 3> tray_roi_min{};
-    std::array<double, 3> tray_roi_max{};
-    copy_roi(tray_roi_x, 0, tray_roi_min, tray_roi_max);
-    copy_roi(tray_roi_y, 1, tray_roi_min, tray_roi_max);
-    profile.tray_roi_min_m = {tray_roi_min[0], tray_roi_min[1]};
-    profile.tray_roi_max_m = {tray_roi_max[0], tray_roi_max[1]};
-    profile.support_contact_tolerance_m = declare_parameter<double>(
-      prefix + "support_contact_tolerance_m", 0.0);
-    profile.top_surface_geometry_tolerance_m = declare_parameter<double>(
-      prefix + "top_surface_geometry_tolerance_m", 0.0);
-    profile.high_confidence_observed_area_ratio = declare_parameter<double>(
-      prefix + "high_confidence_observed_area_ratio", 0.80);
-    profile.medium_confidence_observed_area_ratio = declare_parameter<double>(
-      prefix + "medium_confidence_observed_area_ratio", 0.55);
-    profile.minimum_observation_coverage = declare_parameter<double>(
-      prefix + "minimum_observation_coverage", 0.55);
-    profile.fiducial_dictionary = declare_parameter<std::string>(
-      prefix + "fiducial.dictionary", "");
-    profile.fiducial_marker_id = static_cast<int>(declare_parameter<int64_t>(
-        prefix + "fiducial.marker_id", -1));
-    profile.fiducial_size_m = declare_parameter<double>(
-      prefix + "fiducial.size_m", 0.0);
-    profile.fiducial_pose_translation_scale = declare_parameter<double>(
-      prefix + "fiducial.pose_translation_scale", 1.0);
-    return {profile};
+    return profiles;
   }
 
   std::string vision_run_id_ = make_vision_run_id();

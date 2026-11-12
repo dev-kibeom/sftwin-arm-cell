@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Register a validation fixture and run one material PnP through Task Execution.
+
+This calibration driver uses Fixed Vision and the existing ExecutePnp action;
+it does not create supply/readiness facts or change production material files.
+"""
+import argparse
+import json
+import math
+from pathlib import Path
+
+from arm_cell_bringup.runtime import load_profile
+from register_pnp_fixture import register
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--profile', type=Path, required=True)
+parser.add_argument('--manifest', type=Path, required=True)
+parser.add_argument('--timeout-s', type=float, default=120.0)
+parser.add_argument('--result', type=Path)
+args = parser.parse_args()
+if not math.isfinite(args.timeout_s) or args.timeout_s <= 0:
+    parser.error('--timeout-s must be finite and positive')
+configuration = load_profile(args.profile)
+if 'fixture' not in configuration or '_mission_recipe' not in configuration:
+    parser.error('--profile must be an exported PnP validation configuration')
+# Identity is checked before any registration or motion request.
+from register_pnp_fixture import load_handoff
+handoff = load_handoff(args.manifest)
+if handoff['request']['target_id'] != configuration['_mission_recipe']['target_id']:
+    parser.error('fixture material does not match the selected validation material')
+register(args.manifest)
+
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.parameter import Parameter
+from arm_cell_interfaces.srv import DetectTarget
+from arm_cell_interfaces.action import ExecutePnp
+
+config = configuration
+recipe = config['_mission_recipe']
+rclpy.init()
+node = rclpy.create_node('cnc_material_calibration', parameter_overrides=[Parameter('use_sim_time', value=True)])
+try:
+    detect = node.create_client(DetectTarget, '/vision/detect_target')
+    if not detect.wait_for_service(timeout_sec=10):
+        raise RuntimeError('DetectTarget service unavailable')
+    request = DetectTarget.Request()
+    request.target_id = recipe['target_id']
+    request.algorithm = 'cuboid_top_face'
+    request.timeout.sec = 5
+    future = detect.call_async(request)
+    rclpy.spin_until_future_complete(node, future, timeout_sec=10)
+    response = future.result()
+    if response is None or not response.material_candidates:
+        raise RuntimeError(f'Detection failed: {response}')
+    print('Fixed target candidate accepted.', flush=True)
+    goal = ExecutePnp.Goal()
+    goal.vision_acquisition_id = response.acquisition_id
+    goal.material_candidates = response.material_candidates
+    goal.has_place_target_pose = True
+    pose = recipe['place']['desired_object_pose']
+    goal.place_target_pose.header.frame_id = pose['frame']
+    for key, value in zip(('x','y','z'), pose['position']):
+        setattr(goal.place_target_pose.pose.position, key, value)
+    for key, value in zip(('x','y','z','w'), pose['orientation_xyzw']):
+        setattr(goal.place_target_pose.pose.orientation, key, value)
+    for key in ('approach_distance_m','grasp_backoff_m','grasp_position_tolerance_m','grasp_orientation_tolerance_rad'):
+        setattr(goal, 'pick_'+key, recipe['pick'][key])
+    goal.grasp_width_min_mm = float(recipe['grasp']['min_expected_contact_width_mm'])
+    goal.grasp_width_max_mm = float(recipe['grasp']['max_expected_contact_width_mm'])
+    goal.has_unobserved_yaw_fallback = (response.material_candidates[0].orientation_symmetry_order == 0 and recipe['grasp']['unobserved_yaw_policy'] == 'allowed')
+    goal.unobserved_yaw_fallback_rad = float(recipe['grasp']['yaw_rad']) if goal.has_unobserved_yaw_fallback else 0.0
+    goal.place_position_tolerance_m = recipe['place']['position_tolerance_m']
+    goal.place_orientation_tolerance_rad = recipe['place']['orientation_tolerance_rad']
+    goal.place_orientation_constraint = {'fixed':0,'bounded':1,'free':2}[recipe['place']['orientation_constraint']]
+    goal.place_approach_distance_m = recipe['place']['approach']['distance_m']
+    goal.place_retract_distance_m = recipe['place']['retract_distance_m']
+    for key, value in zip(('x','y','z'), recipe['place']['approach']['direction_object']):
+        setattr(goal.place_approach_direction_object, key, value)
+    goal.has_material_grasp_transform = True
+    for key, value in zip(('x','y','z'), recipe['object_to_grasp_tcp']['translation_m']):
+        setattr(goal.material_grasp_transform.translation, key, value)
+    for key, value in zip(('x','y','z','w'), recipe['object_to_grasp_tcp']['quaternion_xyzw']):
+        setattr(goal.material_grasp_transform.rotation, key, value)
+    action = ActionClient(node, ExecutePnp, '/task_execution/execute_pnp')
+    if not action.wait_for_server(timeout_sec=10):
+        raise RuntimeError('ExecutePnp server unavailable')
+    submitted = action.send_goal_async(goal)
+    rclpy.spin_until_future_complete(node, submitted, timeout_sec=10)
+    handle = submitted.result()
+    if handle is None or not handle.accepted:
+        raise RuntimeError('Material PnP trial was rejected')
+    print('Material PnP validation accepted.', flush=True)
+    result = handle.get_result_async()
+    rclpy.spin_until_future_complete(node, result, timeout_sec=args.timeout_s)
+    if not result.done():
+        cancelled = handle.cancel_goal_async()
+        rclpy.spin_until_future_complete(node, cancelled, timeout_sec=5)
+        rclpy.spin_until_future_complete(node, result, timeout_sec=5)
+        raise RuntimeError('Material PnP trial timed out; cancellation requested')
+    terminal = result.result()
+    report = dict(material_id=recipe['target_id'], action_status=terminal.status,
+                  pnp_outcome=terminal.result.pnp_outcome,
+                  material_placed=terminal.result.material_placed,
+                  result_code=terminal.result.result_code.value,
+                  diagnostic_detail=terminal.result.diagnostic_detail,
+                  object_disposition=terminal.result.object_disposition,
+                  attempted_candidate_ids=list(terminal.result.attempted_candidate_ids),
+                  selected_candidate_id=terminal.result.selected_candidate_id,
+                  grasp=recipe['grasp'], object_to_grasp_tcp=recipe['object_to_grasp_tcp'])
+    print(json.dumps(report, indent=2), flush=True)
+    if args.result:
+        args.result.parent.mkdir(parents=True, exist_ok=True)
+        args.result.write_text(json.dumps(report, indent=2) + '\n')
+    succeeded = terminal.status == 4 and terminal.result.material_placed
+
+finally:
+    node.destroy_node()
+    rclpy.shutdown()
+
+raise SystemExit(0 if succeeded else 2)

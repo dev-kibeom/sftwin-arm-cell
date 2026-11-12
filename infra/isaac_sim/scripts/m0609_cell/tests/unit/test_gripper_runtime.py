@@ -1401,10 +1401,11 @@ def test_production_capture_configuration_uses_rawpart_geometry_and_recipe_width
 
     config, reference, registry = production_capture_configuration(
         {
-            "vision": {"detector_profiles": {"RawPart": {"material_id": "RawPart"}}},
+            "orchestration": {"mission_target_id": "TestCube"},
+            "vision": {"detector_profiles": {"TestCube": {"material_id": "TestCube"}}},
             "material_definitions": {
-                "RawPart": {
-                    "material_id": "RawPart",
+                "TestCube": {
+                    "material_id": "TestCube",
                     "shape": "box",
                     "nominal_dimensions_m": [0.07, 0.07, 0.08],
                 }
@@ -1484,8 +1485,8 @@ def test_eligible_registry_expands_delivery_subtree_to_rawpart_prims_only():
             _Prim("/World/SF_Twin_Cell/MaterialSupply/Deliveries"),
             _Prim("/World/SF_Twin_Cell/MaterialSupply/Deliveries/delivery-a"),
             _Prim(
-                "/World/SF_Twin_Cell/MaterialSupply/Deliveries/delivery-a/RawPart_0000",
-                "RawPart",
+                "/World/SF_Twin_Cell/MaterialSupply/Deliveries/delivery-a/Material_0000",
+                "TestCube",
             ),
             _Prim(
                 "/World/SF_Twin_Cell/MaterialSupply/Deliveries/delivery-a/fixture",
@@ -1502,7 +1503,7 @@ def test_eligible_registry_expands_delivery_subtree_to_rawpart_prims_only():
     registry = EligibleObjectRegistry()
     registry.register_subtree("/World/SF_Twin_Cell/MaterialSupply/Deliveries")
     assert registry.candidate_paths(_Stage()) == (
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/delivery-a/RawPart_0000",
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/delivery-a/Material_0000",
     )
 
 
@@ -1516,19 +1517,19 @@ def test_production_mission_recipe_is_selected_by_profile_target(tmp_path):
     recipe_directory.mkdir()
     expected = {
         "recipe_id": "rawpart-v1",
-        "target_id": "RawPart",
+        "target_id": "TestCube",
         "grasp": {
             "min_expected_contact_width_mm": 60.0,
             "max_expected_contact_width_mm": 85.0,
             "unobserved_yaw_policy": "forbidden",
         },
     }
-    (recipe_directory / "RawPart.json").write_text(json.dumps(expected))
+    (recipe_directory / "TestCube.json").write_text(json.dumps(expected))
 
     actual = load_production_mission_recipe(
         {
             "orchestration": {
-                "mission_target_id": "RawPart",
+                "mission_target_id": "TestCube",
                 "recipe_directory": "recipes",
             }
         },

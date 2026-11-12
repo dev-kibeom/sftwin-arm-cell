@@ -706,6 +706,9 @@ TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturni
     valid_geometry());
   auto goal = execute_pnp_goal();
   goal.pick_grasp_backoff_m = 0.013;
+  goal.has_material_grasp_transform = true;
+  goal.material_grasp_transform.translation.z = 0.0075;
+  goal.material_grasp_transform.rotation.w = 1.0;
 
   const auto result = executor.execute_pnp(goal, "pnp-goal-uuid");
 
@@ -716,6 +719,7 @@ TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturni
   EXPECT_EQ(result.selected_candidate_id, "candidate-pnp-1");
   ASSERT_FALSE(backend->requests.empty());
   EXPECT_EQ(backend->requests.front().task_type.value, MotionTaskType::TASK_TYPE_PICK);
+  EXPECT_DOUBLE_EQ(backend->requests.front().object_to_grasp_tcp.translation.z, 0.0075);
   EXPECT_EQ(backend->requests.back().task_type.value, MotionTaskType::TASK_TYPE_PLACE);
   EXPECT_EQ(backend->requests.back().object_pose.pose.position.z, 0.5);
   for (const auto & request : backend->requests) {

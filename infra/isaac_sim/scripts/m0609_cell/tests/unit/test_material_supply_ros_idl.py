@@ -40,7 +40,7 @@ def test_provider_neutral_completion_fields_survive_ipc_serialization(
 
     result = {
         "delivery_id": bytes(range(1, 17)).hex(),
-        "material_type": "RawPart",
+        "material_type": "TestCube",
         "requested_quantity": 3,
         "supplied_quantity": supplied,
         "completed": completed,
@@ -53,7 +53,7 @@ def test_provider_neutral_completion_fields_survive_ipc_serialization(
         trigger = trigger_payload(
             delivery_id=bytes(range(1, 17)),
             stamp_ns=1_234,
-            material_type="RawPart",
+            material_type="TestCube",
             quantity=3,
             valid=True,
             has_random_seed=True,
@@ -78,7 +78,7 @@ def test_provider_neutral_completion_fields_survive_ipc_serialization(
     assert published_message.header.stamp.sec == 17
     assert published_message.header.stamp.nanosec == 23
     assert bytes(published_message.delivery_id.uuid) == bytes(range(1, 17))
-    assert published_message.material_type == "RawPart"
+    assert published_message.material_type == "TestCube"
     assert published_message.requested_quantity == 3
     assert published_message.supplied_quantity == supplied
     assert published_message.completed is completed

@@ -136,7 +136,7 @@ void verify_late_acceptance_after_handoff(bool pnp)
     std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
   rclcpp::NodeOptions options;
   options.parameter_overrides(
-    {rclcpp::Parameter("mission_target_id", "RawPart"),
+    {rclcpp::Parameter("mission_target_id", "TestCube"),
       rclcpp::Parameter("recipe_directory", "/tmp"),
       rclcpp::Parameter("diagnostics.capture_enabled", true),
       rclcpp::Parameter("diagnostics.output_directory", diagnostic_dir)});
@@ -420,7 +420,7 @@ TEST_F(ActionHandoffBoundaryTest, TerminalIsNotReclassifiedAsGoalRejection)
 {
   rclcpp::NodeOptions options;
   options.parameter_overrides(
-    {rclcpp::Parameter("mission_target_id", "RawPart"),
+    {rclcpp::Parameter("mission_target_id", "TestCube"),
       rclcpp::Parameter("recipe_directory", "/tmp"),
       rclcpp::Parameter("diagnostics.output_directory", "/tmp/sftwin-terminal-precedence")});
   auto node = std::make_shared<arm_cell_orchestration::OrchestrationNode>(options);
@@ -434,7 +434,7 @@ TEST_F(ActionHandoffBoundaryTest, TerminalAndHandoffRacePreservesEitherOriginalO
 {
   rclcpp::NodeOptions options;
   options.parameter_overrides(
-    {rclcpp::Parameter("mission_target_id", "RawPart"),
+    {rclcpp::Parameter("mission_target_id", "TestCube"),
       rclcpp::Parameter("recipe_directory", "/tmp"),
       rclcpp::Parameter("diagnostics.output_directory", "/tmp/sftwin-terminal-race")});
   auto node = std::make_shared<arm_cell_orchestration::OrchestrationNode>(options);

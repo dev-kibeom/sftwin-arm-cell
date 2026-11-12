@@ -16,6 +16,7 @@ from typing import Callable, Protocol
 
 from gripper_runtime.robotiq_actuator import Robotiq2F85Actuator
 from scene_builder.static_environment import load_canonical_static_geometry
+from scene_builder.scene_roles import AMR_TRAY_ROLE
 
 from .fixture import (
     CleanupDecision,
@@ -326,6 +327,7 @@ class IsaacFixtureRuntime:
         world_to_base=(0.0, 0.0, 0.0, 0.0),
         registry=None,
         cube_factory=None,
+        material_properties=None,
         delete_prim=None,
         rigid_body_api_factory=None,
         physx_rigid_body_api_factory=None,
@@ -334,6 +336,7 @@ class IsaacFixtureRuntime:
         self.transform = self.base_link_world_transform(world_to_base)
         self.registry = registry or self._new_registry()
         self.cube_factory = cube_factory
+        self.material_properties = dict(material_properties or {})
         self._delete_prim = delete_prim
         self._rigid_body_api_factory = (
             rigid_body_api_factory or self._default_rigid_body_api
@@ -414,7 +417,7 @@ class IsaacFixtureRuntime:
         import numpy as np
         from scene_builder.primitives import dynamic_box
 
-        colors = np.array([0.52, 0.36, 0.20])
+        colors = np.array(self.material_properties.get("display_color_rgb", [0.52, 0.36, 0.20]))
         dynamic_box(
             self.stage,
             prim_path,
@@ -422,9 +425,17 @@ class IsaacFixtureRuntime:
             [world_pose.x, world_pose.y, world_pose.z],
             dimensions,
             colors,
-            mass=0.45,
+            mass=self.material_properties.get("mass_kg", 0.45),
         )
         prim = self.stage.GetPrimAtPath(prim_path)
+        gf, sdf, _, _, _ = self._pxr_modules()
+        prim.CreateAttribute("sf_twin:shape", sdf.ValueTypeNames.String, custom=True).Set("box")
+        prim.CreateAttribute("sf_twin:dimensions_m", sdf.ValueTypeNames.Double3, custom=True).Set(
+            gf.Vec3d(*dimensions)
+        )
+        identity = self.material_properties.get("material_id")
+        if identity:
+            prim.CreateAttribute("sf_twin:material_type", sdf.ValueTypeNames.String, custom=True).Set(identity)
         xform = self._xformable(prim)
         if abs(world_pose.yaw) > 1e-12:
             _, _, _, usd_geom, _ = self._pxr_modules()
@@ -503,7 +514,7 @@ class IsaacFixtureRuntime:
         )
         prim = self.stage.GetPrimAtPath(identity.prim_path)
         role = prim.GetCustomDataByKey("sf_twin:role")
-        if role != "direct_pick_tray":
+        if role != AMR_TRAY_ROLE:
             raise RuntimeError(
                 f"canonical AMR top-plane role mismatch at {identity.prim_path}: {role!r}"
             )

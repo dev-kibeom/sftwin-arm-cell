@@ -175,6 +175,7 @@ def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
     ]
 
     assert {
+        "amr_tray",  # Required by the bounded PICK retract fingertip exception.
         "cnc_front_left",
         "cnc_front_top",
         "camera_rig_post_left",

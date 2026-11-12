@@ -36,7 +36,7 @@ std::shared_ptr<const arm_cell_vision::AcquisitionResult> make_acquisition_resul
 {
   auto result = std::make_shared<arm_cell_vision::AcquisitionResult>();
   result->generation = generation;
-  result->target_id = "RawPart";
+  result->target_id = "TestCube";
   detection.scene_generation = generation;
   if (detection.algorithm.empty() && detection.has_target_pose && detection.ordered_candidates.empty()) {
     auto candidate = detection;
@@ -103,7 +103,7 @@ TEST_F(DetectTargetServiceTest, FailureLogsKeepCauseWhileResponseKeepsDetailedEv
       terminal_response = response;
     });
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response response;
   FailureLogCapture capture;
@@ -150,7 +150,7 @@ TEST_F(DetectTargetServiceTest, ReturnsUnifiedCandidatesWithoutRepresentativePro
       return make_acquisition_result(retained, generation);
     });
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response response;
   service.handle(request, response);
@@ -251,7 +251,7 @@ TEST_F(DetectTargetServiceTest, ValidatesAndPassesEachRequestedAlgorithmToAcquis
     });
   arm_cell_interfaces::srv::DetectTarget::Request request;
   EXPECT_EQ(request.algorithm, "cuboid_top_face");
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 30;
   for (const auto & algorithm : {"cuboid_top_face", "cuboid_top_face"}) {
     request.algorithm = algorithm;
@@ -284,7 +284,7 @@ TEST_F(DetectTargetServiceTest, ReturnsCalibrationNotReadyWithoutStartingAcquisi
       return arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET;
     });
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 30;
   arm_cell_interfaces::srv::DetectTarget::Response response;
 
@@ -370,7 +370,7 @@ TEST_F(DetectTargetServiceTest, HandsOffOnlyTheMatchingAcquisitionResultOnce)
     ingress, [&now]() {return now++;},
     [&acquisition_generation, &begin_count](const std::string & target_id,
       uint64_t generation, int64_t, int64_t, const std::string &) {
-      EXPECT_EQ(target_id, "RawPart");
+      EXPECT_EQ(target_id, "TestCube");
       ++begin_count;
       acquisition_generation = generation;
       return arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
@@ -378,14 +378,14 @@ TEST_F(DetectTargetServiceTest, HandsOffOnlyTheMatchingAcquisitionResultOnce)
     [&end_count]() {++end_count;},
     [&retained, &lookup_count](const std::string & target_id, uint64_t generation) {
       ++lookup_count;
-      if (target_id != "RawPart" || generation == 0U) {
+      if (target_id != "TestCube" || generation == 0U) {
         return arm_cell_vision::SharedAcquisitionResult{};
       }
       // A completed callback from the prior request must not satisfy this one.
       return make_acquisition_result(retained, generation + (lookup_count == 1 ? 1U : 0U));
     }, {}, {}, "vision-run-success");
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response response;
 
@@ -448,7 +448,7 @@ TEST_F(DetectTargetServiceTest, MislocalizationIsRetainedAcrossFailureAndConsume
   service.set_mislocalize_next(true);
 
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response failed_response;
   service.handle(request, failed_response);
@@ -522,7 +522,7 @@ TEST_F(DetectTargetServiceTest, RejectsOverlappingRequestAsBusyWithoutStartingAc
     });
 
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response active_response;
   std::thread active_request([&]() {service.handle(request, active_response);});
@@ -670,7 +670,7 @@ TEST_F(DetectTargetServiceTest, ReturnsOrderedCandidatesFromOneQualifiedAcquisit
     });
   arm_cell_interfaces::srv::DetectTarget::Request request;
   request.algorithm = "cuboid_top_face";
-  request.target_id = "RawPart"; request.timeout.sec = 1;
+  request.target_id = "TestCube"; request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response first;
   service.handle(request, first);
   ASSERT_EQ(first.result_code.value, Code::DETECT_RESULT_SUCCESS);
@@ -740,7 +740,7 @@ TEST_F(DetectTargetServiceTest, TemporaryInvalidTargetReturnsSameAcquisitionDist
     });
 
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response response;
   service.handle(request, response);
@@ -761,7 +761,7 @@ TEST_F(DetectTargetServiceTest, RejectsLegacyRectangleAlgorithm)
   arm_cell_vision::VisionRosIngress ingress;
   arm_cell_vision::DetectTargetService service(ingress, []() {return int64_t{100};});
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.algorithm = "legacy_rectangle";
   arm_cell_interfaces::srv::DetectTarget::Response response;
 

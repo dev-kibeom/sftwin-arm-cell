@@ -1,4 +1,4 @@
-"""Shared operational RawPart profile loading and visible fiducial geometry."""
+"""Shared operational TestCube profile loading and visible fiducial geometry."""
 
 import math
 import os
@@ -9,25 +9,26 @@ import yaml
 
 
 def load_rawpart_profile(project_root):
-    """Validate RawPart data delivered in the exported runtime contract."""
+    """Validate TestCube data delivered in the exported runtime contract."""
     from runtime_configuration import load_runtime_configuration, selected_configuration
     return validate_rawpart_profile(load_runtime_configuration(selected_configuration(project_root)))
 
 
 def validate_rawpart_profile(config):
     """Validate consumer-owned geometry requirements independently of assembly."""
-    profile = config.get("vision", {}).get("detector_profiles", {}).get("RawPart")
-    if not isinstance(profile, dict) or profile.get("target_id") != "RawPart":
-        raise ValueError("Vision must configure the RawPart target profile")
-    material = config.get("material_definitions", {}).get("RawPart")
-    if not isinstance(material, dict) or material.get("material_id") != "RawPart":
-        raise ValueError("material_definitions must define RawPart")
+    target_id = config.get("orchestration", {}).get("mission_target_id", "TestCube")
+    profile = config.get("vision", {}).get("detector_profiles", {}).get(target_id)
+    if not isinstance(profile, dict) or profile.get("target_id") != target_id:
+        raise ValueError("Vision must configure the TestCube target profile")
+    material = config.get("material_definitions", {}).get(target_id)
+    if not isinstance(material, dict) or material.get("material_id") != target_id:
+        raise ValueError("material_definitions must define TestCube")
     if profile.get("material_id") != material["material_id"]:
         raise ValueError(
-            "Vision RawPart profile must reference its material definition"
+            "Vision TestCube profile must reference its material definition"
         )
     if material.get("shape") != "box":
-        raise ValueError("RawPart material shape must be box")
+        raise ValueError("TestCube material shape must be box")
     _vector(material, "nominal_dimensions_m", 3, positive=True)
     _vector(profile, "dimension_tolerance_m", 3, nonnegative=True)
     _vector(profile.get("workspace_roi_m", {}), "x", 2)
@@ -36,33 +37,33 @@ def validate_rawpart_profile(config):
     for axis in ("x", "y", "z"):
         low, high = profile["workspace_roi_m"][axis]
         if low >= high:
-            raise ValueError(f"RawPart workspace ROI {axis} must be increasing")
+            raise ValueError(f"TestCube workspace ROI {axis} must be increasing")
     for key in ("support_contact_tolerance_m", "top_surface_geometry_tolerance_m"):
         if not _positive_finite(profile.get(key)):
-            raise ValueError(f"RawPart profile {key} must be positive and finite")
+            raise ValueError(f"TestCube profile {key} must be positive and finite")
     _vector(profile, "support_region_dimensions_m", 2, positive=True)
     fiducial = profile.get("fiducial")
     if not isinstance(fiducial, dict):
-        raise ValueError("RawPart profile fiducial is required")
+        raise ValueError("TestCube profile fiducial is required")
     if fiducial.get("support_frame") != "Tray":
-        raise ValueError("RawPart fiducial support_frame must be Tray")
+        raise ValueError("TestCube fiducial support_frame must be Tray")
     relation = fiducial.get("marker_in_support")
     if not isinstance(relation, dict):
-        raise ValueError("RawPart fiducial marker_in_support relation is required")
+        raise ValueError("TestCube fiducial marker_in_support relation is required")
     _vector(relation, "position_m", 3)
     _vector(relation, "rpy_rad", 3)
     size = fiducial.get("size_m")
     if not _positive_finite(size):
-        raise ValueError("RawPart fiducial size_m must be positive and finite")
+        raise ValueError("TestCube fiducial size_m must be positive and finite")
     roll, pitch, _yaw = (float(value) for value in relation["rpy_rad"])
     if abs(roll) > 1e-9 or abs(pitch) > 1e-9:
         raise ValueError("Tray fiducial must face upward on a horizontal plane")
     dictionary_name = fiducial.get("dictionary")
     if not isinstance(dictionary_name, str) or not hasattr(cv2.aruco, dictionary_name):
-        raise ValueError("RawPart fiducial dictionary is unsupported")
+        raise ValueError("TestCube fiducial dictionary is unsupported")
     marker_id = fiducial.get("marker_id")
     if type(marker_id) is not int or marker_id < 0:
-        raise ValueError("RawPart fiducial marker_id must be a non-negative integer")
+        raise ValueError("TestCube fiducial marker_id must be a non-negative integer")
     _validate_rotation(relation["rpy_rad"])
     return profile
 
@@ -74,11 +75,11 @@ def _vector(mapping, name, length, *, positive=False, nonnegative=False):
         or len(values) != length
         or not all(_finite(value) for value in values)
     ):
-        raise ValueError(f"RawPart profile {name} must contain {length} finite values")
+        raise ValueError(f"TestCube profile {name} must contain {length} finite values")
     if positive and not all(value > 0 for value in values):
-        raise ValueError(f"RawPart profile {name} values must be positive")
+        raise ValueError(f"TestCube profile {name} values must be positive")
     if nonnegative and not all(value >= 0 for value in values):
-        raise ValueError(f"RawPart profile {name} values must be non-negative")
+        raise ValueError(f"TestCube profile {name} values must be non-negative")
     return tuple(float(value) for value in values)
 
 
@@ -96,7 +97,7 @@ def _validate_rotation(rpy):
         or len(rpy) != 3
         or not all(_finite(value) for value in rpy)
     ):
-        raise ValueError("RawPart fiducial marker_in_support.rpy_rad must be finite")
+        raise ValueError("TestCube fiducial marker_in_support.rpy_rad must be finite")
 
 
 def marker_black_cells(profile):
@@ -163,7 +164,7 @@ def author_support_fiducial(context, profile, support_origin_world):
 
     profile_fiducial = profile["fiducial"]
     if profile_fiducial["support_frame"] != "Tray":
-        raise ValueError("RawPart scene fiducial must use the Tray support frame")
+        raise ValueError("TestCube scene fiducial must use the Tray support frame")
     origin = tuple(float(value) for value in support_origin_world)
     mesh = UsdGeom.Mesh.Define(
         context.stage,

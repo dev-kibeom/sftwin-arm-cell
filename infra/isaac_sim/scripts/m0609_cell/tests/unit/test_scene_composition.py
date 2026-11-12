@@ -166,7 +166,7 @@ def test_amr_scene_uses_tray_and_front_rail_marker(monkeypatch):
 
     build_amr(context)
 
-    assert f"{CELL_ROOT}/AMR/Mockup/RawPart" not in created_paths
+    assert f"{CELL_ROOT}/AMR/Mockup/TestCube" not in created_paths
     assert f"{CELL_ROOT}/AMR/Mockup/TraySupportFiducial" in created_paths
     assert f"{CELL_ROOT}/AMR/Mockup/TrayMarkerPost" in created_paths
     assert not any("TraySlots" in path for path in created_paths)

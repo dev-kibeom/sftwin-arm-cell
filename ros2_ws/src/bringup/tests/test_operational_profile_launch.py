@@ -678,8 +678,8 @@ def test_vision_node_parameters_include_the_shared_rawpart_definition():
     module = _load_launch_module()
     parameters = module.profile_parameters(profile, "vision")
 
-    assert parameters["material_definitions"]["RawPart"] == {
-        "material_id": "RawPart",
+    assert parameters["material_definitions"]["TestCube"] == {
+        "material_id": "TestCube",
         "shape": "box",
         "nominal_dimensions_m": [0.07, 0.07, 0.08],
     }
@@ -697,19 +697,19 @@ def test_vision_calibration_path_uses_bringup_profile_path_convention():
 
 def test_operational_profile_uses_w06_place_destination():
     profile = load_profile(PROFILE_PATH)
-    rawpart = profile["vision"]["detector_profiles"]["RawPart"]
+    rawpart = profile["vision"]["detector_profiles"]["TestCube"]
     mission = profile["orchestration"]
     assert mission["mission_target_id"] == rawpart["target_id"]
-    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/RawPart.yaml")[0]
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/TestCube.yaml")[0]
     assert recipe["target_id"] == mission["mission_target_id"]
-    nominal_dimensions = profile["material_definitions"]["RawPart"][
+    nominal_dimensions = profile["material_definitions"]["TestCube"][
         "nominal_dimensions_m"
     ]
     expected_width_mm = nominal_dimensions[0] * 1000.0
     assert recipe["grasp"]["min_expected_contact_width_mm"] <= expected_width_mm
     assert recipe["grasp"]["max_expected_contact_width_mm"] >= expected_width_mm
     assert recipe["grasp"]["unobserved_yaw_policy"] == "forbidden"
-    assert rawpart["material_id"] == "RawPart"
+    assert rawpart["material_id"] == "TestCube"
     assert "dimensions_m" not in rawpart
     assert "shape" not in rawpart
     assert "observation_to_object_translation" not in profile["motion"]
@@ -822,10 +822,10 @@ def test_vision_parameters_keep_cuboid_settings_without_algorithm_selection():
     module = _load_launch_module()
     profile = load_profile(PROFILE_PATH)
     parameters = module.vision_profile_parameters(profile, PROFILE_PATH)
-    rawpart = parameters["detector_profiles"]["RawPart"]
+    rawpart = parameters["detector_profiles"]["TestCube"]
     assert "algorithm" not in rawpart
     assert (
-        rawpart["cuboid"] == profile["vision"]["detector_profiles"]["RawPart"]["cuboid"]
+        rawpart["cuboid"] == profile["vision"]["detector_profiles"]["TestCube"]["cuboid"]
     )
 
 

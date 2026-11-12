@@ -8,6 +8,8 @@ import tempfile
 
 import yaml
 
+from .material_catalog import load_material_catalog
+
 
 def project_root():
     explicit = os.environ.get('SFTWIN_PROJECT_ROOT')
@@ -56,40 +58,50 @@ def read(path):
     return value
 
 
-def compile_mission(path):
+def compile_mission(path, *, pick_policy=None, place_task=None, material_override=None, grasp_width_mm=None, tool_quaternion=None):
     mission = read(path)
     if mission.get('schema_version') != 2:
         raise ValueError(f'Unsupported mission schema: {path}')
-    material = read(resolve(mission['material'], Path(path).parent))
+    material = copy.deepcopy(material_override) if material_override is not None else read(resolve(mission['material'], Path(path).parent))
     if material['material_id'] != mission['target_id']:
         raise ValueError('Mission material_id and target_id must match')
     grasp = copy.deepcopy(material['grasp'])
-    pick = read(resolve(mission['pick_policy'], Path(path).parent))
+    if grasp_width_mm is not None:
+        grasp = {'min_expected_contact_width_mm': max(0.001, grasp_width_mm - 1.0),
+                 'max_expected_contact_width_mm': min(85.0, grasp_width_mm + 1.0)}
+    pick = read(resolve(pick_policy or mission['pick_policy'], Path(path).parent))
     for key in ('yaw_rad', 'unobserved_yaw_policy'):
         grasp[key] = pick.pop(key)
     if 'width_mm' in grasp:
         grasp['min_expected_contact_width_mm'] = grasp.pop('width_mm')
         grasp['max_expected_contact_width_mm'] = grasp['min_expected_contact_width_mm']
-    return {'schema_version': 1, 'recipe_id': mission['mission_id'],
+    transform = copy.deepcopy(material['pick_offset'])
+    tool = tool_quaternion or read(resolve('package://arm_cell_motion/config/operational.yaml', Path(path).parent))['tool_axis_quaternion_xyzw']
+    transform['quaternion_xyzw'] = quaternion_product(transform['quaternion_xyzw'], tool)
+    return {'schema_version': 1, 'recipe_id': mission['mission_id'], 'object_to_grasp_tcp': transform,
             'target_id': mission['target_id'], 'grasp': grasp,
             'vision': mission.get('vision', {}),
             'pick': pick,
-            'place': read(resolve(mission['place_task'], Path(path).parent))}, material
+            'place': read(resolve(place_task or mission['place_task'], Path(path).parent))}, material
 
 
-def mission_directory(directory, output_root=None):
+def mission_directory(directory, output_root=None, *, overrides=None):
     """Produce immutable, content-addressed legacy transport documents.
 
-    The C++ runtime contract stays stable; YAML owner files are authoritative.
+    YAML owner files are authoritative; generated optional transforms preserve legacy callers.
     """
     recipes = {}
     for path in sorted(Path(directory).glob('*.yaml')):
-        recipe, _ = compile_mission(path)
+        recipe, _ = compile_mission(path, **(overrides or {}).get(path.stem, {}))
         if path.stem != recipe['target_id']:
             raise ValueError('Mission filename must match target_id')
         recipes[path.stem] = recipe
     if not recipes:
         raise ValueError(f'No missions found: {directory}')
+    return write_recipes(recipes, output_root)
+
+
+def write_recipes(recipes, output_root=None):
     encoded = json.dumps(recipes, sort_keys=True).encode()
     digest = hashlib.sha256(encoded).hexdigest()
     root = Path(output_root) if output_root else Path(tempfile.gettempdir()) / f'arm-cell-missions-{os.getuid()}'
@@ -105,11 +117,26 @@ def mission_directory(directory, output_root=None):
     return str(output)
 
 
-def load_profile(path):
+def load_profile(path, *, material_id=None, grasp_width_mm=None, pick_offset_z_m=None):
     path = Path(path).expanduser().resolve()
     config = read(path)
+    if config.get('kind') == 'arm-cell-runtime-configuration':
+        if config.get('schema_version') != 1:
+            raise ValueError('Unsupported runtime configuration schema')
+        configuration = config['configuration']
+        digest = hashlib.sha256(json.dumps(configuration, sort_keys=True, allow_nan=False).encode()).hexdigest()
+        if digest != config.get('configuration_sha256'):
+            raise ValueError('Runtime configuration checksum mismatch')
+        if any(value is not None for value in (material_id, grasp_width_mm, pick_offset_z_m)):
+            raise ValueError('Re-export the source profile to change material trial settings')
+        configuration = copy.deepcopy(configuration)
+        recipes = configuration.get('_mission_recipes', {configuration['_mission_recipe']['target_id']: configuration['_mission_recipe']})
+        configuration['orchestration']['recipe_directory'] = write_recipes(recipes)
+        return configuration
     if 'components' not in config:
-        return config  # Isolated historical validation fixture contract.
+        return validation_configuration(config, path, material_id, grasp_width_mm, pick_offset_z_m)
+    if any(value is not None for value in (grasp_width_mm, pick_offset_z_m)):
+        raise ValueError('Grasp calibration trial settings require a validation profile')
     if config.get('schema_version') != 2:
         raise ValueError('Unsupported deployment profile schema')
     for section, reference in config.pop('components').items():
@@ -117,8 +144,13 @@ def load_profile(path):
             raise ValueError(f'Duplicate configuration owner: {section}')
         config[section] = read(resolve(reference, path.parent))
     config['vision']['calibration_file'] = str(resolve(config['vision']['calibration_file'], path.parent))
+    if material_id is not None:
+        config['orchestration']['mission_target_id'] = material_id
     target = config['orchestration']['mission_target_id']
-    config['vision']['detector_profiles'][target]['fiducial'] = config.pop('cell_geometry')['tray_fiducial']
+    detectors = config['vision']['detector_profiles']
+    template = copy.deepcopy(next(iter(detectors.values())))
+    detectors.setdefault(target, template)
+    detectors[target]['fiducial'] = config.pop('cell_geometry')['tray_fiducial']
     config['motion'].update(config.get('task_execution', {}))
     # Preserve the existing ROS parameter contract at the composition boundary.
     for owned, runtime in (
@@ -129,8 +161,24 @@ def load_profile(path):
         config['motion'][runtime] = config['motion'].pop(owned)
     orchestration = config['orchestration']
     directory = resolve(orchestration['recipe_directory'], path.parent)
-    recipe, material = compile_mission(directory / f"{orchestration['mission_target_id']}.yaml")
-    config['material_definitions'] = {material['material_id']: material['geometry']}
+    tool_convention = config['motion']['object_to_grasp_tcp_quaternion']
+    recipe, material = compile_mission(directory / f"{orchestration['mission_target_id']}.yaml", tool_quaternion=tool_convention)
+    catalog = load_material_catalog(resolve('package://arm_cell_bringup/config/materials', path.parent))
+    # An explicit mission may override a catalog material for calibration trials.
+    catalog[material['material_id']] = material
+    catalog = {key: value for key, value in catalog.items() if (directory / f'{key}.yaml').is_file()}
+    config['material_catalog'] = catalog
+    config['material_definitions'] = {key: value['geometry'] for key, value in catalog.items()}
+    template = copy.deepcopy(config['vision']['detector_profiles'][target])
+    for identity in catalog:
+        detector = copy.deepcopy(config['vision']['detector_profiles'].get(identity, template))
+        detector.setdefault('fiducial', template['fiducial'])
+        detector.update(target_id=identity, material_id=identity)
+        config['vision']['detector_profiles'][identity] = detector
+    config['vision']['material_ids'] = sorted(catalog)
+    config['material_handoff']['material_types'] = sorted(catalog)
+    config['orchestration']['material_types'] = sorted(catalog)
+
     offset = material['pick_offset']['translation_m']
     import math
     if len(offset) != 3 or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in offset):
@@ -151,20 +199,21 @@ def load_profile(path):
     config['motion']['place_waypoint_target_pose_xyzw'] = pose['position'] + pose['orientation_xyzw']
     config['motion']['place_waypoint_approach_distance_m'] = place['approach']['distance_m']
     config['motion']['place_waypoint_approach_direction_object'] = place['approach']['direction_object']
-    orchestration['recipe_directory'] = mission_directory(directory)
+    orchestration['recipe_directory'] = mission_directory(directory, overrides={key: {'tool_quaternion': tool_convention} for key in catalog})
     return config
 
 
-def export_runtime_configuration(profile_path, output_path):
+def export_runtime_configuration(profile_path, output_path, **trial_settings):
     """Export self-contained data for external runtimes; no Python API is shared."""
     profile_path = Path(profile_path).expanduser().resolve()
-    configuration = load_profile(profile_path)
+    configuration = load_profile(profile_path, **trial_settings)
     orchestration = configuration['orchestration']
     directory = orchestration['recipe_directory']
     if str(directory).startswith('package://'):
         directory = mission_directory(resolve(directory, profile_path.parent))
-    recipe = json.loads((Path(directory) / f"{orchestration['mission_target_id']}.json").read_text())
+    recipe = configuration.get('_mission_recipe') or json.loads((Path(directory) / f"{orchestration['mission_target_id']}.json").read_text())
     configuration = copy.deepcopy(configuration)
+    configuration['_mission_recipes'] = {p.stem: json.loads(p.read_text()) for p in Path(directory).glob('*.json')}
     # External runtimes consume the embedded recipe, never ROS-local temp paths.
     configuration['orchestration'].pop('recipe_directory', None)
     home = read(resolve('package://arm_cell_motion/config/home_joint_positions.yaml', profile_path.parent))
@@ -181,3 +230,49 @@ def export_runtime_configuration(profile_path, output_path):
         temporary = stream.name
     os.replace(temporary, destination)
     return destination
+
+
+def quaternion_product(first, second):
+    x, y, z, w = first
+    a, b, c, d = second
+    return [w*a + x*d + y*c - z*b, w*b - x*c + y*d + z*a,
+            w*c + x*b - y*a + z*d, w*d - x*a - y*b - z*c]
+
+
+def validation_configuration(config, path, material_id=None, grasp_width_mm=None, pick_offset_z_m=None):
+    """Resolve the validation fixture from the same material owner as production."""
+    if 'fixture' not in config:
+        return config
+    catalog = load_material_catalog(resolve('package://arm_cell_bringup/config/materials', path.parent))
+    identity = material_id or config['orchestration']['mission_target_id']
+    if identity not in catalog:
+        raise ValueError(f'Unknown validation material: {identity}')
+    material = copy.deepcopy(catalog[identity])
+    dimensions = material['geometry']['nominal_dimensions_m']
+    if grasp_width_mm is not None:
+        import math
+        if (isinstance(grasp_width_mm, bool) or not math.isfinite(grasp_width_mm)
+            or not 0 < grasp_width_mm <= 85
+            or not any(math.isclose(grasp_width_mm, d*1000, abs_tol=1e-6) for d in dimensions)):
+            raise ValueError('Validation grasp width must match a box dimension within the gripper aperture')
+    if pick_offset_z_m is not None:
+        import math
+        if not math.isfinite(pick_offset_z_m) or abs(pick_offset_z_m) > dimensions[2]/2:
+            raise ValueError('Trial pick offset must remain inside the material height')
+        material['pick_offset']['translation_m'][2] = pick_offset_z_m
+    config['orchestration']['mission_target_id'] = identity
+    config['orchestration']['material_types'] = [identity]
+    config['fixture']['dimensions_m'] = dimensions
+    config['fixture']['grasp_recipe']['object_top_to_grasp_tcp_z_m'] = material['pick_offset']['translation_m'][2] - dimensions[2]/2
+    config['motion']['object_to_grasp_tcp_translation'] = material['pick_offset']['translation_m']
+    config['motion']['object_to_grasp_tcp_quaternion'] = quaternion_product(material['pick_offset']['quaternion_xyzw'], [1., 0., 0., 0.])
+    directory = resolve(config['orchestration']['recipe_directory'], path.parent)
+    validation = config['validation']
+    options = dict(material_override=material, grasp_width_mm=grasp_width_mm,
+                   pick_policy=validation['pick_policy'], place_task=validation['place_task'])
+    config['orchestration']['recipe_directory'] = mission_directory(directory, overrides={identity: options})
+    recipe, _ = compile_mission(directory / f'{identity}.yaml', **options)
+    config['_mission_recipe'] = recipe
+    config['material_catalog'] = {identity: material}
+    config['material_definitions'] = {identity: material['geometry']}
+    return config

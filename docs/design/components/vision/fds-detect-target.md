@@ -19,7 +19,7 @@ DetectTarget은 명시적인 요청마다 유한한 Acquisition을 수행하고 
 | Vision Acquisition | 요청의 수락, 기한, 입력 근거와 결과 확정 | [Vision CDS](cds.md), 이 FDS |
 | Frame Ingress | Depth·CameraInfo·필요 시 RGB 입력의 호환성 | [Frame Ingress FDS](fds-frame-ingress.md) |
 | Depth Scene Stability | 기존 5회 관측 안정화 판단 | [Depth Scene Stability Algorithm](../../algorithms/depth-scene-stability.md) |
-| Detector Strategy | 고정된 STABLE 관측에 대한 후보 적격성 평가 | [RawPart FDS](fds-rawpart-depth-perception.md) 및 해당 Algorithm |
+| Detector Strategy | 고정된 STABLE 관측에 대한 후보 적격성 평가 | [TestCube FDS](fds-rawpart-depth-perception.md) 및 해당 Algorithm |
 | Motion | 인계된 후보 목록의 실행 우선순위·계획 | Motion FDS |
 | Operator / Calibration | 명시적 보정 요청, 산출 파일 선택·재시작 | 이 FDS와 설치 Deployment Profile |
 
@@ -83,7 +83,7 @@ sequenceDiagram
 
 위 **요청별 Acquisition 및 결과 확정** 시퀀스가 공통 처리 흐름을 정의한다. 그 시퀀스 밖의 원자적 BUSY 거부, Profile 선택, 요청별 Deadline 및 후보 인계의 고유 조건은 아래 본문에서 규정한다.
 
-이 단계는 Profile에 공통인 DetectTarget 동작과 결과 의미를 정한다. Support 추정, Depth 변환, 후보 생성, Target 분리, Geometry fitting의 Profile 내부 알고리즘 및 순서는 규정하지 않는다. 세부 단계와 순서는 [RawPart Depth Perception FDS](fds-rawpart-depth-perception.md) 등 각 하위 Profile FDS가 소유하며, 공통 서비스 결과·freshness·frame·Observation Pose 계약을 변경하지 않고 구체화한다.
+이 단계는 Profile에 공통인 DetectTarget 동작과 결과 의미를 정한다. Support 추정, Depth 변환, 후보 생성, Target 분리, Geometry fitting의 Profile 내부 알고리즘 및 순서는 규정하지 않는다. 세부 단계와 순서는 [TestCube Depth Perception FDS](fds-rawpart-depth-perception.md) 등 각 하위 Profile FDS가 소유하며, 공통 서비스 결과·freshness·frame·Observation Pose 계약을 변경하지 않고 구체화한다.
 
 Algorithm 선택은 Recipe가 소유한다. Orchestration은 `vision.algorithm`을 DetectTarget의 `algorithm`으로 전달하고, Vision은 내부 관측 재시도를 포함한 해당 Acquisition 전체에서 선택값 그대로 검증·실행한다. Production RawPart의 지원 알고리즘은 `cuboid_top_face` 하나다. Recipe가 없는 호출의 실효 기본값도 Cuboid이어야 한다. 과거 서비스 필드의 Legacy 기본값은 구현 정합화 대상이다.
 
@@ -93,7 +93,7 @@ Algorithm 선택은 Recipe가 소유한다. Orchestration은 `vision.algorithm`�
 
 Detector를 실행하려면 유효한 Depth 관측이 연속 5회 필요하다. TF preflight가 불가능하면 Detector 결과를 기록하지 않고 같은 deadline 내 대기한다. 이후 새 관측을 사용하려면 그 관측 자체의 Depth 평가가 STABLE이어야 한다. 선택 Detector는 STABLE이 된 정확한 Depth 관측에서 한 번 실행하며, 근처 시각의 호환 RGB는 선택적인 표시 자료일 뿐이다. Detector는 모든 가설을 내부 평가하고 SELECTED HIGH·MEDIUM 후보 전체를 단일 `material_candidates` 목록으로 같은 Acquisition에 반환한다. 단일 목록이 비어 있고 유효한 최종 관측에서 개별 Geometry를 확정하지 못한 경우 기존 `DETECT_RESULT_GEOMETRY_ERROR` 및 근거가 있는 `disturbance_candidates` 의미를 적용한다. `DETECT_RESULT_TEMPORARY_INVALID_TARGET`은 일시적인 관측 Evidence 부족에 한정한다. LOW·REJECTED는 일반 PICK 후보로 반환하지 않는다. `OBJECT_NOT_FOUND`는 유효한 Absence 조건이 부재를 확정한 경우에만 반환하며 불충분하거나 모호한 관측은 부재가 아니다.
 
-모든 후보 Geometry는 동일한 최종 Depth 관측에서 나온다. Vision은 단일 대표 후보를 선택하거나 Pose·ID·Geometry·Confidence를 Acquisition 공통 결과에 투영하지 않는다. Acquisition 진단과 전체 가설·Selection·Boundary·Plane Map·Replay·Disturbance 근거는 특정 후보와 독립적으로 보존한다. 성공적으로 인계한 뒤 Vision은 목록을 보존하지 않는다. Orchestration은 전체 목록을 변경 없이 한 PICK Goal로 전달하고 Task Execution은 후보 우선순위·전환을 소유한다. Strategy별 후보 참여 및 필수 출력은 [RawPart FDS](fds-rawpart-depth-perception.md), ROS 필드와 후보 Geometry 의미는 ICD를 따른다. 물체 하나를 처리한 후 다음 물체는 새로운 관측에서 검출한다. 요청은 `/vision/scene_stability_active`를 사용하지 않는다. `scene_generation`은 호환·진단 식별자로 채울 수 있으나 호출자의 추가 수락 Gate가 아니다.
+모든 후보 Geometry는 동일한 최종 Depth 관측에서 나온다. Vision은 단일 대표 후보를 선택하거나 Pose·ID·Geometry·Confidence를 Acquisition 공통 결과에 투영하지 않는다. Acquisition 진단과 전체 가설·Selection·Boundary·Plane Map·Replay·Disturbance 근거는 특정 후보와 독립적으로 보존한다. 성공적으로 인계한 뒤 Vision은 목록을 보존하지 않는다. Orchestration은 전체 목록을 변경 없이 한 PICK Goal로 전달하고 Task Execution은 후보 우선순위·전환을 소유한다. Strategy별 후보 참여 및 필수 출력은 [TestCube FDS](fds-rawpart-depth-perception.md), ROS 필드와 후보 Geometry 의미는 ICD를 따른다. 물체 하나를 처리한 후 다음 물체는 새로운 관측에서 검출한다. 요청은 `/vision/scene_stability_active`를 사용하지 않는다. `scene_generation`은 호환·진단 식별자로 채울 수 있으나 호출자의 추가 수락 Gate가 아니다.
 
 Orchestration은 PICK 슬롯별로 동시에 하나 이하의 DetectTarget 요청을 보낸다. Vision은 전역적으로도 서비스를 직렬화해 하나의 Acquisition만 처리 상태를 소유할 수 있게 한다. 경쟁 요청은 즉시 `DETECT_RESULT_BUSY`와 빈 `acquisition_id`를 반환하며 새로운 Acquisition·Snapshot·Detector 처리는 없다. 수락된 요청을 Queue에 넣거나 취소·교체하지 않는다. 이 Owner 측 원자적 수락은 개발 클라이언트가 자체 가용성 관측을 경합시키더라도 Mission Acquisition을 보호한다. Orchestration은 BUSY를 임시 슬롯 경합으로 취급해 Mission을 종료하거나 Motion을 제출하지 않은 채 Vision `IDLE`을 기다린 뒤 정상 요청을 보낸다. Hub는 재전송하지 않고 BUSY를 표시하며 운영자는 IDLE 이후 다시 누를 수 있다.
 
@@ -113,7 +113,7 @@ DetectTarget은 terminal 결과와 해당 요청에서 이미 확정된 관측 �
 
 ### Vision 오위치 진단 시나리오
 
-시뮬레이션·테스트 전용 `/vision/test_scenario/mislocalize_next` 요청은 Vision 내부에서 단발성 위치 교란을 Arm한다. Vision은 먼저 정상 RawPart Detection·전체 후보 열거·Scene Stability·TF 변환·후보별 성공 Pose 검증을 모두 완료한다. 성공 결과를 반환하기 직전에 **반환 목록의 모든 후보 Pose 위치만 동일하게** 보정된 Tray/Support Plane의 양의 법선 방향으로 100mm 평행 이동한다. 방향은 반환 Frame인 `base_link`로 표현하며 기존 [RawPart Support Frame 계약](fds-rawpart-depth-perception.md)에 따라 Support Frame 및 Calibration/TF 변환에서 구한다. 선택된 Workpiece 상판 방향을 따르는 Pose Local `+Z`와 같다고 가정하지 않는다. 실제 반환 위치가 물리적으로 위로 이동하도록 변환된 Frame에서 Offset을 적용한다.
+시뮬레이션·테스트 전용 `/vision/test_scenario/mislocalize_next` 요청은 Vision 내부에서 단발성 위치 교란을 Arm한다. Vision은 먼저 정상 TestCube Detection·전체 후보 열거·Scene Stability·TF 변환·후보별 성공 Pose 검증을 모두 완료한다. 성공 결과를 반환하기 직전에 **반환 목록의 모든 후보 Pose 위치만 동일하게** 보정된 Tray/Support Plane의 양의 법선 방향으로 100mm 평행 이동한다. 방향은 반환 Frame인 `base_link`로 표현하며 기존 [TestCube Support Frame 계약](fds-rawpart-depth-perception.md)에 따라 Support Frame 및 Calibration/TF 변환에서 구한다. 선택된 Workpiece 상판 방향을 따르는 Pose Local `+Z`와 같다고 가정하지 않는다. 실제 반환 위치가 물리적으로 위로 이동하도록 변환된 Frame에서 Offset을 적용한다.
 
 `PoseStamped` Header, Source Timestamp, Frame, Orientation, `target_id`, Acquisition/Calibration 식별자, 측정 Geometry, Result Code 및 다른 모든 Response Field는 정상 Detection 결과 그대로다. 원본 관측·후보 집합·Isaac Scene도 변경하지 않는다. 이 통제된 테스트 자극만 정상 반환 Pose가 관측된 Profile Reference를 나타낸다는 원칙의 예외이며 일반 오위치 Algorithm·신규 Adapter·별도 Detector 경로를 도입하지 않는다.
 
@@ -141,13 +141,13 @@ DetectTarget은 운영자가 선택해 Vision 시작 시 로드된 Calibration�
 
 매핑과 값은 Deployment Configuration이다. 중첩 제약 Parameter는 선택 Vision Profile이 정의하며 이 동작 계약이나 공개 ICD는 특정 Algorithm·숫자 임계값을 고정하지 않는다.
 
-RawPart Profile은 인지 소유 제약으로 경쟁 Foreground Geometry에서 요청 관측을 분리해야 한다. 분리가 가능한 환경 전제와 Simulator Ground Truth 독립성은 [ARM Cell Simulation Environment Semantics](../simulation-environment-semantics.md)가 소유한다. 이 FDS는 Sensor 관측에 대한 Target Profile 처리 동작을 소유한다.
+TestCube Profile은 인지 소유 제약으로 경쟁 Foreground Geometry에서 요청 관측을 분리해야 한다. 분리가 가능한 환경 전제와 Simulator Ground Truth 독립성은 [ARM Cell Simulation Environment Semantics](../simulation-environment-semantics.md)가 소유한다. 이 FDS는 Sensor 관측에 대한 Target Profile 처리 동작을 소유한다.
 
 ## 3. 자재 소진 의미
 
 `OBJECT_NOT_FOUND`는 정상적인 자재 소진 근거이며 Sensor·Calibration·TF·Geometry 품질 실패와 구별해야 한다.
 
-최종 STABLE Depth 관측에서 Detector의 유효한 RawPart 작업 영역 Coverage 및 Support Geometry가 **부재를 확정했을 때만** `OBJECT_NOT_FOUND`를 반환한다. 관측된 후보가 Geometry 조건을 만족할 가능성이 있을 때는 이러한 부재 확정 조건을 Detector 실행 Gate로 사용하지 않는다.
+최종 STABLE Depth 관측에서 Detector의 유효한 TestCube 작업 영역 Coverage 및 Support Geometry가 **부재를 확정했을 때만** `OBJECT_NOT_FOUND`를 반환한다. 관측된 후보가 Geometry 조건을 만족할 가능성이 있을 때는 이러한 부재 확정 조건을 Detector 실행 Gate로 사용하지 않는다.
 
 불충분하거나 무효인 Scene Stability 입력은 같은 Deadline 내에서 재시도한다. Detector를 한 번 호출한 뒤에는 추가 Detection Run 없이 후보, 유효한 부재 또는 Geometry 실패를 반환한다. 관측 불가·모호한 Detector 결과는 실패이며 부재로 보고하지 않는다.
 
@@ -169,7 +169,7 @@ RawPart의 `estimated_height_m`는 선택 객체 자체의 수직 두께로, 측
 
 ## 5. Orientation Symmetry
 
-Object Geometry가 안정적인 방향을 뒷받침하지 않으면 Vision은 임의의 불안정한 Orientation을 유효하다고 보고해서는 안 된다. 응답의 `orientation_symmetry_order`는 고유 Yaw(`1`), 관측된 RawPart Rectangle 대칭(서로 다른 변은 `2`, 같은 변은 `4`), 관측 불가능한 방향(`0`)을 구별한다.
+Object Geometry가 안정적인 방향을 뒷받침하지 않으면 Vision은 임의의 불안정한 Orientation을 유효하다고 보고해서는 안 된다. 응답의 `orientation_symmetry_order`는 고유 Yaw(`1`), 관측된 TestCube Rectangle 대칭(서로 다른 변은 `2`, 같은 변은 `4`), 관측 불가능한 방향(`0`)을 구별한다.
 
 Order `0`에서는 `target_pose.orientation`을 사용할 수 없고, `1`은 고유 Object Orientation, `2`는 180도 Modulo의 비정사각 Rectangle 장축 대표 방향, `4`는 90도 Modulo의 정사각 Edge Angle 대표 방향이다. 이 Order는 인계 전체에서 권위 있는 값이다.
 
@@ -208,7 +208,7 @@ Optical→Base Transform이 없거나 유효하지 않으면 Vision 실패 결�
 
 ### VR-VIS-DETECT-05 — Yaw 모호성
 
-Object Geometry의 Yaw가 불안정하거나 관측 불가능하면 성공 결과에 임의의 Orientation을 유효한 Yaw처럼 포함해서는 안 된다. Vision은 유효한 관측 위치를 보존하면서 Orientation Order 0을 보고할 수 있다. Orchestration은 필수 명시 정책이 허용할 때에만 별도 Recipe Fallback Direction을 사용할 수 있으며 `target_pose.orientation`은 사용하지 않는다. RawPart Order 2는 측정 장축의 180도 Modulo Class, Order 4는 정사각형 측정 Edge의 90도 Modulo Class다. 어느 쪽도 임의 Orientation Search를 허용하지 않는다. Vision의 Robot/Tool/TCP 보정 권한도 생기지 않는다.
+Object Geometry의 Yaw가 불안정하거나 관측 불가능하면 성공 결과에 임의의 Orientation을 유효한 Yaw처럼 포함해서는 안 된다. Vision은 유효한 관측 위치를 보존하면서 Orientation Order 0을 보고할 수 있다. Orchestration은 필수 명시 정책이 허용할 때에만 별도 Recipe Fallback Direction을 사용할 수 있으며 `target_pose.orientation`은 사용하지 않는다. TestCube Order 2는 측정 장축의 180도 Modulo Class, Order 4는 정사각형 측정 Edge의 90도 Modulo Class다. 어느 쪽도 임의 Orientation Search를 허용하지 않는다. Vision의 Robot/Tool/TCP 보정 권한도 생기지 않는다.
 
 ### VR-VIS-DETECT-06 — Target ID에 따른 Profile 선택
 
@@ -226,17 +226,17 @@ Object Geometry의 Yaw가 불안정하거나 관측 불가능하면 성공 결�
 
 요청 Target과 무관한 Foreground 객체가 하나 이상 함께 있을 때 선택 Target Pose는 요청 Target만에서 도출해야 하며 무관한 Geometry가 해당 Pose를 이동·재정의해서는 안 된다.
 
-### VR-VIS-DETECT-10 — RawPart Profile 선택
+### VR-VIS-DETECT-10 — TestCube Profile 선택
 
-설정된 RawPart Profile은 승인된 Acceptance Observation에서 관측된 RawPart Target을 선택하고 경쟁 Foreground Geometry를 배제하며 RawPart 관측이 없으면 Object Not Found를 보고해야 한다.
+설정된 TestCube Profile은 승인된 Acceptance Observation에서 관측된 TestCube Target을 선택하고 경쟁 Foreground Geometry를 배제하며 TestCube 관측이 없으면 Object Not Found를 보고해야 한다.
 
 ### VR-VIS-DETECT-11 — Profile 정의 Observation Pose
 
-알려진 Sensor Observation Fixture에서 선택 Target의 성공 Position은 Fixture에 선언된 Tolerance 내에서 선택 Profile의 Sensor 기반 Geometry Reference에 일치해야 하고 `base_link`로 변환되어야 한다. RawPart Profile의 세부 동작은 하위 FDS로 검증한다.
+알려진 Sensor Observation Fixture에서 선택 Target의 성공 Position은 Fixture에 선언된 Tolerance 내에서 선택 Profile의 Sensor 기반 Geometry Reference에 일치해야 하고 `base_link`로 변환되어야 한다. TestCube Profile의 세부 동작은 하위 FDS로 검증한다.
 
 ### VR-VIS-DETECT-12 — Orientation 관측 가능성과 부재
 
-안정적인 선택 Surface Geometry의 고유 Orientation은 `orientation_symmetry_order=1`인 유효한 Object-centric Yaw로 반환한다. 측정 RawPart Rectangle은 다른 변에 Order 2, 같은 변에 Order 4로 대표 방향을 보존한다. 모호하거나 관측 불가능한 Orientation에서는 유효 xyz를 유지하며 Order 0과 사용할 수 없는 `target_pose.orientation`을 보고한다.
+안정적인 선택 Surface Geometry의 고유 Orientation은 `orientation_symmetry_order=1`인 유효한 Object-centric Yaw로 반환한다. 측정 TestCube Rectangle은 다른 변에 Order 2, 같은 변에 Order 4로 대표 방향을 보존한다. 모호하거나 관측 불가능한 Orientation에서는 유효 xyz를 유지하며 Order 0과 사용할 수 없는 `target_pose.orientation`을 보고한다.
 
 ### VR-VIS-DETECT-13 — Environment Semantics 참조
 
@@ -252,7 +252,7 @@ Robot/Tool Geometry가 바뀌거나 제거되어도 Vision Object Reference 결�
 
 ### VR-VIS-DETECT-19 — 단발 Vision 오위치
 
-테스트 시나리오를 Arm하면 다음 완전히 검증된 성공 Acquisition의 모든 후보 Pose는 RawPart Support Frame 계약에 따른 보정 Support Plane의 위쪽 법선을 `base_link`로 표현한 방향으로 **Position만 100mm** 이동한 동일 정상 결과를 반환해야 한다. 방향을 Object Local `+Z`에서 가져오면 안 된다. 선택 RawPart의 원본 관측·Scene·Frame·Stamp·Orientation·Target/Acquisition 식별자·Calibration·측정 Geometry는 그대로다. 실패·Timeout·Invalid·BUSY·Canceled Acquisition은 Arm 상태를 유지하고 성공 하나만 정확히 한 번 소비하며 이후 Acquisition은 정상이다. Vision 진단은 후보 ID별 원래 좌표와 반환 좌표 및 소비 Acquisition을 구별해야 한다. Motion·Gripper 결과는 정상 실행·관측 경로에서만 발생해야 한다. Live Verification은 Planning/Execution, Capture, Fresh `RELEASED`, 기존 Retry Admission을 평가하며 이 FDS는 해당 결과의 성공을 보증하지 않는다. Oracle은 연결된 DetectTarget 응답·원본 식별자·Vision 진단 및 이후 Motion PICK Action Result·Fresh Gripper Disposition·Orchestration Retry 결정이다.
+테스트 시나리오를 Arm하면 다음 완전히 검증된 성공 Acquisition의 모든 후보 Pose는 TestCube Support Frame 계약에 따른 보정 Support Plane의 위쪽 법선을 `base_link`로 표현한 방향으로 **Position만 100mm** 이동한 동일 정상 결과를 반환해야 한다. 방향을 Object Local `+Z`에서 가져오면 안 된다. 선택 RawPart의 원본 관측·Scene·Frame·Stamp·Orientation·Target/Acquisition 식별자·Calibration·측정 Geometry는 그대로다. 실패·Timeout·Invalid·BUSY·Canceled Acquisition은 Arm 상태를 유지하고 성공 하나만 정확히 한 번 소비하며 이후 Acquisition은 정상이다. Vision 진단은 후보 ID별 원래 좌표와 반환 좌표 및 소비 Acquisition을 구별해야 한다. Motion·Gripper 결과는 정상 실행·관측 경로에서만 발생해야 한다. Live Verification은 Planning/Execution, Capture, Fresh `RELEASED`, 기존 Retry Admission을 평가하며 이 FDS는 해당 결과의 성공을 보증하지 않는다. Oracle은 연결된 DetectTarget 응답·원본 식별자·Vision 진단 및 이후 Motion PICK Action Result·Fresh Gripper Disposition·Orchestration Retry 결정이다.
 
 ### VR-VIS-DETECT-20 — Depth Scene Stability Detector Gate
 

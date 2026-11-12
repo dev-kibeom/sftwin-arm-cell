@@ -79,11 +79,15 @@ def validate_validation_profile(profile: dict) -> dict:
     if len(dimensions_m) != 3 or any(value <= 0.0 for value in dimensions_m):
         raise ValueError("fixture dimensions must contain three positive values")
 
-    # The deterministic top-grasp recipe uses the fixture X dimension as its
-    # declared grasp dimension; X and Y are equal in the validation profile.
-    grasp_dimension_mm = dimensions_m[0] * 1000.0
-    if grasp_dimension_mm > Robotiq2F85Actuator.MAX_WIDTH_MM:
-        raise ValueError("fixture grasp dimension exceeds Robotiq 2F-85 opening")
+    grasp_policy = profile.get("_mission_recipe", {}).get("grasp")
+    if grasp_policy is None:
+        grasp_dimensions_mm = [dimensions_m[0] * 1000.0]
+    else:
+        grasp_dimensions_mm = [value * 1000.0 for value in dimensions_m
+            if grasp_policy["min_expected_contact_width_mm"] <= value * 1000.0
+            <= grasp_policy["max_expected_contact_width_mm"]]
+    if not any(0 < width <= Robotiq2F85Actuator.MAX_WIDTH_MM for width in grasp_dimensions_mm):
+        raise ValueError("fixture grasp dimension exceeds Robotiq 2F-85 opening or policy")
     motion = profile["motion"]
     observation_reference = motion.get("observation_reference")
     if not isinstance(observation_reference, str) or not observation_reference:

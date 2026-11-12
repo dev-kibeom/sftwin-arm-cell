@@ -57,8 +57,8 @@ TEST(OrchestrationDiagnosticSerializationTest, RetainsTreeTransitionAndExecution
   queued.execute_cycle_id[15] = 0x34;
   queued.delivery_id[0] = 0x56;
   queued.delivery_id[15] = 0x78;
-  queued.target_id_size = 7;
-  std::copy_n("RawPart", queued.target_id_size, queued.target_id.begin());
+  queued.target_id_size = std::string("TestCube").size();
+  std::copy_n("TestCube", queued.target_id_size, queued.target_id.begin());
   queued.decision.event = CycleCoordinator::DiagnosticEvent::BT_NODE_STATUS;
   queued.decision.tree_node_size = 4;
   std::copy_n("PICK", queued.decision.tree_node_size, queued.decision.tree_node.begin());
@@ -81,7 +81,7 @@ TEST(OrchestrationDiagnosticSerializationTest, RetainsTreeTransitionAndExecution
     std::string::npos);
   EXPECT_NE(serialized.find("\"delivery_id\":\"56000000000000000000000000000078\""),
     std::string::npos);
-  EXPECT_NE(serialized.find("\"target_id\":\"RawPart\""), std::string::npos);
+  EXPECT_NE(serialized.find("\"target_id\":\"TestCube\""), std::string::npos);
   EXPECT_NE(serialized.find("\"result_code\":null"), std::string::npos);
 }
 

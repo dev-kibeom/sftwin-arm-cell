@@ -18,6 +18,7 @@ install(DIRECTORY config launch DESTINATION share/${PROJECT_NAME})
 install(
   PROGRAMS
     scripts/export_runtime_configuration
+    scripts/validate_material_grasp
     scripts/register_pnp_fixture.py
     scripts/pnp_planning_scene.py
     scripts/pnp_planning_scene_runtime.py
@@ -29,6 +30,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_cmake_pytest REQUIRED)
   find_package(launch_testing_ament_cmake REQUIRED)
+  ament_add_pytest_test(test_material_catalog tests/test_material_catalog.py)
   ament_add_pytest_test(test_runtime_export tests/test_runtime_export.py)
   ament_add_pytest_test(test_configuration_composition tests/test_configuration_composition.py)
   ament_add_pytest_test(test_planning_launch tests/test_planning_launch.py)

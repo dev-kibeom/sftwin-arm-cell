@@ -1,0 +1,8 @@
+schema_version: 2
+mission_id: al_billet_060_040_030-placement-v1
+target_id: AL_BILLET_060_040_030
+material: package://arm_cell_bringup/config/materials/AL_BILLET_060_040_030.yaml
+pick_policy: package://arm_cell_task_execution/config/pick_policy.yaml
+place_task: package://arm_cell_task_execution/config/place_tasks/cnc_loading.yaml
+vision:
+  algorithm: cuboid_top_face

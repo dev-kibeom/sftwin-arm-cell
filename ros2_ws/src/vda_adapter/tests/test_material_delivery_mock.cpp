@@ -30,7 +30,7 @@ TEST(MaterialDeliveryMock, StartsFromAcceptedTriggerAndPreservesDeliveryIdentity
   MaterialDeliveryMock mock(100ms);
   AcceptedTrigger trigger;
   trigger.delivery_id.uuid[0] = 0x2a;
-  trigger.material_type = "RawPart";
+  trigger.material_type = "TestCube";
   trigger.quantity = 1;
   trigger.valid = true;
   const auto start = Clock::time_point{};
@@ -54,7 +54,7 @@ TEST(MaterialDeliveryMock, RejectsDuplicateAndInvalidDeliveryIdentities)
   MaterialDeliveryMock mock(100ms);
   AcceptedTrigger trigger;
   const auto start = Clock::time_point{};
-  trigger.material_type = "RawPart";
+  trigger.material_type = "TestCube";
   trigger.quantity = 1;
   trigger.valid = true;
   EXPECT_FALSE(mock.consume_accepted_trigger(trigger, start));
@@ -68,7 +68,7 @@ TEST(MaterialDeliveryMock, RejectsDuplicateAndInvalidDeliveryIdentities)
   trigger.quantity = 1;
   trigger.material_type.clear();
   EXPECT_FALSE(mock.consume_accepted_trigger(trigger, start));
-  trigger.material_type = "RawPart";
+  trigger.material_type = "TestCube";
   ASSERT_TRUE(mock.consume_accepted_trigger(trigger, start));
   EXPECT_FALSE(mock.consume_accepted_trigger(trigger, start + 1s));
   (void)snapshot(mock, start + 1s);
@@ -80,7 +80,7 @@ TEST(MaterialDeliveryMock, FailureAfterUnloadNeverAdvancesToDeparted)
   MaterialDeliveryMock mock(100ms);
   AcceptedTrigger trigger;
   trigger.delivery_id.uuid[0] = 9;
-  trigger.material_type = "RawPart";
+  trigger.material_type = "TestCube";
   trigger.quantity = 1;
   trigger.valid = true;
   const auto start = Clock::time_point{};
@@ -96,7 +96,7 @@ TEST(MaterialDeliveryMock, FailureAfterUnloadNeverAdvancesToDeparted)
   EXPECT_EQ(failed->delivery_id, trigger.delivery_id);
   AcceptedTrigger next_trigger;
   next_trigger.delivery_id.uuid[0] = 10;
-  next_trigger.material_type = "RawPart";
+  next_trigger.material_type = "TestCube";
   next_trigger.quantity = 1;
   next_trigger.valid = true;
   EXPECT_TRUE(mock.consume_accepted_trigger(next_trigger, start + 400ms));
@@ -111,7 +111,7 @@ TEST(MaterialDeliveryMock, SuccessfulDepartureClosesEpisodeAndAllowsNextIdentity
   MaterialDeliveryMock mock(100ms);
   AcceptedTrigger trigger_a;
   trigger_a.delivery_id.uuid[0] = 21;
-  trigger_a.material_type = "RawPart";
+  trigger_a.material_type = "TestCube";
   trigger_a.quantity = 1;
   trigger_a.valid = true;
   const auto start = Clock::time_point{};
@@ -129,7 +129,7 @@ TEST(MaterialDeliveryMock, SuccessfulDepartureClosesEpisodeAndAllowsNextIdentity
 
   AcceptedTrigger trigger_b;
   trigger_b.delivery_id.uuid[0] = 22;
-  trigger_b.material_type = "RawPart";
+  trigger_b.material_type = "TestCube";
   trigger_b.quantity = 1;
   trigger_b.valid = true;
   ASSERT_TRUE(mock.consume_accepted_trigger(trigger_b, start + 400ms));
@@ -147,7 +147,7 @@ TEST(MaterialDeliveryMock, AdvancesMultipleAcceptedDeliveriesIndependently)
   MaterialDeliveryMock mock(100ms);
   AcceptedTrigger first;
   first.delivery_id.uuid[0] = 31;
-  first.material_type = "RawPart";
+  first.material_type = "TestCube";
   first.quantity = 1;
   first.valid = true;
   auto second = first;

@@ -101,6 +101,8 @@ MotionPortRequest TaskExecutionSupport::make_motion_request(
   request.constraints.has_observed_rectangle = goal.has_observed_rectangle;
   request.constraints.rectangle_long_side_m = goal.rectangle_long_side_m;
   request.constraints.rectangle_short_side_m = goal.rectangle_short_side_m;
+  request.constraints.has_material_grasp_transform = goal.has_material_grasp_transform;
+  request.constraints.material_grasp_transform = goal.material_grasp_transform;
   request.constraints.grasp_width_min_mm = goal.grasp_width_min_mm;
   request.constraints.grasp_width_max_mm = goal.grasp_width_max_mm;
   request.constraints.orientation_symmetry_order = pick ?

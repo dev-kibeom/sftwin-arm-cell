@@ -40,7 +40,7 @@ std::shared_ptr<const arm_cell_vision::AcquisitionResult> make_acquisition_resul
 {
   auto result = std::make_shared<arm_cell_vision::AcquisitionResult>();
   result->generation = generation;
-  result->target_id = "RawPart";
+  result->target_id = "TestCube";
   result->acquisition_id = arm_cell_vision::make_acquisition_id("vision-run-snapshot-test", generation);
   detection.scene_generation = generation;
   result->detection = std::move(detection);
@@ -190,7 +190,7 @@ arm_cell_vision::VisionDetectorSnapshotJob cuboid_stage_job(const std::string & 
   job.vision_run_id = "stage-run";
   job.acquisition_id = acquisition_id;
   job.algorithm = "cuboid_top_face";
-  job.target_id = "RawPart";
+  job.target_id = "TestCube";
   job.has_detection_result = true;
   job.terminal_result_code =
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
@@ -459,7 +459,7 @@ arm_cell_vision::VisionDetectorSnapshotJob orientation_stage_job(
   job.result.cuboid_planes.clear();
   job.result.cuboid_replay_evidence.reset();
   job.selected_profile->algorithm = "cuboid_top_face";
-  job.selected_profile->target_id = "RawPart";
+  job.selected_profile->target_id = "TestCube";
   job.calibration.ready = test_case.calibration_valid;
   auto & stamped = job.calibration.tray_from_camera;
   stamped.header.frame_id = "Tray";
@@ -675,7 +675,7 @@ TEST_F(VisionDetectorSnapshotTest, MissingRgbKeepsDepthIdentityAndMarksImageUnav
   job.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
   job.vision_run_id = "depth-only-run";
   job.acquisition_id = "depth-only-acq-1";
-  job.target_id = "RawPart";
+  job.target_id = "TestCube";
   job.processing_stage = "depth_observation";
   auto input = std::make_shared<arm_cell_vision::DetectionInput>(*job.input);
   input->rgb = sensor_msgs::msg::Image{};
@@ -738,7 +738,7 @@ TEST_F(VisionDetectorSnapshotTest, DelayedSnapshotWorkerKeepsRgbSelectedBeforeEn
   job.event_kind = Snapshot::DETECT_TARGET_SUCCESS;
   job.vision_run_id = "pinned-rgb-run";
   job.acquisition_id = "rgb-frozen-acq";
-  job.target_id = "RawPart";
+  job.target_id = "TestCube";
   job.save = true;
   auto selected_input = std::make_shared<arm_cell_vision::DetectionInput>(*job.input);
   selected_input->depth.header.stamp.sec = 10;
@@ -776,7 +776,7 @@ TEST_F(VisionDetectorSnapshotTest, InvalidRgbIsReportedSeparatelyFromSuccessfulD
   job.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_SUCCESS;
   job.vision_run_id = "invalid-rgb-run";
   job.acquisition_id = "invalid-rgb-acq";
-  job.target_id = "RawPart";
+  job.target_id = "TestCube";
   job.processing_stage = "target_pose_estimation";
   job.terminal_result_code =
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
@@ -883,7 +883,7 @@ TEST_F(VisionDetectorSnapshotTest, TerminalSnapshotSaveFailureDoesNotSuppressPub
   request_diagnostics.ingress.source_stamp_freshness_rejected = 1;
   request_diagnostics.ingress.source_stamp_freshness_clock_delta_rejected = 1;
   terminal.request_diagnostics = request_diagnostics;
-  terminal.processing_stage = "RawPart profile evaluation";
+  terminal.processing_stage = "TestCube profile evaluation";
   arm_cell_vision::VisionDetectorSnapshotOutput output(
     *node, "/tmp/snapshot-test-unused", "run-2",
     [&](const auto &, const auto &) {save_attempted = true; return false;},
@@ -897,7 +897,7 @@ TEST_F(VisionDetectorSnapshotTest, TerminalSnapshotSaveFailureDoesNotSuppressPub
     arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE);
   EXPECT_EQ(published.acquisition_id, "acq-7");
   EXPECT_NE(published.diagnostic_record_json.find("deadline expired"), std::string::npos);
-  EXPECT_NE(published.diagnostic_record_json.find("RawPart profile evaluation"), std::string::npos);
+  EXPECT_NE(published.diagnostic_record_json.find("TestCube profile evaluation"), std::string::npos);
   EXPECT_NE(
     published.diagnostic_record_json.find(
       "\"request_diagnostics\":{\"request_id\":"), std::string::npos);
@@ -939,7 +939,7 @@ TEST_F(VisionDetectorSnapshotTest, TerminalAcquisitionWritesDiagnosticAndReplayB
   job.acquisition_id = "acq-replay-1";
   job.vision_run_id = "run-replay-1";
   job.algorithm = "cuboid_top_face";
-  job.target_id = "RawPart";
+  job.target_id = "TestCube";
   job.terminal_result_code =
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
   job.has_detection_result = true;
@@ -952,7 +952,7 @@ TEST_F(VisionDetectorSnapshotTest, TerminalAcquisitionWritesDiagnosticAndReplayB
   job.result.ordered_candidates = {job.result};
   job.result.has_target_pose = false;
   arm_cell_vision::DetectorProfile applied_profile;
-  applied_profile.target_id = "RawPart";
+  applied_profile.target_id = "TestCube";
   applied_profile.algorithm = "cuboid_top_face";
   applied_profile.cuboid.grid_resolution_m = 0.0031;
   applied_profile.tray_roi_min_m = {-0.17, -0.23};
@@ -1225,7 +1225,7 @@ TEST_F(VisionDetectorSnapshotTest, TerminalRejectionCarriesItsAnnotationAndDiagn
   terminal.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
   terminal.calibration_id.clear();
   terminal.acquisition_id = "acq-9";
-  terminal.target_id = "RawPart";
+  terminal.target_id = "TestCube";
   terminal.has_detection_result = true;
   terminal.terminal_result_code =
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_OBJECT_NOT_FOUND;
@@ -3196,7 +3196,7 @@ TEST_F(VisionDetectorSnapshotTest, BlockedSnapshotWriteDoesNotDelayDetectTargetR
       output.submit(std::move(job));
     });
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response response;
   service.handle(request, response);
@@ -3215,7 +3215,7 @@ TEST_F(VisionDetectorSnapshotTest, ServiceAndSnapshotConsumeTheSameCompletedAcqu
 {
   arm_cell_vision::VisionRosIngress ingress;
   auto completed = std::make_shared<arm_cell_vision::AcquisitionResult>();
-  completed->target_id = "RawPart";
+  completed->target_id = "TestCube";
   completed->detection.result_code =
     arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_SUCCESS;
   completed->detection.algorithm = "cuboid_top_face";
@@ -3283,7 +3283,7 @@ TEST_F(VisionDetectorSnapshotTest, ServiceAndSnapshotConsumeTheSameCompletedAcqu
       arm_cell_vision::VisionDetectorSnapshotJob job;
       job.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_SUCCESS;
       job.acquisition_id = response.acquisition_id;
-      job.target_id = "RawPart";
+      job.target_id = "TestCube";
       job.acquisition_result = acquisition_result;
       job.has_observation = static_cast<bool>(acquisition_result->input);
       job.has_detection_result = true;
@@ -3297,7 +3297,7 @@ TEST_F(VisionDetectorSnapshotTest, ServiceAndSnapshotConsumeTheSameCompletedAcqu
     "vision-run-shared");
 
   arm_cell_interfaces::srv::DetectTarget::Request request;
-  request.target_id = "RawPart";
+  request.target_id = "TestCube";
   request.timeout.sec = 1;
   arm_cell_interfaces::srv::DetectTarget::Response response;
   service.handle(request, response);

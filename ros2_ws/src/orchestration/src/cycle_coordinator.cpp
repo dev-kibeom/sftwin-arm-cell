@@ -1034,6 +1034,8 @@ CycleCoordinator::ExecutePnp::Goal CycleCoordinator::pnp_goal(
   goal.pick_grasp_backoff_m = recipe.pick_grasp_backoff_m;
   goal.pick_grasp_position_tolerance_m = recipe.pick_grasp_position_tolerance_m;
   goal.pick_grasp_orientation_tolerance_rad = recipe.pick_grasp_orientation_tolerance_rad;
+  goal.has_material_grasp_transform = recipe.has_material_grasp_transform;
+  goal.material_grasp_transform = recipe.material_grasp_transform;
   goal.grasp_width_min_mm = recipe.grasp_width_min_mm;
   goal.grasp_width_max_mm = recipe.grasp_width_max_mm;
   if (recipe.unobserved_yaw_policy == UnobservedYawPolicy::ALLOWED &&
@@ -1490,7 +1492,7 @@ CycleCoordinator::Result CycleCoordinator::execute(
               state.first_vision_failure->diagnostic_detail : detected.diagnostic_detail);
             return BT::NodeStatus::FAILURE;
           }
-          if (!valid_material_candidate_list(detected, target_id == "RawPart")) {
+          if (!valid_material_candidate_list(detected, true)) {
             state.terminal = commit_non_safety_terminal(
               exit_reason(MissionExitReason::MISSION_EXIT_VISION_ERROR),
               "Vision returned an invalid Material Candidate list");

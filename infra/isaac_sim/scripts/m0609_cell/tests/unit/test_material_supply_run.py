@@ -4,7 +4,7 @@ from scene_builder.material_supply_run import MaterialSupplyRun
 def _run(quantity=1, deadline_ns=100):
     return MaterialSupplyRun(
         delivery_id="delivery-1",
-        material_type="RawPart",
+        material_type="TestCube",
         requested_quantity=quantity,
         deadline_ns=deadline_ns,
     )
@@ -21,7 +21,7 @@ def test_quantity_one_completes_after_spawn_without_spatial_observation():
     assert result["failure_reason"] == "NONE"
 
 
-def test_operational_profile_has_no_post_spawn_supply_delay():
+def test_operational_profile_has_no_post_spawn_supply_delay(exported_configuration):
     from pathlib import Path
 
     import yaml
@@ -31,7 +31,8 @@ def test_operational_profile_has_no_post_spawn_supply_delay():
         repository
         / "ros2_ws/src/bringup/config/operational_profile.yaml"
     )
-    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    from runtime_configuration import load_runtime_configuration
+    profile = load_runtime_configuration(exported_configuration)
 
     assert "post_spawn_vision_delay_ms" not in profile["material_handoff"]
 

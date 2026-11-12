@@ -18,12 +18,12 @@ Gateway는 외부에서 **이미 배정된** 자재 Delivery를 수락하고, �
 | 외부 공급자/데모 UI Hub | Delivery ID·양수 Quantity·설정된 Material Type·선택 Seed를 포함한 Trigger 발행 | Trigger 형식·식별/수락 의미: [External Handoff ICD](../../interfaces/icd-external-handoff-trigger.md) |
 | Gateway | 원본 Trigger의 유일한 수락 Owner; 수락 전 검증, 수락 통보, Delivery별 VDA·Provider 근거 검증, Readiness 발행 | 이 FDS |
 | VDA Mock | **Gateway가 수락한** Trigger만 소비해 `ARRIVED → DOCKED → UNLOADED → DEPARTED` 사실 보고 | [VDA Material Delivery FDS](../vda/fds-material-delivery.md) |
-| Simulation Material Supply | 수락 Delivery별 RawPart 생성·Random Initial Pose·Physics Drop 실행 및 완료 사실 보고 | [Simulation Environment Semantics](../simulation-environment-semantics.md), 공급 Provider 구현 |
+| Simulation Material Supply | 수락 Delivery별 선택한 자재 생성·Random Initial Pose·Physics Drop 실행 및 완료 사실 보고 | [Simulation Environment Semantics](../simulation-environment-semantics.md), 공급 Provider 구현 |
 | Production Supply Provider | 해당 장비가 정의한 물리적 완료 조건으로 공급 사실 보고 | 외부 Provider |
 | Orchestration | Ready Delivery와 잔여 수량을 소비해 Safety·Mission 조건에 따라 순차 실행 | [Mission Cycle FDS](../orchestration/fds-mission-cycle.md), [ExecuteCycle ICD](../../interfaces/icd-orchestration-execute-cycle.md) |
 | Safety·Vision·Motion | Safety Permission, 실제 관측, 경로 및 PICK/PLACE 결과 판정 | 각 컴포넌트 설계 |
 
-Gateway는 양 환경에서 동일한 Trigger·TransferCompletion·Readiness 계약과 검증 규칙을 사용한다. Provider의 **공급 완료 계산 방식**과 Isaac Scene/Prim은 Gateway의 입력 계약이 아니다. `RawPart`는 현재 지원되는 Material Profile이며 Material Definition이 물리 형상·공칭 치수의 Owner다. Vision Profile은 이를 참조해 검출을 설정하고 Recipe는 검출 및 Grasp/PLACE 정책을 소유한다.
+Gateway는 양 환경에서 동일한 Trigger·TransferCompletion·Readiness 계약과 검증 규칙을 사용한다. Provider의 **공급 완료 계산 방식**과 Isaac Scene/Prim은 Gateway의 입력 계약이 아니다. `TestCube` 및 CNC cuboid의 등록 목록은 export된 자재 카탈로그에서 구성하며 Material Definition이 물리 형상·공칭 치수의 Owner다. Vision Profile은 이를 참조해 검출을 설정하고 Recipe는 검출 및 Grasp/PLACE 정책을 소유한다.
 
 ## 3. 기능 시퀀스
 
@@ -67,7 +67,7 @@ sequenceDiagram
 | Trigger 수락 | 신선하고 유효한 중복 없는 양수 Delivery ID, 설정된 Material Type, Quantity > 0만 수락. 수락/거부 Receipt를 원인과 동일 ID로 보고 | Gateway가 ID를 발급하거나 Delivery를 배정했다고 주장 금지 |
 | 수락 사실 인계 | 수락된 모든 공급 필드를 변경 없이 `/integration/accepted_handoff`에 발행 | VDA·Supply Provider가 원본 Trigger를 독립적으로 수락하지 않음 |
 | VDA 문맥 | 동일 Delivery의 유효한 VDA 상태만 검증 근거로 소비 | `UNLOADED`·`DEPARTED`만으로 공급 완료 확정 금지 |
-| Provider 완료 | `/material_supply/transfer_completion`에서 요청 ID·Type·Quantity와 완료 당시 Freshness·Validity·성공 및 `supplied_quantity` 확인 | Timer·UI 상태·정적 RawPart·일치하지 않는 근거로 Ready 발행 금지 |
+| Provider 완료 | `/material_supply/transfer_completion`에서 요청 ID·Type·Quantity와 완료 당시 Freshness·Validity·성공 및 `supplied_quantity` 확인 | Timer·UI 상태·정적 TestCube·일치하지 않는 근거로 Ready 발행 금지 |
 | 긍정적 완료 | 요청 수량 전체를 공급한 유효한 Provider 성공 사실과 적용 가능한 VDA 문맥이 모두 확인될 때 **Delivery별 한 번** `MATERIAL_READY` | 긍정적 Readiness를 Vision 가시성·PICK 성공·Mission 승인으로 해석 금지 |
 | 부정적 완료 | 실패·부분 공급·부재·무효·중복·불일치·확인 시점 Stale·Delivery Deadline 종료·Stop 취소를 구분해 보고하고 Ready 금지 | 자동 재공급·Trigger 재소비·이전 완료 사실 덮어쓰기 금지 |
 
@@ -132,7 +132,7 @@ Supply Provider는 환경별 완료 알고리즘과 사실 보고를 소유하�
 
 ## 8. 계약과 구현 경계
 
-인터페이스 필드·상태의 단일 공유 의미는 [External Handoff Trigger ICD](../../interfaces/icd-external-handoff-trigger.md)와 [Material Readiness ICD](../../interfaces/icd-integration-orchestration-material.md)에 있으며, Quantity별 Mission 결과는 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)에 있다. Gateway ROS 검증, Isaac Supply Adapter, 구성된 자재 생성/물리 동작은 기존 구현을 보존한다. Production Provider의 바인딩, 형상·좌표·물리·임계값은 환경에 따라 설정되며 PnP 성공을 위해 무작위 자세를 임의로 보정하지 않는다. 과거 Timer 기반 Ready나 정적 RawPart 확인은 이 계약을 충족하지 않는다.
+인터페이스 필드·상태의 단일 공유 의미는 [External Handoff Trigger ICD](../../interfaces/icd-external-handoff-trigger.md)와 [Material Readiness ICD](../../interfaces/icd-integration-orchestration-material.md)에 있으며, Quantity별 Mission 결과는 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)에 있다. Gateway ROS 검증, Isaac Supply Adapter, 구성된 자재 생성/물리 동작은 기존 구현을 보존한다. Production Provider의 바인딩, 형상·좌표·물리·임계값은 환경에 따라 설정되며 PnP 성공을 위해 무작위 자세를 임의로 보정하지 않는다. 과거 Timer 기반 Ready나 정적 TestCube 확인은 이 계약을 충족하지 않는다.
 
 ## 9. 참조
 - [Gateway CDS](cds.md)
@@ -140,7 +140,7 @@ Supply Provider는 환경별 완료 알고리즘과 사실 보고를 소유하�
 - [Material Readiness ICD](../../interfaces/icd-integration-orchestration-material.md)
 - [ExecuteCycle ICD](../../interfaces/icd-orchestration-execute-cycle.md)
 - [VDA Material Delivery FDS](../vda/fds-material-delivery.md)
-- [RawPart Vision FDS](../vision/fds-rawpart-depth-perception.md)
+- [TestCube Vision FDS](../vision/fds-rawpart-depth-perception.md)
 - [Simulation Environment Semantics](../simulation-environment-semantics.md)
 - [Simulation UI Hub FDS](../ui-hub/fds.md)
 - [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)

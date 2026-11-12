@@ -37,7 +37,7 @@ def _stub_physx_schema(monkeypatch):
 
 def _adapter(stage, profile=None):
     profile = profile or MaterialSupplyProfile(
-        material_type="RawPart",
+        material_type="TestCube",
         shape="box",
         dimensions_m=(0.04, 0.04, 0.04),
         mass_kg=0.1,
@@ -63,7 +63,7 @@ def test_material_definition_shape_is_authored_on_generated_rawpart_root(monkeyp
     profile = MaterialSupplyProfile.from_mapping(
         {
             "material_supply": {
-                "material_type": "RawPart",
+                "material_type": "TestCube",
                 "mass_kg": 0.1,
                 "receiving_region_fraction": 0.5,
                 "spawn_height_above_shelf_m": 0.1,
@@ -79,15 +79,15 @@ def test_material_definition_shape_is_authored_on_generated_rawpart_root(monkeyp
         },
         {
             "detector_profiles": {
-                "RawPart": {
-                    "material_id": "RawPart",
+                "TestCube": {
+                    "material_id": "TestCube",
                     "support_region_dimensions_m": [0.6, 0.4],
                 }
             }
         },
         {
-            "RawPart": {
-                "material_id": "RawPart",
+            "TestCube": {
+                "material_id": "TestCube",
                 "shape": "box",
                 "nominal_dimensions_m": [0.04, 0.04, 0.04],
             }
@@ -99,7 +99,7 @@ def test_material_definition_shape_is_authored_on_generated_rawpart_root(monkeyp
     root = stage.GetPrimAtPath(part_path)
 
     assert root.GetAttribute("sf_twin:shape").Get() == "box"
-    assert root.GetAttribute("sf_twin:material_type").Get() == "RawPart"
+    assert root.GetAttribute("sf_twin:material_type").Get() == "TestCube"
 
 
 def _define_transform(stage, path, translation, rotation):
@@ -174,7 +174,7 @@ def test_demonstration_uses_world_pose_under_identity_or_transformed_ancestors(
         [
             {
                 "rawpart_id": "recorded-part",
-                "prim_path": "/recorded/RawPart_0000",
+                "prim_path": "/recorded/Material_0000",
                 "position_xyz": expected_position,
                 "orientation_xyzw": expected_orientation,
                 "dimensions_m": (0.05, 0.04, 0.03),
@@ -184,7 +184,7 @@ def test_demonstration_uses_world_pose_under_identity_or_transformed_ancestors(
     )
 
     demonstration_prim = next(
-        prim for prim in stage.Traverse() if prim.GetName() == "RawPart_0000"
+        prim for prim in stage.Traverse() if prim.GetName() == "Material_0000"
     )
     _assert_pose(
         stage,

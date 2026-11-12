@@ -144,7 +144,7 @@ Legacy ExecuteTask caller는 해당 Goal의 `task_type`과 Terminal `result_code
 
 **좌표·형상·방향 해석:**
 - PICK `target_pose`는 Observation Pose이며 Object Center나 직접 명령할 TCP Grasp Pose가 아니다. Rectangle top-face의 실제 두께(`estimated_object_height_m`)는 상단 높이나 Tray 지지면부터의 높이가 아니며 Orchestration은 원값과 presence를 보존한다.
-- 직사각형 변 길이·Contact Width 범위는 관측/추정 Geometry와 Recipe 정책을 구분한다. `has_observed_rectangle=false`인 L자 기반 RawPart 복원은 양수 Side Length를 Recipe 추정 치수로 전달할 수 있으며 Motion은 flag와 독립적으로 이를 Geometry 입력으로 소비한다. Orientation symmetry `0/1/2/4`는 차례로 관측 불가 / 고유 / 180° 등가 / 90° 등가 의미다. Order 0에서는 target Pose의 Quaternion을 사용하지 않으며, 유효한 복원 Candidate의 Recipe 추정 방향은 기존 symmetry 대표값과 `target_pose`로 전달한다. 추정 Yaw를 관측값으로 기록하지 않는다.
+- 직사각형 변 길이·Contact Width 범위는 관측/추정 Geometry와 Recipe 정책을 구분한다. `has_observed_rectangle=false`인 L자 기반 TestCube 복원은 양수 Side Length를 Recipe 추정 치수로 전달할 수 있으며 Motion은 flag와 독립적으로 이를 Geometry 입력으로 소비한다. Orientation symmetry `0/1/2/4`는 차례로 관측 불가 / 고유 / 180° 등가 / 90° 등가 의미다. Order 0에서는 target Pose의 Quaternion을 사용하지 않으며, 유효한 복원 Candidate의 Recipe 추정 방향은 기존 symmetry 대표값과 `target_pose`로 전달한다. 추정 Yaw를 관측값으로 기록하지 않는다.
 - `PICK_APPROACH_TCP_INSERTION_AXIS`는 RawPart의 Recipe 전달 모드다. 기존 직접 Caller의 planning-frame vertical 모드는 호환성 목적으로 유지한다.
 - PLACE `target_pose`는 `base_link`의 Desired **Object** Pose이며 최종 TCP Pose가 아니다. `fixed`는 명목 방향, `bounded`는 Recipe의 방향 오차 내, `free`는 Object 방향 공정 제한 없음이다. `free`에서 호환성 `orientation_tolerance_rad` 필드는 실행 제한으로 사용하지 않으며 선택적 TCP orientation preference도 적용하지 않는다. Preference는 `base_link` 방향 순위 힌트일 뿐 목표 Object Pose를 바꾸지 않는다.
 - PLACE Approach/Retreat 방향은 Desired Object Pose Frame에서 해석한다. 그 외 접근 거리·정확도·Grasp Width와 Orientation 제약은 전달된 Recipe 공정 요구사항이며 Motion이 Solver 선택·실행 가능성 판정을 소유한다.
@@ -205,7 +205,7 @@ Vision-derived PnP의 Planning은 `has_non_target_occupancy`와 `non_target_occu
 유효한 JointState Callback이 500ms 이상 도착하지 않으면 Motion은 관측 경고를 남기고, 같은 공백이 5초에 도달하면 `MotionObservationError`를 한 번 보고해야 한다. Orchestration은 이벤트의 종류·지속 시간·Execution ID 존재 여부를 보존하고 비Terminal 진단으로 소비해야 한다. 해당 공백만으로 Action의 성공·실패·취소 또는 안전 정지를 확정하지 않는다. 500ms Action Feedback 주기와 1.5초 Feedback 수신 이상은 별도 계약이다.
 
 ### VR-ICD-ORCH-MOT-14 — 추정 Rectangle Geometry 소비
-Orchestration은 `has_observed_rectangle=false`인 부분 형상 RawPart Candidate의 유효 Side Length·Pose 방향·추정 자체 두께를 기존 필드에서 보존해 전달해야 한다. Motion은 presence/provenance flag만으로 이 값을 거부하지 않고 유한성·양수·형상 일관성을 검증해 grasp geometry와 Object Pose에 사용해야 한다. 메시지 필드는 추가하지 않는다.
+Orchestration은 `has_observed_rectangle=false`인 부분 형상 TestCube Candidate의 유효 Side Length·Pose 방향·추정 자체 두께를 기존 필드에서 보존해 전달해야 한다. Motion은 presence/provenance flag만으로 이 값을 거부하지 않고 유한성·양수·형상 일관성을 검증해 grasp geometry와 Object Pose에 사용해야 한다. 메시지 필드는 추가하지 않는다.
 
 ## 6. 계약 의존성과 소비 관계
 - **Motion CDS/FDS:** [정적 책임](../components/motion/cds.md), [Motion movement](../components/motion/fds-motion-execution.md), [Task Execution PnP](../components/task-execution/fds-pnp-execution.md), [Stop 처리](../components/motion/fds-stop-recovery.md)
@@ -213,3 +213,8 @@ Orchestration은 `has_observed_rectangle=false`인 부분 형상 RawPart Candida
 - **공유 계약:** [Safety–Motion](icd-safety-motion.md), [Vision–Orchestration](icd-vision-orchestration.md), [Motion Backend](icd-motion-backend.md)
 
 각 소비자는 자신이 사용하는 공유 의미의 단일 설계 Owner를 참조한다. 구현 경로나 파일 탐색은 이 문서에서 규정하지 않는다.
+
+
+### 자재별 Grasp Transform 전달
+
+컴파일된 미션의 선택적 `object_to_grasp_tcp`는 자재 offset과 Motion 소유 tool axis convention을 합성한 변환이다. Orchestration은 `ExecutePnp`의 `has_material_grasp_transform` 및 `material_grasp_transform`으로 전달하고 Task Execution은 PICK의 `ExecuteTask`와 `MotionConstraints`에 보존한다. Motion은 해당 요청에만 변환을 적용하며 실행 간 공용 Geometry를 변경하지 않는다. 필드가 없는 기존 호출은 설정된 Geometry를 사용한다. PLACE는 실제 파지에서 수락된 Object→TCP 관계를 유지한다.

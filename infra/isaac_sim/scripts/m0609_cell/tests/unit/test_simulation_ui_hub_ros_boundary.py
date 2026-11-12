@@ -14,15 +14,16 @@ import pytest
 import yaml
 
 
-def test_simulation_profile_supplies_handoff_trigger_defaults():
+def test_simulation_profile_supplies_handoff_trigger_defaults(exported_configuration):
     repository = Path(__file__).resolve().parents[6]
     profile_path = (
         repository
         / "ros2_ws/src/bringup/config/operational_profile.yaml"
     )
-    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    from runtime_configuration import load_runtime_configuration
+    profile = load_runtime_configuration(exported_configuration)
 
-    assert profile["simulation"]["external_handoff_material_type"] == "RawPart"
+    assert profile["simulation"]["external_handoff_material_type"] == "TestCube"
     assert profile["simulation"]["external_handoff_default_quantity"] == 1
 
 
@@ -490,10 +491,10 @@ def test_hub_creates_only_approved_clients_and_sends_operator_identities(monkeyp
     _kind, trigger_topic, _qos, trigger_publisher = node.publishers[0]
     assert trigger_topic == "/external/handoff_trigger"
 
-    trigger_id = runtime.publish_handoff_trigger("RawPart", 3, random_seed=42)
+    trigger_id = runtime.publish_handoff_trigger("TestCube", 3, random_seed=42)
     trigger = trigger_publisher.messages[-1]
     assert str(uuid.UUID(bytes=bytes(trigger.delivery_id.uuid))) == trigger_id
-    assert trigger.material_type == "RawPart"
+    assert trigger.material_type == "TestCube"
     assert trigger.quantity == 3
     assert trigger.has_random_seed
     assert trigger.random_seed == 42
@@ -530,15 +531,15 @@ def test_retry_detection_sends_one_vision_request_and_matches_its_snapshot(monke
     runtime = HubRuntime(node=node)
     _make_retry_detection_eligible(runtime)
     client = node.clients["/vision/detect_target"][1]
-    request_id, future = runtime.request_retry_detection("RawPart")
+    request_id, future = runtime.request_retry_detection("TestCube")
 
     assert future is not None
-    assert client.request.target_id == "RawPart"
+    assert client.request.target_id == "TestCube"
     assert client.request.timeout.sec == 30
     assert client.request.timeout.nanosec == 0
     assert len(client.calls) == 1
 
-    repeated_id, repeated_future = runtime.request_retry_detection("RawPart")
+    repeated_id, repeated_future = runtime.request_retry_detection("TestCube")
     assert repeated_id == request_id
     assert repeated_future is None
     assert len(client.calls) == 1
@@ -592,7 +593,7 @@ def test_retry_detection_sends_one_vision_request_and_matches_its_snapshot(monke
         '{"acquisition_id":"acq-retry"}'
     )
     assert runtime._active_execute_goal_id is None
-    assert client.calls[0].target_id == "RawPart"
+    assert client.calls[0].target_id == "TestCube"
     assert (
         len(node.clients["/orchestration/execute_cycle/_action/get_result"][1].calls)
         == 0
@@ -785,7 +786,7 @@ def test_retry_detection_does_not_dispatch_when_owner_state_blocks_it(
         runtime._active_execute_goal_id = "active-mission"
 
     eligible, reason = runtime.retry_detection_eligibility()
-    _request_id, future = runtime.request_retry_detection("RawPart")
+    _request_id, future = runtime.request_retry_detection("TestCube")
 
     assert not eligible
     assert reason_fragment in reason
@@ -870,7 +871,7 @@ def test_retry_detection_does_not_match_terminal_snapshot_from_previous_vision_r
     node = _Node()
     runtime = HubRuntime(node=node)
     _make_retry_detection_eligible(runtime)
-    _request_id, future = runtime.request_retry_detection("RawPart")
+    _request_id, future = runtime.request_retry_detection("TestCube")
     snapshot_callback = next(
         callback
         for _kind, topic, callback, _qos in node.subscriptions
@@ -925,7 +926,7 @@ def test_retry_detection_busy_response_has_no_acquisition_or_snapshot(monkeypatc
     runtime = HubRuntime(node=node)
     _make_retry_detection_eligible(runtime)
     client = node.clients["/vision/detect_target"][1]
-    request_id, future = runtime.request_retry_detection("RawPart")
+    request_id, future = runtime.request_retry_detection("TestCube")
     future._result = types.SimpleNamespace(
         result_code=types.SimpleNamespace(value=8),
         acquisition_id="",
@@ -955,7 +956,7 @@ def test_retry_detection_service_failure_has_no_acquisition_or_snapshot(monkeypa
 
     runtime = HubRuntime(node=_Node())
     _make_retry_detection_eligible(runtime)
-    request_id, future = runtime.request_retry_detection("RawPart")
+    request_id, future = runtime.request_retry_detection("TestCube")
 
     def fail_response():
         raise RuntimeError("service transport failed")
@@ -986,7 +987,7 @@ def test_retry_detection_times_out_at_the_composed_client_bound_and_allows_retry
     monkeypatch.setattr(runtime_module.time, "monotonic", lambda: now[0])
     _make_retry_detection_eligible(runtime)
 
-    first_id, first_future = runtime.request_retry_detection("RawPart")
+    first_id, first_future = runtime.request_retry_detection("TestCube")
     assert first_future is not None
 
     now[0] = 129.999
@@ -1009,7 +1010,7 @@ def test_retry_detection_times_out_at_the_composed_client_bound_and_allows_retry
     assert "30" in result["diagnostic_detail"]
 
     _make_retry_detection_eligible(runtime)
-    second_id, second_future = runtime.request_retry_detection("RawPart")
+    second_id, second_future = runtime.request_retry_detection("TestCube")
     assert second_future is not None
     assert second_id != first_id
     assert len(client.calls) == 2
@@ -1040,7 +1041,7 @@ def test_competing_vision_detection_does_not_extend_retry_detection_deadline(
     now = [100.0]
     monkeypatch.setattr(runtime_module.time, "monotonic", lambda: now[0])
     _make_retry_detection_eligible(runtime)
-    request_id, future = runtime.request_retry_detection("RawPart")
+    request_id, future = runtime.request_retry_detection("TestCube")
     assert future is not None
 
     now[0] = 105.0
@@ -1085,11 +1086,11 @@ def test_late_retry_detection_future_cannot_overwrite_a_new_request(monkeypatch)
     _make_retry_detection_eligible(runtime)
     client = node.clients["/vision/detect_target"][1]
 
-    first_id, first_future = runtime.request_retry_detection("RawPart")
+    first_id, first_future = runtime.request_retry_detection("TestCube")
     now[0] = 60.1
     runtime.spin_once()
     _make_retry_detection_eligible(runtime)
-    second_id, second_future = runtime.request_retry_detection("RawPart")
+    second_id, second_future = runtime.request_retry_detection("TestCube")
     assert second_future is not None
 
     second_future._result = types.SimpleNamespace(
@@ -1149,7 +1150,7 @@ def test_retry_detection_future_callback_after_close_does_not_mutate_runtime(
     node = _Node()
     runtime = HubRuntime(node=node)
     _make_retry_detection_eligible(runtime)
-    _request_id, future = runtime.request_retry_detection("RawPart")
+    _request_id, future = runtime.request_retry_detection("TestCube")
     runtime.close()
     closed_result = runtime.retry_detection_result()
 
@@ -1400,7 +1401,7 @@ def test_hub_projects_latest_owner_readiness_with_compatible_subscription(monkey
                 stamp=types.SimpleNamespace(sec=source_seconds, nanosec=0)
             ),
             delivery_id=types.SimpleNamespace(uuid=list(delivery_id.bytes)),
-            material_type="RawPart",
+            material_type="TestCube",
             quantity=3,
             material_ready=ready,
             valid=True,
@@ -1428,7 +1429,7 @@ def test_hub_projects_accepted_trigger_supply_counts_and_quantity_feedback(monke
     message_fields = {
         "header": types.SimpleNamespace(stamp=types.SimpleNamespace(sec=10, nanosec=0)),
         "delivery_id": types.SimpleNamespace(uuid=list(delivery_id.bytes)),
-        "material_type": "RawPart",
+        "material_type": "TestCube",
         "quantity": 4,
         "has_random_seed": True,
         "random_seed": 91,
@@ -1447,7 +1448,7 @@ def test_hub_projects_accepted_trigger_supply_counts_and_quantity_feedback(monke
     accepted = runtime.observation_text("accepted_handoff", now=now)
     supply = runtime.observation_text("transfer_completion", now=now)
     assert str(delivery_id) in accepted
-    assert "type=RawPart quantity=4 seed=91" in accepted
+    assert "type=TestCube quantity=4 seed=91" in accepted
     assert "supplied=3" in supply
     assert "stabilized=" not in supply
     assert "completed=False valid=True failure=canceled" in supply
@@ -1496,13 +1497,13 @@ def test_hub_projects_accepted_trigger_supply_counts_and_quantity_feedback(monke
 
     scene = types.SimpleNamespace(
         header=types.SimpleNamespace(stamp=types.SimpleNamespace(sec=10, nanosec=0)),
-        target_id="RawPart",
+        target_id="TestCube",
         scene_generation=7,
         status=2,
     )
     callbacks["/vision/scene_stability"](scene)
     assert runtime.observation_text("scene_stability", now=time.monotonic()) == (
-        "vision scene: current · target=RawPart status=STABLE generation=7"
+        "vision scene: current · target=TestCube status=STABLE generation=7"
     )
 
     feedback = types.SimpleNamespace(
@@ -1598,7 +1599,7 @@ def test_selected_sources_release_and_reopen_around_frozen_pnp_result(monkeypatc
             result_code=0,
             valid=True,
             source_rgb_header=header(5.0),
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=False,
             support_region=[],
         )
@@ -1693,7 +1694,7 @@ def test_unavailable_depth_does_not_prevent_rgb_pnp_snapshot(monkeypatch):
             result_code=0,
             valid=True,
             source_rgb_header=header,
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=False,
             support_region=[],
         )
@@ -1793,7 +1794,7 @@ def test_depth_mode_skips_unselected_rgb_annotation_overlay(monkeypatch):
             result_code=0,
             valid=True,
             source_rgb_header=header,
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=False,
             support_region=[],
         )
@@ -2006,7 +2007,7 @@ def test_terminal_source_is_authoritative_over_detecting_source(monkeypatch):
             result_code=6,
             valid=False,
             source_rgb_header=original_source,
-            target_id="RawPart",
+            target_id="TestCube",
         )
     )
     video_callback(
@@ -2031,7 +2032,7 @@ def test_terminal_source_is_authoritative_over_detecting_source(monkeypatch):
                 stamp=types.SimpleNamespace(sec=3, nanosec=83_333_000),
                 frame_id="camera_optical",
             ),
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=False,
             support_region=[],
         )
@@ -2243,7 +2244,7 @@ def test_vision_latches_nearest_compatible_rgb_during_execute_cycle(
                 source_rgb_header=types.SimpleNamespace(
                     stamp=types.SimpleNamespace(sec=0, nanosec=0), frame_id=""
                 ),
-                target_id="RawPart",
+                target_id="TestCube",
             )
         )
         diagnostic_callback(
@@ -2252,7 +2253,7 @@ def test_vision_latches_nearest_compatible_rgb_during_execute_cycle(
                 result_code=6,
                 valid=False,
                 source_rgb_header=source,
-                target_id="RawPart",
+                target_id="TestCube",
             )
         )
     # Operator video may use a nearby same-camera frame. This is 83.333 ms
@@ -2268,7 +2269,7 @@ def test_vision_latches_nearest_compatible_rgb_during_execute_cycle(
             result_code=0,
             valid=True,
             source_rgb_header=source,
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=True,
             support_region=[
                 types.SimpleNamespace(x=0.0, y=0.0),
@@ -2284,7 +2285,7 @@ def test_vision_latches_nearest_compatible_rgb_during_execute_cycle(
     assert runtime.video_mode() == "DETECTION SNAPSHOT · PnP ACTIVE"
     _state, metadata = runtime.vision_display()
     assert metadata is not None
-    assert metadata["target_id"] == "RawPart"
+    assert metadata["target_id"] == "TestCube"
     assert "object_region" not in metadata
     assert "centroid" not in metadata
     assert metadata["support_region"] == [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0)]
@@ -2311,7 +2312,7 @@ def test_vision_latches_nearest_compatible_rgb_during_execute_cycle(
     state, metadata = runtime.vision_display()
     assert state == "TARGET DETECTED"
     assert metadata is not None
-    assert metadata["target_id"] == "RawPart"
+    assert metadata["target_id"] == "TestCube"
     runtime.close()
 
 
@@ -2354,7 +2355,7 @@ def test_stale_terminal_diagnostic_does_not_latch_late_operator_frame(monkeypatc
         )
     )
     diagnostic_callback(
-        types.SimpleNamespace(state=1, source_rgb_header=source, target_id="RawPart")
+        types.SimpleNamespace(state=1, source_rgb_header=source, target_id="TestCube")
     )
     diagnostic_callback(
         types.SimpleNamespace(
@@ -2362,7 +2363,7 @@ def test_stale_terminal_diagnostic_does_not_latch_late_operator_frame(monkeypatc
             result_code=0,
             valid=True,
             source_rgb_header=source,
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=False,
             support_region=[],
         )
@@ -2413,7 +2414,7 @@ def test_successful_terminal_annotation_is_presented_without_execute_cycle(
                 result_code=6,
                 valid=False,
                 source_rgb_header=source,
-                target_id="RawPart",
+                target_id="TestCube",
             )
         )
     callbacks["/camera/color/image_raw"](
@@ -2435,7 +2436,7 @@ def test_successful_terminal_annotation_is_presented_without_execute_cycle(
             result_code=0,
             valid=True,
             source_rgb_header=source,
-            target_id="RawPart",
+            target_id="TestCube",
             support_region_valid=False,
         )
     )
@@ -2447,7 +2448,7 @@ def test_successful_terminal_annotation_is_presented_without_execute_cycle(
     assert runtime._detection_snapshot is None
     assert state == "TARGET DETECTED"
     assert annotation == {
-        "target_id": "RawPart",
+        "target_id": "TestCube",
         "support_region": [],
     }
     now[0] += 1.1
@@ -2506,7 +2507,7 @@ def test_vision_annotation_requires_bounded_same_camera_operator_frame(
                 result_code=6,
                 valid=False,
                 source_rgb_header=source,
-                target_id="RawPart",
+                target_id="TestCube",
             )
         )
     video_callback(
@@ -2530,7 +2531,7 @@ def test_vision_annotation_requires_bounded_same_camera_operator_frame(
         result_code=0,
         valid=True,
         source_rgb_header=source,
-        target_id="RawPart",
+        target_id="TestCube",
         support_region_valid=True,
         support_region=[types.SimpleNamespace(x=1.0, y=2.0)],
     )
@@ -2586,7 +2587,7 @@ def test_invalid_or_non_success_terminal_does_not_create_annotation(
                 stamp=types.SimpleNamespace(sec=2, nanosec=0),
                 frame_id="camera_optical",
             ),
-            target_id="RawPart",
+            target_id="TestCube",
         )
     )
     assert runtime._detection_snapshot is None
@@ -2673,7 +2674,7 @@ def test_hub_marks_missing_owner_services_unavailable_without_faking_outcomes(
 
     node = _Node()
     runtime = HubRuntime(node=node)
-    trigger_id = runtime.publish_handoff_trigger("RawPart", 2)
+    trigger_id = runtime.publish_handoff_trigger("TestCube", 2)
     assert trigger_id
     assert len(node.publishers[0][3].messages) == 1
     assert node.publishers[0][3].messages[0].has_random_seed is False
@@ -2686,6 +2687,7 @@ def test_hub_marks_missing_owner_services_unavailable_without_faking_outcomes(
 
 def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
     _install_ros_types(monkeypatch)
+    monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     collapsible_sections = []
     observation_calls = []
 
@@ -2796,7 +2798,11 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
     ui.Button = lambda text, **kwargs: _Widget(text, **kwargs)
     ui.StringField = lambda **kwargs: _Widget(**kwargs)
     ui.IntField = lambda **kwargs: _Widget(**kwargs)
-    ui.ComboBox = lambda *_args, **kwargs: _Widget(**kwargs)
+    def _combo(index, *_items, **kwargs):
+        widget = _Widget(**kwargs)
+        widget.model.set_value(index)
+        return widget
+    ui.ComboBox = _combo
     ui.ImageWithProvider = lambda *_args, **_kwargs: _Widget()
     ui.ByteImageProvider = _ImageProvider
     omni = types.ModuleType("omni")
@@ -2959,7 +2965,16 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
     assert not hasattr(extension, "_simulation_buttons")
     extension._handoff_quantity_field.model.set_value(2)
     extension._publish_handoff_trigger()
-    assert extension.runtime.last_trigger == ("RawPart", 2, None)
+    assert extension.runtime.last_trigger == ("TestCube", 2, None)
+    assert set(extension._handoff_material_types) == {
+        "TestCube", "AL_BILLET_060_040_030", "STEEL_BLANK_070_050_040", "AL_PLATE_080_060_020",
+    }
+    extension._handoff_material_type_field.model.set_value(
+        extension._handoff_material_types.index("AL_PLATE_080_060_020")
+    )
+    extension._publish_handoff_trigger()
+    assert extension.runtime.last_trigger == ("AL_PLATE_080_060_020", 2, None)
+
     assert not hasattr(extension, "_handoff_seed_field")
     assert (
         "trigger stimulus published" in extension._handoff_trigger_status.text.lower()
@@ -3394,13 +3409,13 @@ def test_sidecar_publishes_handoff_trigger_through_ros_process():
         "delivery_id": "delivery-123"
     }
 
-    delivery_id = proxy.publish_handoff_trigger("RawPart", 2, random_seed=7)
+    delivery_id = proxy.publish_handoff_trigger("TestCube", 2, random_seed=7)
 
     assert delivery_id == "delivery-123"
     assert calls == [
         {
             "op": "publish_handoff_trigger",
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 2,
             "random_seed": 7,
         }
@@ -3707,9 +3722,9 @@ def test_retry_detection_rpc_reaches_existing_runtime_request_method(monkeypatch
     proxy._last_poll_at = 0.0
     try:
         assert json.loads(reader.readline()) == {"ready": True}
-        request_id, _future = proxy.request_retry_detection("RawPart")
+        request_id, _future = proxy.request_retry_detection("TestCube")
         assert request_id == "request-1"
-        assert proxy.retry_detection_result()["target_id"] == "RawPart"
+        assert proxy.retry_detection_result()["target_id"] == "TestCube"
         calibration_id, _future = proxy.request_vision_calibration()
         assert calibration_id == "calibration-request-1"
         assert proxy.vision_calibration_result()["state"] == "pending"
@@ -3783,7 +3798,7 @@ def test_extension_retry_detection_requires_dev_setting_running_timeline_and_eli
     extension = SimulationUIHubExtension.__new__(SimulationUIHubExtension)
     extension.runtime = Runtime()
     extension._retry_detection_enabled = False
-    extension._retry_detection_target_id = "RawPart"
+    extension._retry_detection_target_id = "TestCube"
     extension._retry_detection_button = types.SimpleNamespace(enabled=False)
     extension._retry_detection_status = types.SimpleNamespace(text="")
 
@@ -3801,7 +3816,7 @@ def test_extension_retry_detection_requires_dev_setting_running_timeline_and_eli
     extension._refresh_retry_detection()
     assert extension._retry_detection_button.enabled
     extension._request_retry_detection()
-    assert extension.runtime.requests == ["RawPart"]
+    assert extension.runtime.requests == ["TestCube"]
 
 
 def test_extension_vision_calibration_button_disables_while_pending_and_shows_result():

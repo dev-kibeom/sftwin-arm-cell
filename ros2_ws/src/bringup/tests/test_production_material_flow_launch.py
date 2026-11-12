@@ -3,6 +3,7 @@
 import time
 import unittest
 from pathlib import Path
+from arm_cell_bringup.runtime import mission_directory
 
 import launch
 import launch_testing
@@ -19,7 +20,7 @@ from arm_cell_interfaces.msg import (
 from rcl_interfaces.msg import Log
 
 
-MISSION_TARGET = "RawPart"
+MISSION_TARGET = "TestCube"
 
 
 def generate_test_description():
@@ -54,10 +55,8 @@ def generate_test_description():
                     parameters=[
                         {
                             "mission_target_id": MISSION_TARGET,
-                            "recipe_directory": str(
-                                Path(__file__).resolve().parents[1]
-                                / "config"
-                                / "recipes"
+                            "recipe_directory": mission_directory(
+                                Path(__file__).resolve().parents[1] / "config" / "missions"
                             ),
                         }
                     ],
@@ -144,7 +143,7 @@ class TestProductionMaterialFlow(unittest.TestCase):
         trigger.header.stamp = self.node.get_clock().now().to_msg()
         trigger.delivery_id.uuid[0] = 77
         trigger.quantity = 2
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.has_random_seed = True
         trigger.random_seed = 123
         trigger.valid = True

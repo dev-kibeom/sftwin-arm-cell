@@ -217,37 +217,37 @@ RecipeLoadResult RecipeRepository::load(const std::string & target_id) const
     double pick_grasp_position_tolerance_m = 0.0;
     double pick_grasp_orientation_tolerance_rad = 0.0;
     const auto & pick = object(required(document, "pick"), "pick");
-      pick_approach_distance_m = number_value(
-        required(pick, "approach_distance_m"), "pick.approach_distance_m");
-      pick_grasp_backoff_m = number_value(
-        required(pick, "grasp_backoff_m"), "pick.grasp_backoff_m");
-      pick_grasp_position_tolerance_m = number_value(
-        required(pick, "grasp_position_tolerance_m"), "pick.grasp_position_tolerance_m");
-      pick_grasp_orientation_tolerance_rad = number_value(
-        required(pick, "grasp_orientation_tolerance_rad"),
-        "pick.grasp_orientation_tolerance_rad");
-      if (!std::isfinite(pick_grasp_backoff_m) || pick_grasp_backoff_m < 0.0 ||
-        !std::isfinite(pick_approach_distance_m) || pick_approach_distance_m <= 0.0 ||
-        !std::isfinite(pick_grasp_position_tolerance_m) ||
-        pick_grasp_position_tolerance_m <= 0.0 ||
-        !std::isfinite(pick_grasp_orientation_tolerance_rad) ||
-        pick_grasp_orientation_tolerance_rad <= 0.0 ||
-        pick_grasp_orientation_tolerance_rad > 3.14159265358979323846)
-      {
-        throw RecipeError(RecipeDiagnosticReason::INVALID_TOLERANCE, "pick grasp envelope");
+    pick_approach_distance_m = number_value(
+      required(pick, "approach_distance_m"), "pick.approach_distance_m");
+    pick_grasp_backoff_m = number_value(
+      required(pick, "grasp_backoff_m"), "pick.grasp_backoff_m");
+    pick_grasp_position_tolerance_m = number_value(
+      required(pick, "grasp_position_tolerance_m"), "pick.grasp_position_tolerance_m");
+    pick_grasp_orientation_tolerance_rad = number_value(
+      required(pick, "grasp_orientation_tolerance_rad"),
+      "pick.grasp_orientation_tolerance_rad");
+    if (!std::isfinite(pick_grasp_backoff_m) || pick_grasp_backoff_m < 0.0 ||
+      !std::isfinite(pick_approach_distance_m) || pick_approach_distance_m <= 0.0 ||
+      !std::isfinite(pick_grasp_position_tolerance_m) ||
+      pick_grasp_position_tolerance_m <= 0.0 ||
+      !std::isfinite(pick_grasp_orientation_tolerance_rad) ||
+      pick_grasp_orientation_tolerance_rad <= 0.0 ||
+      pick_grasp_orientation_tolerance_rad > 3.14159265358979323846)
+    {
+      throw RecipeError(RecipeDiagnosticReason::INVALID_TOLERANCE, "pick grasp envelope");
+    }
+    if (pick.contains("approach_axis")) {
+      const auto axis = string_value(pick.at("approach_axis"), "pick.approach_axis");
+      if (axis == "tcp_insertion_axis") {
+        pick_approach_axis = PickApproachAxis::TCP_INSERTION_AXIS;
+      } else if (axis == "planning_frame_vertical") {
+        pick_approach_axis = PickApproachAxis::PLANNING_FRAME_VERTICAL;
+      } else {
+        throw RecipeError(
+                RecipeDiagnosticReason::INVALID_PICK_APPROACH_AXIS,
+                "pick.approach_axis");
       }
-      if (pick.contains("approach_axis")) {
-        const auto axis = string_value(pick.at("approach_axis"), "pick.approach_axis");
-        if (axis == "tcp_insertion_axis") {
-          pick_approach_axis = PickApproachAxis::TCP_INSERTION_AXIS;
-        } else if (axis == "planning_frame_vertical") {
-          pick_approach_axis = PickApproachAxis::PLANNING_FRAME_VERTICAL;
-        } else {
-          throw RecipeError(
-                  RecipeDiagnosticReason::INVALID_PICK_APPROACH_AXIS,
-                  "pick.approach_axis");
-        }
-      }
+    }
     const auto & place = object(required(document, "place"), "place");
     const auto orientation_constraint_token = string_value(
       required(place, "orientation_constraint"), "orientation_constraint");
@@ -366,12 +366,35 @@ RecipeLoadResult RecipeRepository::load(const std::string & target_id) const
                   RecipeDiagnosticReason::INVALID_VISION_ALGORITHM, "vision.algorithm");
         }
         recipe.vision_algorithm = vision.at("algorithm").get<std::string>();
-        if (recipe.vision_algorithm != "cuboid_top_face")
-        {
+        if (recipe.vision_algorithm != "cuboid_top_face") {
           throw RecipeError(
                   RecipeDiagnosticReason::INVALID_VISION_ALGORITHM, "vision.algorithm");
         }
       }
+    }
+    if (document.contains("object_to_grasp_tcp")) {
+      const auto & transform = object(document.at("object_to_grasp_tcp"), "object_to_grasp_tcp");
+      const auto translation =
+        array_value(required(transform, "translation_m"), 3, "translation_m");
+      const auto quaternion = array_value(
+        required(
+          transform,
+          "quaternion_xyzw"), 4, "quaternion_xyzw");
+      double norm = 0.0;
+      for (const auto value : quaternion) {
+        norm += value * value;
+      }
+      if (!finite(translation) || !finite(quaternion) || std::abs(norm - 1.0) > 1e-6) {
+        throw RecipeError(
+                RecipeDiagnosticReason::TYPE_MISMATCH,
+                "invalid material grasp transform");
+      }
+      recipe.has_material_grasp_transform = true;
+      auto & t = recipe.material_grasp_transform;
+      t.translation.x = translation[0]; t.translation.y = translation[1];
+      t.translation.z = translation[2];
+      t.rotation.x = quaternion[0]; t.rotation.y = quaternion[1];
+      t.rotation.z = quaternion[2]; t.rotation.w = quaternion[3];
     }
     recipe.grasp_width_min_mm = static_cast<float>(min_width);
     recipe.grasp_width_max_mm = static_cast<float>(max_width);

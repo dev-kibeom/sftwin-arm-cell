@@ -31,10 +31,10 @@ def _handoff():
         "schema_version": "wu14-pnp-registration/v2",
         "status": "FIXTURE_READY_FOR_REGISTRATION",
         "run_id": "run-1",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "request": {
             "run_id": "run-1",
-            "target_id": "cube_profile",
+            "target_id": "TestCube",
             "pose": {
                 "frame_id": "base_link",
                 "x": 0.2,
@@ -84,7 +84,7 @@ def test_request_mapping_preserves_context_pose_frame_and_ttl(monkeypatch):
     handoff["fixture"]["dimensions_m"] = [0.061, 0.052, 0.093]
     request = module.request_from_handoff(handoff, Request)
 
-    assert request.target_id == "cube_profile"
+    assert request.target_id == "TestCube"
     assert request.run_id == "run-1"
     assert list(request.dimensions_m) == handoff["fixture"]["dimensions_m"]
     assert request.pose.header.frame_id == "base_link"
@@ -180,5 +180,5 @@ def test_accepted_registration_state_is_written_atomically_for_runtime_bridge(tm
     written = module.write_planning_scene_state(_handoff(), destination)
 
     assert written == destination
-    assert json.loads(destination.read_text())["target_id"] == "cube_profile"
+    assert json.loads(destination.read_text())["target_id"] == "TestCube"
     assert not list(tmp_path.glob("*.tmp"))

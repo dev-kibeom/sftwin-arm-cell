@@ -16,7 +16,7 @@ sequenceDiagram
     participant Orch as Orchestration
     participant Motion
     participant Grip as Isaac Gripper Adapter
-    Fixture->>Fixture: Seed로 검증용 RawPart 생성·초기 자세 고정
+    Fixture->>Fixture: Seed로 검증용 TestCube 생성·초기 자세 고정
     Fixture->>Fixed: Top Surface Reference 등록
     Fixed-->>Fixture: 수락 Receipt
     Fixture->>Orch: 검증 Mission 실행
@@ -135,7 +135,7 @@ Fixture는 적격 Object마다 Motion이 선택한 Grasp Candidate의 **양수 `
 
 Adapter는 TCP 주위의 실제 Scene Geometry를 평가해야 한다. `target_id`·설정 Prim Path·Vision Result Identity로 멀리 있는 Prim을 검색해서는 안 된다. Production·Validation의 공통 계약은 [Task Execution PnP FDS](../task-execution/fds-pnp-execution.md)가 소유한다. Motion은 선택 TCP Grasp Pose·명시적 Reference Frame·Orientation Class·Geometry에서 산출한 예상 접촉 폭을 제공한다. Adapter는 공통 Frame에서 실제 TCP와 선택 Pose를 비교하며 Object Local Z·공칭 높이·World Up으로 Capture Reference를 재구성하지 않는다.
 
-RawPart에서는 Object의 유한하고 비퇴화·직교인 Box Frame을 검증한다. Box Axis 중 선택 예상 접촉 폭과 기존 Width Tolerance 내에서 일치하는 Geometric Span을 식별하고, 실제 TCP Closing Axis가 이에 정렬되는지 검사한다. Axis 부호 반전은 동등하며 Side Face도 포함한다. 관측된 Orientation Symmetry는 본래 의미를 유지할 뿐 선택 Pose·Contact Geometry 검사를 생략하게 하지 않는다. 폭 불일치는 Contact-width Tolerance, 무효 Box Geometry는 Invalid RawPart Orientation, Closing Axis 불일치는 Motion FDS의 Orientation Tolerance로 거부한다.
+RawPart에서는 Object의 유한하고 비퇴화·직교인 Box Frame을 검증한다. Box Axis 중 선택 예상 접촉 폭과 기존 Width Tolerance 내에서 일치하는 Geometric Span을 식별하고, 실제 TCP Closing Axis가 이에 정렬되는지 검사한다. Axis 부호 반전은 동등하며 Side Face도 포함한다. 관측된 Orientation Symmetry는 본래 의미를 유지할 뿐 선택 Pose·Contact Geometry 검사를 생략하게 하지 않는다. 폭 불일치는 Contact-width Tolerance, 무효 Box Geometry는 Invalid TestCube Orientation, Closing Axis 불일치는 Motion FDS의 Orientation Tolerance로 거부한다.
 
 World Vertical이나 Top-down Approach는 Production·Validation 어디에서도 Capture의 필수 조건이 아니다. 검증 Recipe는 Top-down을 선택할 수 있지만 Capture는 **실제 Motion이 선택한 Pose**를 확인하며 Top Normal Approach를 별도 조건으로 추가하지 않는다. Profile별 Orientation Tolerance는 Production Demo **40°**, Validation **10°**로 유지한다. 임의 Orientation Error를 허용한다는 뜻이 아니다.
 
@@ -250,4 +250,4 @@ GO_HOME이 PLACE 이후에 실행되고 측정된 Joint가 선언된 Home Tolera
 
 ### Motion Capture Reference 좌표계 계약
 
-Capture Reference는 Motion이 선택한 TCP Pose와 명시적 `frame_id`를 함께 전달한다. Position은 Meter, Quaternion 순서는 `xyzw`다. Isaac은 Robot Root 아래 Named Frame을 해석하고 해당 Frame의 Stage World Transform을 사용해 Expected Pose를 변환한 뒤 실제 TCP Stage World Pose와 비교한다. Frame 누락·무효 Transform·변환 실패는 Capture를 거부한다. Frame 누락을 Stage World로 간주하거나 다른 Frame으로 대체해서는 안 된다. Production·Validation 모두 기존 Position/Orientation Tolerance 및 RawPart Shape/Contact Width 검사를 유지하며 초기 Fixture Pose와 Test Approach Direction이 Motion 선택 Capture Reference를 대체하지 않는다.
+Capture Reference는 Motion이 선택한 TCP Pose와 명시적 `frame_id`를 함께 전달한다. Position은 Meter, Quaternion 순서는 `xyzw`다. Isaac은 Robot Root 아래 Named Frame을 해석하고 해당 Frame의 Stage World Transform을 사용해 Expected Pose를 변환한 뒤 실제 TCP Stage World Pose와 비교한다. Frame 누락·무효 Transform·변환 실패는 Capture를 거부한다. Frame 누락을 Stage World로 간주하거나 다른 Frame으로 대체해서는 안 된다. Production·Validation 모두 기존 Position/Orientation Tolerance 및 TestCube Shape/Contact Width 검사를 유지하며 초기 Fixture Pose와 Test Approach Direction이 Motion 선택 Capture Reference를 대체하지 않는다.

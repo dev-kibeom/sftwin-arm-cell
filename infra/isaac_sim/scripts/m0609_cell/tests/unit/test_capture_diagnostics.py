@@ -201,7 +201,7 @@ def test_physx_observer_reads_single_rigid_prim_dynamic_state(monkeypatch):
 
     class _SingleRigidPrim:
         def __init__(self, prim_path, reset_xform_properties):
-            assert prim_path in ("/World/TCP", "/World/RawPart")
+            assert prim_path in ("/World/TCP", "/World/TestCube")
             assert reset_xform_properties is False
 
         def initialize(self):
@@ -228,8 +228,8 @@ def test_physx_observer_reads_single_rigid_prim_dynamic_state(monkeypatch):
         monkeypatch.setitem(sys.modules, name, module)
 
     observer = IsaacPhysXObserver()
-    observer.prepare(["/World/TCP", "/World/RawPart"])
-    result = observer.observe_pair("/World/TCP", "/World/RawPart")
+    observer.prepare(["/World/TCP", "/World/TestCube"])
+    result = observer.observe_pair("/World/TCP", "/World/TestCube")
 
     assert result["source"] == "isaacsim.core.prims.SingleRigidPrim_physx"
     assert result["tcp"]["status"] == "observed", result
@@ -255,7 +255,7 @@ def test_successful_capture_writes_goal_correlated_observation_decision_outcome(
         def query(self):
             return True, [
                 CaptureCandidate(
-                    "/World/RawPart",
+                    "/World/TestCube",
                     True,
                     (0.0, 0.0, 0.0),
                     0.001,
@@ -320,7 +320,7 @@ def test_successful_capture_writes_goal_correlated_observation_decision_outcome(
         and event["payload"].get("policy") == "CapturePolicy.evaluate"
     )
     assert capture_decision["decision"] == "capture_eligible"
-    assert capture_decision["selected_candidate"] == "/World/RawPart"
+    assert capture_decision["selected_candidate"] == "/World/TestCube"
     assert any(
         event["payload"].get("phase") == "attach_immediately_before_joint_creation"
         and event["payload"]["pair"]["status"] == "unavailable"
@@ -350,7 +350,7 @@ def test_session_records_four_distinct_physx_and_stage_step_observations():
     class _Manager:
         tcp_path = "/World/TCP"
         candidate_source = _CandidateSource()
-        capture_diagnostic_target_path = "/World/RawPart"
+        capture_diagnostic_target_path = "/World/TestCube"
 
         def __init__(self):
             self.capture_diagnostic_record = _Record()
@@ -423,7 +423,7 @@ def test_failed_capture_record_retains_goal_uuid_and_unknown_reason(tmp_path):
         def query(self):
             return True, [
                 CaptureCandidate(
-                    "/World/RawPart", True, (0.06, 0.0, 0.0), 0.02, 20.0, 30.0
+                    "/World/TestCube", True, (0.06, 0.0, 0.0), 0.02, 20.0, 30.0
                 )
             ]
 
@@ -482,7 +482,7 @@ def test_capture_rejection_warns_once_after_close_finishes_and_matches_policy_re
         def query(self):
             return True, [
                 CaptureCandidate(
-                    "/World/RawPart", True, (0.06, 0.0, 0.0), 0.02, 20.0, 12.0
+                    "/World/TestCube", True, (0.06, 0.0, 0.0), 0.02, 20.0, 12.0
                 )
             ]
 

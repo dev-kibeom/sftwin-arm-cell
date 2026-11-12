@@ -13,7 +13,7 @@ namespace
 arm_cell_vision::FixedTargetRegistration valid_registration()
 {
   arm_cell_vision::FixedTargetRegistration registration;
-  registration.target_id = "cube_profile";
+  registration.target_id = "TestCube";
   registration.run_id = "run-1";
   registration.dimensions_m = {0.061, 0.052, 0.093};
   registration.pose.header.frame_id = "base_link";
@@ -29,7 +29,7 @@ arm_cell_vision::FixedTargetRegistration valid_registration()
 arm_cell_vision::FixedTargetRegistry make_registry(int64_t * now)
 {
   return arm_cell_vision::FixedTargetRegistry(
-    "cube_profile",
+    "TestCube",
     [now]() {return *now;});
 }
 
@@ -60,13 +60,13 @@ TEST(FixedTargetRegistry, AcceptsValidRegistrationAndConsumesItOnce)
   EXPECT_EQ(accepted.receipt_sequence, 1U);
   EXPECT_EQ(accepted.receipt_time_ns, now);
 
-  const auto result = registry.consume("cube_profile", now + 1);
+  const auto result = registry.consume("TestCube", now + 1);
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->dimensions_m, valid_registration().dimensions_m);
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->run_id, "run-1");
   EXPECT_EQ(result->orientation_symmetry_order, 1U);
-  EXPECT_FALSE(registry.consume("cube_profile", now + 2).has_value());
+  EXPECT_FALSE(registry.consume("TestCube", now + 2).has_value());
 }
 
 TEST(FixedTargetRegistry, RejectsWrongFrameNonFiniteAndZeroNormOrientation)
@@ -133,7 +133,7 @@ TEST(FixedTargetRegistry, SameRunReplacesUnconsumedRecord)
   replacement.pose.pose.position.x = 0.8;
   ASSERT_TRUE(registry.register_target(replacement).accepted);
 
-  const auto result = registry.consume("cube_profile", now + 1);
+  const auto result = registry.consume("TestCube", now + 1);
   ASSERT_TRUE(result.has_value());
   EXPECT_DOUBLE_EQ(result->pose.pose.position.x, 0.8);
   EXPECT_EQ(result->receipt_sequence, 2U);
@@ -149,7 +149,7 @@ TEST(FixedTargetRegistry, DifferentRunCannotReplaceUntilConsumedOrExpired)
   other_run.run_id = "run-2";
   EXPECT_FALSE(registry.register_target(other_run).accepted);
 
-  ASSERT_TRUE(registry.consume("cube_profile", now + 1).has_value());
+  ASSERT_TRUE(registry.consume("TestCube", now + 1).has_value());
   EXPECT_TRUE(registry.register_target(other_run).accepted);
 }
 
@@ -162,7 +162,7 @@ TEST(FixedTargetRegistry, ExpiredRegistrationIsFailClosedAndAllowsNextRun)
   registration.ttl_ns = 10;
   ASSERT_TRUE(registry.register_target(registration).accepted);
   now = 111;
-  EXPECT_FALSE(registry.consume("cube_profile", now).has_value());
+  EXPECT_FALSE(registry.consume("TestCube", now).has_value());
 
   auto next_run = valid_registration();
   next_run.run_id = "run-2";

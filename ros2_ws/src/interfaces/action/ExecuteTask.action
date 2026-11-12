@@ -36,6 +36,9 @@ bool has_estimated_object_height
 bool has_observed_rectangle
 float32 rectangle_long_side_m
 float32 rectangle_short_side_m
+# Optional material-specific grasp transform, already composed with Motion tool axes.
+bool has_material_grasp_transform
+geometry_msgs/Transform material_grasp_transform
 float32 grasp_width_min_mm
 float32 grasp_width_max_mm
 # PLACE process envelope for the Desired Object Pose. Zero permits only the

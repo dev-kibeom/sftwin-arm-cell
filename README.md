@@ -22,7 +22,7 @@ Isaac Sim은 로봇과 센서가 동작하는 시뮬레이션 환경을 제공�
 - canonical joint state, 시뮬레이션 시간, TF, RGB-D 카메라 입력을 연결하는 ROS 통합
 - MoveIt 2 기반 로봇 계획과 제한 범위를 명시한 planning scene 프로파일
 - Vision은 관측 Geometry와 후보를 제공하고 Task Execution은 후보 순서를 정하며 Motion은 선택 후보를 제외한 요청별 planning occupancy를 구성하는 책임 분리
-- 깊이맵 기반 Geometry-first Vision: 공장 RawPart 작업의 직육면체 형상에 특화해 별도 구현한 `cuboid_top_face` 알고리즘으로, 관측된 직교 L자 상판 윤곽과 프로파일 치수를 사용해 완전·부분 관측의 형상·자세 가설을 평가·복원합니다. Detector profile과 source-frame 진단 정보도 제공합니다.
+- 깊이맵 기반 Geometry-first Vision: 공장 TestCube 작업의 직육면체 형상에 특화해 별도 구현한 `cuboid_top_face` 알고리즘으로, 관측된 직교 L자 상판 윤곽과 프로파일 치수를 사용해 완전·부분 관측의 형상·자세 가설을 평가·복원합니다. Detector profile과 source-frame 진단 정보도 제공합니다.
 - backend-neutral ROS 인터페이스를 통한 PICK, PLACE, GO_HOME 및 복구 모션 작업
 - 재사용 가능한 Behavior Tree Action 기반 작업 실행, PICK 후보 순서 및 Occupancy 제외 휴리스틱
 - fail-closed 시작, 모션 capability, Motion에 직접 전달하는 정지 요청을 지원하는 소프트웨어 Safety 감독
@@ -160,6 +160,24 @@ ros2 run arm_cell_bringup export_runtime_configuration \
 ```
 
 검증 entrypoint는 이 파일을 기본으로 읽으며, `SFTWIN_PNP_PROFILE`에 다른 export 파일의 절대 경로를 지정할 수 있습니다. 상대 설정 경로는 선언 파일 기준, `package://`는 해당 ROS 패키지 기준, `project://`는 프로젝트 기준으로 해석합니다.
+
+자재는 `bringup/config/materials/*.yaml`에서 관리합니다. `TestCube`(70×70×80 mm), 알루미늄 빌릿(60×40×30 mm), 철강 블랭크(70×50×40 mm), 알루미늄 판재(80×60×20 mm)를 제공합니다. UI Hub의 Material type 목록은 export에 포함된 자재에서 생성되며, Random Drop 한 요청은 선택한 한 종류만 공급합니다. 새 cuboid는 자재 정의와 미션을 추가하고 runtime 설정을 다시 export하면 목록에 반영됩니다.
+
+판재의 일반 파지는 60 mm 방향으로 제한합니다. 80 mm 방향을 명시적으로 시험하거나 pick offset을 조정할 때는 별도의 검증 export를 사용합니다.
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/pnp_validation_profile.yaml \
+  --material AL_PLATE_080_060_020 --grasp-width-mm 80 \
+  --output .run_records/pnp_runtime_configuration.json
+ros2 launch arm_cell_bringup arm_cell_pnp_validation.launch.py \
+  profile:="$(pwd)/.run_records/pnp_runtime_configuration.json"
+```
+
+`--pick-offset-z-m`은 자재 중심 기준 Z offset의 시험값입니다. 이 옵션은 원본 YAML을 변경하지 않습니다. Isaac에는 같은 export를 `SFTWIN_PNP_PROFILE`로 지정합니다. 신규 자재 offset은 기존 2.5 mm 상판 접촉 깊이에 기반한 초깃값이며 `pending_live_validation`으로 표시합니다. 실제 파지 결과를 확인한 뒤 자재 정의에 보정값과 근거를 반영해야 합니다.
+
+Isaac에서 검증 fixture를 생성한 뒤 출력된 등록 manifest로 `ros2 run arm_cell_bringup validate_material_grasp --profile <export.json> --manifest <manifest.json> --result <result.json>`을 실행하면 Fixed Vision과 기존 Task Execution API로 한 번의 PnP를 수행하고 결과를 기록합니다. 원본 자재 YAML은 자동 변경하지 않습니다.
+
 
 ### 방법 1: 호스트에서 ROS 2 빌드 및 실행
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "recipe_id": "rawpart-placement-v1",
-  "target_id": "RawPart",
+  "target_id": "TestCube",
   "vision": {
     "_comment": "algorithm: cuboid_top_face. 생략 시 Cuboid를 사용하며 검출 실패 시 자동 전환 없음.",
     "algorithm": "cuboid_top_face"

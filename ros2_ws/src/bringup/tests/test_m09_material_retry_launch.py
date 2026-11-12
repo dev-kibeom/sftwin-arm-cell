@@ -86,7 +86,7 @@ class TestM09MaterialRetry(unittest.TestCase):
         trigger.header.stamp = self.node.get_clock().now().to_msg()
         trigger.delivery_id.uuid[0] = identity_byte
         trigger.quantity = 1
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.valid = True
         self.trigger_publisher.publish(trigger)
         return trigger
@@ -113,7 +113,7 @@ class TestM09MaterialRetry(unittest.TestCase):
         failure = TransferCompletion()
         failure.header.stamp = self.node.get_clock().now().to_msg()
         failure.delivery_id = failed_id
-        failure.material_type = "RawPart"
+        failure.material_type = "TestCube"
         failure.requested_quantity = 1
         failure.supplied_quantity = 0
         failure.completed = False
@@ -149,7 +149,7 @@ class TestM09MaterialRetry(unittest.TestCase):
         completion = TransferCompletion()
         completion.header.stamp = self.node.get_clock().now().to_msg()
         completion.delivery_id = retried_id
-        completion.material_type = "RawPart"
+        completion.material_type = "TestCube"
         completion.requested_quantity = 1
         completion.supplied_quantity = 1
         completion.completed = True

@@ -196,7 +196,7 @@ bool inside_fiducial_footprint(const DetectorProfile & profile, double x, double
 bool valid_profile(const DetectorProfile & profile, bool calibration_requested)
 {
   const auto dictionary = resolve_fiducial_dictionary(profile.fiducial_dictionary);
-  if (profile.target_id != "RawPart" || profile.material_id != profile.target_id ||
+  if (profile.target_id != "TestCube" || profile.material_id != profile.target_id ||
     profile.shape != "box" ||
     (calibration_requested && (dictionary.empty() || profile.fiducial_marker_id < 0 ||
     profile.fiducial_marker_id >= dictionary->bytesList.rows ||
@@ -867,7 +867,7 @@ DetectionResult DetectTargetProcessor::process_profile(
     !valid_profile(profile, calibration_only))
   {
     return failure(
-      ResultCode::DETECT_RESULT_INVALID_RESULT, "invalid RawPart profile config",
+      ResultCode::DETECT_RESULT_INVALID_RESULT, "invalid TestCube profile config",
       "profile_resolution");
   }
   if (!calibration_only && !support_calibration_snapshot().ready) {
@@ -1095,7 +1095,7 @@ DetectionResult DetectTargetProcessor::process_profile(
   if (calibration_only) {
     return failure(
       ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET,
-      "support calibration ready; RawPart detection requires active acquisition",
+      "support calibration ready; TestCube detection requires active acquisition",
       "calibration_only");
   }
 
@@ -1230,12 +1230,12 @@ DetectionResult DetectTargetProcessor::process_profile(
     if (observation_coverage->valid_depth_fraction < profile.minimum_observation_coverage) {
       return with_trace(
         ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET,
-        "insufficient valid depth coverage in RawPart workspace");
+        "insufficient valid depth coverage in TestCube workspace");
     }
     if (rejected_candidates.count("insufficient_evidence") != 0) {
       auto result = with_trace(
         ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET,
-        "RawPart candidate geometry has insufficient evidence");
+        "TestCube candidate geometry has insufficient evidence");
       result.processing_stage = "candidate_profile_validation";
       result.rawpart_candidate_diagnostics = std::move(candidate_diagnostics);
       return result;
@@ -1243,15 +1243,15 @@ DetectionResult DetectTargetProcessor::process_profile(
     if (rejected_candidates.count("workspace_roi_exceeded") != 0) {
       return with_trace(
         ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET,
-        "RawPart Rectangle exceeds the configured Workspace ROI");
+        "TestCube Rectangle exceeds the configured Workspace ROI");
     }
     if (rejected_candidates.count("image_boundary_clipped") != 0) {
       return with_trace(
         ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET,
-        "RawPart candidate is clipped by the camera image boundary");
+        "TestCube candidate is clipped by the camera image boundary");
     }
     auto result = failure(
-      ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND, "no matching RawPart candidate",
+      ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND, "no matching TestCube candidate",
       "absence_confirmation");
     result.has_rawpart_diagnostics = true;
     result.processing_stage = "absence_confirmation";
@@ -1266,7 +1266,7 @@ DetectionResult DetectTargetProcessor::process_profile(
     result.diagnostic_detail = trace.str() +
       "; candidate_result=no_matching_profile_candidate; "
       "absence_confirmation=confirmed_valid_workspace_coverage; "
-      "reason=no matching RawPart candidate";
+      "reason=no matching TestCube candidate";
     return result;
   }
 
@@ -1299,7 +1299,7 @@ DetectionResult DetectTargetProcessor::process_profile(
   {
     return failure(
       ResultCode::DETECT_RESULT_GEOMETRY_ERROR,
-      "qualified RawPart rectangle has no valid orientation contract", "target_pose_estimation");
+      "qualified TestCube rectangle has no valid orientation contract", "target_pose_estimation");
   }
   DetectionResult output;
   if (rgb_compatible) {output.source_rgb_header = input.rgb.header;}
@@ -1321,7 +1321,7 @@ DetectionResult DetectTargetProcessor::process_profile(
     if (!finite(orientation_norm) || std::abs(orientation_norm - 1.0) > 1e-6) {
       return failure(
         ResultCode::DETECT_RESULT_GEOMETRY_ERROR,
-        "qualified RawPart rectangle produced an invalid orientation", "target_pose_estimation");
+        "qualified TestCube rectangle produced an invalid orientation", "target_pose_estimation");
     }
     output.target_pose.pose.orientation.x = measured_orientation.x();
     output.target_pose.pose.orientation.y = measured_orientation.y();
@@ -1390,7 +1390,7 @@ DetectionResult DetectTargetProcessor::process_profile(
     // A selected candidate remains usable if marker pixels were not cached.
     output.support_region.clear();
   }
-  output.diagnostic_detail = "RawPart detected from configured support-relative depth geometry";
+  output.diagnostic_detail = "TestCube detected from configured support-relative depth geometry";
   return output;
 }
 

@@ -48,7 +48,7 @@ class RawPartPoseRecorder:
         current: dict[str, dict[str, Any]] = {}
         complete = True
         for prim in self.stage.Traverse():
-            if not prim.IsValid() or not prim.GetName().startswith("RawPart_"):
+            if not prim.IsValid() or not prim.GetName().startswith("Material_"):
                 continue
             path = str(prim.GetPath())
             if "/MaterialSupply/Deliveries/" not in path:

@@ -29,10 +29,9 @@ def production_capture_configuration(profile, mission_recipe):
     del mission_recipe  # Gripper Capture no longer consumes Motion's grasp policy.
     motion = profile["motion"]
     capture = profile["gripper_capture"]
-    dimensions = tuple(
-        float(value)
-        for value in profile["material_definitions"]["RawPart"]["nominal_dimensions_m"]
-    )
+    identity = profile["orchestration"]["mission_target_id"]
+    dimensions = tuple(float(value) for value in
+        profile["material_definitions"][identity]["nominal_dimensions_m"])
     translation = tuple(
         float(value) for value in motion["object_to_grasp_tcp_translation"]
     )
@@ -40,7 +39,7 @@ def production_capture_configuration(profile, mission_recipe):
     if len(translation) != 3:
         raise ValueError("object_to_grasp_tcp_translation must have three values")
     if len(dimensions) != 3:
-        raise ValueError("RawPart dimensions_m must have three values")
+        raise ValueError("Material dimensions_m must have three values")
     reference = CaptureReferenceConfig(
         fixture_dimensions_m=dimensions,
         observation_to_grasp_tcp_m=-dimensions[2] / 2.0 + translation[2],
@@ -51,6 +50,6 @@ def production_capture_configuration(profile, mission_recipe):
             float(value) for value in capture["volume_dimensions_m"]
         )
     ).validate()
-    registry = EligibleObjectRegistry()
+    registry = EligibleObjectRegistry(profile["material_definitions"])
     registry.register_subtree("/World/SF_Twin_Cell/MaterialSupply/Deliveries")
     return config, reference, registry

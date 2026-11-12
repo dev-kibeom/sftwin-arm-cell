@@ -52,7 +52,7 @@ def test_collision_query_entry_matches_reference_prim_and_point_without_claiming
         "collision_scene_query": {
             "entries": [
                 {
-                    "reference_prim_path": "/World/RawPart",
+                    "reference_prim_path": "/World/TestCube",
                     "reference_point": "top_center",
                     "hit_optical_z_m": 1.02,
                     "limitation": "Collision hit is not accepted as Replicator renderer-visible surface ground truth.",
@@ -60,9 +60,9 @@ def test_collision_query_entry_matches_reference_prim_and_point_without_claiming
             ]
         }
     }
-    entry = collision_query_entry(snapshot, "/World/RawPart", "top_center")
+    entry = collision_query_entry(snapshot, "/World/TestCube", "top_center")
     assert entry["hit_optical_z_m"] == 1.02
-    assert collision_query_entry(snapshot, "/World/RawPart", "top_off_axis_a") is None
+    assert collision_query_entry(snapshot, "/World/TestCube", "top_off_axis_a") is None
 
 
 import pytest

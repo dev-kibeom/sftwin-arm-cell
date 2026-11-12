@@ -21,7 +21,7 @@ Trigger trigger(uint8_t identity, uint32_t quantity = 2)
   Trigger value;
   value.delivery_id.uuid[0] = identity;
   value.quantity = quantity;
-  value.material_type = "RawPart";
+  value.material_type = "TestCube";
   value.valid = true;
   return value;
 }
@@ -362,6 +362,19 @@ TEST(MaterialHandoffCoordinator, OneDeliveryFailureDoesNotFailAnotherDelivery)
   EXPECT_EQ(result.readiness->delivery_id, successful_delivery.delivery_id);
   EXPECT_FALSE(coordinator.observe_completion(
     completion(failed_delivery), at + 1ms, stamp()).readiness);
+}
+
+TEST(MaterialHandoffCoordinator, AcceptsConfiguredMaterialsAndRejectsUnregisteredTypes)
+{
+  MaterialHandoffCoordinator coordinator(5s);
+  coordinator.set_material_types({"TestCube", "AL_PLATE_080_060_020"});
+  auto plate = trigger(61);
+  plate.material_type = "AL_PLATE_080_060_020";
+  ASSERT_TRUE(coordinator.begin(plate, Clock::time_point{}));
+  auto unsupported = trigger(62);
+  unsupported.material_type = "STEEL_BLANK_070_050_040";
+  EXPECT_EQ(coordinator.rejection_reason(unsupported), "unsupported_material_type");
+  EXPECT_FALSE(coordinator.begin(unsupported, Clock::time_point{}));
 }
 
 }  // namespace arm_cell_gateway

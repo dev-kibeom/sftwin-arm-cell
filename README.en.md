@@ -22,7 +22,7 @@ The current profile includes a simulated material-delivery path and an Isaac Sim
 - ROS integration for canonical joint state, simulation time, TF, and RGB-D camera input.
 - MoveIt 2 robot planning with explicitly scoped planning-scene profiles.
 - A Vision/Task Execution/Motion boundary where Vision reports candidate geometry, Task Execution decides candidate order, and Motion builds request-specific planning occupancy excluding the selected candidate.
-- Depth-map-based, Geometry-first Vision for factory RawPart work: the separately implemented `cuboid_top_face` algorithm specializes in cuboid workpieces and uses observed orthogonal L-shaped top edges and profile dimensions to evaluate and reconstruct shape and pose hypotheses from complete or partial observations. It also provides detector profiles and source-frame diagnostics.
+- Depth-map-based, Geometry-first Vision for factory TestCube work: the separately implemented `cuboid_top_face` algorithm specializes in cuboid workpieces and uses observed orthogonal L-shaped top edges and profile dimensions to evaluate and reconstruct shape and pose hypotheses from complete or partial observations. It also provides detector profiles and source-frame diagnostics.
 - PICK, PLACE, GO_HOME, and recovery motion tasks behind backend-neutral ROS interfaces.
 - Reusable Behavior Tree task actions plus PICK candidate ordering and occupancy-exclusion heuristics.
 - Software Safety supervision with fail-closed startup, motion capability, and a direct stop path to Motion.
@@ -141,6 +141,25 @@ ros2 run arm_cell_bringup export_runtime_configuration \
 ```
 
 Validation entrypoints read this file by default. Set `SFTWIN_PNP_PROFILE` to the absolute path of another exported file to override it. Relative configuration paths resolve against their declaring file; `package://` resolves against the ROS package, and `project://` against the project root.
+
+The material catalog is owned by `bringup/config/materials/*.yaml`: `TestCube` (70×70×80 mm), aluminium billet (60×40×30 mm), steel blank (70×50×40 mm), and aluminium plate (80×60×20 mm). The Hub builds its Material type list from the exported catalog. Each Random Drop request supplies one selected material. Add a material definition and mission, then re-export to register another cuboid.
+
+The plate normally closes across 60 mm. Export an explicit aperture trial to test the 80 mm direction:
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/pnp_validation_profile.yaml \
+  --material AL_PLATE_080_060_020 --grasp-width-mm 80 \
+  --output .run_records/pnp_runtime_configuration.json
+ros2 launch arm_cell_bringup arm_cell_pnp_validation.launch.py \
+  profile:="$(pwd)/.run_records/pnp_runtime_configuration.json"
+```
+
+Set Isaac's `SFTWIN_PNP_PROFILE` to the same export. Optional `--pick-offset-z-m` changes the trial offset relative to the material center without modifying its YAML. New offsets use an initial 2.5 mm top contact depth and remain `pending_live_validation`; record material-specific evidence before treating them as calibrated.
+
+After spawning the validation fixture in Isaac, run `ros2 run arm_cell_bringup validate_material_grasp --profile <export.json> --manifest <manifest.json> --result <result.json>` with its printed registration manifest. This uses Fixed Vision and the existing Task Execution API for one PnP trial and records the result without modifying material YAML.
+
+
 
 
 If Isaac Sim is not installed at `$HOME/isaac_sim`, set its location:

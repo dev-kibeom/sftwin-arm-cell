@@ -409,12 +409,17 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   } else if (is_pick) {
     request.observation_pose = goal.target_pose;
   }
+  auto grasp_geometry = geometry_;
+  if (is_pick && goal.has_material_grasp_transform) {
+    grasp_geometry.object_to_grasp_tcp = goal.material_grasp_transform;
+    if (!grasp_geometry.valid()) {throw std::invalid_argument("invalid material grasp transform");}
+  }
   const auto object_pose = is_pick ? resolve_object_pose(
     request.observation_pose, geometry_, goal.has_estimated_object_height,
     goal.estimated_object_height_m) : goal.target_pose;
   request.object_pose = object_pose;
-  request.target_pose = compose_target_pose(object_pose, geometry_);
-  request.object_to_grasp_tcp = geometry_.object_to_grasp_tcp;
+  request.target_pose = compose_target_pose(object_pose, grasp_geometry);
+  request.object_to_grasp_tcp = grasp_geometry.object_to_grasp_tcp;
   request.place_position_tolerance_m = is_place ? goal.place_position_tolerance_m : 0.0;
   request.place_orientation_tolerance_rad =
     is_place ? goal.place_orientation_tolerance_rad : 0.0;
@@ -565,13 +570,18 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   } else if (pick) {
     request.observation_pose = movement.target_pose;
   }
+  auto grasp_geometry = geometry_;
+  if (pick && movement.constraints.has_material_grasp_transform) {
+    grasp_geometry.object_to_grasp_tcp = movement.constraints.material_grasp_transform;
+    if (!grasp_geometry.valid()) {throw std::invalid_argument("invalid material grasp transform");}
+  }
   const auto object_pose = pick ? resolve_object_pose(
     request.observation_pose, geometry_, movement.constraints.has_estimated_object_height,
     movement.constraints.estimated_object_height_m) : movement.target_pose;
   request.object_pose = object_pose;
   request.target_pose = disturbance || movement.target_is_tcp_pose ? movement.target_pose :
-    compose_target_pose(object_pose, geometry_);
-  request.object_to_grasp_tcp = geometry_.object_to_grasp_tcp;
+    compose_target_pose(object_pose, grasp_geometry);
+  request.object_to_grasp_tcp = grasp_geometry.object_to_grasp_tcp;
   request.pick_approach_axis = movement.constraints.pick_approach_axis;
   request.pick_grasp_position_tolerance_m = pick ?
     movement.constraints.position_tolerance_m : 0.0;

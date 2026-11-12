@@ -42,7 +42,7 @@ flowchart TD
 | Live Test session_id | Play~Stop 세션 소속. Mission 결과·Safety Authority가 아님 |
 | 로컬 Sequence / Clock Epoch | 로컬 Producer의 관측 순서에만 사용 |
 
-RawPart Pose Recorder의 Producer-local session_id는 Live Test Session ID와 구별한다. 명시적인 live_test_session_id 또는 Session Descriptor의 유효한 참조를 통해서만 소속을 확정한다. 식별자 누락·응답 미수신 등으로 Join 근거가 없으면 unassociated/unavailable로 표시한다. 동일 Timestamp, 파일 경로 또는 이름만으로 인과 연결을 추론하지 않는다. 새로운 전역 capture_id·Trace ID·상관관계 Service를 도입하지 않는다.
+TestCube Pose Recorder의 Producer-local session_id는 Live Test Session ID와 구별한다. 명시적인 live_test_session_id 또는 Session Descriptor의 유효한 참조를 통해서만 소속을 확정한다. 식별자 누락·응답 미수신 등으로 Join 근거가 없으면 unassociated/unavailable로 표시한다. 동일 Timestamp, 파일 경로 또는 이름만으로 인과 연결을 추론하지 않는다. 새로운 전역 capture_id·Trace ID·상관관계 Service를 도입하지 않는다.
 
 ## 시간의 의미와 비교 한계
 
