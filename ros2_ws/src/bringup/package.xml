@@ -6,6 +6,7 @@
   <maintainer email="neopkrrl@gmail.com">kibeom</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
   <depend>arm_cell_motion</depend>
   <depend>arm_cell_vision</depend>
   <depend>arm_cell_vda</depend>

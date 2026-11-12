@@ -7,6 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 import yaml
+from arm_cell_bringup.runtime import load_profile, compile_mission
 import pytest
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, Substitution
@@ -18,7 +19,7 @@ from launch_ros.utilities import evaluate_parameters
 PACKAGE_ROOT = Path(__file__).parents[1]
 LAUNCH_PATH = PACKAGE_ROOT / "launch/arm_cell_operational.launch.py"
 PROFILE_PATH = PACKAGE_ROOT / "config/operational_profile.yaml"
-HOME_PATH = PACKAGE_ROOT / "config/home_joint_positions.yaml"
+HOME_PATH = PACKAGE_ROOT.parent / "motion/config/home_joint_positions.yaml"
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +98,7 @@ def _node_ros_arguments(node):
 
 
 def test_profile_declares_reviewed_runtime_nodes_and_readiness_config():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     nodes = [action for action in _composed_nodes() if isinstance(action, Node)]
 
     project_nodes = {(node.node_package, node.node_executable) for node in nodes}
@@ -120,7 +121,7 @@ def test_profile_declares_reviewed_runtime_nodes_and_readiness_config():
 
 
 def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     motion = profile["motion"]
     nodes = _project_nodes(_composed_nodes())
     parameters = _node_parameters(nodes["motion_node"])
@@ -635,7 +636,7 @@ def test_all_diagnostics_enables_every_runtime_producer():
 
 
 def test_operational_profile_selects_static_collision_geometry_for_isaac_motion():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     assert profile["simulation"]["static_scene"] is True
 
     scene_path = (
@@ -673,7 +674,7 @@ def test_operational_profile_selects_static_collision_geometry_for_isaac_motion(
 
 
 def test_vision_node_parameters_include_the_shared_rawpart_definition():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     module = _load_launch_module()
     parameters = module.profile_parameters(profile, "vision")
 
@@ -685,7 +686,7 @@ def test_vision_node_parameters_include_the_shared_rawpart_definition():
 
 
 def test_vision_calibration_path_uses_bringup_profile_path_convention():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     module = _load_launch_module()
     parameters = module.vision_profile_parameters(profile, PROFILE_PATH)
 
@@ -695,11 +696,11 @@ def test_vision_calibration_path_uses_bringup_profile_path_convention():
 
 
 def test_operational_profile_uses_w06_place_destination():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     rawpart = profile["vision"]["detector_profiles"]["RawPart"]
     mission = profile["orchestration"]
     assert mission["mission_target_id"] == rawpart["target_id"]
-    recipe = json.loads((PACKAGE_ROOT / "config/recipes/RawPart.json").read_text())
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/RawPart.yaml")[0]
     assert recipe["target_id"] == mission["mission_target_id"]
     nominal_dimensions = profile["material_definitions"]["RawPart"][
         "nominal_dimensions_m"
@@ -733,7 +734,7 @@ def test_operational_profile_uses_w06_place_destination():
 
 
 def test_place_approach_geometry_is_recipe_owned_and_not_injected_into_motion():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     motion = next(
         action
         for action in _composed_nodes()
@@ -745,7 +746,7 @@ def test_place_approach_geometry_is_recipe_owned_and_not_injected_into_motion():
     assert "place_approach_direction_object" not in parameters
     assert "place_approach_distance_m" not in parameters
     assert "retract_distance_m" not in parameters
-    assert mission["recipe_directory"] == "recipes"
+    assert Path(mission["recipe_directory"]).is_dir()
     assert not any(
         key.startswith("mission_grasp") or key.startswith("mission_place")
         for key in mission
@@ -754,7 +755,7 @@ def test_place_approach_geometry_is_recipe_owned_and_not_injected_into_motion():
 
 def test_profile_preserves_canonical_topics_and_backend_neutral_startup():
     nodes = _composed_nodes()
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     module = _load_launch_module()
     assert module.profile_parameters(profile, "motion")["backend_mode"] == "isaac"
     assert "backend_available" not in profile["motion"]
@@ -813,13 +814,13 @@ def test_operational_motion_receives_home_from_single_source_of_truth():
 
     assert list(parameters["home_joint_positions"]) == home
     assert (
-        "home_joint_positions" not in yaml.safe_load(PROFILE_PATH.read_text())["motion"]
+        "home_joint_positions" not in load_profile(PROFILE_PATH)["motion"]
     )
 
 
 def test_vision_parameters_keep_cuboid_settings_without_algorithm_selection():
     module = _load_launch_module()
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     parameters = module.vision_profile_parameters(profile, PROFILE_PATH)
     rawpart = parameters["detector_profiles"]["RawPart"]
     assert "algorithm" not in rawpart
@@ -1142,7 +1143,7 @@ def test_failed_nested_session_creation_removes_run(tmp_path, monkeypatch):
 
 
 def test_place_search_retains_count_limits_with_independent_planning_budget():
-    motion = yaml.safe_load(PROFILE_PATH.read_text())["motion"]
+    motion = load_profile(PROFILE_PATH)["motion"]
     assert motion["place_max_pose_candidates"] == motion["pick_grasp_pose_candidate_limit"]
     assert motion["place_ik_seed_attempts_per_pose"] == motion["pick_ik_seed_attempts_per_grasp_pose"]
     assert motion["place_ik_timeout_s"] == motion["pick_approach_ik_timeout_s"]

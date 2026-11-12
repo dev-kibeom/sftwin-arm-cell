@@ -1,0 +1,20 @@
+material_id: cube_profile
+grasp:
+  width_mm: 70.0
+pick_offset:
+  translation_m:
+  - 0.0
+  - 0.0
+  - 0.0
+  quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+geometry:
+  material_id: cube_profile
+  shape: box
+  nominal_dimensions_m:
+  - 0.07
+  - 0.07
+  - 0.08

@@ -28,6 +28,7 @@ from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
+from arm_cell_bringup.runtime import load_profile
 
 
 def _load_console_output_format():
@@ -370,8 +371,8 @@ def join_live_test_session(artifact_directory):
 def camera_configuration_provenance():
     """Identify the default calibration input without changing camera behavior."""
     try:
-        path = (Path(get_package_share_directory("arm_cell_vision")) /
-                "config/isaac_d455_camera_calibration.json")
+        path = (Path(get_package_share_directory("arm_cell_sim_adapter")) /
+                "config/isaac_camera_stage_snapshot.json")
         return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "scope": "packaged_default"}
     except (OSError, LookupError):
@@ -683,7 +684,7 @@ def compose(context):
         context
     )
     profile_path = Path(LaunchConfiguration("profile").perform(context))
-    config = yaml.safe_load(profile_path.read_text()) or {}
+    config = load_profile(profile_path)
     material_handoff_config = dict(config.get("material_handoff", {}))
     motion_parameters = profile_parameters(config, "motion")
     motion_share = Path(get_package_share_directory("arm_cell_motion"))
@@ -700,7 +701,7 @@ def compose(context):
     motion_parameters["place_waypoint_trajectory_file"] = str(trajectory_file.resolve())
     share = Path(get_package_share_directory("arm_cell_bringup"))
     home_config = (
-        yaml.safe_load((share / "config/home_joint_positions.yaml").read_text()) or {}
+        yaml.safe_load((motion_share / "config/home_joint_positions.yaml").read_text()) or {}
     )
     home_joint_positions = home_config["home_joint_positions"]
     if len(home_joint_positions) != 6:
@@ -946,7 +947,7 @@ def generate_launch_description():
                 "ROS_DOMAIN_ID", LaunchConfiguration("ros_domain_id")
             ),
             DeclareLaunchArgument(
-                "profile", default_value=str(share / "config/operational_profile.yaml")
+                "profile", default_value=os.environ.get("ARM_CELL_PROFILE", str(share / "config/operational_profile.yaml"))
             ),
             DeclareLaunchArgument("include_simulation", default_value="true"),
             DeclareLaunchArgument("log_level", default_value="info"),

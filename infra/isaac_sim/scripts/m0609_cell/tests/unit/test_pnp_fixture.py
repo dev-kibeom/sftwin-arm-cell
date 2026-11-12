@@ -44,14 +44,15 @@ def profile(**overrides):
     return FixtureProfile(**values)
 
 
-def test_validation_fixture_uses_selected_json_recipe_from_profile_registry():
+def test_validation_fixture_uses_selected_json_recipe_from_profile_registry(tmp_path):
     project_root = Path(__file__).resolve().parents[6]
     config_path = (
         project_root
         / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
     )
 
-    config = load_validation_profile(config_path)
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    config = load_validation_profile(export_runtime_configuration(config_path, tmp_path / "validation.json"))
     loaded = fixture_profile_from_validation_config(config)
 
     assert "pick_approach_distance_m" not in config["motion"]

@@ -128,21 +128,13 @@ def test_gripper_bootstrap_replaces_session_and_reloads_split_packages(
         shutil.copytree(CELL_ROOT / package, cell_root / package)
     config_root = project_root / "ros2_ws/src/bringup/config"
     config_root.mkdir(parents=True)
-    shutil.copy2(
-        PROJECT_ROOT
-        / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml",
-        config_root / "pnp_validation_profile.yaml",
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    profile = export_runtime_configuration(
+        PROJECT_ROOT / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml",
+        config_root / "validation.json",
     )
-    profile = config_root / "pnp_validation_profile.yaml"
+    shutil.copy2(CELL_ROOT / 'runtime_configuration.py', cell_root / 'runtime_configuration.py')
     live_session_descriptor = tmp_path / "diagnostic_records" / "session.json"
-    profile_data = yaml.safe_load(profile.read_text(encoding="utf-8"))
-    recipe_directory = config_root / profile_data["orchestration"]["recipe_directory"]
-    source_recipe_directory = (
-        PROJECT_ROOT
-        / "ros2_ws/src/bringup/config"
-        / profile_data["orchestration"]["recipe_directory"]
-    )
-    shutil.copytree(source_recipe_directory, recipe_directory)
 
     class Subscription:
         def __init__(self, callback):

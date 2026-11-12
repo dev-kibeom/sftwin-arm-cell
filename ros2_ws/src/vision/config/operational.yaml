@@ -1,0 +1,79 @@
+sync_slop_ms: 10.0
+request_timeout_ms: 500.0
+receipt_max_age_ms: -1.0
+reusable_pair_max_age_ms: 200.0
+sync_queue_size: 20
+rgb_topic: /camera/color/image_raw
+depth_topic: /camera/aligned_depth_to_color/image_raw
+camera_info_topic: /camera/color/camera_info
+calibration_file: package://arm_cell_vision/config/calibration/isaac_overhead_wide.yaml
+tray_aligned_depth_resolution_m: 0.002
+scene_stability:
+  stable_observation_count: 5
+observation:
+  maximum_frame_age_ms: 1000.0
+snapshot_style:
+  candidate:
+    color_rgb: '#FF0000'
+    line_width_px: 3
+  regions:
+    unresolved_color_rgb: '#FFA500'
+    target_color_rgb: '#00FF00'
+    support_color_rgb: '#00B4FF'
+    line_width_px: 2
+  disturbance:
+    inclined_color_rgb: '#FF00FF'
+    elevated_color_rgb: '#00FFFF'
+    other_color_rgb: '#FFFFFF'
+  measurement:
+    color_rgb: '#FF0000'
+    marker_size_px: 24
+    line_width_px: 3
+  annotation:
+    show_text: true
+    text_scale: 1.0
+    primary_color_rgb: '#FFDC00'
+    detail_color_rgb: '#FFFFFF'
+detector_profiles:
+  RawPart:
+    target_id: RawPart
+    material_id: RawPart
+    cuboid:
+      grid_resolution_m: 0.0025
+      height_tolerance_m: 0.003
+      line_residual_limit_px: 1.25
+      minimum_line_support: 0.8
+      finger_contact_width_m: 0.02
+      finger_height_m: 0.03
+      clearance_probe_m: 0.06
+      contact_z_fraction: 0.5
+    observation_reference: visible_top_surface_centroid
+    dimension_tolerance_m:
+    - 0.01
+    - 0.01
+    - 0.01
+    workspace_roi_m:
+      x:
+      - -0.3
+      - 0.3
+      y:
+      - -0.2
+      - 0.2
+      z:
+      - 0.01
+      - 1.0
+    tray_roi_m:
+      x:
+      - -0.324
+      - 0.324
+      y:
+      - -0.228
+      - 0.228
+    support_contact_tolerance_m: 0.01
+    top_surface_geometry_tolerance_m: 0.01
+    minimum_observation_coverage: 0.55
+    high_confidence_observed_area_ratio: 0.8
+    medium_confidence_observed_area_ratio: 0.55
+    support_region_dimensions_m:
+    - 0.6336
+    - 0.4416

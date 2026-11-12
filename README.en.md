@@ -116,6 +116,33 @@ source /opt/ros/humble/setup.bash
 ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
+Before starting Isaac, the launcher invokes Bringup’s public export CLI to produce runtime JSON. Isaac reads that data without importing Bringup Python code. Restart the launcher after changing material or policy settings to refresh the export. See [configuration export and Script Editor startup](#configuration-export-and-script-editor-startup) for Script Editor and validation exports.
+
+### Configuration export and Script Editor startup
+
+The default launcher exports the selected operational profile to `.run_records/runtime_configuration.json` before starting Isaac. Set `ARM_CELL_PROFILE` to select another input profile, or `ARM_CELL_RUNTIME_CONFIG` to select another output file.
+
+For direct Script Editor startup, first export from a terminal with the built ROS workspace overlay sourced:
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/operational_profile.yaml \
+  --output .run_records/runtime_configuration.json
+```
+
+Set `SFTWIN_PROJECT_ROOT` to the absolute repository path in the Isaac process. To read another export, set `ARM_CELL_RUNTIME_CONFIG` to its absolute path. Re-export and reload the Isaac configuration after changing settings. An explicit ROS `profile:=` argument only affects that ROS invocation.
+
+Export the validation PnP profile separately:
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/pnp_validation_profile.yaml \
+  --output .run_records/pnp_runtime_configuration.json
+```
+
+Validation entrypoints read this file by default. Set `SFTWIN_PNP_PROFILE` to the absolute path of another exported file to override it. Relative configuration paths resolve against their declaring file; `package://` resolves against the ROS package, and `project://` against the project root.
+
+
 If Isaac Sim is not installed at `$HOME/isaac_sim`, set its location:
 
 ```bash

@@ -152,13 +152,22 @@ def _angular_distance(first: float, second: float) -> float:
 def load_validation_profile(path: str | Path) -> dict:
     profile_path = Path(path)
     profile = yaml.safe_load(profile_path.read_text()) or {}
+    if profile.get("kind") == "arm-cell-runtime-configuration":
+        from runtime_configuration import load_runtime_configuration
+        profile = load_runtime_configuration(profile_path)
+        recipe = profile["_mission_recipe"]
     orchestration = profile.get("orchestration", {})
     target_id = orchestration.get("mission_target_id")
     recipe_directory = orchestration.get("recipe_directory", "recipes")
     if not isinstance(target_id, str) or not target_id:
         raise ValueError("validation profile must select a mission target_id")
-    recipe_path = profile_path.parent / recipe_directory / f"{target_id}.json"
-    recipe = json.loads(recipe_path.read_text())
+    if '_mission_recipe' in profile:
+        recipe = profile['_mission_recipe']
+    else:
+        if recipe_directory.startswith("package://"):
+            raise ValueError('Export the validation profile with Bringup before starting Isaac')
+        recipe_path = profile_path.parent / recipe_directory / f"{target_id}.json"
+        recipe = json.loads(recipe_path.read_text())
     # PICK Approach belongs to the selected mission Recipe, not Motion tuning.
     pick = recipe.get("pick") if isinstance(recipe, dict) else None
     approach_distance = (

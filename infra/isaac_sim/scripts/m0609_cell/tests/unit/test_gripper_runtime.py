@@ -1444,7 +1444,8 @@ def test_production_profile_uses_requested_capture_limits():
         repository_root
         / "ros2_ws/src/bringup/config/operational_profile.yaml"
     )
-    profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    from arm_cell_bringup.runtime import load_profile
+    profile = load_profile(profile_path)
     recipe = load_production_mission_recipe(profile, profile_path)
     capture, _reference, _registry = production_capture_configuration(profile, recipe)
 

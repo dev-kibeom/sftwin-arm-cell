@@ -74,4 +74,5 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_safety_stop_coordination arm_cell_interfaces)
 endif()
 
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 ament_package()

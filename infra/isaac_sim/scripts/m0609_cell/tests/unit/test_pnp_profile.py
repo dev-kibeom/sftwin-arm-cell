@@ -38,10 +38,13 @@ def test_validation_profile_loader_rejects_missing_or_invalid_recipe_approach(
     profile_data = yaml.safe_load(
         (config_directory / "pnp_validation_profile.yaml").read_text()
     )
-    recipe_directory = profile_data["orchestration"]["recipe_directory"]
+    from arm_cell_bringup.runtime import resolve, mission_directory
+    recipe_source = Path(mission_directory(resolve(profile_data["orchestration"]["recipe_directory"], config_directory)))
+    recipe_directory = "recipes"
+    profile_data["orchestration"]["recipe_directory"] = recipe_directory
     target_id = profile_data["orchestration"]["mission_target_id"]
     recipe_data = json.loads(
-        (config_directory / recipe_directory / f"{target_id}.json").read_text()
+        (recipe_source / f"{target_id}.json").read_text()
     )
     if pick is None:
         del recipe_data["pick"]

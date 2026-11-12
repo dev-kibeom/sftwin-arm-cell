@@ -67,6 +67,8 @@ flowchart LR
 
 Task Execution → Motion은 단방향 C++ MotionPort 의존이며 그 경계에 ROS endpoint를 추가하지 않는다. Motion은 Task Execution을 참조하지 않는다. Task Execution의 PnP endpoint와 Motion runtime composition 및 공유 instance 불변조건은 [Task Execution CDS](../components/task-execution/cds.md)와 [Task Execution–Motion ICD](../interfaces/icd-task-execution-motion.md)가 정의한다. Safety의 직접 정지 요청과 각 소비자의 읽기 전용 상태 구독은 런타임 상호작용이지 상호 구현 의존이 아니다. Gateway·VDA, Camera·Vision, Simulation Adapter·Robot State 경계는 각 ICD가 정의한 공유 계약으로 연결된다. Bringup은 조립 책임만 가지며 아래 런타임 흐름을 소유하지 않는다.
 
+설정의 선택·조립·전달은 Bringup이 담당하고, 설정의 의미와 유효성 검증은 해당 컴포넌트가 소유한다. 외부 Runtime은 전달된 설정을 소비하며 Bringup의 내부 구현에 의존하지 않는다.
+
 ### BT 계층과 재시도 경계
 
 Orchestration BT는 Mission lifecycle·재진입·Safety Recovery를, Task Execution BT는 Material Candidate 전환·PICK/PLACE 공정 및 작업 내부 Recovery를 소유한다. Motion 내부 Planning BT는 선택된 Material Candidate의 Grasp Pose·IK Seed 탐색과 검증·계획 순서 및 그 범위의 재시도를 소유한다. 각 계층은 하위 결과를 기존 계약으로 소비하며 다른 계층의 결과 분류나 Recovery를 재구현하지 않는다. Motion BT는 내부 구현이며 새 ROS node·package·Action server가 아니다. Task Execution은 MotionPort만 사용한다.

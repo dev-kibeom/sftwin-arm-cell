@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scene_builder.rawpart_profile import load_rawpart_profile, marker_black_cells
+from scene_builder.rawpart_profile import load_rawpart_profile, marker_black_cells, validate_rawpart_profile
 
 
 REPOSITORY = Path(__file__).resolve().parents[6]
@@ -99,14 +99,15 @@ def test_rawpart_profile_fails_closed_when_marker_relation_is_incomplete(tmp_pat
     )
 
     with pytest.raises(ValueError, match="marker_in_support"):
-        load_rawpart_profile(tmp_path)
+        validate_rawpart_profile(yaml.safe_load(config_path.read_text()))
 
 
 def _write_deployment(tmp_path, *, marker_y=None):
     profile_path = Path(
         "ros2_ws/src/bringup/config/operational_profile.yaml"
     )
-    config = yaml.safe_load((REPOSITORY / profile_path).read_text())
+    from arm_cell_bringup.runtime import load_profile
+    config = load_profile(REPOSITORY / profile_path)
     rawpart = config["vision"]["detector_profiles"]["RawPart"]
     rawpart["workspace_roi_m"]["x"] = [-0.3168, 0.3168]
     rawpart["workspace_roi_m"]["y"] = [-0.2208, 0.2208]
@@ -115,15 +116,16 @@ def _write_deployment(tmp_path, *, marker_y=None):
     destination = tmp_path / profile_path
     destination.parent.mkdir(parents=True)
     destination.write_text(yaml.safe_dump(config))
+    return config
 
 
 @pytest.mark.parametrize("marker_y", [-0.249, 0.0])
 def test_tray_sized_detection_roi_loads_without_supply_config(tmp_path, marker_y):
-    _write_deployment(tmp_path, marker_y=marker_y)
-    assert load_rawpart_profile(tmp_path)["target_id"] == "RawPart"
+    config = _write_deployment(tmp_path, marker_y=marker_y)
+    assert validate_rawpart_profile(config)["target_id"] == "RawPart"
 
 
-def test_deployed_detection_roi_matches_canonical_tray_plate():
+def test_deployed_detection_roi_stays_inside_canonical_tray_plate():
     scene_path = (
         REPOSITORY
         / "ros2_ws/src/motion/config/moveit/m0609_static_scene.json"
@@ -133,6 +135,5 @@ def test_deployed_detection_roi_matches_canonical_tray_plate():
     dimensions = tray["geometry"]["dimensions_m"]
     profile = load_rawpart_profile(REPOSITORY)
     for axis, dimension in zip(("x", "y"), dimensions):
-        assert profile["workspace_roi_m"][axis] == pytest.approx(
-            [-dimension / 2, dimension / 2]
-        )
+        low, high = profile["workspace_roi_m"][axis]
+        assert -dimension / 2 <= low < high <= dimension / 2

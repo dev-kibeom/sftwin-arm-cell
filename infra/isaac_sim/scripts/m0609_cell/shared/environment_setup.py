@@ -7,7 +7,7 @@ import sys
 
 CELL_RELATIVE_PATH = Path("infra/isaac_sim/scripts/m0609_cell")
 VALIDATION_PROFILE_RELATIVE_PATH = Path(
-    "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
+    ".run_records/pnp_runtime_configuration.json"
 )
 DEFAULT_ROS_DOMAIN_ID = "0"
 DIAGNOSTIC_COMPONENTS = frozenset({"motion", "vision", "safety", "orchestration"})

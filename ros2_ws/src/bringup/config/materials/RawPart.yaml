@@ -1,0 +1,21 @@
+material_id: RawPart
+grasp:
+  min_expected_contact_width_mm: 60.0
+  max_expected_contact_width_mm: 85.0
+pick_offset:
+  translation_m:
+  - 0.0
+  - 0.0
+  - 0.0
+  quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+geometry:
+  material_id: RawPart
+  shape: box
+  nominal_dimensions_m:
+  - 0.07
+  - 0.07
+  - 0.08

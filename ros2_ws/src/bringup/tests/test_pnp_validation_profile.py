@@ -7,6 +7,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import yaml
+from arm_cell_bringup.runtime import load_profile, compile_mission, resolve, mission_directory
 import pytest
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
@@ -49,7 +50,7 @@ def _nodes():
 
 
 def test_validation_profile_selects_fixed_vision_and_its_recipe():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     nodes = [action for action in _nodes() if isinstance(action, Node)]
     vision = next(
         action for action in nodes if action.node_package == "arm_cell_vision"
@@ -58,12 +59,7 @@ def test_validation_profile_selects_fixed_vision_and_its_recipe():
     assert vision.node_executable == "fixed_detect_target_node"
     assert all(node.node_executable != "detect_target_node" for node in nodes)
     mission = profile["orchestration"]
-    recipe_path = (
-        PACKAGE_ROOT
-        / "config"
-        / mission["recipe_directory"]
-        / f"{mission['mission_target_id']}.json"
-    )
+    recipe_path = Path(mission_directory(resolve(mission['recipe_directory'], PROFILE_PATH.parent))) / f"{mission['mission_target_id']}.json"
     recipe = json.loads(recipe_path.read_text())
     assert recipe["target_id"] == mission["mission_target_id"]
     orchestration = next(
@@ -86,7 +82,7 @@ def test_validation_profile_selects_fixed_vision_and_its_recipe():
     )
     grasp_dimension_mm = profile["fixture"]["dimensions_m"][0] * 1000.0
     assert grasp_dimension_mm <= 85.0
-    assert recipe["grasp"]["width_mm"] == grasp_dimension_mm
+    assert recipe["grasp"]["min_expected_contact_width_mm"] == grasp_dimension_mm
 
 
 def test_validation_profile_owns_moveit_planning_scaling():
@@ -113,7 +109,7 @@ def test_validation_profile_owns_moveit_planning_scaling():
 def test_validation_place_target_is_above_the_cnc_workarea():
     planning = yaml.safe_load((PACKAGE_ROOT / "config/isaac_planning.yaml").read_text())
 
-    recipe = json.loads((PACKAGE_ROOT / "config/recipes/cube_profile.json").read_text())
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/cube_profile.yaml")[0]
     assert recipe["place"]["desired_object_pose"]["frame"] == "base_link"
     assert recipe["place"]["desired_object_pose"]["position"] == pytest.approx(
         [0.50, 0.25, 0.37]
@@ -131,7 +127,7 @@ def test_validation_place_target_is_above_the_cnc_workarea():
 
 
 def test_validation_profile_passes_motion_completion_tolerances_to_motion_node():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     motion = next(
         action
         for action in _nodes()
@@ -162,7 +158,7 @@ def test_validation_profile_rejects_invalid_motion_completion_tolerances():
         "trajectory_goal_tolerance_rad",
     ):
         for value in (None, 0.0, -1.0, float("nan"), float("inf")):
-            candidate = yaml.safe_load(PROFILE_PATH.read_text())
+            candidate = load_profile(PROFILE_PATH)
             if value is None:
                 del candidate["motion"][key]
             else:
@@ -172,7 +168,7 @@ def test_validation_profile_rejects_invalid_motion_completion_tolerances():
 
 
 def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
 
     # Motion resolves the detector-specific observation reference to object center before
     # applying the object-center-to-TCP transform. The WU-14 contact value
@@ -188,7 +184,7 @@ def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
         [1.0, 0.0, 0.0, 0.0]
     )
     assert profile["motion"]["insertion_axis_tcp"] == pytest.approx([0.0, 0.0, 1.0])
-    recipe = json.loads((PACKAGE_ROOT / "config/recipes/cube_profile.json").read_text())
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/cube_profile.yaml")[0]
     assert recipe["pick"]["approach_distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["direction_object"] == [
@@ -204,9 +200,9 @@ def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
 
 
 def test_validation_profile_uses_canonical_home_joint_pose():
-    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile = load_profile(PROFILE_PATH)
     home = yaml.safe_load(
-        (PACKAGE_ROOT / "config/home_joint_positions.yaml").read_text()
+        (PACKAGE_ROOT.parent / "motion/config/home_joint_positions.yaml").read_text()
     )
 
     assert "home_joint_positions" not in profile["motion"]
@@ -240,9 +236,7 @@ def test_sf_grasp_tcp_matches_nominal_contact_geometry():
 
 
 def test_production_operational_profile_has_no_fixed_adapter_selection():
-    production = yaml.safe_load(
-        (PACKAGE_ROOT / "config/operational_profile.yaml").read_text()
-    )
+    production = load_profile(PACKAGE_ROOT / "config/operational_profile.yaml")
     assert production["vision"].get("adapter") != "fixed"
     assert "fixed_vision" not in production
     assert "validation_grasp_contact_policy_enabled" not in production.get("motion", {})

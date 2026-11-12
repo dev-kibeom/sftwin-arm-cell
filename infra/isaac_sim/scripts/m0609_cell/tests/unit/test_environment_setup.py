@@ -13,6 +13,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[6]
 CELL_ROOT = PROJECT_ROOT / "infra/isaac_sim/scripts/m0609_cell"
 
 
+@pytest.fixture(autouse=True)
+def _validation_export(tmp_path, monkeypatch):
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    exported = export_runtime_configuration(PROJECT_ROOT / 'ros2_ws/src/bringup/config/pnp_validation_profile.yaml', tmp_path / 'validation.json')
+    monkeypatch.setattr(setup, 'VALIDATION_PROFILE_RELATIVE_PATH', exported)
+
+
 def test_explicit_project_root_is_validated_without_discovery():
     root, source = setup.resolve_project_root(PROJECT_ROOT, environ={})
     assert root == PROJECT_ROOT
@@ -97,7 +104,7 @@ def test_before_play_bootstraps_live_environment_without_running_setup_entrypoin
     monkeypatch.setattr(importlib, "reload", lambda module: module)
     environment = monkeypatch.context()
     with environment as scoped:
-        scoped.delenv("SFTWIN_PROJECT_ROOT", raising=False)
+        scoped.setenv("SFTWIN_PROJECT_ROOT", str(PROJECT_ROOT))
         scoped.delenv("ROS_DOMAIN_ID", raising=False)
         scoped.delenv("SFTWIN_PNP_PROFILE", raising=False)
         scoped.delenv("SFTWIN_RUNTIME_MODE", raising=False)
@@ -121,7 +128,7 @@ def test_before_play_selection_sets_existing_diagnostics_environment(
     configured = tmp_path / "1_before_play.py"
     configured.write_text(
         source.replace(
-            'DIAGNOSTICS_SELECTION = "none"', 'DIAGNOSTICS_SELECTION = "motion,vision"'
+            'DIAGNOSTICS_SELECTION = "all"', 'DIAGNOSTICS_SELECTION = "motion,vision"'
         ),
         encoding="utf-8",
     )
@@ -130,6 +137,7 @@ def test_before_play_selection_sets_existing_diagnostics_environment(
     monkeypatch.setitem(sys.modules, "shared.role_entrypoint", entrypoint)
     monkeypatch.setattr(importlib, "reload", lambda module: module)
     with monkeypatch.context() as scoped:
+        scoped.setenv("SFTWIN_PROJECT_ROOT", str(PROJECT_ROOT))
         scoped.delenv("SFTWIN_DIAGNOSTICS", raising=False)
         runpy.run_path(str(configured))
         assert setup.os.environ["SFTWIN_DIAGNOSTICS"] == "motion,vision"
@@ -223,7 +231,8 @@ def test_bootstrap_profile_is_consumable_by_task3_capture_config():
 
     from pnp_validation.run_validation import capture_config_from_profile
 
-    profile = yaml.safe_load(Path(environment["SFTWIN_PNP_PROFILE"]).read_text())
+    from pnp_validation.profile import load_validation_profile
+    profile = load_validation_profile(environment["SFTWIN_PNP_PROFILE"])
     capture_config = capture_config_from_profile(profile)
 
     assert capture_config is not None

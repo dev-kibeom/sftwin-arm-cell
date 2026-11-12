@@ -71,11 +71,8 @@ def _load_home_joint_positions():
             "SFTWIN_PROJECT_ROOT is not configured. Run 1_before_play.py from "
             "the intended checkout."
         )
-    home_path = (
-        Path(configured_root).expanduser().resolve()
-        / "ros2_ws/src/bringup/config/home_joint_positions.yaml"
-    )
-    config = yaml.safe_load(home_path.read_text()) or {}
+    from runtime_configuration import load_runtime_configuration
+    config = load_runtime_configuration()
     positions = tuple(float(value) for value in config.get("home_joint_positions", ()))
     if len(positions) != len(ARM_JOINT_NAMES) or not all(
         math.isfinite(value) for value in positions
@@ -93,11 +90,9 @@ def _load_operational_profile():
             "SFTWIN_PROJECT_ROOT is not configured. Run 1_before_play.py from "
             "the intended checkout."
         )
-    profile_path = (
-        Path(configured_root).expanduser().resolve()
-        / "ros2_ws/src/bringup/config/operational_profile.yaml"
-    )
-    return yaml.safe_load(profile_path.read_text()) or {}
+    from runtime_configuration import load_runtime_configuration
+    return load_runtime_configuration()
+
 
 
 def _author_initial_home_targets(stage):

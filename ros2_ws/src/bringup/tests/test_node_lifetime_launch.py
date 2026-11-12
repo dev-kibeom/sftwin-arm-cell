@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from arm_cell_bringup.runtime import load_profile, compile_mission
 
 
 def _isolated_environment():
@@ -84,7 +85,7 @@ def test_vision_node_owns_node_while_spinning():
 
     package_root = Path(__file__).parents[1]
     profile_path = package_root / "config/operational_profile.yaml"
-    profile = yaml.safe_load(profile_path.read_text())
+    profile = load_profile(profile_path)
     with tempfile.TemporaryDirectory(prefix="wu13-vision-profile-") as temp_dir:
         params_path = Path(temp_dir) / "vision-parameters.yaml"
         vision_parameters = dict(profile["vision"])
@@ -118,9 +119,7 @@ def test_orchestration_node_owns_node_while_spinning():
         )
 
     package_root = Path(__file__).parents[1]
-    profile = yaml.safe_load(
-        (package_root / "config/operational_profile.yaml").read_text()
-    )
+    profile = load_profile(package_root / "config/operational_profile.yaml")
     with tempfile.TemporaryDirectory(prefix="wu13-orchestration-profile-") as temp_dir:
         params_path = Path(temp_dir) / "orchestration-parameters.yaml"
         params_path.write_text(

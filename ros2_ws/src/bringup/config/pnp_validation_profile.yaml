@@ -58,7 +58,7 @@ orchestration:
   mission_target_id: cube_profile
   safety_state_freshness_timeout_ms: 500
   vision_request_timeout_ms: 30000
-  recipe_directory: recipes
+  recipe_directory: package://arm_cell_bringup/config/missions
 
 validation:
   runtime_runner_entrypoint: infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py
