@@ -1613,15 +1613,32 @@ TEST(CuboidTopFace, Live20261027BoundaryResidualsDoNotBecomeDisturbanceCandidate
   // The recorded point for Boundary 97 lies outside its observed outline;
   // the nearest cell belongs to Boundary 118 (height about 0.13814 m).
   // Its own 489 observed cells have the independently recorded mean below.
-  const auto scoped = std::find_if(result.disturbance_regions.begin(), result.disturbance_regions.end(),
-    [](const auto & region) {return region.source_boundary_id == 97 && region.outline_id == 1;});
+  // Locate the same measured surface by a recorded cell, since boundary IDs
+  // are enumeration details and change when preceding slopes join.
+  const auto observed = std::find_if(
+    result.cuboid_boundaries.begin(), result.cuboid_boundaries.end(),
+    [](const auto & b) {
+      return std::find(b.observed_cell_ids.begin(), b.observed_cell_ids.end(), 88u * 193u + 81u) !=
+      b.observed_cell_ids.end();
+    });
+  ASSERT_NE(observed, result.cuboid_boundaries.end());
+  const auto boundary_id = observed->source_boundary_id;
+  const auto scoped = std::find_if(
+    result.disturbance_regions.begin(), result.disturbance_regions.end(),
+    [&](const auto & region) {
+      return region.source_boundary_id == boundary_id && region.outline_id == 1;
+    });
   if (scoped != result.disturbance_regions.end()) {
     const auto index = static_cast<size_t>(scoped - result.disturbance_regions.begin());
     EXPECT_NEAR(result.disturbance_candidates[index].observed_height_m, 0.06844092788516641, 1e-12);
   } else {
     // A resolved covered object no longer needs a disturbance-only region.
-    EXPECT_TRUE(std::any_of(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
-      [](const auto & h) {return h.source_boundary_id == 97 && h.selection_state == "SELECTED";}));
+    EXPECT_TRUE(
+      std::any_of(
+        result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
+        [&](const auto & h) {
+          return h.source_boundary_id == boundary_id && h.selection_state == "SELECTED";
+        }));
   }
   // Frozen PICK/Occupancy output predates covered candidates. Verify the new
   // semantic invariants instead of freezing changed candidate ordering/counts.
@@ -2759,4 +2776,86 @@ TEST(CuboidTopFace, LocalMarkerReplayExcludesMarkerAndPreservesMaterials)
              std::hypot(h.center_x_m, h.center_y_m + 0.24625) < 0.02 &&
              std::abs(h.height_m - 0.11803) < 0.01;
     }));
+}
+
+TEST(HeightContinuity, SteepRampRemainsConnectedWithoutPlaneClassification)
+{
+  auto obs = scene();
+  for (int y = 80; y < 100; ++y) {
+    for (int x = 80; x < 90; ++x) {
+      obs.heights.at<double>(y, x) = 0.02 + (x - 80) * 0.01;
+    }
+  }
+  size_t budget = 20000;
+  const auto map = arm_cell_vision::cuboid_geometry::build_plane_map(obs, profile(), budget, true);
+  // The supported interior joins; silhouette cells remain conservative.
+  EXPECT_TRUE(
+    std::any_of(
+      map.boundaries.begin(), map.boundaries.end(),
+      [](const auto & b) {return b.cell_count >= 120u;}));
+}
+
+TEST(HeightContinuity, TrueStepAndMissingStripRemainSeparate)
+{
+  for (bool missing : {false, true}) {
+    auto obs = scene();
+    for (int y = 80; y < 100; ++y) {
+      for (int x = 80; x < 100; ++x) {
+        obs.heights.at<double>(y, x) = x < 90 ? 0.03 : 0.07;
+        if (missing && x == 90) {
+          obs.heights.at<double>(y, x) = std::numeric_limits<double>::quiet_NaN();
+        }
+      }
+    }
+    size_t budget = 20000;
+    const auto map =
+      arm_cell_vision::cuboid_geometry::build_plane_map(obs, profile(), budget, true);
+    EXPECT_EQ(map.boundaries.size(), 2u);
+  }
+}
+
+TEST(HeightContinuity, ImpulseFilterPreservesRampStepsAndMissingCells)
+{
+  auto obs = scene();
+  obs.heights.setTo(0.03);
+  obs.heights.at<double>(50, 50) = 0.12;
+  obs.heights.at<double>(60, 60) = std::numeric_limits<double>::quiet_NaN();
+  for (int y = 80; y < 100; ++y) {
+    for (int x = 80; x < 100; ++x) {
+      obs.heights.at<double>(y, x) = 0.04 + (x - 80) * 0.005;
+    }
+  }
+  const auto original = obs.heights.clone();
+  arm_cell_vision::cuboid_geometry::filter_height_impulses(obs, 0.003);
+  EXPECT_TRUE(std::isnan(obs.heights.at<double>(50, 50)));
+  EXPECT_TRUE(std::isnan(obs.heights.at<double>(60, 60)));
+  for (int y = 80; y < 100; ++y) {
+    for (int x = 80; x < 100; ++x) {
+      EXPECT_EQ(obs.heights.at<double>(y, x), original.at<double>(y, x));
+    }
+  }
+}
+
+TEST(HeightContinuity, LocalSnapshot01Replay)
+{
+  const char * prefix = std::getenv("ARM_CELL_CONTINUITY_REPLAY");
+  if (!prefix) {GTEST_SKIP() << "Set to 20261112/085301 acquisition 1 prefix";}
+  CuboidHeightObservation obs{cv::Mat(209, 261, CV_64F), {-0.325, -0.29}, 0.0025,
+    cv::Mat(209, 261, CV_8U)};
+  std::ifstream grid(std::string(prefix) + ".height_grid.f64le", std::ios::binary);
+  ASSERT_TRUE(grid.read(reinterpret_cast<char *>(obs.heights.data), obs.heights.total() * 8));
+  std::ifstream mask(std::string(prefix) + ".image_boundary.u8", std::ios::binary);
+  ASSERT_TRUE(mask.read(reinterpret_cast<char *>(obs.image_boundary.data), obs.heights.total()));
+  auto p = profile();
+  p.dimensions_m = {0.07, 0.07, 0.08}; p.dimension_tolerance_m = {0.01, 0.01, 0.01};
+  p.workspace_roi_min_m = {-0.3, -0.2, 0.01}; p.workspace_roi_max_m = {0.3, 0.2, 1};
+  p.support_contact_tolerance_m = 0.01; p.top_surface_geometry_tolerance_m = 0.01;
+  p.cuboid.height_tolerance_m = 0.003; p.cuboid.line_residual_limit_px = 1.25;
+  arm_cell_vision::cuboid_geometry::filter_height_impulses(obs, p.cuboid.height_tolerance_m);
+  const auto result = detect_cuboid_top_face(obs, p, true);
+  EXPECT_EQ(result.result_code, Code::DETECT_RESULT_SUCCESS);
+  EXPECT_LT(result.cuboid_boundaries.size(), 482u);
+  EXPECT_FALSE(result.ordered_candidates.empty());
+  std::cout << "snapshot01 boundaries=" << result.cuboid_boundaries.size()
+            << " candidates=" << result.ordered_candidates.size() << std::endl;
 }

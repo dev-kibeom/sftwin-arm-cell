@@ -359,6 +359,68 @@ CuboidHypothesisVisualization visualization(const Fit & fit, const std::string &
 
 }  // namespace
 
+// Remove only isolated impulses on otherwise consistent observed support.
+// Never fill missing cells or smooth across a height step or a ramp.
+void filter_height_impulses(CuboidHeightObservation & obs, double tolerance)
+{
+  const auto original = obs.heights.clone();
+  for (int y = 1; y + 1 < original.rows; ++y) {
+    for (int x = 1; x + 1 < original.cols; ++x) {
+      const double center = original.at<double>(y, x);
+      if (!std::isfinite(center)) {continue;}
+      std::vector<double> neighbors;
+      for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dy == 0) {continue;}
+          const double z = original.at<double>(y + dy, x + dx);
+          if (std::isfinite(z)) {neighbors.push_back(z);}
+        }
+      }
+      if (neighbors.size() < 6) {continue;}
+      const auto limits = std::minmax_element(neighbors.begin(), neighbors.end());
+      if (*limits.second - *limits.first > tolerance ||
+        (center >= *limits.first - tolerance && center <= *limits.second + tolerance))
+      {continue;}
+      // Keep the cell explicitly unobserved rather than inventing a measurement.
+      obs.heights.at<double>(y, x) = std::numeric_limits<double>::quiet_NaN();
+    }
+  }
+}
+
+// Directional height differences test local continuity without fitting or
+// classifying a plane. Four measured samples are required to bridge a steep
+// slope; both sides must predict the crossing difference consistently.
+static bool continuous_height_edge(
+  const cv::Mat & heights, cv::Point p, cv::Point q, double tolerance)
+{
+  const double delta = heights.at<double>(q) - heights.at<double>(p);
+  if (std::abs(delta) <= tolerance) {return true;}
+  // A crossing supported along one direction alone can connect unrelated
+  // faces at a corner. Require a coherent measured stencil on both ends.
+  for (const auto center : {p, q}) {
+    if (center.x < 1 || center.y < 1 || center.x + 1 >= heights.cols ||
+      center.y + 1 >= heights.rows) {return false;}
+    const double z = heights.at<double>(center);
+    for (const auto axis : {cv::Point(1, 0), cv::Point(0, 1),
+        cv::Point(1, 1), cv::Point(1, -1)})
+    {
+      const double a = heights.at<double>(center - axis);
+      const double b = heights.at<double>(center + axis);
+      if (!std::isfinite(a) || !std::isfinite(b) ||
+        std::abs(a + b - 2 * z) > tolerance) {return false;}
+    }
+  }
+  const auto direction = q - p;
+  const auto before = p - direction, after = q + direction;
+  if (before.x < 0 || before.y < 0 || after.x < 0 || after.y < 0 ||
+    before.x >= heights.cols || before.y >= heights.rows ||
+    after.x >= heights.cols || after.y >= heights.rows) {return false;}
+  const double a = heights.at<double>(before), b = heights.at<double>(after);
+  if (!std::isfinite(a) || !std::isfinite(b)) {return false;}
+  return std::abs(delta - (heights.at<double>(p) - a)) <= tolerance &&
+         std::abs(delta - (b - heights.at<double>(q))) <= tolerance;
+}
+
 static std::vector<PlaneRegion> connected_observations(
   const CuboidHeightObservation & obs, const DetectorProfile & profile,
   const cv::Mat * allowed_cells)
@@ -383,15 +445,13 @@ static std::vector<PlaneRegion> connected_observations(
       available.at<uint8_t>(r, c) = 0;
       while (!pending.empty()) {
         const auto pixel = pending.back(); pending.pop_back(); patch.pixels.push_back(pixel);
-        const double z = obs.heights.at<double>(pixel.y, pixel.x);
         for (int dy = -1; dy <= 1; ++dy) {
           for (int dx = -1; dx <= 1; ++dx) {
             const int x = pixel.x + dx, y = pixel.y + dy;
             if (x < 0 || x >= available.cols || y < 0 || y >= available.rows ||
               available.at<uint8_t>(y, x) != 255) {continue;}
-            if (!within_height_tolerance(
-                z, obs.heights.at<double>(y, x),
-                profile.cuboid.height_tolerance_m)) {continue;}
+            if (!continuous_height_edge(
+                obs.heights, pixel, {x, y}, profile.cuboid.height_tolerance_m)) {continue;}
             available.at<uint8_t>(y, x) = 0; pending.push_back({x, y});
           }
         }
