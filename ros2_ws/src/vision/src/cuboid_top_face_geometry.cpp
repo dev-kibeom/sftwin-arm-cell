@@ -397,11 +397,11 @@ static bool continuous_height_edge(
   if (std::abs(delta) <= tolerance) {return true;}
   // A crossing supported along one direction alone can connect unrelated
   // faces at a corner. Require a coherent measured stencil on both ends.
-  for (const auto center : {p, q}) {
+  for (const auto & center : {p, q}) {
     if (center.x < 1 || center.y < 1 || center.x + 1 >= heights.cols ||
       center.y + 1 >= heights.rows) {return false;}
     const double z = heights.at<double>(center);
-    for (const auto axis : {cv::Point(1, 0), cv::Point(0, 1),
+    for (const auto & axis : {cv::Point(1, 0), cv::Point(0, 1),
         cv::Point(1, 1), cv::Point(1, -1)})
     {
       const double a = heights.at<double>(center - axis);
