@@ -938,6 +938,7 @@ DetectionResult process_cuboid_top_face(
       obs.image_boundary.at<uint8_t>(y, x) = 255;
     }
   }
+  cuboid_geometry::filter_height_impulses(obs, profile.cuboid.height_tolerance_m);
   auto result = detect_cuboid_top_face(obs, profile, input.detailed_diagnostics_enabled);
   if (result.cuboid_replay_evidence) {
     result.cuboid_replay_evidence->frame_id = "Tray";

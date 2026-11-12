@@ -10,6 +10,8 @@ namespace arm_cell_vision
 {
 namespace cuboid_geometry
 {
+void filter_height_impulses(CuboidHeightObservation & obs, double tolerance);
+
 struct Face
 {
   double length;
