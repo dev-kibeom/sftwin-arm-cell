@@ -128,7 +128,7 @@ source /opt/ros/humble/setup.bash
 ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
-Launcher는 시작 전에 Bringup의 공개 export CLI로 runtime JSON을 생성합니다. Isaac은 이 파일만 읽으며 Bringup Python 코드를 import하지 않습니다. 자재·정책 설정을 변경하면 launcher를 다시 실행해 export를 갱신합니다. Script Editor 및 검증용 설정 export는 [설정 소유권과 조립](docs/design/architecture/components.md#설정-소유권과-조립)을 참조하세요.
+Launcher는 시작 전에 Bringup의 공개 export CLI로 runtime JSON을 생성합니다. Isaac은 이 파일만 읽으며 Bringup Python 코드를 import하지 않습니다. 자재·정책 설정을 변경하면 launcher를 다시 실행해 export를 갱신합니다. Script Editor 및 검증용 설정 export는 [설정 export와 Script Editor 실행](#설정-export와-script-editor-실행)을 참조하세요.
 
 Isaac Sim 설치 위치가 `$HOME/isaac_sim`과 다르면 `ISAAC_SIM_ROOT`를 지정합니다.
 
@@ -136,6 +136,30 @@ Isaac Sim 설치 위치가 `$HOME/isaac_sim`과 다르면 `ISAAC_SIM_ROOT`를 �
 source /opt/ros/humble/setup.bash
 ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
+
+### 설정 export와 Script Editor 실행
+
+기본 launcher는 선택한 운영 프로파일을 `.run_records/runtime_configuration.json`으로 export한 뒤 Isaac을 시작합니다. `ARM_CELL_PROFILE`로 입력 프로파일을, `ARM_CELL_RUNTIME_CONFIG`로 출력 파일을 선택할 수 있습니다.
+
+Script Editor로 직접 시작할 때는 ROS workspace를 빌드하고 overlay를 source한 터미널에서 먼저 export합니다.
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/operational_profile.yaml \
+  --output .run_records/runtime_configuration.json
+```
+
+Isaac 프로세스에 `SFTWIN_PROJECT_ROOT`를 저장소 절대 경로로 설정합니다. 기본 파일 이외의 export를 읽으려면 `ARM_CELL_RUNTIME_CONFIG`에 해당 파일의 절대 경로를 설정합니다. 설정을 바꾸면 다시 export하고 Isaac 구성을 다시 로드합니다. ROS의 명시적 `profile:=` 인자는 해당 ROS 실행에만 적용됩니다.
+
+검증용 PnP는 별도 프로파일을 export합니다.
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/pnp_validation_profile.yaml \
+  --output .run_records/pnp_runtime_configuration.json
+```
+
+검증 entrypoint는 이 파일을 기본으로 읽으며, `SFTWIN_PNP_PROFILE`에 다른 export 파일의 절대 경로를 지정할 수 있습니다. 상대 설정 경로는 선언 파일 기준, `package://`는 해당 ROS 패키지 기준, `project://`는 프로젝트 기준으로 해석합니다.
 
 ### 방법 1: 호스트에서 ROS 2 빌드 및 실행
 
