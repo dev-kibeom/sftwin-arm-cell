@@ -5,7 +5,7 @@
   "objects": [
     {
       "id": "factory_floor",
-      "display_name": "FactoryFloor",
+      "display_name": "Environment/FactoryFloor",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -30,7 +30,7 @@
     },
     {
       "id": "pedestal",
-      "display_name": "Pedestal",
+      "display_name": "RobotStation/Pedestal",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -55,7 +55,7 @@
     },
     {
       "id": "pedestal_top",
-      "display_name": "PedestalTop",
+      "display_name": "RobotStation/PedestalTop",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -80,7 +80,7 @@
     },
     {
       "id": "robot_riser",
-      "display_name": "RobotRiser",
+      "display_name": "RobotStation/RobotRiser",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -105,7 +105,7 @@
     },
     {
       "id": "cnc_base",
-      "display_name": "CNC Base",
+      "display_name": "CNC/Base",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -130,7 +130,7 @@
     },
     {
       "id": "cnc_front_left",
-      "display_name": "CNC FrontFrameLeft",
+      "display_name": "CNC/FrontFrameLeft",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -155,7 +155,7 @@
     },
     {
       "id": "cnc_front_top",
-      "display_name": "CNC FrontFrameTop",
+      "display_name": "CNC/FrontFrameTop",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -180,7 +180,7 @@
     },
     {
       "id": "cnc_upper_housing",
-      "display_name": "CNC UpperHousing",
+      "display_name": "CNC/UpperHousing",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -205,7 +205,7 @@
     },
     {
       "id": "camera_rig_post_left",
-      "display_name": "CameraRig PostLeft",
+      "display_name": "CameraRig/PostLeft",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -216,7 +216,7 @@
       },
       "pose": {
         "position_m": [
-          -0.56,
+          -0.86,
           -0.35,
           0.95
         ],
@@ -230,7 +230,7 @@
     },
     {
       "id": "camera_rig_post_right",
-      "display_name": "CameraRig PostRight",
+      "display_name": "CameraRig/PostRight",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -255,18 +255,18 @@
     },
     {
       "id": "camera_rig_top_beam",
-      "display_name": "CameraRig TopBeam",
+      "display_name": "CameraRig/TopBeam",
       "geometry": {
         "type": "box",
         "dimensions_m": [
-          1.88,
+          2.18,
           0.06,
           0.06
         ]
       },
       "pose": {
         "position_m": [
-          0.35,
+          0.2,
           -0.35,
           1.88
         ],
@@ -280,7 +280,7 @@
     },
     {
       "id": "camera_boom",
-      "display_name": "CameraBoom",
+      "display_name": "CameraRig/CameraBoom",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -305,7 +305,7 @@
     },
     {
       "id": "camera_drop_bracket",
-      "display_name": "CameraDropBracket",
+      "display_name": "CameraRig/CameraDropBracket",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -330,7 +330,7 @@
     },
     {
       "id": "cable_tray",
-      "display_name": "CableTray",
+      "display_name": "CameraRig/CableTray",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -355,7 +355,7 @@
     },
     {
       "id": "amr_base",
-      "display_name": "AMR Base",
+      "display_name": "AMR/Mockup/Base",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -380,7 +380,7 @@
     },
     {
       "id": "amr_upper_body",
-      "display_name": "AMR UpperBody",
+      "display_name": "AMR/Mockup/UpperBody",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -405,7 +405,7 @@
     },
     {
       "id": "amr_tray_lift",
-      "display_name": "AMR TrayLift",
+      "display_name": "AMR/Mockup/TrayLift",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -430,7 +430,7 @@
     },
     {
       "id": "amr_tray",
-      "display_name": "AMR Tray",
+      "display_name": "AMR/Mockup/Tray",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -455,7 +455,7 @@
     },
     {
       "id": "amr_tray_rail_left",
-      "display_name": "AMR Tray LeftRail",
+      "display_name": "AMR/Mockup/TrayRails/LeftRail",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -480,7 +480,7 @@
     },
     {
       "id": "amr_tray_rail_right",
-      "display_name": "AMR Tray RightRail",
+      "display_name": "AMR/Mockup/TrayRails/RightRail",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -505,7 +505,7 @@
     },
     {
       "id": "amr_tray_rail_front",
-      "display_name": "AMR Tray FrontRail",
+      "display_name": "AMR/Mockup/TrayRails/FrontRail",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -530,7 +530,7 @@
     },
     {
       "id": "amr_tray_rail_rear",
-      "display_name": "AMR Tray RearRail",
+      "display_name": "AMR/Mockup/TrayRails/RearRail",
       "geometry": {
         "type": "box",
         "dimensions_m": [
@@ -555,7 +555,7 @@
     },
     {
       "id": "amr_tray_marker_post",
-      "display_name": "AMR Tray Front Marker Post",
+      "display_name": "AMR/Mockup/TrayMarkerPost",
       "geometry": {
         "type": "box",
         "dimensions_m": [
