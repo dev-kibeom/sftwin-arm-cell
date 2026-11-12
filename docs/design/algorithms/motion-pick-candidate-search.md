@@ -168,6 +168,14 @@ LOW·미선택 대안·UNRESOLVED 영역은 일반 `material_candidates`에 없�
 
 Grasp 해의 끝점 검증은 Motion FDS의 Occupancy 전략을 적용하고 PICK 접근 경로 계획에서는 현재 target의 관측 Occupancy가 포함된 요청 범위 Scene을 사용하며, PICK 삽입·후퇴 및 PLACE에서는 제외한다. 고정 설비·Tray·Robot Self Collision·Attached Object 검사는 유지한다.
 
+`FINGER_CLEARANCE` 모드에서는 명목 손가락 보호영역을 통과한 선정 후보를 먼저 평가한다.
+이 후보들 사이에서는 양쪽 보호영역의 반경을 함께 확장하여 먼저 점유와 교차하는
+쪽의 반경이 큰 순서로 평가한다. 접촉 Span과 삽입 깊이는 유지하며, 반경은 기존
+설정값부터 최소 0.100 m까지의 구간을 10회 이분 탐색한다. 점수 동률은 기존
+거리·Tilt 정책 순서를 유지한다. 주변 반환 자재와 Tray Rail을 비교 근거로 사용하며,
+미관측 공간의 자유를 보증하지 않는다. 기존 충돌 검사와 IK·경로 검증 및 보류 후보
+Fallback은 유지한다.
+
 ### Finger Clearance 계산
 
 `FINGER_CLEARANCE`는 기존 Grasp Contact의 Closing Axis와 예상 폭을 재사용한다.
