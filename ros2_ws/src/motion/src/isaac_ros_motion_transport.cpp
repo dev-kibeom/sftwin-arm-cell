@@ -5675,8 +5675,9 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         }
         const auto & position = request.object_pose.pose.position;
         const Eigen::Vector3d object_center(position.x, position.y, position.z);
-        // Preserve geometric order within each group and retain deferred poses
-        // for the existing fallback search when nominal clearance is misleading.
+        // Rank nominal finger space before geometric tie breakers. Deferred poses
+        // remain available to the existing IK and planning fallback search.
+        std::map<std::size_t, double> finger_space;
         const auto first_deferred = std::stable_partition(
           grasp_pose_candidates.begin(), grasp_pose_candidates.end(),
           [&](const PickGraspPoseCandidate & candidate) {
@@ -5703,7 +5704,28 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             const auto clearance = evaluate_finger_occupancy(
               tcp, object_center, object_orientation, candidate.contact, insertion,
               clearance_occupancy, finger_clearance_);
-            return clearance.valid && clearance.allowed;
+            if (!clearance.valid || !clearance.allowed) {return false;}
+            // Expanding both finger radii measures the limiting side. Cap the
+            // preference at 10 cm; absent occupancy is not proof of free space.
+            double lower = finger_clearance_.radius_m;
+            double upper = std::max(lower, 0.100);
+            for (int step = 0; step < 10; ++step) {
+              auto dimensions = finger_clearance_;
+              dimensions.radius_m = (lower + upper) * 0.5;
+              const auto expanded = evaluate_finger_occupancy(
+                tcp, object_center, object_orientation, candidate.contact, insertion,
+                clearance_occupancy, dimensions);
+              if (expanded.valid && expanded.allowed) {lower = dimensions.radius_m;} else {
+                upper = dimensions.radius_m;
+              }
+            }
+            finger_space[candidate.generation_index] = lower;
+            return true;
+          });
+        std::stable_sort(
+          grasp_pose_candidates.begin(), first_deferred,
+          [&](const auto & lhs, const auto & rhs) {
+            return finger_space.at(lhs.generation_index) > finger_space.at(rhs.generation_index);
           });
         constexpr std::size_t preferred_pose_limit = 10U;
         preferred_pose_end = std::min(
