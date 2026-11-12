@@ -1,6 +1,7 @@
 """Shared operational RawPart profile loading and visible fiducial geometry."""
 
 import math
+import os
 from pathlib import Path
 
 import cv2
@@ -14,10 +15,11 @@ PROFILE_RELATIVE_PATH = Path(
 
 def load_rawpart_profile(project_root):
     """Load and validate the RawPart deployment values from the ROS profile."""
-    path = Path(project_root).expanduser().resolve() / PROFILE_RELATIVE_PATH
+    path = Path(os.environ.get("ARM_CELL_PROFILE", Path(project_root).expanduser().resolve() / PROFILE_RELATIVE_PATH))
     if not path.is_file():
         raise ValueError(f"operational profile is unavailable: {path}")
-    config = yaml.safe_load(path.read_text()) or {}
+    from runtime_configuration import load_profile, selected_profile
+    config = load_profile(path)
     profile = config.get("vision", {}).get("detector_profiles", {}).get("RawPart")
     if not isinstance(profile, dict) or profile.get("target_id") != "RawPart":
         raise ValueError("Vision must configure the RawPart target profile")

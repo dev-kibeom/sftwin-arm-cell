@@ -73,7 +73,7 @@ def _load_home_joint_positions():
         )
     home_path = (
         Path(configured_root).expanduser().resolve()
-        / "ros2_ws/src/bringup/config/home_joint_positions.yaml"
+        / "ros2_ws/src/motion/config/home_joint_positions.yaml"
     )
     config = yaml.safe_load(home_path.read_text()) or {}
     positions = tuple(float(value) for value in config.get("home_joint_positions", ()))
@@ -97,7 +97,8 @@ def _load_operational_profile():
         Path(configured_root).expanduser().resolve()
         / "ros2_ws/src/bringup/config/operational_profile.yaml"
     )
-    return yaml.safe_load(profile_path.read_text()) or {}
+    from runtime_configuration import load_profile, selected_profile
+    return load_profile(selected_profile())
 
 
 def _author_initial_home_targets(stage):

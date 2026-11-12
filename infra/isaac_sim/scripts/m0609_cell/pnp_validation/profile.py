@@ -157,6 +157,10 @@ def load_validation_profile(path: str | Path) -> dict:
     recipe_directory = orchestration.get("recipe_directory", "recipes")
     if not isinstance(target_id, str) or not target_id:
         raise ValueError("validation profile must select a mission target_id")
+    if recipe_directory.startswith("package://"):
+        from runtime_configuration import load_profile  # bootstrap shared source resolver
+        from arm_cell_configuration.runtime import resolve, mission_directory
+        recipe_directory = mission_directory(resolve(recipe_directory, profile_path.parent))
     recipe_path = profile_path.parent / recipe_directory / f"{target_id}.json"
     recipe = json.loads(recipe_path.read_text())
     # PICK Approach belongs to the selected mission Recipe, not Motion tuning.

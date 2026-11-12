@@ -104,8 +104,9 @@ else:
         project_root
         / "ros2_ws/src/bringup/config/operational_profile.yaml"
     )
-    with operational_profile_path.open("r", encoding="utf-8") as profile_file:
-        operational_profile = yaml.safe_load(profile_file)
+    from runtime_configuration import load_profile, selected_profile
+    operational_profile_path = selected_profile()
+    operational_profile = load_profile(operational_profile_path)
     mission_recipe = load_production_mission_recipe(
         operational_profile, operational_profile_path
     )

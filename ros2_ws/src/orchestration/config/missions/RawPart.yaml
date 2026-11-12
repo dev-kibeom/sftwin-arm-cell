@@ -1,0 +1,8 @@
+schema_version: 2
+mission_id: rawpart-placement-v1
+target_id: RawPart
+material: package://arm_cell_configuration/config/materials/RawPart.yaml
+pick_policy: package://arm_cell_task_execution/config/pick_policy.yaml
+place_task: package://arm_cell_task_execution/config/place_tasks/RawPart.yaml
+vision:
+  algorithm: cuboid_top_face

@@ -19,6 +19,7 @@
   <depend>std_srvs</depend>
   <depend>nlohmann-json-dev</depend>
 
+  <test_depend>arm_cell_configuration</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>

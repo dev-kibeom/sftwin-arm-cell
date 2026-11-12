@@ -27,11 +27,11 @@ def test_camera_overlay_requires_snapshot_when_no_packaged_snapshot_exists(
     context.launch_configurations.update({"profile": str(profile), "snapshot": ""})
     module = load_module()
     bringup_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
-    vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_vision"
+    vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_sim_adapter"
     bringup_share.mkdir(parents=True)
     vision_share.mkdir(parents=True)
     module.get_package_share_directory = lambda package: str(
-        vision_share if package == "arm_cell_vision" else bringup_share
+        vision_share if package == "arm_cell_sim_adapter" else bringup_share
     )
     monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     with pytest.raises(RuntimeError, match="inspector-generated"):
@@ -96,13 +96,13 @@ def test_camera_overlay_snapshot_argument_overrides_profile(tmp_path):
     assert len(nodes) == 2
 
 
-def test_camera_overlay_uses_vision_package_snapshot_by_default(
+def test_camera_overlay_uses_simulation_adapter_snapshot_by_default(
     tmp_path, monkeypatch
 ):
     bringup_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
-    vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_vision"
+    vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_sim_adapter"
     bringup_share.mkdir(parents=True)
-    snapshot = vision_share / "config/isaac_d455_camera_calibration.json"
+    snapshot = vision_share / "config/isaac_camera_stage_snapshot.json"
     snapshot.parent.mkdir(parents=True)
     snapshot.write_text(
         json.dumps(
@@ -124,7 +124,7 @@ def test_camera_overlay_uses_vision_package_snapshot_by_default(
     )
     module = load_module()
     module.get_package_share_directory = lambda package: str(
-        vision_share if package == "arm_cell_vision" else bringup_share
+        vision_share if package == "arm_cell_sim_adapter" else bringup_share
     )
     monkeypatch.delenv("SFTWIN_PROJECT_ROOT", raising=False)
     context = LaunchContext()

@@ -25,6 +25,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
+from arm_cell_configuration.runtime import resolve, mission_directory
 
 
 def _load_console_output_format():
@@ -80,7 +81,7 @@ def compose(context):
     validate_motion_completion_tolerances(config)
     share = Path(get_package_share_directory("arm_cell_bringup"))
     home_config = (
-        yaml.safe_load((share / "config/home_joint_positions.yaml").read_text()) or {}
+        yaml.safe_load((Path(get_package_share_directory("arm_cell_motion")) / "config/home_joint_positions.yaml").read_text()) or {}
     )
     home_joint_positions = home_config["home_joint_positions"]
     if len(home_joint_positions) != 6:
@@ -180,9 +181,7 @@ def compose(context):
                     **profile_parameters(config, "orchestration"),
                     "mission_target_id": target_id,
                     "recipe_directory": str(
-                        share
-                        / "config"
-                        / config["orchestration"].get("recipe_directory", "recipes")
+                        mission_directory(resolve(config["orchestration"]["recipe_directory"], profile_path.parent))
                     ),
                 }
             ],

@@ -584,9 +584,9 @@ def inspect_stage(output_path, reference_prim_paths=None):
 
 
 def script_editor_output_path(
-    environ, script_path=None, default_filename="isaac_d455_camera_calibration.json"
+    environ, script_path=None, default_filename="isaac_camera_stage_snapshot.json"
 ):
-    """Return an explicit override or the Vision package config path."""
+    """Return an explicit override or the simulation adapter config path."""
     output = environ.get("SFTWIN_CAMERA_SNAPSHOT_PATH")
     path = (
         Path(output).expanduser()
@@ -594,7 +594,7 @@ def script_editor_output_path(
         else project_root(
             script_path if script_path is not None else __file__, environ
         )
-        / "ros2_ws/src/vision/config"
+        / "ros2_ws/src/sim_adapter/config"
         / default_filename
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -618,7 +618,7 @@ def run_entrypoint(
     script_path=None,
     environ=None,
     inspector=inspect_stage,
-    output_filename="isaac_d455_camera_calibration.json",
+    output_filename="isaac_camera_stage_snapshot.json",
 ):
     """Choose strict CLI parsing or the Script Editor-safe environment entrypoint."""
     effective_path = script_path if script_path is not None else __file__

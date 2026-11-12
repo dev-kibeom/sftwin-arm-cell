@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-OUTPUT_FILENAME = "isaac_d455_camera_calibration.json"
+OUTPUT_FILENAME = "isaac_camera_stage_snapshot.json"
 
 
 def _add_cell_module_root():

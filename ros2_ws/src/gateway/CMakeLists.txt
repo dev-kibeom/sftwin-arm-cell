@@ -34,4 +34,5 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_material_handoff_coordinator arm_cell_interfaces)
 endif()
 
+install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 ament_package()

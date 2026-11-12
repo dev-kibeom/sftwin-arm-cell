@@ -75,10 +75,19 @@ if(BUILD_TESTING)
   target_include_directories(test_motion_feedback_supervision PRIVATE include)
   ament_target_dependencies(test_motion_feedback_supervision arm_cell_interfaces)
 
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E env
+      "PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/../configuration"
+      ${Python3_EXECUTABLE} -c
+      "from arm_cell_configuration.runtime import mission_directory; print(mission_directory('${CMAKE_CURRENT_SOURCE_DIR}/config/missions', '${CMAKE_CURRENT_BINARY_DIR}/mission_transport'))"
+    OUTPUT_VARIABLE mission_transport_directory
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY)
   ament_add_gtest(test_cycle_coordinator tests/test_cycle_coordinator.cpp)
   target_include_directories(test_cycle_coordinator PRIVATE include)
   target_compile_definitions(test_cycle_coordinator PRIVATE
-    ARM_CELL_TEST_RECIPE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../bringup/config/recipes")
+    ARM_CELL_TEST_RECIPE_DIR="${mission_transport_directory}")
   target_link_libraries(test_cycle_coordinator arm_cell_orchestration_core)
   ament_target_dependencies(
     test_cycle_coordinator arm_cell_interfaces builtin_interfaces)

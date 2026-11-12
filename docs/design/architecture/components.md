@@ -116,3 +116,26 @@ flowchart LR
 | 외부 Mock·센서 관측과 정식 판단 | VDA·Simulation·Camera·State Adapter는 각 외부 사실과 정규 관측을 제공하며 Gateway·Vision·Motion·Safety 등 각 Owner가 정식 의미를 판단 | Mock 결과, UI 표시 및 원본 센서값만으로 업무·인지·Safety 결과가 확정되지 않음 |
 
 세부 상태·단계·실패·복구 및 공유 필드 의미는 해당 CDS·FDS·ICD를 따른다. 이 문서는 새로운 Gate·상태·Retry·Timeout을 정의하지 않는다.
+
+## 설정 소유권과 조립
+
+컴포넌트는 설정 값의 의미·기본값·유효성 검증을 소유한다. Bringup의
+`config/operational_profile.yaml`은 `package://` 참조로 소유 설정을 선택한다.
+공유 셀 기하와 자재 정의는 `arm_cell_configuration`, Calibration은 Vision,
+Camera stage snapshot은 Simulation Adapter, HOME 관절 목표는 Motion에 둔다.
+Isaac의 물성·drive·capture 설정은 `infra/isaac_sim/config`에 둔다.
+
+Orchestration의 `config/missions`는 자재·PICK 정책·PLACE 작업을 연결한다.
+자재별 `pick_offset`은 자재 기하 중심 기준의 위치(m)·회전(xyzw) 변환이다.
+전역 PICK 정책은 Task Execution의 `config/pick_policy.yaml`이 소유하며,
+접근·backoff·허용오차 및 yaw 정책은 자재 offset으로 덮어쓰지 않는다.
+Motion의 도구 축 규약은 자재 회전 offset 뒤에 합성한다.
+PLACE 정의는 `task_execution/config/place_tasks`가 소유하고 WAYPOINT 목표도
+같은 정의에서 파생한다. C++ recipe 입력은 조립 시 생성하는 JSON 산출물이며
+수동 편집 원본이 아니다. 검증용 PICK 정책과 fixture profile은 운영과 분리한다.
+
+ROS와 Isaac에서 사용자 지정 프로파일을 함께 사용하려면 두 프로세스에 같은
+절대 경로의 `ARM_CELL_PROFILE`을 설정한다. ROS의 명시적 `profile:=` 인자는
+해당 ROS 실행에 우선하며, 이미 실행 중인 외부 Isaac 프로세스를 변경하지 않는다.
+상대 파일 경로는 선언 파일 기준, `package://`는 해당 패키지 기준,
+`project://`는 프로젝트 기준으로 해석한다.

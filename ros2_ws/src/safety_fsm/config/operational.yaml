@@ -1,0 +1,2 @@
+freshness_timeout_ms: 500
+source_timestamp_max_age_ms: 2000

@@ -53,8 +53,8 @@ def compose(context):
         snapshot_path = config.get("camera_snapshot")
     if not snapshot_path:
         candidate = (
-            Path(get_package_share_directory("arm_cell_vision"))
-            / "config/isaac_d455_camera_calibration.json"
+            Path(get_package_share_directory("arm_cell_sim_adapter"))
+            / "config/isaac_camera_stage_snapshot.json"
         )
         if candidate.is_file():
             snapshot_path = str(candidate)
