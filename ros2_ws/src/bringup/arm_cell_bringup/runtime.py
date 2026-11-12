@@ -22,15 +22,15 @@ def project_root():
 def resolve(reference, base):
     if reference.startswith('package://'):
         package, relative = reference[10:].split('/', 1)
-        # Source operation is also supported in Isaac without a ROS environment.
+        # The source export CLI also works without installed ROS packages.
         try:
-            if (Path(__file__).resolve().parents[1] / 'package.xml').is_file() and Path(__file__).resolve().parents[1].name == 'configuration':
+            if (Path(__file__).resolve().parents[1] / 'package.xml').is_file() and Path(__file__).resolve().parents[1].name == 'bringup':
                 raise ImportError('source configuration uses source package owners')
             from ament_index_python.packages import get_package_share_directory
             root = Path(get_package_share_directory(package))
         except (ImportError, LookupError):
             source_root = Path(__file__).resolve().parents[2]
-            candidates = list(source_root.glob('*/package.xml')) if (source_root / 'configuration/package.xml').is_file() else list((project_root() / 'ros2_ws/src').glob('*/package.xml'))
+            candidates = list(source_root.glob('*/package.xml')) if (source_root / 'bringup/package.xml').is_file() else list((project_root() / 'ros2_ws/src').glob('*/package.xml'))
             import xml.etree.ElementTree as ET
             roots = [p.parent for p in candidates if ET.parse(p).findtext('name') == package]
             if len(roots) != 1:
@@ -42,7 +42,7 @@ def resolve(reference, base):
         return path.resolve()
     if reference.startswith('project://'):
         for ancestor in (Path(base).resolve(), *Path(base).resolve().parents):
-            if (ancestor / 'ros2_ws/src/configuration').is_dir():
+            if (ancestor / 'ros2_ws/src/bringup').is_dir():
                 return (ancestor / reference[10:]).resolve()
         return (project_root() / reference[10:]).resolve()
     path = Path(reference).expanduser()
@@ -155,5 +155,29 @@ def load_profile(path):
     return config
 
 
-def selected_profile():
-    return Path(os.environ.get('ARM_CELL_PROFILE', project_root() / 'ros2_ws/src/bringup/config/operational_profile.yaml'))
+def export_runtime_configuration(profile_path, output_path):
+    """Export self-contained data for external runtimes; no Python API is shared."""
+    profile_path = Path(profile_path).expanduser().resolve()
+    configuration = load_profile(profile_path)
+    orchestration = configuration['orchestration']
+    directory = orchestration['recipe_directory']
+    if str(directory).startswith('package://'):
+        directory = mission_directory(resolve(directory, profile_path.parent))
+    recipe = json.loads((Path(directory) / f"{orchestration['mission_target_id']}.json").read_text())
+    configuration = copy.deepcopy(configuration)
+    # External runtimes consume the embedded recipe, never ROS-local temp paths.
+    configuration['orchestration'].pop('recipe_directory', None)
+    home = read(resolve('package://arm_cell_motion/config/home_joint_positions.yaml', profile_path.parent))
+    configuration['home_joint_positions'] = home['home_joint_positions']
+    configuration['_mission_recipe'] = recipe
+    document = {'kind': 'arm-cell-runtime-configuration', 'schema_version': 1,
+                'source_profile': str(profile_path), 'configuration': configuration}
+    canonical = json.dumps(configuration, sort_keys=True, allow_nan=False).encode()
+    document['configuration_sha256'] = hashlib.sha256(canonical).hexdigest()
+    destination = Path(output_path).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode='w', dir=destination.parent, delete=False) as stream:
+        json.dump(document, stream, indent=2, allow_nan=False)
+        temporary = stream.name
+    os.replace(temporary, destination)
+    return destination

@@ -116,6 +116,8 @@ source /opt/ros/humble/setup.bash
 ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
+Before starting Isaac, the launcher invokes Bringup’s public export CLI to produce runtime JSON. Isaac reads that data without importing Bringup Python code. Restart the launcher after changing material or policy settings to refresh the export. See [configuration ownership and assembly](docs/design/architecture/components.md#설정-소유권과-조립) for Script Editor and validation exports.
+
 If Isaac Sim is not installed at `$HOME/isaac_sim`, set its location:
 
 ```bash

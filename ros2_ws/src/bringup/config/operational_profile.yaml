@@ -13,4 +13,4 @@ components:
   orchestration: package://arm_cell_orchestration/config/operational.yaml
   simulation: project://infra/isaac_sim/config/simulation.yaml
   gripper_capture: project://infra/isaac_sim/config/gripper_capture.yaml
-  cell_geometry: package://arm_cell_configuration/config/cell_geometry.yaml
+  cell_geometry: package://arm_cell_bringup/config/cell_geometry.yaml

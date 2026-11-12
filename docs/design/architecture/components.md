@@ -121,11 +121,11 @@ flowchart LR
 
 컴포넌트는 설정 값의 의미·기본값·유효성 검증을 소유한다. Bringup의
 `config/operational_profile.yaml`은 `package://` 참조로 소유 설정을 선택한다.
-공유 셀 기하와 자재 정의는 `arm_cell_configuration`, Calibration은 Vision,
+공유 셀 기하와 자재 정의는 Bringup의 배포 구성으로 보관하고, Calibration은 Vision,
 Camera stage snapshot은 Simulation Adapter, HOME 관절 목표는 Motion에 둔다.
 Isaac의 물성·drive·capture 설정은 `infra/isaac_sim/config`에 둔다.
 
-Orchestration의 `config/missions`는 자재·PICK 정책·PLACE 작업을 연결한다.
+Bringup의 `config/missions`는 자재·PICK 정책·PLACE 작업을 연결한다.
 자재별 `pick_offset`은 자재 기하 중심 기준의 위치(m)·회전(xyzw) 변환이다.
 전역 PICK 정책은 Task Execution의 `config/pick_policy.yaml`이 소유하며,
 접근·backoff·허용오차 및 yaw 정책은 자재 offset으로 덮어쓰지 않는다.
@@ -134,8 +134,26 @@ PLACE 정의는 `task_execution/config/place_tasks`가 소유하고 WAYPOINT 목
 같은 정의에서 파생한다. C++ recipe 입력은 조립 시 생성하는 JSON 산출물이며
 수동 편집 원본이 아니다. 검증용 PICK 정책과 fixture profile은 운영과 분리한다.
 
-ROS와 Isaac에서 사용자 지정 프로파일을 함께 사용하려면 두 프로세스에 같은
-절대 경로의 `ARM_CELL_PROFILE`을 설정한다. ROS의 명시적 `profile:=` 인자는
-해당 ROS 실행에 우선하며, 이미 실행 중인 외부 Isaac 프로세스를 변경하지 않는다.
+Bringup은 설정을 조립한 뒤 외부 runtime용 JSON 데이터 계약으로 내보낸다.
+Isaac은 이 파일을 자체 로더로 읽으며 Bringup Python 모듈을 import하지 않는다.
+파일에는 선택한 Mission recipe와 HOME 값이 포함되며 ROS 임시 경로를 따라가지 않는다.
+스키마 버전·설정 해시·Mission 대상 일치를 검사한다. 각 소비자의 의미 검증은 유지한다.
+
+기본 `isaac_arm_cell.sh` launcher는 시작 전에 별도 프로세스로 export CLI를 실행한다.
+Isaac 프로세스에는 JSON 경로만 전달하며 producer의 Python 경로는 전달하지 않는다.
+Script Editor로 직접 시작하거나 별도 프로파일을 준비할 때는 ROS 환경에서 다음을 실행한다.
+
+```bash
+ros2 run arm_cell_bringup export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/operational_profile.yaml \
+  --output .run_records/runtime_configuration.json
+```
+
+Isaac은 `SFTWIN_PROJECT_ROOT/.run_records/runtime_configuration.json`을 기본으로
+읽으며 `ARM_CELL_RUNTIME_CONFIG`로 다른 파일을 선택할 수 있다. 설정을 바꾸면
+다시 export하고 Isaac 구성을 다시 로드한다. 검증용 PnP는
+`pnp_validation_profile.yaml`을 `.run_records/pnp_runtime_configuration.json`으로
+export하며 `SFTWIN_PNP_PROFILE`로 다른 export 파일을 선택할 수 있다.
+ROS의 `ARM_CELL_PROFILE` 또는 명시적 `profile:=` 인자는 ROS 조립 입력을 선택한다.
 상대 파일 경로는 선언 파일 기준, `package://`는 해당 패키지 기준,
 `project://`는 프로젝트 기준으로 해석한다.

@@ -1,7 +1,7 @@
 schema_version: 2
 mission_id: cube-validation-placement-v1
 target_id: cube_profile
-material: package://arm_cell_configuration/config/materials/cube_profile.yaml
+material: package://arm_cell_bringup/config/materials/cube_profile.yaml
 pick_policy: package://arm_cell_task_execution/config/validation_pick_policy.yaml
 place_task: package://arm_cell_task_execution/config/place_tasks/cube_profile.yaml
 vision: {}

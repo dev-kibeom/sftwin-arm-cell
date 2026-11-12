@@ -38,7 +38,7 @@ def test_validation_profile_loader_rejects_missing_or_invalid_recipe_approach(
     profile_data = yaml.safe_load(
         (config_directory / "pnp_validation_profile.yaml").read_text()
     )
-    from arm_cell_configuration.runtime import resolve, mission_directory
+    from arm_cell_bringup.runtime import resolve, mission_directory
     recipe_source = Path(mission_directory(resolve(profile_data["orchestration"]["recipe_directory"], config_directory)))
     recipe_directory = "recipes"
     profile_data["orchestration"]["recipe_directory"] = recipe_directory

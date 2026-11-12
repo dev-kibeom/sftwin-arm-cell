@@ -19,4 +19,11 @@ if [[ ! -f "$STARTUP_SCRIPT" ]]; then
 fi
 
 export SFTWIN_PROJECT_ROOT="$PROJECT_ROOT"
+# Run the public producer CLI in a separate process. Isaac receives only JSON;
+# the temporary Python search path is not inherited by the simulator.
+export ARM_CELL_RUNTIME_CONFIG="${ARM_CELL_RUNTIME_CONFIG:-$PROJECT_ROOT/.run_records/runtime_configuration.json}"
+PYTHONPATH="$PROJECT_ROOT/ros2_ws/src/bringup${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 "$PROJECT_ROOT/ros2_ws/src/bringup/scripts/export_runtime_configuration" \
+    --profile "${ARM_CELL_PROFILE:-$PROJECT_ROOT/ros2_ws/src/bringup/config/operational_profile.yaml}" \
+    --output "$ARM_CELL_RUNTIME_CONFIG"
 exec "$ISAAC_LAUNCHER" "$@" --exec "$STARTUP_SCRIPT"

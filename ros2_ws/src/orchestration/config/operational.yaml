@@ -1,4 +1,4 @@
 mission_target_id: RawPart
 safety_state_freshness_timeout_ms: 1000
 vision_request_timeout_ms: 30000
-recipe_directory: package://arm_cell_orchestration/config/missions
+recipe_directory: package://arm_cell_bringup/config/missions

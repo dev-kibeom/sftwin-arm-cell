@@ -25,7 +25,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
-from arm_cell_configuration.runtime import resolve, mission_directory
+from arm_cell_bringup.runtime import resolve, mission_directory
 
 
 def _load_console_output_format():

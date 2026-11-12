@@ -8,18 +8,14 @@ import cv2
 import yaml
 
 
-PROFILE_RELATIVE_PATH = Path(
-    "ros2_ws/src/bringup/config/operational_profile.yaml"
-)
-
-
 def load_rawpart_profile(project_root):
-    """Load and validate the RawPart deployment values from the ROS profile."""
-    path = Path(os.environ.get("ARM_CELL_PROFILE", Path(project_root).expanduser().resolve() / PROFILE_RELATIVE_PATH))
-    if not path.is_file():
-        raise ValueError(f"operational profile is unavailable: {path}")
-    from runtime_configuration import load_profile, selected_profile
-    config = load_profile(path)
+    """Validate RawPart data delivered in the exported runtime contract."""
+    from runtime_configuration import load_runtime_configuration, selected_configuration
+    return validate_rawpart_profile(load_runtime_configuration(selected_configuration(project_root)))
+
+
+def validate_rawpart_profile(config):
+    """Validate consumer-owned geometry requirements independently of assembly."""
     profile = config.get("vision", {}).get("detector_profiles", {}).get("RawPart")
     if not isinstance(profile, dict) or profile.get("target_id") != "RawPart":
         raise ValueError("Vision must configure the RawPart target profile")

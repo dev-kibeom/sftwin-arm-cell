@@ -100,16 +100,9 @@ else:
         production_capture_configuration,
     )
 
-    operational_profile_path = (
-        project_root
-        / "ros2_ws/src/bringup/config/operational_profile.yaml"
-    )
-    from runtime_configuration import load_profile, selected_profile
-    operational_profile_path = selected_profile()
-    operational_profile = load_profile(operational_profile_path)
-    mission_recipe = load_production_mission_recipe(
-        operational_profile, operational_profile_path
-    )
+    from runtime_configuration import load_runtime_configuration
+    operational_profile = load_runtime_configuration()
+    mission_recipe = operational_profile['_mission_recipe']
     (
         capture_config,
         capture_reference_config,

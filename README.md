@@ -128,6 +128,8 @@ source /opt/ros/humble/setup.bash
 ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
+Launcher는 시작 전에 Bringup의 공개 export CLI로 runtime JSON을 생성합니다. Isaac은 이 파일만 읽으며 Bringup Python 코드를 import하지 않습니다. 자재·정책 설정을 변경하면 launcher를 다시 실행해 export를 갱신합니다. Script Editor 및 검증용 설정 export는 [설정 소유권과 조립](docs/design/architecture/components.md#설정-소유권과-조립)을 참조하세요.
+
 Isaac Sim 설치 위치가 `$HOME/isaac_sim`과 다르면 `ISAAC_SIM_ROOT`를 지정합니다.
 
 ```bash

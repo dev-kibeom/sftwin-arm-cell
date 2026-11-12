@@ -7,7 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 import yaml
-from arm_cell_configuration.runtime import load_profile, compile_mission
+from arm_cell_bringup.runtime import load_profile, compile_mission
 import pytest
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext, Substitution
@@ -700,7 +700,7 @@ def test_operational_profile_uses_w06_place_destination():
     rawpart = profile["vision"]["detector_profiles"]["RawPart"]
     mission = profile["orchestration"]
     assert mission["mission_target_id"] == rawpart["target_id"]
-    recipe = compile_mission(PACKAGE_ROOT.parent / "orchestration/config/missions/RawPart.yaml")[0]
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/RawPart.yaml")[0]
     assert recipe["target_id"] == mission["mission_target_id"]
     nominal_dimensions = profile["material_definitions"]["RawPart"][
         "nominal_dimensions_m"

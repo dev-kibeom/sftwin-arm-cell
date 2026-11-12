@@ -7,7 +7,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import yaml
-from arm_cell_configuration.runtime import load_profile, compile_mission, resolve, mission_directory
+from arm_cell_bringup.runtime import load_profile, compile_mission, resolve, mission_directory
 import pytest
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
@@ -109,7 +109,7 @@ def test_validation_profile_owns_moveit_planning_scaling():
 def test_validation_place_target_is_above_the_cnc_workarea():
     planning = yaml.safe_load((PACKAGE_ROOT / "config/isaac_planning.yaml").read_text())
 
-    recipe = compile_mission(PACKAGE_ROOT.parent / "orchestration/config/missions/cube_profile.yaml")[0]
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/cube_profile.yaml")[0]
     assert recipe["place"]["desired_object_pose"]["frame"] == "base_link"
     assert recipe["place"]["desired_object_pose"]["position"] == pytest.approx(
         [0.50, 0.25, 0.37]
@@ -184,7 +184,7 @@ def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
         [1.0, 0.0, 0.0, 0.0]
     )
     assert profile["motion"]["insertion_axis_tcp"] == pytest.approx([0.0, 0.0, 1.0])
-    recipe = compile_mission(PACKAGE_ROOT.parent / "orchestration/config/missions/cube_profile.yaml")[0]
+    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/cube_profile.yaml")[0]
     assert recipe["pick"]["approach_distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["direction_object"] == [

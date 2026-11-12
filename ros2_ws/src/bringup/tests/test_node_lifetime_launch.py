@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from arm_cell_configuration.runtime import load_profile, compile_mission
+from arm_cell_bringup.runtime import load_profile, compile_mission
 
 
 def _isolated_environment():

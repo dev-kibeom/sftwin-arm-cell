@@ -28,7 +28,7 @@ from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
-from arm_cell_configuration.runtime import load_profile
+from arm_cell_bringup.runtime import load_profile
 
 
 def _load_console_output_format():

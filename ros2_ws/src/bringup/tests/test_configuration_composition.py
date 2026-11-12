@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from arm_cell_configuration.runtime import compile_mission, load_profile, mission_directory, resolve
+from arm_cell_bringup.runtime import compile_mission, load_profile, mission_directory, resolve
 
 ROOT = Path(__file__).resolve().parents[4]
 SRC = ROOT / 'ros2_ws/src'
 PROFILE = SRC / 'bringup/config/operational_profile.yaml'
-MISSIONS = SRC / 'orchestration/config/missions'
+MISSIONS = SRC / 'bringup/config/missions'
 
 
 def test_composition_preserves_operational_behavior():
