@@ -1591,7 +1591,8 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   planning_group_ = node_->get_parameter("planning_group").as_string();
   model_id_ = node_->get_parameter("model_id").as_string();
   for (const auto * name : {"wrap_equivalent_joints", "place_ik_seed_joints",
-      "payload_touch_links", "pick_retract_contact_links", "pick_clearance_objects"})
+      "payload_touch_links", "pick_retract_contact_links", "pick_clearance_objects",
+      "tool_grasp_collision_links"})
   {
     if (!node_->has_parameter(name)) {
       node_->declare_parameter<std::vector<std::string>>(name, std::vector<std::string>{});
@@ -1600,6 +1601,12 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   wrap_equivalent_joints_ = node_->get_parameter("wrap_equivalent_joints").as_string_array();
   place_ik_seed_joints_ = node_->get_parameter("place_ik_seed_joints").as_string_array();
   pick_clearance_objects_ = node_->get_parameter("pick_clearance_objects").as_string_array();
+  if (!node_->has_parameter("tool_width_control")) {
+    node_->declare_parameter("tool_width_control", true);
+  }
+  tool_width_control_ = node_->get_parameter("tool_width_control").as_bool();
+  tool_grasp_collision_links_ =
+    node_->get_parameter("tool_grasp_collision_links").as_string_array();
   payload_touch_links_ = node_->get_parameter("payload_touch_links").as_string_array();
   pick_retract_contact_object_ = node_->get_parameter("pick_retract_contact_object").as_string();
   pick_retract_contact_links_ =
@@ -1841,6 +1848,7 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
     "/joint_commands", rclcpp::QoS(10).reliable().durability_volatile());
   gripper_publisher_ = node_->create_publisher<std_msgs::msg::Float64>(
     "/gripper/command", 10);
+  tool_intent_publisher_ = node_->create_publisher<std_msgs::msg::String>("/tool/intent", 10);
   gripper_close_publisher_ = node_->create_publisher<std_msgs::msg::String>(
     "/gripper/close", 10);
   capture_reference_publisher_ = node_->create_publisher<std_msgs::msg::String>(
@@ -5757,6 +5765,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       planning_context->grasp_occupancy_mode = grasp_occupancy_mode_;
       planning_context->finger_clearance = finger_clearance_;
       planning_context->pick_clearance_objects = pick_clearance_objects_;
+      planning_context->tool_grasp_collision_links = tool_grasp_collision_links_;
       planning_context->non_target_occupancy = request.non_target_occupancy;
       planning_context->grasp_ik_timeout_s = pick_grasp_ik_timeout_s_;
       planning_context->approach_ik_timeout_s = pick_approach_ik_timeout_s_;
@@ -8104,7 +8113,7 @@ void IsaacRosMotionTransport::on_gripper_status(
     }
     fields[field.substr(0, separator)] = field.substr(separator + 1);
   }
-  const auto required = {"ready", "grasp", "attached", "released", "width_mm", "seq"};
+  const auto required = {"ready", "grasp", "attached", "released", "seq"};
   for (const auto & key : required) {
     if (fields.find(key) == fields.end()) {
       log_rejection("missing_field");
@@ -8116,7 +8125,12 @@ void IsaacRosMotionTransport::on_gripper_status(
     const bool grasp = std::stoi(fields.at("grasp")) == 1;
     const bool attached = std::stoi(fields.at("attached")) == 1;
     const bool released = std::stoi(fields.at("released")) == 1;
-    const double width = std::stod(fields.at("width_mm"));
+    if (tool_width_control_ && fields.find("width_mm") == fields.end()) {
+      log_rejection("missing_field");
+      return;
+    }
+    const double width = fields.find("width_mm") ==
+      fields.end() ? 0.0 : std::stod(fields.at("width_mm"));
     const auto sequence = static_cast<std::uint64_t>(std::stoull(fields.at("seq")));
     if (!std::isfinite(width)) {
       log_rejection("non_finite_width", sequence);
@@ -8407,8 +8421,30 @@ bool IsaacRosMotionTransport::command_gripper_close()
   }
   std_msgs::msg::String command;
   command.data = reference_id;
-  gripper_close_publisher_->publish(command);
+  if (tool_width_control_) {
+    gripper_close_publisher_->publish(command);
+  } else {
+    command.data = "{\"intent\":\"GRASP\",\"execution_id\":\"" + reference_id + "\"}";
+    tool_intent_publisher_->publish(command);
+  }
   std::lock_guard<std::mutex> lock(mutex_);
+  gripper_active_ = true;
+  return true;
+}
+
+bool IsaacRosMotionTransport::command_gripper_release()
+{
+  if (tool_width_control_) {return command_normalized_gripper(1.0);}
+  if (!available()) {return false;}
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (!gripper_runtime_ready_ ||
+    std::chrono::steady_clock::now() - latest_gripper_status_receipt_ > kGripperStatusFreshness)
+  {
+    return false;
+  }
+  std_msgs::msg::String command;
+  command.data = "{\"intent\":\"RELEASE\"}";
+  tool_intent_publisher_->publish(command);
   gripper_active_ = true;
   return true;
 }
@@ -8427,7 +8463,7 @@ HoldingObservation IsaacRosMotionTransport::holding_observation() const
   }
   observation.observed_at = latest_gripper_status_receipt_;
   observation.sequence = gripper_status_sequence_;
-  observation.width_mm = gripper_width_mm_;
+  if (tool_width_control_) {observation.width_mm = gripper_width_mm_;}
   if (object_attached_ && grasp_confirmed_) {
     observation.state = HoldingState::HELD;
   } else if (!object_attached_ && release_confirmed_) {
@@ -8448,6 +8484,13 @@ void IsaacRosMotionTransport::stop_gripper()
     std::chrono::steady_clock::now() - latest_gripper_status_receipt_ >
     kGripperStatusFreshness)
   {
+    gripper_active_ = false;
+    return;
+  }
+  if (!tool_width_control_) {
+    std_msgs::msg::String intent;
+    intent.data = "{\"intent\":\"STOP\"}";
+    tool_intent_publisher_->publish(intent);
     gripper_active_ = false;
     return;
   }

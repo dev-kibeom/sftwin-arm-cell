@@ -30,7 +30,7 @@ uint8_t IsaacGripperPort::open()
   if (!transport_) {
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
   }
-  return transport_->command_normalized_gripper(1.0) ?
+  return transport_->command_gripper_release() ?
          arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS :
          arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
 }

@@ -1,4 +1,4 @@
-"""Play-time lifecycle for the scripted Robotiq actuator and Isaac adapter."""
+"""Play-time lifecycle for the selected Tool actuator and Isaac adapter."""
 
 import logging
 import math
@@ -17,7 +17,7 @@ from gripper_runtime.capture_diagnostics import (
 )
 from gripper_runtime.grasp_attachment import GraspManager, HoldingState
 from gripper_runtime.grasp_stage import EligibleObjectRegistry
-from gripper_runtime.robotiq_actuator import Robotiq2F85Actuator
+from gripper_runtime.tool_plugin import ToolIntent, select_tool_runtime
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class GripperRuntimeSession:
     def __init__(
         self,
         physics_interface,
-        actuator_cls=Robotiq2F85Actuator,
+        actuator_cls=None,
         adapter_cls=SimGripperAdapter,
         grasp_manager_cls=GraspManager,
         capture_config=None,
@@ -46,14 +46,24 @@ class GripperRuntimeSession:
         diagnostic_writer=None,
         physx_observer=None,
         diagnostic_output_directory=None,
+        tool=None,
     ):
         self.grasp_config = capture_config
         self.registry = registry or EligibleObjectRegistry()
-        self.gripper = actuator_cls(verbose=True)
+        if tool is None and actuator_cls is None:
+            from runtime_configuration import load_runtime_configuration
+            from robot_binding import RobotBinding
+            configuration = load_runtime_configuration()
+            tool = select_tool_runtime(
+                configuration['tool'], RobotBinding.from_runtime(configuration)
+            )
+        self.tool = tool
+        self.gripper = tool.actuator if tool is not None else actuator_cls(verbose=True)
         self.sim_adapter = adapter_cls(
             gripper=self.gripper,
             graph_path=GRAPH_PATH,
-            move_duration=0.40,
+            move_duration=tool.move_duration if tool is not None else 0.40,
+            **({"tool": tool} if tool is not None else {}),
             verbose=True,
         )
         prime_generation = getattr(self.sim_adapter, "prime_command_generation", None)
@@ -64,6 +74,7 @@ class GripperRuntimeSession:
             registry=self.registry,
             config=self.grasp_config,
             capture_reference_config=capture_reference_config,
+            **({"tool": tool} if tool is not None else {}),
             verbose=True,
         )
         selected_diagnostics = resolve_diagnostics_selection()
@@ -191,14 +202,21 @@ class GripperRuntimeSession:
             getattr(self.gripper, "state", None), "value", "unknown"
         )
         command_applied = self.sim_adapter.update()
+        intent = getattr(self.sim_adapter, "last_intent", None)
+        if command_applied and intent is ToolIntent.STOP:
+            self.grasp_manager.cancel_tool_transaction()
         command_width = getattr(self.sim_adapter, "last_command_width_mm", None)
-        is_open_command = (
+        maximum_width = getattr(self.sim_adapter, "MAX_WIDTH_MM", None)
+        if maximum_width is None:
+            maximum_width = getattr(self.gripper, "MAX_WIDTH_MM", None)
+        is_open_command = command_applied and intent is ToolIntent.RELEASE
+        is_open_command = is_open_command or (
             command_applied
             and command_width is not None
-            and float(command_width)
-            >= getattr(self.sim_adapter, "MAX_WIDTH_MM", 85.0) - 1e-6
+            and maximum_width is not None
+            and float(command_width) >= maximum_width - 1e-6
         )
-        if is_open_command and self.capture_diagnostics_enabled:
+        if is_open_command and command_width is not None and self.capture_diagnostics_enabled:
             if self._active_release_record is not None:
                 self._finalize_release_record("superseded_by_open_command")
             generation = getattr(self.sim_adapter, "last_command_generation", None)
@@ -348,7 +366,7 @@ class GripperRuntimeSession:
             grasp_confirmed=held,
             attached=attached,
             released=released,
-            width_mm=self.gripper.get_width(),
+            width_mm=self.tool.width_mm() if self.tool is not None else self.gripper.get_width(),
             sequence=self._status_sequence,
             capture_reference_id=getattr(
                 self.grasp_manager, "capture_reference_id", None

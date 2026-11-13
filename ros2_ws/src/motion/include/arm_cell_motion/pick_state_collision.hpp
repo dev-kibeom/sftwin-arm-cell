@@ -25,7 +25,8 @@ PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
   const moveit::core::RobotState & state,
   const moveit::core::JointModelGroup * arm,
   const geometry_msgs::msg::PoseStamped & tcp_goal,
-  const std::vector<std::string> & clearance_objects);
+  const std::vector<std::string> & clearance_objects,
+  const std::vector<std::string> & tool_links);
 
 // Append the selected scene BOX shapes to the existing candidate occupancy.
 // Missing objects and non-BOX shapes retain the previous skip behavior.

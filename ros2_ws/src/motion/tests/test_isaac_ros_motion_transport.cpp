@@ -2458,6 +2458,39 @@ TEST_F(IsaacRosMotionTransportTest, GripperCommandDoesNotInventHoldingState)
   EXPECT_FALSE(observation.fresh());
 }
 
+TEST_F(IsaacRosMotionTransportTest, WidthlessToolIntentsPreserveHoldingAndStopContract)
+{
+  transport_->tool_width_control_ = false;
+  std::vector<std::string> intents;
+  auto subscription = observer_->create_subscription<String>(
+    "/tool/intent", 10, [&intents](const String::SharedPtr message) {
+      intents.push_back(nlohmann::json::parse(message->data).at("intent"));
+    });
+  publish_feedback(std::vector<double>(6, 0.0));
+  auto status = std::make_shared<String>();
+  status->data = "ready=1;grasp=0;attached=0;released=1;seq=1";
+  transport_->on_gripper_status(status);
+  auto observation = transport_->holding_observation();
+  ASSERT_EQ(observation.state, HoldingState::RELEASED);
+  EXPECT_FALSE(observation.width_mm.has_value());
+  ASSERT_TRUE(transport_->command_gripper_close());
+  pump_until([&]() {return intents.size() == 1U;});
+  EXPECT_EQ(intents.front(), "GRASP");
+  EXPECT_EQ(transport_->holding_observation().state, HoldingState::RELEASED);
+  ASSERT_TRUE(transport_->command_gripper_release());
+  pump_until([&]() {return intents.size() == 2U;});
+  EXPECT_EQ(intents.back(), "RELEASE");
+  transport_->stop_gripper();
+  pump_until([&]() {return intents.size() == 3U;});
+  EXPECT_EQ(intents.back(), "STOP");
+  EXPECT_FALSE(transport_->gripper_active());
+  status->data = "ready=1;grasp=1;attached=1;released=0;seq=2";
+  transport_->on_gripper_status(status);
+  observation = transport_->holding_observation();
+  EXPECT_EQ(observation.state, HoldingState::HELD);
+  EXPECT_GT(observation.sequence, 1U);
+}
+
 class SelectedCaptureReferenceTest : public IsaacRosMotionTransportTest,
   public testing::WithParamInterface<uint8_t> {};
 

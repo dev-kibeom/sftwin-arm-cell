@@ -13,7 +13,7 @@ Motion Core와 Isaac·실물 Robot Backend가 동일하게 유지해야 하는 *
 |---|---|---|
 | 실행 요청 및 실행 수명주기 | Motion 요청 / Backend 실행 결과 | Motion |
 | 중단·Hold·Stop 전달 및 종료 근거 | Motion 요청 / Backend 증거 | Motion·Safety 상태 판단 |
-| `GripperPort.close()/open()` | Motion 논리 명령 / Adapter 실현 | Motion |
+| GRASP / RELEASE (`GripperPort.grasp()/release()`, 기존 `close()/open()` 호환) | Task Execution 의도 / Tool Plugin 실현 | Motion·Backend |
 | `HoldingObservation` | Backend 관측 | Motion |
 | Backend 가용성·Capability·오류 | Backend | Motion |
 
@@ -35,6 +35,12 @@ Backend는 Controller·Prim·서비스명·Joint 토폴로지와 무관하게 �
 관측은 Validation 프로파일에서 **500ms**의 유효기간을 갖는다. 결측·오래된 관측·Adapter 연결 소실·모호한 후보·예기치 않은 Joint/Prim 소실은 `UNKNOWN`이다. PICK 후퇴·성공에는 새로운 `HELD`, PLACE 후퇴·성공에는 `open()` 성공과 새로운 `RELEASED`가 필요하다.
 
 Motion이 제공하는 선택된 TCP Grasp Pose와 Geometry에서 도출한 예상 접촉 폭은 Simulator Capture가 같은 계획된 파지점을 평가하도록 하는 논리 입력이다. 예상 접촉 폭은 `close()`의 구동 목표가 아니다. Simulator별 Capture Volume/위치·방향·폭 허용 조건과 단계 실행은 [Motion Execution FDS](../components/motion/fds-motion-execution.md) 및 [Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md)가 소유한다. Backend는 이 기준을 무시할 수 있는 실물 Holding 센서를 사용할 수 있으며 최종 보유 근거는 유효한 `HoldingObservation`이다.
+
+Tool 작업 의도 GRASP는 자재 확보 요청, RELEASE는 자재 해제 요청이다. 병렬 그리퍼는 CLOSE/OPEN으로, 흡착기 유형은 VACUUM_ON/OFF로 실현할 수 있다. 의도 수락·Tool 구동 완료·Qualification 통과·Attach/Detach 완료는 별개의 사실이다. 기존 close/open API와 폭 기반 ROS 명령은 병렬 그리퍼 호환 경로로 유지한다.
+
+Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
+
+Tool별 Qualification은 해당 접촉·확보 조건을 제공하고 기존 Capture 소유자가 Attach를 완료한 뒤에만 HELD를 발행한다. RELEASE도 Tool별 해제 완료와 소유 Attachment 제거가 모두 확인되어야 RELEASED다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만 주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
 
 ## 4. 상호운용 조건
 

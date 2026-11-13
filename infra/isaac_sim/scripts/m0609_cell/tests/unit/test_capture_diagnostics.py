@@ -243,6 +243,7 @@ def test_successful_capture_writes_goal_correlated_observation_decision_outcome(
 ):
     class _Gripper:
         MODEL_ID = "robotiq_2f_85"
+        SUPPORTED_SHAPES = ("box",)
         state = types.SimpleNamespace(value="holding")
 
         def get_width(self):

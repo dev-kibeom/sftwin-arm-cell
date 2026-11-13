@@ -39,3 +39,23 @@ contact_links:
   pick_retract:
   - gripper_robotiq_85_left_finger_tip_link
   - gripper_robotiq_85_right_finger_tip_link
+
+# Isaac implementation and optional capabilities are Tool-owned.
+runtime:
+  implementation: robotiq_2f85
+  capabilities: [width, parallel_grasp]
+  max_width_mm: 85.0
+  move_duration_s: 0.40
+  supported_shapes: [box]
+
+# Geometry checked at requested TCP poses; independent of contact exceptions.
+grasp_pose_collision_links:
+  - gripper_robotiq_85_base_link
+  - gripper_robotiq_85_left_knuckle_link
+  - gripper_robotiq_85_right_knuckle_link
+  - gripper_robotiq_85_left_inner_knuckle_link
+  - gripper_robotiq_85_right_inner_knuckle_link
+  - gripper_robotiq_85_left_finger_link
+  - gripper_robotiq_85_right_finger_link
+  - gripper_robotiq_85_left_finger_tip_link
+  - gripper_robotiq_85_right_finger_tip_link

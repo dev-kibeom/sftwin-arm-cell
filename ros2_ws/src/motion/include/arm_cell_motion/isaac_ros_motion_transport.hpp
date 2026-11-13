@@ -152,6 +152,7 @@ public:
   bool measured_joint_state(sensor_msgs::msg::JointState & state) const override;
   bool command_normalized_gripper(double opening) override;
   bool command_gripper_close() override;
+  bool command_gripper_release() override;
   HoldingObservation holding_observation() const override;
   bool gripper_active() const override;
   void stop_gripper() override;
@@ -252,6 +253,7 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_command_publisher_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr gripper_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr gripper_close_publisher_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr tool_intent_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr capture_reference_publisher_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr current_fixture_object_id_subscription_;
@@ -312,6 +314,8 @@ private:
   std::string current_fixture_object_id_;
   std::vector<std::string> validation_grasp_contact_links_;
   std::vector<std::string> pick_clearance_objects_;
+  std::vector<std::string> tool_grasp_collision_links_;
+  bool tool_width_control_{true};
   std::vector<std::string> payload_touch_links_;
   std::string pick_retract_contact_object_;
   std::vector<std::string> pick_retract_contact_links_;

@@ -11,6 +11,7 @@ class GripperCharacteristics:
     """Gripper facts supplied to grasp qualification."""
 
     model_id: str
+    supported_shapes: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -20,7 +21,7 @@ class GraspQualificationResult:
 
 
 class GraspQualification:
-    """Qualify whether a material shape is supported by a gripper model."""
+    """Qualify whether a material shape is supported by explicit Tool characteristics."""
 
     @staticmethod
     def evaluate(
@@ -32,9 +33,6 @@ class GraspQualification:
             return GraspQualificationResult(False, "shape_tag_missing")
         if not isinstance(material_shape, str) or not material_shape.strip():
             return GraspQualificationResult(False, "shape_tag_invalid")
-        if material_shape != "box":
-            return GraspQualificationResult(False, "unsupported_shape")
-
         if gripper_characteristics is None:
             return GraspQualificationResult(False, "gripper_characteristics_missing")
         if (
@@ -43,7 +41,9 @@ class GraspQualification:
             or not gripper_characteristics.model_id.strip()
         ):
             return GraspQualificationResult(False, "gripper_characteristics_invalid")
-        if gripper_characteristics.model_id != ROBOTIQ_2F_85_MODEL_ID:
+        if not gripper_characteristics.supported_shapes:
             return GraspQualificationResult(False, "unsupported_gripper")
+        if material_shape not in gripper_characteristics.supported_shapes:
+            return GraspQualificationResult(False, "unsupported_shape")
 
         return GraspQualificationResult(True)

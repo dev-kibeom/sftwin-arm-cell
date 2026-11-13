@@ -426,6 +426,7 @@ class _GenerationController(_Controller):
 
 
 class _Gripper:
+    MAX_WIDTH_MM = 85.0
     def __init__(self):
         self.commands = []
 

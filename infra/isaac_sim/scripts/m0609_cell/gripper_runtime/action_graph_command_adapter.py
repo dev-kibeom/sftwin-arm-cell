@@ -1,8 +1,10 @@
 import logging
 import math
 import json
+import time
 
 from graph_builder.graph_contract import GRAPH_PATH
+from gripper_runtime.tool_plugin import ToolIntent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ class SimGripperAdapter:
     DEFAULT_STATUS_NODE_NAME = "PublishGripperStatus"
 
     MIN_WIDTH_MM = 0.0
-    MAX_WIDTH_MM = 85.0
+    MAX_WIDTH_MM = None
 
     def __init__(
         self,
@@ -43,8 +45,14 @@ class SimGripperAdapter:
         move_duration=None,
         verbose=False,
         controller=None,
+        tool=None,
     ):
         self.gripper = gripper
+        self.tool = tool
+        self.MAX_WIDTH_MM = tool.max_width_mm if tool is not None else getattr(gripper, 'MAX_WIDTH_MM', None)
+        self.last_intent = None
+        self._last_intent_generation = None
+        self._intent_execution_id = None
         self.graph_path = graph_path or self.DEFAULT_GRAPH_PATH
         self.subscriber_node = subscriber_node or self.DEFAULT_NODE_NAME
         self.move_duration = move_duration
@@ -65,6 +73,7 @@ class SimGripperAdapter:
         self._last_capture_reference_packet = None
         self._last_command_width_mm = None
         self._last_command_generation = None
+        self._last_width_generation = None
         self._last_close_generation = None
         self._last_command_is_closing = None
 
@@ -145,6 +154,13 @@ class SimGripperAdapter:
             if packet["motion_goal_uuid"] == self._applied_capture_reference_id:
                 self._applied_capture_reference_id = None
             return packet
+        decode = getattr(self.tool.capture, 'decode_reference', None) if self.tool is not None else None
+        if callable(decode):
+            decoded = decode(packet)
+            if decoded is None or decoded == self._last_capture_reference_packet:
+                return None
+            self._last_capture_reference_packet = decoded
+            return decoded
         try:
             values = tuple(
                 float(value)
@@ -204,6 +220,8 @@ class SimGripperAdapter:
             return None
 
     def read_close_execution_id(self):
+        if self.last_intent is ToolIntent.GRASP and self._intent_execution_id is not None:
+            return self._intent_execution_id
         return self._read_close_execution_id()
 
     def mark_capture_reference_applied(self, execution_id):
@@ -279,12 +297,25 @@ class SimGripperAdapter:
             return None
         return generation if generation >= 0 else None
 
+    def _read_intent_generation(self):
+        if self.tool is None:
+            return None
+        attr = self._controller.attribute(f"{self.graph_path}/ToolIntentGeneration.outputs:count")
+        if attr is None or not attr.is_valid():
+            return None
+        try:
+            return int(self._controller.get(attr))
+        except (TypeError, ValueError):
+            return None
+
     def prime_command_generation(self):
         """Treat the retained graph value as a baseline, not a new command."""
+        self._last_intent_generation = self._read_intent_generation()
         generation = self._read_command_generation()
         if generation is None:
             return False
         self._last_command_generation = generation
+        self._last_width_generation = generation
         self._last_close_generation = self._read_close_generation()
         return True
 
@@ -292,11 +323,10 @@ class SimGripperAdapter:
     # Command adaptation
     # ------------------------------------------------------------------
 
-    @classmethod
-    def _clamp_width(cls, width_mm):
+    def _clamp_width(self, width_mm):
         return max(
-            cls.MIN_WIDTH_MM,
-            min(cls.MAX_WIDTH_MM, float(width_mm)),
+            self.MIN_WIDTH_MM,
+            min(self.MAX_WIDTH_MM, float(width_mm)),
         )
 
     def update(self):
@@ -307,6 +337,32 @@ class SimGripperAdapter:
             True  if a new command was applied.
             False otherwise.
         """
+        self.last_intent = None
+        intent_generation = self._read_intent_generation()
+        if intent_generation is not None and intent_generation != self._last_intent_generation:
+            self._last_intent_generation = intent_generation
+            try:
+                packet = json.loads(self._controller.get(self._controller.attribute(
+                    f"{self.graph_path}/SubscribeToolIntent.outputs:data")))
+                intent = ToolIntent(packet['intent'])
+                execution_id = str(packet.get('execution_id', ''))
+            except (ValueError, TypeError, KeyError):
+                return False
+            if intent is ToolIntent.GRASP and execution_id != (self._applied_capture_reference_id or ''):
+                return False
+            if self.tool is None:
+                return False
+            # An intent wins over legacy ingress already pending at this physics boundary.
+            # In particular, STOP must not be followed by replay of an older CLOSE.
+            self._last_width_generation = self._read_command_generation()
+            self._last_close_generation = self._read_close_generation()
+            self.tool.command(intent, self.move_duration)
+            self.last_intent = intent
+            self._intent_execution_id = execution_id
+            self._last_command_width_mm = self.MAX_WIDTH_MM if intent is ToolIntent.RELEASE else None
+            self._last_command_generation = time.monotonic_ns()
+            self._last_command_is_closing = intent is ToolIntent.GRASP
+            return True
         close_generation = self._read_close_generation()
         if (
             close_generation is not None
@@ -320,12 +376,19 @@ class SimGripperAdapter:
                 self._last_close_generation = close_generation
                 self._last_command_is_closing = False
                 return False
-            self.gripper.close(duration=self.move_duration)
+            if self.tool is not None:
+                self.tool.command(ToolIntent.GRASP, self.move_duration)
+            else:
+                self.gripper.close(duration=self.move_duration)
+            self.last_intent = ToolIntent.GRASP
+            self._intent_execution_id = None
             self._last_close_generation = close_generation
             self._last_command_width_mm = None
             self._last_command_is_closing = True
             return True
 
+        if self.MAX_WIDTH_MM is None:
+            return False
         requested_width = self._read_width_mm()
 
         if requested_width is None:
@@ -338,7 +401,7 @@ class SimGripperAdapter:
         # a command identity.
         if generation is None:
             return False
-        if generation == self._last_command_generation:
+        if generation == self._last_width_generation:
             return False
 
         width_mm = self._clamp_width(requested_width)
@@ -365,8 +428,10 @@ class SimGripperAdapter:
             duration=self.move_duration,
         )
 
+        self.last_intent = ToolIntent.RELEASE if width_mm >= self.MAX_WIDTH_MM - 1e-6 else None
         self._last_command_width_mm = width_mm
         self._last_command_generation = generation
+        self._last_width_generation = generation
         self._last_command_is_closing = command_is_closing
 
         return True
@@ -390,7 +455,8 @@ class SimGripperAdapter:
             f"grasp={int(bool(grasp_confirmed))};"
             f"attached={int(bool(attached))};"
             f"released={int(bool(released))};"
-            f"width_mm={float(width_mm):.3f};"
+            + (f"width_mm={float(width_mm):.3f};" if width_mm is not None else "")
+            +
             f"seq={int(sequence)}"
             f";capture_reference_id={capture_reference_id or ''}"
         )

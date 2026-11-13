@@ -42,6 +42,9 @@ public:
 
   virtual ~GripperPort() = default;
 
+  uint8_t grasp() {return close();}
+  uint8_t release() {return open();}
+
   virtual uint8_t close() = 0;
   virtual uint8_t open() = 0;
   virtual HoldingObservation holding() const = 0;

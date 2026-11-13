@@ -5,11 +5,9 @@ from dataclasses import dataclass
 from enum import Enum
 
 from gripper_runtime.capture_diagnostics import CaptureDiagnosticRecord
+from gripper_runtime.tool_plugin import ParallelGripperCapture, ToolIntent
+from gripper_runtime.grasp_qualification import GraspQualification, GripperCharacteristics
 from gripper_runtime.grasp_joint import UsdFixedJointOwner
-from gripper_runtime.grasp_qualification import (
-    GraspQualification,
-    GripperCharacteristics,
-)
 from gripper_runtime.grasp_policy import (
     CaptureAssessment,
     CaptureCandidate,
@@ -94,6 +92,7 @@ class GraspManager:
         joint_owner=None,
         pre_capture_stability=None,
         verbose=False,
+        tool=None,
     ):
         if stage is None and (candidate_source is None or joint_owner is None):
             import omni.usd
@@ -101,6 +100,10 @@ class GraspManager:
             stage = omni.usd.get_context().get_stage()
         self.stage = stage
         self.gripper = gripper
+        self.tool = tool
+        self.capture = tool.capture if tool is not None else ParallelGripperCapture(
+            max_width_mm=getattr(gripper, "MAX_WIDTH_MM", None)
+        )
         self.verbose = verbose
         self.config = None
         # Capture configuration constrains CLOSE, not physical OPEN/release.
@@ -117,12 +120,8 @@ class GraspManager:
             tcp_path = self._discover_tcp_path()
         self.tcp_path = str(tcp_path)
 
-        self.candidate_source = candidate_source or StageCaptureQuery(
-            self.stage,
-            self.tcp_path,
-            self.registry,
-            self.gripper,
-            reference_config=None,
+        self.candidate_source = candidate_source or self.capture.candidate_source(
+            self.stage, self.tcp_path, self.registry, self.gripper,
         )
         if capture_reference_config is not None:
             self.configure_capture_reference(capture_reference_config)
@@ -502,6 +501,7 @@ class GraspManager:
         return bool(configure(reference_config))
 
     def configure_selected_grasp_reference(self, values):
+        packet = values
         reference_id = None
         frame_id = None
         object_position = None
@@ -526,6 +526,15 @@ class GraspManager:
             and reference_id != self.capture_reference_id
         ):
             self._diagnostic_outcome("capture_reference_replaced")
+        configure_tool = getattr(self.capture, 'configure_selected_reference', None)
+        if callable(configure_tool):
+            accepted = bool(configure_tool(self.candidate_source, packet))
+            self.capture_reference_id = reference_id if accepted else None
+            if not accepted:
+                clear = getattr(self.candidate_source, 'clear_expected_tcp_reference', None)
+                if callable(clear):
+                    clear()
+            return accepted
         if values is None or len(values) != 9:
             invalidate = getattr(
                 self.candidate_source, "invalidate_expected_tcp_reference", None
@@ -626,7 +635,7 @@ class GraspManager:
         """Remember one newly applied open command as a release intent."""
         try:
             generation = int(generation)
-            width_mm = float(width_mm)
+            width_mm = None if width_mm is None else float(width_mm)
         except (TypeError, ValueError):
             return False
         if generation == self._last_release_command_generation:
@@ -634,6 +643,13 @@ class GraspManager:
         self._last_release_command_generation = generation
         self._pending_release_command = (generation, width_mm)
         return True
+
+    def cancel_tool_transaction(self):
+        """Cancel pending actuation/capture; attachment cleanup retains its existing owner."""
+        self._capture_transaction_armed = False
+        self._pending_release_command = None
+        if self._holding.state is not HoldingState.HELD:
+            self._mark_unknown("tool_operation_cancelled")
 
     def consume_release_detach_event(self):
         event = self._release_detach_event
@@ -804,7 +820,7 @@ class GraspManager:
         if callable(clear_reference):
             clear_reference()
         self.capture_reference_id = None
-        cancel_motion = getattr(self.gripper, "cancel_motion", None)
+        cancel_motion = self.tool.cancel_motion if self.tool is not None else getattr(self.gripper, "cancel_motion", None)
         if callable(cancel_motion):
             cancel_motion()
         self._mark_unknown()
@@ -823,7 +839,7 @@ class GraspManager:
     def _attempt_capture(
         self, actuator_state, runtime_available, candidates, decision=None
     ):
-        result = decision or CapturePolicy.evaluate(
+        result = decision or self.capture.select(
             close_active=actuator_state == "holding",
             candidates=candidates,
             config=self.config,
@@ -1063,25 +1079,6 @@ class GraspManager:
         )
         return self.state
 
-    def _closing_width_reached(self, candidate):
-        """Wait for the selected opening during CLOSE, without requiring contact."""
-        try:
-            measured = float(candidate.measured_opening_mm)
-            expected = float(candidate.capture_reference["expected_contact_width_mm"])
-            tolerance = float(getattr(
-                self.candidate_source,
-                "actual_contact_width_tolerance_mm",
-                GraspConfig().contact_width_tolerance_mm,
-            ))
-            return (
-                math.isfinite(measured) and measured >= 0.0
-                and math.isfinite(expected) and expected > 0.0
-                and math.isfinite(tolerance) and tolerance >= 0.0
-                and measured <= expected + tolerance
-            )
-        except (TypeError, ValueError, KeyError, OverflowError):
-            return False
-
     def _evaluate_capture_transaction(self, actuator_state):
         """Search during CLOSE and make one final Capture assessment at HOLDING."""
         if (
@@ -1107,7 +1104,7 @@ class GraspManager:
                 },
             )
         try:
-            selection = CapturePolicy.evaluate(
+            selection = self.capture.select(
                 close_active=True,
                 candidates=candidates,
                 config=self.config,
@@ -1130,12 +1127,9 @@ class GraspManager:
             )
         try:
             qualification = (
-                GraspQualification.evaluate(
-                    material_shape=selection.candidate.shape,
-                    gripper_characteristics=GripperCharacteristics(
-                        getattr(self.gripper, "MODEL_ID", None)
-                    ),
-                )
+                (self.capture.qualify(selection.candidate) if self.tool is not None else
+                 GraspQualification.evaluate(material_shape=selection.candidate.shape,
+                     gripper_characteristics=GripperCharacteristics(getattr(self.gripper, 'MODEL_ID', None), getattr(self.gripper, 'SUPPORTED_SHAPES', ()))))
                 if selection.decision is CaptureDecision.CAPTURE_ELIGIBLE
                 else None
             )
@@ -1178,7 +1172,7 @@ class GraspManager:
             )
         else:
             if actuator_state == "closing":
-                if not self._closing_width_reached(selection.candidate):
+                if not self.capture.ready_during_grasp(selection.candidate, self.candidate_source):
                     self.state = GraspState.SEEKING
                     self.object_detected = False
                     self.resistance = False
@@ -1195,7 +1189,7 @@ class GraspManager:
                     })
                     return False
                 try:
-                    self.gripper.stop()
+                    self.capture.on_capture_ready(self.gripper)
                 except Exception as error:
                     reason = "gripper_stop_failed"
                     self._diagnostic_append(
@@ -1300,7 +1294,7 @@ class GraspManager:
     def _record_released_if_open(self):
         """Confirm physical OPEN and joint absence without a Capture query."""
         pending = self._pending_release_command
-        target_width_mm = pending[1] if pending is not None else 85.0
+        target_width_mm = pending[1] if pending is not None else None
         measured_width_mm = None
         result = "runtime_error"
         attempted = False
@@ -1312,11 +1306,11 @@ class GraspManager:
             if gripper_state != "holding":
                 return False
             result = "actuator_width_unavailable"
-            measured_width_mm = float(self.gripper.get_width())
-            if not math.isfinite(measured_width_mm):
+            measured_width_mm = self.tool.width_mm() if self.tool is not None else self.gripper.get_width()
+            if measured_width_mm is not None and not math.isfinite(measured_width_mm):
                 return False
             result = "open_target_not_reached"
-            if measured_width_mm < target_width_mm - 0.1:
+            if not self.capture.release_complete(self.gripper, target_width_mm):
                 return False
             result = "joint_state_unavailable"
             owned = self.joint_owner.has_owned_joint()
@@ -1471,10 +1465,13 @@ class GraspManager:
         if not self.ready:
             self._mark_unknown()
             return
-        self._pending_release_command = (None, 85.0)
+        self._pending_release_command = (None, None)
         if open_gripper:
             try:
-                self.gripper.open(duration=duration)
+                if self.tool is not None:
+                    self.tool.command(ToolIntent.RELEASE, duration)
+                else:
+                    self.gripper.open(duration=duration)
             except Exception:
                 self._pending_release_command = None
                 self._release_detach_event = {
@@ -1505,7 +1502,7 @@ class GraspManager:
             "position_error_m": self.last_position_error_m,
             "orientation_error_deg": self.last_orientation_error_deg,
             "width_error_mm": self.last_width_error_mm,
-            "gripper_width_mm": self.gripper.get_width(),
+            "gripper_width_mm": self.tool.width_mm() if self.tool is not None else self.gripper.get_width(),
             "attach_joint_path": self.attach_joint_path,
             "holding_state": holding.state.value,
             "holding_sequence": holding.sequence,
