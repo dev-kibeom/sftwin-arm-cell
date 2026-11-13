@@ -142,7 +142,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 기존 CLI 및 Docker 실행과 별도로, Robot·Tool·Cell·Backend를 선택하고 호스트
 프로세스를 관리하는 GUI를 사용할 수 있습니다. 먼저 아래 호스트 빌드 절차로
 `ros2_ws/install/setup.bash`를 준비합니다. Python 3.10 이상 환경에 의존성을 설치한 뒤 실행합니다.
-Linux X11에서는 Qt 시스템 의존성인 `libxcb-cursor0`도 설치되어 있어야 합니다.
+Linux에서는 Qt 시스템 의존성인 `libegl1`이, X11에서는 `libxcb-cursor0`도 설치되어 있어야 합니다.
 
 ```bash
 python3 -m pip install -r infra/launcher/requirements.txt
