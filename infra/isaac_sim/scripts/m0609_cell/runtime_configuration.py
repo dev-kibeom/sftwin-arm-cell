@@ -31,3 +31,12 @@ def load_runtime_configuration(path=None):
     if configuration['_mission_recipe']['target_id'] != configuration['orchestration']['mission_target_id']:
         raise ValueError('Runtime configuration mission target mismatch')
     return configuration
+
+
+def selected_camera(path=None):
+    """Read the selected Cell sensor from the existing exported data contract."""
+    return load_runtime_configuration(path)['cell']['camera']
+
+
+def selected_delivery_root():
+    return load_runtime_configuration()['cell']['material_supply']['delivery_root']

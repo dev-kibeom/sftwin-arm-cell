@@ -2253,5 +2253,36 @@
     "query_kind": "PhysX collision scene query",
     "limitation": "Collision geometry can differ from renderer-visible geometry; do not use these hits to verify depth semantics.",
     "entries": []
+  },
+  "camera_binding": {
+    "prim_path": "/World/SF_Twin_Cell/Vision/Camera_Sensor",
+    "mount_prim_path": "/World/SF_Twin_Cell/CameraRig/RealSense_D455",
+    "mount": {
+      "geometry_object": "amr_base",
+      "translation_offset_m": [
+        0.0,
+        0.02,
+        1.5650000000000002
+      ],
+      "rotation_xyz_deg": [
+        0.0,
+        90.0,
+        0.0
+      ]
+    },
+    "frame_id": "camera_color_optical_frame",
+    "link_frame_id": "camera_link",
+    "rgb_topic": "/camera/color/image_raw",
+    "depth_topic": "/camera/aligned_depth_to_color/image_raw",
+    "camera_info_topic": "/camera/color/camera_info",
+    "resolution": [
+      1280,
+      720
+    ],
+    "focal_length": 17.0,
+    "clipping_range_m": [
+      0.1,
+      10.0
+    ]
   }
 }

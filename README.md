@@ -216,6 +216,10 @@ QT_QPA_PLATFORM=offscreen ~/.venvs/arm-cell-launcher/bin/python -m pytest -q inf
 
 Scene 선택 진입점은 `infra/isaac_sim/scripts/scene_entrypoint.py`입니다. Cell Profile의 `isaac.scene_builder`는 scripts 루트 기준의 `모듈:함수`를 지정하며, 기본값은 `m0609_cell.scene_builder.composition:run_scene_build`입니다. 이 선택과 Builder import에는 M0609 디렉터리를 Python 검색 경로에 넣을 필요가 없습니다. Builder는 전달된 Runtime Configuration의 Assembly와 Cell 배치·Geometry를 소비합니다.
 
+Cell Profile의 `camera`는 논리 Prim, D455 Mount Prim과 기존 Geometry 기준 설치 Offset, Frame·Topic·해상도·센서 설정 및 TF Snapshot 경로를 소유합니다. Calibration 참조는 같은 Cell의 기존 `calibration_file`을 재사용합니다. Bringup은 원본 조립 때 Calibration의 Frame·CameraInfo Topic·해상도 정합성을 확인하고 Vision Topic을 같은 Camera 선택에서 구성합니다. Isaac Scene·Graph·Camera Snapshot은 export된 값을 소비합니다. 운영 ROS Camera Launch는 `runtime_profile`로 전달된 운영 Profile 또는 Runtime JSON을 우선하며, 단독 실행은 `ARM_CELL_RUNTIME_CONFIG`가 없을 때 기존 `profile`/`snapshot` 인자를 지원합니다. 운영 Camera Snapshot 생성도 Cell의 `camera.snapshot` 경로를 사용합니다. Camera 설치를 바꾸면 해당 Stage에서 Snapshot을 다시 생성하고 Calibration을 맞춰야 합니다.
+
+Cell의 `material_supply`는 기존 Supply Profile, Delivery Root와 기존 Geometry의 공급 지지면을 선택합니다. Bringup은 Supply Profile 내용을 Runtime Configuration에 포함하고 Vision·Supply가 공유하는 지지면 치수도 같은 Geometry에서 유도합니다. 공급 위치는 지지면 중심과 두께에서 유도하며 자재 종류·수량·랜덤 낙하·공급 완료 계산은 기존 설정과 알고리즘을 유지합니다. Adapter·Capture Registry·Demonstration·Pose 기록이 같은 Delivery Root를 소비하고 Sidecar·UI Hub·ROS Gateway 프로토콜은 유지합니다.
+
 공통 Startup은 기존 `m0609_cell/1_before_play.py`와 GUI/headless After Play 단계를 계속 호출합니다. 이 경로는 HOME·Joint Drive·Action Graph·Gripper·UI·진단·Material Supply의 기존 실행 생명주기를 위한 것이며, Scene Builder 선택은 Before Play에서 공통 진입점에 위임합니다. 다른 Cell의 Scene 선택만으로 그 Cell의 전체 Runtime이 지원되지는 않습니다.
 
 

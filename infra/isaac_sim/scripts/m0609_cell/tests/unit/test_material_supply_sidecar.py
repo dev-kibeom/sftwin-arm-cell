@@ -145,7 +145,7 @@ def _install_fake_usd(monkeypatch, stage):
     )
 
 
-def _adapter(sidecar, stage=None, timeline=None):
+def _adapter(sidecar, stage=None, timeline=None, delivery_root=None):
     profile = MaterialSupplyProfile(
         material_type="TestCube",
         shape="box",
@@ -159,6 +159,7 @@ def _adapter(sidecar, stage=None, timeline=None):
     )
     return IsaacMaterialSupplyAdapter(
         stage=stage or _FakeStage(),
+        delivery_root=delivery_root,
         sidecar=sidecar,
         profile=profile,
         shelf_origin_m=(0.0, 0.0, 0.0),
@@ -1078,14 +1079,18 @@ def test_scene_supply_startup_resolves_diagnostic_directory(tmp_path, monkeypatc
     namespace = {
         "Path": Path, "os": os, "yaml": yaml,
         "_close_material_supply_adapter": lambda: None,
-        "_load_operational_profile": lambda: {"material_catalog": {}},
+        "_load_operational_profile": lambda: {**__import__('runtime_configuration').load_runtime_configuration(), 'material_catalog': {}},
+        "supply_support_origin": __import__('scene_builder.static_environment', fromlist=['supply_support_origin']).supply_support_origin,
         "MaterialSupplyProfile": types.SimpleNamespace(from_mapping=lambda *args: object()),
         "MaterialSupplySidecarClient": types.SimpleNamespace(launch=lambda root: sidecar),
         "IsaacMaterialSupplyAdapter": construct_adapter,
         "World": types.SimpleNamespace(instance=lambda: types.SimpleNamespace(stage=object())),
     }
     exec(compile(ast.Module(body=[startup], type_ignores=[]), str(source), "exec"), namespace)
-    context = types.SimpleNamespace(tray_x=0.0, tray_y=0.0, amr_tray_z=0.0)
+    from runtime_configuration import load_runtime_configuration
+    from scene_builder.static_environment import load_canonical_static_geometry
+    context = types.SimpleNamespace(static_geometry=load_canonical_static_geometry(
+        manifest_path=load_runtime_configuration()['cell']['geometry']))
     # get_timeline_interface is evaluated after artifact_directory.
     timeline.get_timeline_interface = lambda: object()
     with pytest.raises(AdapterReached):
@@ -1121,3 +1126,16 @@ def test_queued_deliveries_freeze_their_own_material_profiles(monkeypatch):
     assert adapter._runs[f'{1:032x}'].material_type == first.material_type
     assert adapter._runs[f'{2:032x}'].material_type == second.material_type
     assert len(adapter._pending_parts) == 4
+
+
+def test_selected_delivery_root_reset_preserves_unrelated_objects():
+    sidecar = _FakeSidecar()
+    adapter = _adapter(sidecar, delivery_root='/World/Selected/Stock')
+    delivery_id = '05' * 16
+    path = f'{adapter.delivery_root}/Delivery_{delivery_id}'
+    adapter._delivery_paths.add(path)
+    adapter.stage.paths.update({path, path + '/Material_0000', '/World/Unrelated/Material_0000'})
+    adapter.reset_generated_materials()
+    assert path not in adapter.stage.paths
+    assert path + '/Material_0000' not in adapter.stage.paths
+    assert '/World/Unrelated/Material_0000' in adapter.stage.paths

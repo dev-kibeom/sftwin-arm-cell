@@ -3,9 +3,6 @@ request_timeout_ms: 500.0
 receipt_max_age_ms: -1.0
 reusable_pair_max_age_ms: 200.0
 sync_queue_size: 20
-rgb_topic: /camera/color/image_raw
-depth_topic: /camera/aligned_depth_to_color/image_raw
-camera_info_topic: /camera/color/camera_info
 tray_aligned_depth_resolution_m: 0.002
 scene_stability:
   stable_observation_count: 5
@@ -72,6 +69,3 @@ detector_profiles:
     minimum_observation_coverage: 0.55
     high_confidence_observed_area_ratio: 0.8
     medium_confidence_observed_area_ratio: 0.55
-    support_region_dimensions_m:
-    - 0.6336
-    - 0.4416

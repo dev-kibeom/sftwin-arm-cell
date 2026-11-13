@@ -3,12 +3,12 @@
 import math
 
 import pytest
+from runtime_configuration import selected_delivery_root
 
 pxr = pytest.importorskip("pxr")
 from pxr import Gf, Usd, UsdGeom
 from scene_builder.material_supply import MaterialSupplyProfile
 from scene_builder.material_supply_adapter import (
-    DELIVERY_ROOT,
     IsaacMaterialSupplyAdapter,
 )
 
@@ -59,7 +59,7 @@ def _adapter(stage, profile=None):
 def test_material_definition_shape_is_authored_on_generated_rawpart_root(monkeypatch):
     _stub_physx_schema(monkeypatch)
     stage = Usd.Stage.CreateInMemory()
-    UsdGeom.Xform.Define(stage, DELIVERY_ROOT)
+    UsdGeom.Xform.Define(stage, selected_delivery_root())
     profile = MaterialSupplyProfile.from_mapping(
         {
             "material_supply": {
@@ -142,8 +142,7 @@ def test_demonstration_uses_world_pose_under_identity_or_transformed_ancestors(
         "/World",
         "/World/SF_Twin_Cell",
         "/World/SF_Twin_Cell/MaterialSupply",
-        DELIVERY_ROOT,
-    ):
+        ):
         UsdGeom.Xform.Define(stage, path)
 
     if transformed_parent:
@@ -155,7 +154,7 @@ def test_demonstration_uses_world_pose_under_identity_or_transformed_ancestors(
         )
         _define_transform(
             stage,
-            f"{DELIVERY_ROOT}",
+            f"{selected_delivery_root()}",
             (-0.25, 0.6, 0.15),
             Gf.Quatd(math.cos(math.pi / 12), Gf.Vec3d(math.sin(math.pi / 12), 0, 0)),
         )
@@ -197,7 +196,7 @@ def test_demonstration_uses_world_pose_under_identity_or_transformed_ancestors(
 def test_random_drop_part_creation_keeps_its_existing_local_pose(monkeypatch):
     _stub_physx_schema(monkeypatch)
     stage = Usd.Stage.CreateInMemory()
-    UsdGeom.Xform.Define(stage, DELIVERY_ROOT)
+    UsdGeom.Xform.Define(stage, selected_delivery_root())
     adapter = _adapter(stage)
     pose = (0.2, -0.1, 0.08, 0.0, 0.0, math.pi / 2)
 
@@ -215,7 +214,7 @@ def test_random_drop_part_creation_keeps_its_existing_local_pose(monkeypatch):
 def test_partial_demonstration_creation_removes_owned_root(monkeypatch):
     _stub_physx_schema(monkeypatch)
     stage = Usd.Stage.CreateInMemory()
-    UsdGeom.Xform.Define(stage, DELIVERY_ROOT)
+    UsdGeom.Xform.Define(stage, selected_delivery_root())
     timeline = type("Timeline", (), {"is_playing": lambda self: True})()
     base = _adapter(stage)
     adapter = IsaacMaterialSupplyAdapter(

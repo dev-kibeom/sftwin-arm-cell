@@ -1,12 +1,6 @@
 """ROS 2 Action Graph declaration using selected robot articulation bindings."""
 
 from graph_builder.graph_contract import (
-    CAMERA_FRAME_ID,
-    CAMERA_HEIGHT,
-    CAMERA_INFO_TOPIC,
-    CAMERA_PATH,
-    CAMERA_WIDTH,
-    DEPTH_TOPIC,
     ENABLE_ARM_COMMAND_SUBSCRIBER,
     ENABLE_CAMERA,
     ENABLE_GRIPPER_COMMAND_SUBSCRIBER,
@@ -17,16 +11,17 @@ from graph_builder.graph_contract import (
     GRIPPER_STATUS_TOPIC,
     JOINT_COMMAND_TOPIC,
     JOINT_STATE_TOPIC,
-    RGB_TOPIC,
     ROS2_ROOT,
 )
+from runtime_configuration import selected_camera
 from robot_binding import load_robot_binding
 from graph_builder.graph_lifecycle import release_graph_controller_node
 
 
-def graph_declaration(sdf_path, *, binding=None, enable_arm_command_subscriber=None):
+def graph_declaration(sdf_path, *, binding=None, camera=None, enable_arm_command_subscriber=None):
     """Return the complete graph declaration without importing Isaac runtime APIs."""
     binding = binding or load_robot_binding()
+    camera = camera if camera is not None else selected_camera()
     if enable_arm_command_subscriber is None:
         enable_arm_command_subscriber = ENABLE_ARM_COMMAND_SUBSCRIBER
     create_nodes = [
@@ -195,21 +190,21 @@ def graph_declaration(sdf_path, *, binding=None, enable_arm_command_subscriber=N
         )
         set_values.extend(
             [
-                ("CreateRenderProduct.inputs:cameraPrim", [sdf_path(CAMERA_PATH)]),
+                ("CreateRenderProduct.inputs:cameraPrim", [sdf_path(camera['prim_path'])]),
                 ("CreateRenderProduct.inputs:enabled", True),
-                ("CreateRenderProduct.inputs:width", CAMERA_WIDTH),
-                ("CreateRenderProduct.inputs:height", CAMERA_HEIGHT),
+                ("CreateRenderProduct.inputs:width", camera['resolution'][0]),
+                ("CreateRenderProduct.inputs:height", camera['resolution'][1]),
                 ("CameraHelperColor.inputs:enabled", True),
-                ("CameraHelperColor.inputs:topicName", RGB_TOPIC),
+                ("CameraHelperColor.inputs:topicName", camera['rgb_topic']),
                 ("CameraHelperColor.inputs:type", "rgb"),
-                ("CameraHelperColor.inputs:frameId", CAMERA_FRAME_ID),
+                ("CameraHelperColor.inputs:frameId", camera['frame_id']),
                 ("CameraHelperDepth.inputs:enabled", True),
-                ("CameraHelperDepth.inputs:topicName", DEPTH_TOPIC),
+                ("CameraHelperDepth.inputs:topicName", camera['depth_topic']),
                 ("CameraHelperDepth.inputs:type", "depth"),
-                ("CameraHelperDepth.inputs:frameId", CAMERA_FRAME_ID),
+                ("CameraHelperDepth.inputs:frameId", camera['frame_id']),
                 ("CameraInfoHelper.inputs:enabled", True),
-                ("CameraInfoHelper.inputs:topicName", CAMERA_INFO_TOPIC),
-                ("CameraInfoHelper.inputs:frameId", CAMERA_FRAME_ID),
+                ("CameraInfoHelper.inputs:topicName", camera['camera_info_topic']),
+                ("CameraInfoHelper.inputs:frameId", camera['frame_id']),
             ]
         )
         connect.extend(
@@ -252,7 +247,7 @@ _rgbd_stale_stimulus = None
 
 
 def apply_rgbd_source_scenario(
-    scenario, active, *, controller=None, stale_adapter_factory=None
+    scenario, active, *, controller=None, stale_adapter_factory=None, camera=None
 ):
     """Private source-side control port for the approved RGB-D fault seam.
 
@@ -261,6 +256,7 @@ def apply_rgbd_source_scenario(
     image topic. Invalid changes source CameraInfo frame metadata. No ROS
     control interface is created.
     """
+    camera = camera if camera is not None else selected_camera()
     allowed = {"target_unavailable", "target_stale", "target_invalid"}
     if scenario not in allowed:
         raise ValueError(f"unsupported RGB-D scenario: {scenario}")
@@ -286,7 +282,7 @@ def apply_rgbd_source_scenario(
                 from graph_builder.rgbd_source_stimulus import RgbdStaleStimulus
 
                 stale_adapter_factory = RgbdStaleStimulus
-            stimulus = stale_adapter_factory(RGB_TOPIC)
+            stimulus = stale_adapter_factory(camera['rgb_topic'])
             if not stimulus.start():
                 return False
             _rgbd_stale_stimulus = stimulus
@@ -304,7 +300,7 @@ def apply_rgbd_source_scenario(
     camera_frame.set(
         "scenario_invalid_optical_frame"
         if "target_invalid" in _active_rgbd_scenarios
-        else CAMERA_FRAME_ID
+        else camera['frame_id']
     )
     return True
 
@@ -319,9 +315,11 @@ def build_ros_action_graph(
     report=print,
     enable_arm_command_subscriber=None,
     binding=None,
+    camera=None,
 ):
     """Validate stage prims, replace the graph, and author the declared graph."""
     binding = binding or load_robot_binding()
+    camera = camera if camera is not None else selected_camera()
     if stage is None:
         raise RuntimeError("No USD stage is currently open.")
     if not stage.GetPrimAtPath(ROS2_ROOT).IsValid():
@@ -346,6 +344,7 @@ def build_ros_action_graph(
     create_nodes, set_values, connect, create_attributes = graph_declaration(
         sdf_path,
         binding=binding,
+        camera=camera,
         enable_arm_command_subscriber=enable_arm_command_subscriber,
     )
     keys = controller.Keys
@@ -361,11 +360,12 @@ def build_ros_action_graph(
     graph_prim = stage.GetPrimAtPath(GRAPH_PATH)
     if not graph_prim.IsValid():
         raise RuntimeError(f"Action Graph was not created: {GRAPH_PATH}")
-    _report_summary(report, enable_arm_command_subscriber, binding=binding)
+    _report_summary(report, enable_arm_command_subscriber, binding=binding, camera=camera)
 
 
-def _report_summary(report, enable_arm_command_subscriber=None, *, binding=None):
+def _report_summary(report, enable_arm_command_subscriber=None, *, binding=None, camera=None):
     binding = binding or load_robot_binding()
+    camera = camera if camera is not None else selected_camera()
     report()
     report("============================================================")
     report(" SF-Twin ROS 2 Action Graph")
@@ -383,11 +383,11 @@ def _report_summary(report, enable_arm_command_subscriber=None, *, binding=None)
     else:
         report(">>> [INFO]    Joint cmd   : DISABLED")
     if ENABLE_CAMERA:
-        report(f">>> [SUCCESS] Camera      : {CAMERA_PATH}")
-        report(f">>> [SUCCESS] RGB         : {RGB_TOPIC}")
-        report(f">>> [SUCCESS] Depth       : {DEPTH_TOPIC}")
-        report(f">>> [SUCCESS] Camera info : {CAMERA_INFO_TOPIC}")
-        report(f">>> [SUCCESS] Resolution  : {CAMERA_WIDTH} x {CAMERA_HEIGHT}")
+        report(f">>> [SUCCESS] Camera      : {camera['prim_path']}")
+        report(f">>> [SUCCESS] RGB         : {camera['rgb_topic']}")
+        report(f">>> [SUCCESS] Depth       : {camera['depth_topic']}")
+        report(f">>> [SUCCESS] Camera info : {camera['camera_info_topic']}")
+        report(f">>> [SUCCESS] Resolution  : {camera['resolution'][0]} x {camera['resolution'][1]}")
     else:
         report(">>> [INFO]    Camera      : DISABLED")
     if ENABLE_GRIPPER_COMMAND_SUBSCRIBER:

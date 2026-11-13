@@ -1,4 +1,5 @@
 import json
+from runtime_configuration import selected_delivery_root
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -79,7 +80,7 @@ def test_empty_scene_does_not_create_recording_directory(tmp_path):
 
 def test_session_binding_changes_destination_without_mixing_records(tmp_path):
     stage = _Stage()
-    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/Material_0000")
+    prim = _Prim(f"{selected_delivery_root()}/Delivery_a/Material_0000")
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()
@@ -111,7 +112,7 @@ def test_pose_retention_preserves_other_simulation_records(tmp_path, monkeypatch
     unrelated = tmp_path / "events.jsonl"
     unrelated.write_text("unrelated\n")
     stage = _Stage()
-    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/Material_0000")
+    prim = _Prim(f"{selected_delivery_root()}/Delivery_a/Material_0000")
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()
@@ -316,7 +317,7 @@ def test_recorded_world_pose_conversion_uses_parent_transform():
 
 def test_sample_reports_only_actual_persistence(tmp_path):
     stage = _Stage()
-    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/Material_0000')
+    prim = _Prim(f'{selected_delivery_root()}/Delivery_a/Material_0000')
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()
@@ -364,7 +365,7 @@ def test_failed_segment_initialization_is_retried_after_storage_recovers(tmp_pat
     import pytest
 
     stage = _Stage()
-    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/Material_0000')
+    prim = _Prim(f'{selected_delivery_root()}/Delivery_a/Material_0000')
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()

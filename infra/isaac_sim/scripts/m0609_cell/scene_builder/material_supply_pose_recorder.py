@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 import uuid
 from typing import Any
+from runtime_configuration import selected_delivery_root
 
 
 SAMPLE_INTERVAL_SECONDS = 0.2
@@ -25,7 +26,10 @@ class RawPartPoseRecorder:
         stage: Any,
         artifact_directory: Path,
         live_test_session_id: str | None = None,
+        *,
+        delivery_root: str | None = None,
     ):
+        self.delivery_root = delivery_root if delivery_root is not None else selected_delivery_root()
         self.stage = stage
         self.artifact_directory = Path(artifact_directory)
         self._default_artifact_directory = self.artifact_directory
@@ -51,7 +55,7 @@ class RawPartPoseRecorder:
             if not prim.IsValid() or not prim.GetName().startswith("Material_"):
                 continue
             path = str(prim.GetPath())
-            if "/MaterialSupply/Deliveries/" not in path:
+            if not path.startswith(self.delivery_root + "/"):
                 continue
             state = physx.get_rigidbody_transformation(path)
             if not state or not state.get("ret_val"):

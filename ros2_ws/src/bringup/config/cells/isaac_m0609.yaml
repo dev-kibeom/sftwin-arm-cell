@@ -45,3 +45,24 @@ contact_objects:
 isaac:
   scene_builder: m0609_cell.scene_builder.composition:run_scene_build
   robot_prim_path: /World/SF_Twin_Cell/m0609
+# Sensor placement remains relative to the existing Cell geometry.
+camera:
+  prim_path: /World/SF_Twin_Cell/Vision/Camera_Sensor
+  mount_prim_path: /World/SF_Twin_Cell/CameraRig/RealSense_D455
+  mount:
+    geometry_object: amr_base
+    translation_offset_m: [0.0, 0.02, 1.5650000000000002]
+    rotation_xyz_deg: [0.0, 90.0, 0.0]
+  frame_id: camera_color_optical_frame
+  link_frame_id: camera_link
+  rgb_topic: /camera/color/image_raw
+  depth_topic: /camera/aligned_depth_to_color/image_raw
+  camera_info_topic: /camera/color/camera_info
+  resolution: [1280, 720]
+  focal_length: 17.0
+  clipping_range_m: [0.10, 10.0]
+  snapshot: package://arm_cell_sim_adapter/config/isaac_camera_stage_snapshot.json
+material_supply:
+  profile: project://infra/isaac_sim/config/material_supply.yaml
+  delivery_root: /World/SF_Twin_Cell/MaterialSupply/Deliveries
+  support_geometry_object: amr_tray

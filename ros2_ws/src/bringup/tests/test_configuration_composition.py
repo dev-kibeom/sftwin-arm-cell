@@ -142,7 +142,8 @@ def test_cell_location_and_tool_orientation_reach_recipe_and_motion(tmp_path):
                                        'orientation_xyzw': [0., 0., 0., 1.]}))
     cell['work_locations']['cnc_loading'] = str(location)
     cell['calibration_file'] = 'selected_calibration.yaml'
-    (tmp_path / 'selected_calibration.yaml').write_text('selected: true\n')
+    (tmp_path / 'selected_calibration.yaml').write_text(
+        resolve('package://arm_cell_vision/config/calibration/isaac_overhead_wide.yaml', PROFILE.parent).read_text())
     selected_cell = tmp_path / 'cell.yaml'
     selected_cell.write_text(yaml.safe_dump(cell))
     tool = yaml.safe_load(resolve(profile['profiles']['tool'], PROFILE.parent).read_text())

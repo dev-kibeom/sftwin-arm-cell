@@ -6,7 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-import yaml
 from pxr import Gf, UsdGeom, UsdLux, UsdPhysics
 
 try:
@@ -53,6 +52,7 @@ if str(scripts_root) not in sys.path:
 from scene_entrypoint import run_scene_build
 from scene_builder.material_supply import MaterialSupplyProfile
 from scene_builder.material_supply_adapter import IsaacMaterialSupplyAdapter
+from scene_builder.static_environment import supply_support_origin
 from scene_builder.material_supply_sidecar import MaterialSupplySidecarClient
 
 LOGGER = logging.getLogger(__name__)
@@ -223,13 +223,8 @@ def _start_material_supply_adapter(context):
             "ROS workspace is not built locally; waiting for the Docker "
             "material supply sidecar."
         )
-    supply_config_path = project_root / "infra/isaac_sim/config/material_supply.yaml"
-    if not supply_config_path.is_file():
-        raise RuntimeError(
-            f"material supply configuration is unavailable: {supply_config_path}"
-        )
-    supply_config = yaml.safe_load(supply_config_path.read_text()) or {}
     operational_profile = _load_operational_profile()
+    supply_config = operational_profile['cell']['material_supply']['profile']
     material_handoff = operational_profile.get("material_handoff", {})
     profile = MaterialSupplyProfile.from_mapping(
         supply_config,
@@ -258,11 +253,8 @@ def _start_material_supply_adapter(context):
             profile=profile,
             material_profiles=material_profiles,
             delivery_deadline_ms=material_handoff.get("delivery_deadline_ms"),
-            shelf_origin_m=(
-                context.tray_x,
-                context.tray_y,
-                context.amr_tray_z + 0.0225,
-            ),
+            delivery_root=operational_profile['cell']['material_supply']['delivery_root'],
+            shelf_origin_m=supply_support_origin(context.static_geometry, operational_profile['cell']['material_supply']),
             artifact_directory=(
                 diagnostic_component_directory(project_root, "simulation")
             ),
