@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,11 +12,6 @@
 
 namespace arm_cell_motion
 {
-
-inline constexpr char kPickRetractTrayCollisionObject[] = "amr_tray";
-inline constexpr std::array<const char *, 2> kPickRetractTrayAllowedLinks{
-  "gripper_robotiq_85_left_finger_tip_link",
-  "gripper_robotiq_85_right_finger_tip_link"};
 
 inline uint32_t pick_retract_planning_scene_components()
 {
@@ -39,20 +33,22 @@ inline bool is_pick_retract_collision_exception_scope(bool is_pick, bool is_retr
 
 inline std::optional<moveit_msgs::msg::AllowedCollisionMatrix>
 make_pick_retract_allowed_collision_matrix(
-  const moveit_msgs::msg::AllowedCollisionMatrix & original)
+  const moveit_msgs::msg::AllowedCollisionMatrix & original,
+  const std::string & contact_object, const std::vector<std::string> & contact_links)
 {
   return allow_current_target_contacts(
-    original, kPickRetractTrayCollisionObject,
-    std::vector<std::string>{kPickRetractTrayAllowedLinks[0], kPickRetractTrayAllowedLinks[1]});
+    original, contact_object, contact_links);
 }
 
 inline moveit_msgs::msg::PlanningScene make_pick_retract_planning_scene_diff(
-  const moveit_msgs::msg::AllowedCollisionMatrix & original)
+  const moveit_msgs::msg::AllowedCollisionMatrix & original,
+  const std::string & contact_object, const std::vector<std::string> & contact_links)
 {
   moveit_msgs::msg::PlanningScene diff;
   diff.is_diff = true;
   diff.robot_state.is_diff = true;
-  const auto acm = make_pick_retract_allowed_collision_matrix(original);
+  const auto acm = make_pick_retract_allowed_collision_matrix(
+    original, contact_object, contact_links);
   if (acm) {
     diff.allowed_collision_matrix = *acm;
   }

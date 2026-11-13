@@ -228,6 +228,12 @@ MotionNode::MotionNode(
     "wrap_equivalent_joints", std::vector<std::string>{});
   const auto place_ik_seed_joints = declare_parameter<std::vector<std::string>>(
     "place_ik_seed_joints", std::vector<std::string>{});
+  const auto payload_touch_links = declare_parameter<std::vector<std::string>>(
+    "payload_touch_links", std::vector<std::string>{});
+  const auto pick_retract_contact_links = declare_parameter<std::vector<std::string>>(
+    "pick_retract_contact_links", std::vector<std::string>{});
+  const auto pick_retract_contact_object = declare_parameter<std::string>(
+    "pick_retract_contact_object", "");
   const auto kinematics_prefix = "robot_description_kinematics." + planning_group + ".";
   const auto kinematics_solver = declare_parameter<std::string>(
     kinematics_prefix + "kinematics_solver", "");
@@ -439,6 +445,9 @@ MotionNode::MotionNode(
       std::vector<rclcpp::Parameter> backend_parameters{
         rclcpp::Parameter("planning_group", planning_group),
         rclcpp::Parameter("model_id", model_id),
+        rclcpp::Parameter("payload_touch_links", payload_touch_links),
+        rclcpp::Parameter("pick_retract_contact_links", pick_retract_contact_links),
+        rclcpp::Parameter("pick_retract_contact_object", pick_retract_contact_object),
         rclcpp::Parameter("wrap_equivalent_joints", wrap_equivalent_joints),
         rclcpp::Parameter("place_ik_seed_joints", place_ik_seed_joints)};
       if (has_parameter("use_sim_time")) {

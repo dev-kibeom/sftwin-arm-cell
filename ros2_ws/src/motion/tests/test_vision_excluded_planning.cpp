@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -161,12 +162,26 @@ TEST_F(RequestScopedOccupancyTest, CandidateTransitionAndPlaceUseIndependentCont
   EXPECT_TRUE(candidate_occupancy_ids(fixed_message_).empty());
 }
 
+TEST_F(RequestScopedOccupancyTest, PayloadUsesOnlySelectedContactsAndCanonicalAttachment)
+{
+  geometry_msgs::msg::Transform relation;
+  relation.rotation.w = 1.0;
+  const auto payload = make_attached_payload(
+    relation, {0.2, 0.2, 0.2},
+    {"selected_finger", "selected_knuckle"});
+  EXPECT_EQ(payload.link_name, "sf_grasp_tcp");
+  EXPECT_EQ(payload.object.header.frame_id, "sf_grasp_tcp");
+  EXPECT_EQ(
+    (std::set<std::string>(payload.touch_links.begin(), payload.touch_links.end())),
+    (std::set<std::string>{"sf_grasp_tcp", "selected_finger", "selected_knuckle"}));
+}
+
 TEST_F(RequestScopedOccupancyTest, PayloadCollidesWhenBareToolIsClear)
 {
   geometry_msgs::msg::Transform relation;
   relation.rotation.w = 1.0;
   relation.translation.x = -1.0;
-  const auto payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+  const auto payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, {}, "tool");
   EXPECT_DOUBLE_EQ(payload.object.primitive_poses[0].position.x, 1.0);
   EXPECT_FALSE(collides(*fixed_scene_, 1.0));
   ASSERT_TRUE(fixed_scene_->processAttachedCollisionObjectMsg(payload));
@@ -330,7 +345,7 @@ TEST_F(RequestScopedOccupancyTest, VerifyKnuckleExceptionKeepsOtherCollisions) {
     geometry_msgs::msg::Transform relation;
     relation.rotation.w = 1;
     relation.translation.x = 2;
-    auto payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+    auto payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, {knuckle}, "tool");
     EXPECT_NE(std::find(payload.touch_links.begin(), payload.touch_links.end(), knuckle),
               payload.touch_links.end());
     payload.touch_links.erase(
@@ -351,14 +366,14 @@ TEST_F(RequestScopedOccupancyTest, VerifyKnuckleExceptionKeepsOtherCollisions) {
     scene.checkCollision(req, after, scene.getCurrentState());
     EXPECT_FALSE(after.collision);
     relation.translation.x = 1;
-    payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+    payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, {}, "tool");
     payload.touch_links.push_back(knuckle);
     ASSERT_TRUE(scene.processAttachedCollisionObjectMsg(payload));
     collision_detection::CollisionResult arm;
     scene.checkCollision(req, arm, scene.getCurrentState());
     EXPECT_TRUE(arm.collision);
     relation.translation.x = -2;
-    payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, "tool");
+    payload = make_attached_payload(relation, {0.2, 0.2, 0.2}, {}, "tool");
     payload.touch_links.push_back(knuckle);
     ASSERT_TRUE(scene.processAttachedCollisionObjectMsg(payload));
     add_box(scene, "external_obstacle", 3);

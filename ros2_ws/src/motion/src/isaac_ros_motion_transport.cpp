@@ -1585,18 +1585,24 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   place_waypoint_trajectory_file_(std::move(place_waypoint_trajectory_file)),
   trajectory_watchdog_(trajectory_clock_liveness_timeout_s)
 {
-  for (const auto * name : {"planning_group", "model_id"}) {
+  for (const auto * name : {"planning_group", "model_id", "pick_retract_contact_object"}) {
     if (!node_->has_parameter(name)) {node_->declare_parameter<std::string>(name, "");}
   }
   planning_group_ = node_->get_parameter("planning_group").as_string();
   model_id_ = node_->get_parameter("model_id").as_string();
-  for (const auto * name : {"wrap_equivalent_joints", "place_ik_seed_joints"}) {
+  for (const auto * name : {"wrap_equivalent_joints", "place_ik_seed_joints",
+      "payload_touch_links", "pick_retract_contact_links"})
+  {
     if (!node_->has_parameter(name)) {
       node_->declare_parameter<std::vector<std::string>>(name, std::vector<std::string>{});
     }
   }
   wrap_equivalent_joints_ = node_->get_parameter("wrap_equivalent_joints").as_string_array();
   place_ik_seed_joints_ = node_->get_parameter("place_ik_seed_joints").as_string_array();
+  payload_touch_links_ = node_->get_parameter("payload_touch_links").as_string_array();
+  pick_retract_contact_object_ = node_->get_parameter("pick_retract_contact_object").as_string();
+  pick_retract_contact_links_ =
+    node_->get_parameter("pick_retract_contact_links").as_string_array();
   if (!node_->has_parameter("pick_ik_solver")) {
     node_->declare_parameter<std::string>(
       "pick_ik_solver", "kdl_kinematics_plugin/KDLKinematicsPlugin");
@@ -3447,6 +3453,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     is_pick_retract_collision_exception_scope(
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK,
     request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING);
+  nlohmann::json retract_allowed_pairs = nlohmann::json::array();
+  for (const auto & link : pick_retract_contact_links_) {
+    retract_allowed_pairs.push_back({link, pick_retract_contact_object_});
+  }
   const bool vision_derived_pick =
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
     !request.material_candidates.empty() && !request.vision_candidate_id.empty();
@@ -3517,7 +3527,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             return false;
           }
           try {
-            payload = make_attached_payload(accepted_object_to_tcp_, accepted_payload_dimensions_);
+            payload = make_attached_payload(
+              accepted_object_to_tcp_, accepted_payload_dimensions_, payload_touch_links_);
           } catch (const std::invalid_argument & error) {
             normalized_failure_result_ =
               arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
@@ -3541,7 +3552,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           retract_exception_context_result = "VISION_OCCUPANCY_IDENTITY_AMBIGUOUS";
         }
         PlanningSceneBuilder scene_builder(
-          scene_snapshot, request.non_target_occupancy, request.observation_pose.header);
+          scene_snapshot, request.non_target_occupancy, request.observation_pose.header,
+          pick_retract_contact_object_, pick_retract_contact_links_);
         const auto manipulation_scene = scene_builder.build(PlanningScenePolicy{});
         if (!manipulation_scene.valid) {
           valid = false;
@@ -3590,11 +3602,12 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         if (valid && pick_retract_collision_exception) {
           const bool tray_present = std::any_of(
             scene_snapshot.world.collision_objects.begin(),
-            scene_snapshot.world.collision_objects.end(), [](const auto & object) {
-              return object.id == kPickRetractTrayCollisionObject;
+            scene_snapshot.world.collision_objects.end(), [this](const auto & object) {
+              return object.id == pick_retract_contact_object_;
             });
           const auto allowed_acm = make_pick_retract_allowed_collision_matrix(
-            scene_snapshot.allowed_collision_matrix);
+            scene_snapshot.allowed_collision_matrix,
+            pick_retract_contact_object_, pick_retract_contact_links_);
           if (!tray_present || !allowed_acm) {
             valid = false;
             retract_exception_context_result = tray_present ? "ACM_INVALID" : "TRAY_NOT_FOUND";
@@ -3602,7 +3615,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             request_validation_scene->getAllowedCollisionMatrixNonConst() =
               collision_detection::AllowedCollisionMatrix(*allowed_acm);
             retract_scene_diff = make_pick_retract_planning_scene_diff(
-              scene_snapshot.allowed_collision_matrix);
+              scene_snapshot.allowed_collision_matrix,
+              pick_retract_contact_object_, pick_retract_contact_links_);
             manipulation_scene_diff.allowed_collision_matrix =
               retract_scene_diff.allowed_collision_matrix;
             planning_request_scene_diff.allowed_collision_matrix =
@@ -4223,9 +4237,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
               {"scope", "PICK_RETRACT_PLANNING_AND_VALIDATION"},
               {"applied", static_cast<bool>(retract_validation_scene)},
               {"context_result", retract_exception_context_result},
-              {"allowed_pairs", {
-                  {kPickRetractTrayAllowedLinks[0], kPickRetractTrayCollisionObject},
-                  {kPickRetractTrayAllowedLinks[1], kPickRetractTrayCollisionObject}}}};
+              {"allowed_pairs", retract_allowed_pairs}};
             serialized = record.dump();
           }
         }
@@ -4548,9 +4560,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             {"scope", "PICK_RETRACT_PLANNING_AND_VALIDATION"},
             {"applied", static_cast<bool>(retract_validation_scene)},
             {"context_result", retract_exception_context_result},
-            {"allowed_pairs", {
-                {kPickRetractTrayAllowedLinks[0], kPickRetractTrayCollisionObject},
-                {kPickRetractTrayAllowedLinks[1], kPickRetractTrayCollisionObject}}}};
+            {"allowed_pairs", retract_allowed_pairs}};
         }
         stage["final_planning_result"] = planning_succeeded ? "SUCCESS" : "FAILED";
         stage["selected_strategy"] = planning_succeeded ?
@@ -5754,7 +5764,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       planning_context->scene_snapshot = scene_snapshot;
       if (planning_scene_context_required) {
         planning_context->scene_builder = std::make_unique<PlanningSceneBuilder>(
-          scene_snapshot, request.non_target_occupancy, request.observation_pose.header);
+          scene_snapshot, request.non_target_occupancy, request.observation_pose.header,
+          pick_retract_contact_object_, pick_retract_contact_links_);
       }
       planning_context->planning_budget = std::make_unique<PickSearchBudget>(pick_search_budget);
       planning_context->grasp_candidates = grasp_pose_candidates;

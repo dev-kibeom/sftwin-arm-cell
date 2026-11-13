@@ -93,7 +93,8 @@ uint8_t IsaacRosMotionTransport::plan_normalized(
           return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
         }
         try {
-          payload = make_attached_payload(accepted_object_to_tcp_, accepted_payload_dimensions_);
+          payload = make_attached_payload(
+            accepted_object_to_tcp_, accepted_payload_dimensions_, payload_touch_links_);
         } catch (const std::invalid_argument &) {
           return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
         }
@@ -117,7 +118,8 @@ uint8_t IsaacRosMotionTransport::plan_normalized(
       if (!response || !move_group_state_->move_group) {return Code::TASK_RESULT_BACKEND_ERROR;}
       planning_scene::PlanningScene scene(move_group_state_->move_group->getRobotModel());
       if (!scene.setPlanningSceneMsg(response->scene)) {return Code::TASK_RESULT_BACKEND_ERROR;}
-      PlanningSceneBuilder builder(response->scene, {}, request.object_pose.header);
+      PlanningSceneBuilder builder(response->scene, {}, request.object_pose.header,
+        pick_retract_contact_object_, pick_retract_contact_links_);
       const auto diff = builder.build(PlanningScenePolicy{});
       if (!diff.valid || !scene.setPlanningSceneDiffMsg(diff.diff) ||
         !scene.processAttachedCollisionObjectMsg(payload)) {return Code::TASK_RESULT_BACKEND_ERROR;}

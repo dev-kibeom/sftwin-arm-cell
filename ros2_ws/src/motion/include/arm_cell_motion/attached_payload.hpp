@@ -15,7 +15,8 @@ namespace arm_cell_motion
 // object's center in TCP coordinates. Only the physical grasp contacts may touch.
 inline moveit_msgs::msg::AttachedCollisionObject make_attached_payload(
   const geometry_msgs::msg::Transform & object_to_tcp,
-  const std::vector<double> & dimensions, const std::string & link = "sf_grasp_tcp")
+  const std::vector<double> & dimensions, const std::vector<std::string> & touch_links = {},
+  const std::string & link = "sf_grasp_tcp")
 {
   if (dimensions.size() != 3 || !std::all_of(
       dimensions.begin(), dimensions.end(),
@@ -34,11 +35,10 @@ inline moveit_msgs::msg::AttachedCollisionObject make_attached_payload(
   const Eigen::Vector3d position = -(inverse_rotation * translation);
   moveit_msgs::msg::AttachedCollisionObject payload;
   payload.link_name = link;
-  payload.touch_links = {link, "gripper_robotiq_85_left_finger_link",
-    "gripper_robotiq_85_right_finger_link",
-    "gripper_robotiq_85_left_finger_tip_link", "gripper_robotiq_85_right_finger_tip_link",
-    "gripper_robotiq_85_left_inner_knuckle_link",
-    "gripper_robotiq_85_right_inner_knuckle_link"};
+  payload.touch_links = {link};
+  for (const auto & contact : touch_links) {
+    if (contact != link) {payload.touch_links.push_back(contact);}
+  }
   payload.object.id = "accepted_pick_payload";
   payload.object.header.frame_id = link;
   payload.object.operation = moveit_msgs::msg::CollisionObject::ADD;
