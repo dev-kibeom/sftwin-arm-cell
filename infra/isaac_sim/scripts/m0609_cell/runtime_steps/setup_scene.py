@@ -46,7 +46,7 @@ def _add_cell_module_root():
 
 _add_cell_module_root()
 
-from scene_builder.composition import run_scene_build
+from scene_selection import run_scene_build
 from scene_builder.material_supply import MaterialSupplyProfile
 from scene_builder.material_supply_adapter import IsaacMaterialSupplyAdapter
 from scene_builder.material_supply_sidecar import MaterialSupplySidecarClient
@@ -376,6 +376,7 @@ def _start_material_supply_adapter(context):
 
 
 context = run_scene_build(
+    configuration=_load_operational_profile(),
     world_cls=World,
     enable_extension=enable_extension,
     delete_prim=delete_prim,

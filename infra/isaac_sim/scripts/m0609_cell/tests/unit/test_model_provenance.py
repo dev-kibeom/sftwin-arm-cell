@@ -148,8 +148,11 @@ def test_xacro_environment_excludes_kit_python_and_library_paths(tmp_path, monke
 
 
 def test_scene_builder_refuses_stale_robot_artifact_before_referencing_it(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, exported_configuration
 ):
+    from runtime_configuration import load_runtime_configuration
+    from scene_selection import SceneConfiguration
+
     (tmp_path / "infra/isaac_sim/assets/usd").mkdir(parents=True)
     (
         tmp_path / "infra/isaac_sim/assets/usd/m0609_robotiq_2f85_generated.usd"
@@ -158,10 +161,12 @@ def test_scene_builder_refuses_stale_robot_artifact_before_referencing_it(
     monkeypatch.setattr(
         robot_station,
         "verify_current_artifact",
-        lambda *args: (_ for _ in ()).throw(ValueError("stale robot artifact")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("stale robot artifact")),
     )
     references = []
     context = SimpleNamespace(
+        scene_configuration=SceneConfiguration.from_runtime(
+            load_runtime_configuration(exported_configuration), tmp_path),
         stage=SimpleNamespace(),
         cell_root="/World/SF_Twin_Cell",
         colors={"charcoal": "charcoal", "steel": "steel", "black": "black"},

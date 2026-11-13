@@ -168,6 +168,7 @@ def run_scene_build(
     usd_geom,
     usd_lux,
     script_path,
+    configuration,
 ):
     """Build the complete scene in the original cleanup and authoring order."""
     enable_extension("isaacsim.asset.importer.urdf")
@@ -176,7 +177,11 @@ def run_scene_build(
     if world is None:
         world = world_cls(stage_units_in_meters=1.0)
     stage = world.stage
-    static_geometry = load_canonical_static_geometry(script_path=script_path)
+    from scene_selection import SceneConfiguration
+
+    project_root = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
+    selected = SceneConfiguration.from_runtime(configuration, project_root)
+    static_geometry = load_canonical_static_geometry(manifest_path=selected.geometry)
 
     def author_fixed_box(path, name, position, scale, color, material=None):
         return fixed_box(stage, path, name, position, scale, color, material)
@@ -210,9 +215,7 @@ def run_scene_build(
         add_reference_to_stage,
         static_geometry,
     )
-    project_root = (
-        os.environ.get("SFTWIN_PROJECT_ROOT") or Path(__file__).resolve().parents[5]
-    )
+    context.scene_configuration = selected
     context.rawpart_profile = load_rawpart_profile(project_root)
     for path in LEGACY_CLEANUP:
         if context.stage.GetPrimAtPath(path).IsValid():

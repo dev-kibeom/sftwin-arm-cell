@@ -58,8 +58,9 @@ def canonical_manifest_path(project_root=None, script_path=None):
     )
 
 
-def load_canonical_static_geometry(project_root=None, script_path=None):
-    manifest_path = canonical_manifest_path(project_root, script_path)
+def load_canonical_static_geometry(project_root=None, script_path=None, *, manifest_path=None):
+    manifest_path = (Path(manifest_path) if manifest_path is not None
+                     else canonical_manifest_path(project_root, script_path))
     manifest = json.loads(manifest_path.read_text())
     if manifest.get("schema_version") != 1 or manifest.get("coverage") != "partial":
         raise RuntimeError(f"Unsupported static environment manifest: {manifest_path}")
