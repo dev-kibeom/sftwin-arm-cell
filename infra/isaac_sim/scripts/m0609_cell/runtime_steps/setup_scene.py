@@ -6,7 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-import yaml
 from pxr import Gf, UsdGeom, UsdLux, UsdPhysics
 
 try:
@@ -224,13 +223,8 @@ def _start_material_supply_adapter(context):
             "ROS workspace is not built locally; waiting for the Docker "
             "material supply sidecar."
         )
-    supply_config_path = project_root / "infra/isaac_sim/config/material_supply.yaml"
-    if not supply_config_path.is_file():
-        raise RuntimeError(
-            f"material supply configuration is unavailable: {supply_config_path}"
-        )
-    supply_config = yaml.safe_load(supply_config_path.read_text()) or {}
     operational_profile = _load_operational_profile()
+    supply_config = operational_profile['cell']['material_supply']['profile']
     material_handoff = operational_profile.get("material_handoff", {})
     profile = MaterialSupplyProfile.from_mapping(
         supply_config,

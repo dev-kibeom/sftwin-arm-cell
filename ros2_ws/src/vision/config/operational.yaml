@@ -69,6 +69,3 @@ detector_profiles:
     minimum_observation_coverage: 0.55
     high_confidence_observed_area_ratio: 0.8
     medium_confidence_observed_area_ratio: 0.55
-    support_region_dimensions_m:
-    - 0.6336
-    - 0.4416

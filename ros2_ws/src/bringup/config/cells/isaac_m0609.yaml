@@ -63,5 +63,6 @@ camera:
   clipping_range_m: [0.10, 10.0]
   snapshot: package://arm_cell_sim_adapter/config/isaac_camera_stage_snapshot.json
 material_supply:
+  profile: project://infra/isaac_sim/config/material_supply.yaml
   delivery_root: /World/SF_Twin_Cell/MaterialSupply/Deliveries
   support_geometry_object: amr_tray

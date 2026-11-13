@@ -99,7 +99,11 @@ def selected_profiles(references, base):
         if 'camera' in owner:
             owner['camera']['snapshot'] = str(resolve(owner['camera']['snapshot'], path.parent))
         if name == 'cell':
-            validate_cell_configuration(owner)
+            supply = owner['material_supply']
+            supply['profile'] = read(resolve(supply['profile'], path.parent))
+            geometry = {item['id']: item for item in json.loads(Path(owner['geometry']).read_text())['objects']}
+            validate_cell_configuration(owner, geometry)
+            supply['support_region_dimensions_m'] = geometry[supply['support_geometry_object']]['geometry']['dimensions_m'][:2]
         owners[name] = owner
     return owners
 
@@ -244,6 +248,8 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
         config['orchestration']['mission_target_id'] = material_id
     target = config['orchestration']['mission_target_id']
     detectors = config['vision']['detector_profiles']
+    for detector in detectors.values():
+        merge_owned(detector, {'support_region_dimensions_m': owners['cell']['material_supply']['support_region_dimensions_m']}, 'vision.detector_profiles')
     template = copy.deepcopy(next(iter(detectors.values())))
     detectors.setdefault(target, template)
     detectors[target]['fiducial'] = owners['cell']['tray_fiducial']
@@ -381,7 +387,7 @@ def validation_configuration(config, path, material_id=None, pick_offset_z_m=Non
     return config
 
 
-def validate_cell_configuration(cell):
+def validate_cell_configuration(cell, geometry):
     """Check Cell inputs at Bringup composition, before exporting to consumers."""
     import math
     from .model_validation import prim_path
@@ -404,10 +410,8 @@ def validate_cell_configuration(cell):
     near, far = camera['clipping_range_m']
     if not (math.isfinite(near) and math.isfinite(far) and 0 < near < far):
         raise ValueError('Camera clipping range requires 0 < near < far')
-    geometry = json.loads(Path(cell['geometry']).read_text())
-    objects = {item['id'] for item in geometry['objects']}
     for identity in (camera['mount']['geometry_object'], supply['support_geometry_object']):
-        if identity not in objects:
+        if identity not in geometry:
             raise ValueError(f'Cell binding geometry object not found: {identity}')
     # OpenCV's YAML directive is not understood by PyYAML.
     calibration = yaml.safe_load(Path(cell['calibration_file']).read_text().replace('%YAML:1.0', ''))
