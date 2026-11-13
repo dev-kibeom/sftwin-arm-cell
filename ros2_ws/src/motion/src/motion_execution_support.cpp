@@ -395,8 +395,6 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   request.has_observed_rectangle = is_pick && goal.has_observed_rectangle;
   request.rectangle_long_side_m = is_pick ? goal.rectangle_long_side_m : 0.0F;
   request.rectangle_short_side_m = is_pick ? goal.rectangle_short_side_m : 0.0F;
-  request.grasp_width_min_mm = is_pick ? goal.grasp_width_min_mm : 0.0F;
-  request.grasp_width_max_mm = is_pick ? goal.grasp_width_max_mm : 0.0F;
   request.motion_goal_uuid = execution_id;
   request.observation_pose = geometry_msgs::msg::PoseStamped{};
   if (is_pick && goal.orientation_symmetry_order == ExecuteTask::Goal::ORIENTATION_UNOBSERVABLE) {
@@ -556,8 +554,6 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   request.has_observed_rectangle = pick && movement.constraints.has_observed_rectangle;
   request.rectangle_long_side_m = pick ? movement.constraints.rectangle_long_side_m : 0.0F;
   request.rectangle_short_side_m = pick ? movement.constraints.rectangle_short_side_m : 0.0F;
-  request.grasp_width_min_mm = pick ? movement.constraints.grasp_width_min_mm : 0.0F;
-  request.grasp_width_max_mm = pick ? movement.constraints.grasp_width_max_mm : 0.0F;
   request.observation_pose = geometry_msgs::msg::PoseStamped{};
   if (pick && movement.constraints.orientation_symmetry_order ==
     MotionOrientationSymmetry::UNOBSERVABLE)

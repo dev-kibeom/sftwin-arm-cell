@@ -1036,8 +1036,6 @@ CycleCoordinator::ExecutePnp::Goal CycleCoordinator::pnp_goal(
   goal.pick_grasp_orientation_tolerance_rad = recipe.pick_grasp_orientation_tolerance_rad;
   goal.has_material_grasp_transform = recipe.has_material_grasp_transform;
   goal.material_grasp_transform = recipe.material_grasp_transform;
-  goal.grasp_width_min_mm = recipe.grasp_width_min_mm;
-  goal.grasp_width_max_mm = recipe.grasp_width_max_mm;
   if (recipe.unobserved_yaw_policy == UnobservedYawPolicy::ALLOWED &&
     std::any_of(response.material_candidates.begin(), response.material_candidates.end(),
       [](const auto & candidate) {return candidate.orientation_symmetry_order == 0;}))
@@ -1118,10 +1116,8 @@ CycleCoordinator::Result CycleCoordinator::execute(
         candidate->pick_grasp_orientation_tolerance_rad <= kPi;
       return candidate &&
              candidate->vision_algorithm == "cuboid_top_face" &&
-             candidate->has_grasp_width_policy && candidate->has_grasp_yaw &&
+             candidate->has_grasp_yaw &&
              candidate->has_unobserved_yaw_policy && candidate->has_place_pose &&
-             std::isfinite(candidate->grasp_width_min_mm) &&
-             std::isfinite(candidate->grasp_width_max_mm) &&
              valid_place_pose(candidate->place_pose) &&
              std::isfinite(candidate->place_position_tolerance_m) &&
              candidate->place_position_tolerance_m >= 0.0 &&
@@ -1137,9 +1133,7 @@ CycleCoordinator::Result CycleCoordinator::execute(
              candidate->place_approach_distance_m > 0.0 &&
              std::isfinite(candidate->retract_distance_m) && candidate->retract_distance_m > 0.0 &&
              std::isfinite(candidate->grasp_yaw_rad) && valid_pick_approach_axis &&
-             valid_pick_grasp_envelope && candidate->grasp_width_min_mm > 0.0F &&
-             candidate->grasp_width_max_mm >= candidate->grasp_width_min_mm &&
-             candidate->grasp_width_max_mm <= 85.0F;
+             valid_pick_grasp_envelope;
     };
 
   BT::BehaviorTreeFactory factory;

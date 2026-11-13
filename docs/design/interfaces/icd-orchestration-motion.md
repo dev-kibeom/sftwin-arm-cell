@@ -90,7 +90,6 @@ erDiagram
 | `estimated_object_height_m` / `has_estimated_object_height` | Object own thickness와 presence | Rectangle PICK에서는 유한 양수; 부분 복원에서는 추정 자체 두께 |
 | `has_observed_rectangle`, `rectangle_long_side_m`, `rectangle_short_side_m` | `has_observed_rectangle`는 Rectangle 실측 여부 provenance이고 side 필드는 유효 Rectangle Geometry 치수 | 실측 또는 추정 Geometry를 제공할 때 양수·형상 일관성; false여도 양수 side는 추정값으로 유효 |
 | `orientation_symmetry_order`, `has_unobserved_yaw_fallback`, `unobserved_yaw_fallback_rad` | 관측 대칭 동치류와 별도 Recipe 방향 정책 | 0/1/2/4만 인정; order 0 fallback은 관측 근거로 취급 금지 |
-| `grasp_width_min_mm`, `grasp_width_max_mm` | Recipe의 허용 접촉 폭 구간 | 유한 양수·최솟값 ≤ 최댓값 |
 | `pick_approach_translation_direction`, `pick_approach_distance_m` | PICK 접근축 모드·Grasp와 Approach 분리 거리 | RawPart는 TCP insertion axis, 양의 거리 |
 | `pick_grasp_backoff_m` | Recipe `pick.grasp_backoff_m`의 파지 깊이 보정 거리 | Recipe에 명시하는 유한 비음수 metre 값. 0은 무보정. 최종 TCP 후보의 정규화된 insertion axis 반대 방향으로 적용하며 Approach 거리와 독립 |
 | `pick_grasp_position_tolerance_m`, `pick_grasp_orientation_tolerance_rad` | Recipe의 Grasp 목표 허용오차 | 후보 상판 높이 동치 허용오차와 구별 |
@@ -218,3 +217,5 @@ Orchestration은 `has_observed_rectangle=false`인 부분 형상 TestCube Candid
 ### 자재별 Grasp Transform 전달
 
 컴파일된 미션의 선택적 `object_to_grasp_tcp`는 자재 offset과 Motion 소유 tool axis convention을 합성한 변환이다. Orchestration은 `ExecutePnp`의 `has_material_grasp_transform` 및 `material_grasp_transform`으로 전달하고 Task Execution은 PICK의 `ExecuteTask`와 `MotionConstraints`에 보존한다. Motion은 해당 요청에만 변환을 적용하며 실행 간 공용 Geometry를 변경하지 않는다. 필드가 없는 기존 호출은 설정된 Geometry를 사용한다. PLACE는 실제 파지에서 수락된 Object→TCP 관계를 유지한다.
+
+PICK 접촉 폭은 Recipe/Action 입력이 아니다. Motion은 관측된 직육면체 각 축의 길이와 Gripper 최대 개구 폭으로 후보를 선별하고, 선택한 축의 예상 접촉 폭을 Capture 검증에 전달한다.

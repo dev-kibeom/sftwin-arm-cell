@@ -12,7 +12,7 @@ TEST(BoxGraspGeometry, SidePairAcceptsTiltAroundClosingAxis)
   const Eigen::Quaterniond object(Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitZ()));
   const Eigen::Quaterniond tcp = object *
     Eigen::Quaterniond(Eigen::AngleAxisd(0.7, Eigen::Vector3d::UnitX()));
-  const auto result = box_grasp_contact(object, tcp, 0.07, 0.05, 0.08, 40.0, 85.0);
+  const auto result = box_grasp_contact(object, tcp, 0.07, 0.05, 0.08);
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->face_evidence, BoxFaceEvidence::INFERRED_SIDE_PAIR);
   EXPECT_EQ(result->closing_axis, 0U);
@@ -24,7 +24,7 @@ TEST(BoxGraspGeometry, TopBottomPairUsesMeasuredHeight)
   const Eigen::Quaterniond object = Eigen::Quaterniond::Identity();
   const Eigen::Quaterniond tcp(Eigen::AngleAxisd(
       1.5707963267948966, Eigen::Vector3d::UnitY()));
-  const auto result = box_grasp_contact(object, tcp, 0.07, 0.05, 0.08, 40.0, 85.0);
+  const auto result = box_grasp_contact(object, tcp, 0.07, 0.05, 0.08);
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result->face_evidence, BoxFaceEvidence::OBSERVED_TOP_INFERRED_BOTTOM);
   EXPECT_NEAR(result->width_mm, 80.0, 1e-6);
@@ -43,7 +43,7 @@ TEST(BoxGraspGeometry, OppositeClosingDirectionsAndTcpRollAreEquivalent)
         const Eigen::Quaterniond tcp = object * alignment *
           Eigen::Quaterniond(Eigen::AngleAxisd(roll_rad, Eigen::Vector3d::UnitX()));
         const auto result = box_grasp_contact(
-          object, tcp, 0.07, 0.05, 0.08, 40.0, 85.0);
+          object, tcp, 0.07, 0.05, 0.08);
         ASSERT_TRUE(result.has_value()) << "axis=" << axis << " sign=" << sign <<
           " roll=" << roll_rad;
         EXPECT_EQ(result->closing_axis, axis);
@@ -62,8 +62,8 @@ TEST(BoxGraspGeometry, RejectsCornerContactAndWidthBeyondGripper)
   const Eigen::Quaterniond object = Eigen::Quaterniond::Identity();
   const Eigen::Quaterniond diagonal(Eigen::AngleAxisd(
       0.7853981633974483, Eigen::Vector3d::UnitZ()));
-  EXPECT_FALSE(box_grasp_contact(object, diagonal, 0.07, 0.05, 0.08, 40.0, 85.0));
-  EXPECT_FALSE(box_grasp_contact(object, object, 0.09, 0.05, 0.08, 40.0, 85.0));
+  EXPECT_FALSE(box_grasp_contact(object, diagonal, 0.07, 0.05, 0.08));
+  EXPECT_FALSE(box_grasp_contact(object, object, 0.09, 0.05, 0.08));
 }
 
 TEST(BoxGraspGeometry, OneDegreeAlignmentTolerancePreservesSignsAndWidths)
@@ -75,18 +75,21 @@ TEST(BoxGraspGeometry, OneDegreeAlignmentTolerancePreservesSignsAndWidths)
           (sign < 0.0 ? pi : 0.0) + degrees * pi / 180.0,
           Eigen::Vector3d::UnitZ()));
       const auto contact = box_grasp_contact(
-        Eigen::Quaterniond::Identity(), tcp, 0.07, 0.05, 0.08, 60.0, 85.0);
+        Eigen::Quaterniond::Identity(), tcp, 0.07, 0.05, 0.08);
       EXPECT_EQ(contact.has_value(), degrees <= 1.0);
       if (contact) {
         EXPECT_EQ(contact->closing_axis, 0U);
         EXPECT_DOUBLE_EQ(contact->width_mm, 70.0);
       }
-      EXPECT_FALSE(box_grasp_contact(
-          Eigen::Quaterniond::Identity(), tcp, 0.09, 0.05, 0.08, 60.0, 100.0));
-      EXPECT_FALSE(box_grasp_contact(
-          Eigen::Quaterniond::Identity(), tcp, 0.07, 0.05, 0.08, 71.0, 85.0));
-      EXPECT_FALSE(box_grasp_contact(
-          Eigen::Quaterniond::Identity(), tcp, 0.07, 0.05, 0.08, 60.0, 69.0));
+      EXPECT_FALSE(
+        box_grasp_contact(
+          Eigen::Quaterniond::Identity(), tcp, 0.09, 0.05, 0.08));
+      EXPECT_FALSE(
+        box_grasp_contact(
+          Eigen::Quaterniond::Identity(), tcp, 0.07, 0.05, 0.08, 69.0));
+      EXPECT_FALSE(
+        box_grasp_contact(
+          Eigen::Quaterniond::Identity(), tcp, 0.07, 0.05, 0.08, 0.0));
     }
   }
 }

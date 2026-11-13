@@ -443,7 +443,6 @@ BT::NodeStatus ValidateGraspContact::execute(PlanningContext & context)
     context.attempt.grasp_fk_orientation, context.attempt.expected_closing_axis,
     context.object_orientation, context.rectangle_long_side_m,
     context.rectangle_short_side_m, context.object_height_m,
-    context.grasp_width_min_mm, context.grasp_width_max_mm,
     context.gripper_max_width_mm);
   if (context.attempt.grasp_contact_result.check == PickGraspContactCheck::MISMATCH) {
     context.attempt.failure_stage = "GRASP_CONTACT";

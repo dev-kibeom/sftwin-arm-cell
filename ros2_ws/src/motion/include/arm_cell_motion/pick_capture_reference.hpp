@@ -72,8 +72,7 @@ inline nlohmann::json capture_reference_diagnostic_json(
   const CaptureReferenceContactWidth & resolution,
   RectangleGeometryStatus geometry_status, const std::string & fixture_id,
   bool has_observed_rectangle, bool has_estimated_height,
-  double long_side_m, double short_side_m, double height_m,
-  double policy_min_mm, double policy_max_mm)
+  double long_side_m, double short_side_m, double height_m)
 {
   return {
     {"source", resolution.source},
@@ -85,7 +84,6 @@ inline nlohmann::json capture_reference_diagnostic_json(
     {"has_estimated_object_height", has_estimated_height},
     {"rectangle_dimensions_m", {long_side_m, short_side_m}},
     {"estimated_object_height_m", height_m},
-    {"recipe_contact_width_policy_mm", {policy_min_mm, policy_max_mm}},
     {"contact_width_input_mm", resolution.width_mm}};
 }
 

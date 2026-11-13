@@ -40,7 +40,7 @@ constexpr char kValidRecipe[] = R"({
   "schema_version": 1,
   "recipe_id": "rawpart-placement-v1",
   "target_id": "TestCube",
-  "grasp": {"min_expected_contact_width_mm": 60.0, "max_expected_contact_width_mm": 85.0, "yaw_rad": 0.0, "unobserved_yaw_policy": "forbidden"},
+  "grasp": {"yaw_rad": 0.0, "unobserved_yaw_policy": "forbidden"},
   "pick": {"grasp_backoff_m": 0.017, "approach_distance_m": 0.15, "grasp_position_tolerance_m": 0.01, "grasp_orientation_tolerance_rad": 0.08726646259971647},
   "place": {
     "orientation_constraint": "bounded",
@@ -83,8 +83,6 @@ TEST_F(RecipeRepositoryTest, ParsesAValidRecipeIntoMissionSemantics)
   ASSERT_TRUE(result.recipe);
   EXPECT_EQ(result.recipe->recipe_id, "rawpart-placement-v1");
   EXPECT_EQ(result.recipe->target_id, "TestCube");
-  EXPECT_FLOAT_EQ(result.recipe->grasp_width_min_mm, 60.0F);
-  EXPECT_FLOAT_EQ(result.recipe->grasp_width_max_mm, 85.0F);
   EXPECT_DOUBLE_EQ(result.recipe->pick_approach_distance_m, 0.15);
   EXPECT_DOUBLE_EQ(result.recipe->pick_grasp_backoff_m, 0.017);
   EXPECT_DOUBLE_EQ(result.recipe->pick_grasp_position_tolerance_m, 0.01);
@@ -320,7 +318,7 @@ TEST_F(RecipeRepositoryTest, RejectsInvalidUnobservedYawPolicy)
 TEST_F(RecipeRepositoryTest, DistinguishesRequiredFieldTypeErrorsByReasonToken)
 {
   auto contents = std::string(kValidRecipe);
-  contents.replace(contents.find("60.0"), 4, "\"wide\"");
+  contents.replace(contents.find("\"yaw_rad\": 0.0"), 14, "\"yaw_rad\": \"wide\"");
   write("TestCube.json", contents);
 
   const auto result = RecipeRepository(directory_).load("TestCube");
@@ -356,8 +354,8 @@ TEST_F(RecipeRepositoryTest, RejectsSemanticViolationsWithDistinctReasons)
       "\"direction_object\": [0.0, 0.0, 2.0]",
       RecipeDiagnosticReason::INVALID_APPROACH_DIRECTION},
     {"\"distance_m\": 0.015", "\"distance_m\": 0.0", RecipeDiagnosticReason::INVALID_DISTANCE},
-    {"\"position_tolerance_m\": 0.01", "\"position_tolerance_m\": -0.01", RecipeDiagnosticReason::INVALID_TOLERANCE},
-    {"\"max_expected_contact_width_mm\": 85.0", "\"max_expected_contact_width_mm\": 86.0", RecipeDiagnosticReason::INVALID_GRASP_WIDTH},
+    {"\"position_tolerance_m\": 0.01", "\"position_tolerance_m\": -0.01",
+      RecipeDiagnosticReason::INVALID_TOLERANCE},
   };
   for (const auto & invalid : cases) {
     auto contents = std::string(kValidRecipe);

@@ -1,7 +1,4 @@
 material_id: TestCube
-grasp:
-  min_expected_contact_width_mm: 60.0
-  max_expected_contact_width_mm: 85.0
 pick_offset:
   translation_m:
   - 0.0

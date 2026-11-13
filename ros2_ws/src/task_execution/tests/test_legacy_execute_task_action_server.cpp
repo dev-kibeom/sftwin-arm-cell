@@ -285,8 +285,6 @@ PnpAction::Goal action_lifecycle_pnp_goal()
   goal.pick_approach_distance_m = 0.15;
   goal.pick_grasp_position_tolerance_m = 0.01;
   goal.pick_grasp_orientation_tolerance_rad = 0.08;
-  goal.grasp_width_min_mm = 10.0F;
-  goal.grasp_width_max_mm = 85.0F;
   goal.place_position_tolerance_m = 0.01;
   goal.place_orientation_tolerance_rad = 0.02;
   goal.place_orientation_constraint = PnpAction::Goal::PLACE_ORIENTATION_BOUNDED;

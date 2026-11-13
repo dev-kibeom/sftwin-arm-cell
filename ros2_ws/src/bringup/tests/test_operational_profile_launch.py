@@ -705,9 +705,9 @@ def test_operational_profile_uses_w06_place_destination():
     nominal_dimensions = profile["material_definitions"]["TestCube"][
         "nominal_dimensions_m"
     ]
-    expected_width_mm = nominal_dimensions[0] * 1000.0
-    assert recipe["grasp"]["min_expected_contact_width_mm"] <= expected_width_mm
-    assert recipe["grasp"]["max_expected_contact_width_mm"] >= expected_width_mm
+    assert max(nominal_dimensions) * 1000.0 <= 85.0
+    assert "min_expected_contact_width_mm" not in recipe["grasp"]
+    assert "max_expected_contact_width_mm" not in recipe["grasp"]
     assert recipe["grasp"]["unobserved_yaw_policy"] == "forbidden"
     assert rawpart["material_id"] == "TestCube"
     assert "dimensions_m" not in rawpart

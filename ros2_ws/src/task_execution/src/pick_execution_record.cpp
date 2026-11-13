@@ -114,8 +114,6 @@ void write_pick_execution_record(
     output
       << "  \"vision_acquisition_id\": \"" << json_escape(goal.vision_acquisition_id) << "\",\n"
       << "  \"target_frame_id\": \"" << json_escape(goal.target_pose.header.frame_id) << "\",\n"
-      << "  \"requested_grasp_width_min_mm\": " << goal.grasp_width_min_mm << ",\n"
-      << "  \"requested_grasp_width_max_mm\": " << goal.grasp_width_max_mm << ",\n"
       << "  \"orientation_symmetry_order\": " <<
       static_cast<unsigned>(goal.orientation_symmetry_order) << ",\n"
       << "  \"orientation_source\": \"" <<

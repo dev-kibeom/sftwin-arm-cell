@@ -28,8 +28,7 @@ struct BoxGraspContact
 inline std::optional<BoxGraspContact> box_grasp_contact(
   const Eigen::Quaterniond & object_orientation,
   const Eigen::Quaterniond & tcp_orientation,
-  double long_side_m, double short_side_m, double height_m,
-  double policy_min_mm, double policy_max_mm, double gripper_max_mm = 85.0)
+  double long_side_m, double short_side_m, double height_m, double gripper_max_mm = 85.0)
 {
   if (!object_orientation.coeffs().allFinite() ||
     !tcp_orientation.coeffs().allFinite() ||
@@ -37,8 +36,6 @@ inline std::optional<BoxGraspContact> box_grasp_contact(
     !std::isfinite(long_side_m) || !std::isfinite(short_side_m) ||
     !std::isfinite(height_m) || long_side_m < short_side_m ||
     short_side_m <= 0.0 || height_m <= 0.0 ||
-    !std::isfinite(policy_min_mm) || !std::isfinite(policy_max_mm) ||
-    policy_min_mm <= 0.0 || policy_max_mm < policy_min_mm ||
     !std::isfinite(gripper_max_mm) || gripper_max_mm <= 0.0)
   {
     return std::nullopt;
@@ -54,7 +51,7 @@ inline std::optional<BoxGraspContact> box_grasp_contact(
       continue;
     }
     const double width_mm = lengths[axis] * 1000.0;
-    if (width_mm < policy_min_mm || width_mm > policy_max_mm || width_mm > gripper_max_mm) {
+    if (width_mm > gripper_max_mm) {
       return std::nullopt;
     }
     return BoxGraspContact{

@@ -180,9 +180,6 @@ public:
     uint32_t schema_version{0};
     bool has_material_grasp_transform{false};
     geometry_msgs::msg::Transform material_grasp_transform;
-    float grasp_width_min_mm{0.0F};
-    float grasp_width_max_mm{0.0F};
-    bool has_grasp_width_policy{false};
     double grasp_yaw_rad{0.0};
     bool has_grasp_yaw{false};
     UnobservedYawPolicy unobserved_yaw_policy{UnobservedYawPolicy::FORBIDDEN};

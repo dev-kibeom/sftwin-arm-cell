@@ -127,15 +127,15 @@ nlohmann::json attempt_record(
   return record;
 }
 }  // namespace
-void PickPlanningDiagnostics::resize(std::size_t count, bool has_recipe_candidates)
+void PickPlanningDiagnostics::resize(std::size_t count, bool has_grasp_candidates)
 {
   summary_.candidate_joint_distance.assign(count, std::numeric_limits<double>::infinity());
   summary_.tcp_orientation_candidates.assign(count, Eigen::Quaterniond::Identity());
   summary_.expected_width_candidates.assign(count, 0.0);
   summary_.candidate_evaluated.assign(count, false);
   summary_.candidate_results.assign(count, "NOT_EVALUATED");
-  if (!has_recipe_candidates && count > 0U) {
-    summary_.candidate_results[0] = "NO_RECIPE_VALID_GRASP_POSE";
+  if (!has_grasp_candidates && count > 0U) {
+    summary_.candidate_results[0] = "NO_GRIPPER_COMPATIBLE_GRASP_POSE";
   }
   summary_.candidate_transition_reasons.assign(count, "NOT_TRANSITIONED");
   summary_.candidate_plan_status.assign(count, "NOT_ATTEMPTED");

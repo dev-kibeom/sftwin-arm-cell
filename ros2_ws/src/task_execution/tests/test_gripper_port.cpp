@@ -137,8 +137,6 @@ ExecuteTask::Goal pick_goal()
   goal.has_observed_rectangle = true;
   goal.rectangle_long_side_m = 0.07F;
   goal.rectangle_short_side_m = 0.07F;
-  goal.grasp_width_min_mm = 10.0F;
-  goal.grasp_width_max_mm = 85.0F;
   return goal;
 }
 

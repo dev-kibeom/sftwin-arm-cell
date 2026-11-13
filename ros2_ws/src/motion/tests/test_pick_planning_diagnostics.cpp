@@ -64,3 +64,14 @@ TEST(PickPlanningDiagnostics, BudgetAndCancelDoNotInventSkippedStageSuccess)
   }
 }
 }  // namespace arm_cell_motion
+
+TEST(PickPlanningDiagnostics, EmptyGenerationDoesNotClaimIKWasEvaluated)
+{
+  arm_cell_motion::PickPlanningDiagnostics diagnostics;
+  diagnostics.resize(1U, false);
+  const auto & summary = diagnostics.summary();
+  ASSERT_EQ(summary.candidate_results.size(), 1U);
+  EXPECT_EQ(summary.candidate_results[0], "NO_GRIPPER_COMPATIBLE_GRASP_POSE");
+  EXPECT_FALSE(summary.candidate_evaluated[0]);
+  EXPECT_EQ(summary.candidate_plan_status[0], "NOT_ATTEMPTED");
+}

@@ -51,16 +51,16 @@ TEST(GraspContactPolicyTest, FixtureWidthUsesSelectedClosingAxisAndShapeRotation
   geometry_msgs::msg::PoseStamped tcp;
   tcp.header.frame_id = "base_link";
   tcp.pose.orientation.w = 1.0;
-  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 50, 80, 85), 70);
+  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 85), 70);
   // Side-on TCP: +X closes along the fixture Z axis, without a top-down gate.
   tcp.pose.orientation.y = std::sqrt(0.5);
   tcp.pose.orientation.w = std::sqrt(0.5);
-  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 50, 80, 85), 80);
+  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 85), 80);
   // Compose the CollisionObject and primitive rotations, not just the object pose.
   fixture.primitive_poses[0].orientation = tcp.pose.orientation;
-  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 50, 80, 85), 70);
+  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 85), 70);
   fixture.pose.orientation = tcp.pose.orientation;
-  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 50, 80, 85), 80);
+  EXPECT_DOUBLE_EQ(*fixture_contact_width_mm({fixture}, fixture.id, tcp, 85), 80);
 }
 
 TEST(GraspContactPolicyTest, FixtureWidthRejectsMissingAmbiguousInvalidOrOutOfPolicyGeometry)
@@ -70,7 +70,7 @@ TEST(GraspContactPolicyTest, FixtureWidthRejectsMissingAmbiguousInvalidOrOutOfPo
   tcp.header.frame_id = "base_link";
   tcp.pose.orientation.w = 1.0;
   const auto width = [&](const std::vector<CollisionObject> & objects) {
-      return fixture_contact_width_mm(objects, fixture.id, tcp, 69, 71, 85);
+      return fixture_contact_width_mm(objects, fixture.id, tcp, 85);
     };
   EXPECT_FALSE(width({}));
   EXPECT_FALSE(width({fixture, fixture}));

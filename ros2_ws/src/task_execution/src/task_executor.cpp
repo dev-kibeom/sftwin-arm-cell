@@ -194,8 +194,6 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
   pick.pick_grasp_orientation_tolerance_rad = goal.pick_grasp_orientation_tolerance_rad;
   pick.has_material_grasp_transform = goal.has_material_grasp_transform;
   pick.material_grasp_transform = goal.material_grasp_transform;
-  pick.grasp_width_min_mm = goal.grasp_width_min_mm;
-  pick.grasp_width_max_mm = goal.grasp_width_max_mm;
   pick.has_unobserved_yaw_fallback = goal.has_unobserved_yaw_fallback;
   pick.unobserved_yaw_fallback_rad = goal.unobserved_yaw_fallback_rad;
 

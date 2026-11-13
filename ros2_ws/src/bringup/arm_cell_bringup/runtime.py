@@ -58,23 +58,17 @@ def read(path):
     return value
 
 
-def compile_mission(path, *, pick_policy=None, place_task=None, material_override=None, grasp_width_mm=None, tool_quaternion=None):
+def compile_mission(path, *, pick_policy=None, place_task=None, material_override=None, tool_quaternion=None):
     mission = read(path)
     if mission.get('schema_version') != 2:
         raise ValueError(f'Unsupported mission schema: {path}')
     material = copy.deepcopy(material_override) if material_override is not None else read(resolve(mission['material'], Path(path).parent))
     if material['material_id'] != mission['target_id']:
         raise ValueError('Mission material_id and target_id must match')
-    grasp = copy.deepcopy(material['grasp'])
-    if grasp_width_mm is not None:
-        grasp = {'min_expected_contact_width_mm': max(0.001, grasp_width_mm - 1.0),
-                 'max_expected_contact_width_mm': min(85.0, grasp_width_mm + 1.0)}
+    grasp = {}
     pick = read(resolve(pick_policy or mission['pick_policy'], Path(path).parent))
     for key in ('yaw_rad', 'unobserved_yaw_policy'):
         grasp[key] = pick.pop(key)
-    if 'width_mm' in grasp:
-        grasp['min_expected_contact_width_mm'] = grasp.pop('width_mm')
-        grasp['max_expected_contact_width_mm'] = grasp['min_expected_contact_width_mm']
     transform = copy.deepcopy(material['pick_offset'])
     tool = tool_quaternion or read(resolve('package://arm_cell_motion/config/operational.yaml', Path(path).parent))['tool_axis_quaternion_xyzw']
     transform['quaternion_xyzw'] = quaternion_product(transform['quaternion_xyzw'], tool)
@@ -117,7 +111,7 @@ def write_recipes(recipes, output_root=None):
     return str(output)
 
 
-def load_profile(path, *, material_id=None, grasp_width_mm=None, pick_offset_z_m=None):
+def load_profile(path, *, material_id=None, pick_offset_z_m=None):
     path = Path(path).expanduser().resolve()
     config = read(path)
     if config.get('kind') == 'arm-cell-runtime-configuration':
@@ -127,15 +121,15 @@ def load_profile(path, *, material_id=None, grasp_width_mm=None, pick_offset_z_m
         digest = hashlib.sha256(json.dumps(configuration, sort_keys=True, allow_nan=False).encode()).hexdigest()
         if digest != config.get('configuration_sha256'):
             raise ValueError('Runtime configuration checksum mismatch')
-        if any(value is not None for value in (material_id, grasp_width_mm, pick_offset_z_m)):
+        if any(value is not None for value in (material_id, pick_offset_z_m)):
             raise ValueError('Re-export the source profile to change material trial settings')
         configuration = copy.deepcopy(configuration)
         recipes = configuration.get('_mission_recipes', {configuration['_mission_recipe']['target_id']: configuration['_mission_recipe']})
         configuration['orchestration']['recipe_directory'] = write_recipes(recipes)
         return configuration
     if 'components' not in config:
-        return validation_configuration(config, path, material_id, grasp_width_mm, pick_offset_z_m)
-    if any(value is not None for value in (grasp_width_mm, pick_offset_z_m)):
+        return validation_configuration(config, path, material_id, pick_offset_z_m)
+    if any(value is not None for value in (pick_offset_z_m,)):
         raise ValueError('Grasp calibration trial settings require a validation profile')
     if config.get('schema_version') != 2:
         raise ValueError('Unsupported deployment profile schema')
@@ -239,7 +233,7 @@ def quaternion_product(first, second):
             w*c + x*b - y*a + z*d, w*d - x*a - y*b - z*c]
 
 
-def validation_configuration(config, path, material_id=None, grasp_width_mm=None, pick_offset_z_m=None):
+def validation_configuration(config, path, material_id=None, pick_offset_z_m=None):
     """Resolve the validation fixture from the same material owner as production."""
     if 'fixture' not in config:
         return config
@@ -249,12 +243,6 @@ def validation_configuration(config, path, material_id=None, grasp_width_mm=None
         raise ValueError(f'Unknown validation material: {identity}')
     material = copy.deepcopy(catalog[identity])
     dimensions = material['geometry']['nominal_dimensions_m']
-    if grasp_width_mm is not None:
-        import math
-        if (isinstance(grasp_width_mm, bool) or not math.isfinite(grasp_width_mm)
-            or not 0 < grasp_width_mm <= 85
-            or not any(math.isclose(grasp_width_mm, d*1000, abs_tol=1e-6) for d in dimensions)):
-            raise ValueError('Validation grasp width must match a box dimension within the gripper aperture')
     if pick_offset_z_m is not None:
         import math
         if not math.isfinite(pick_offset_z_m) or abs(pick_offset_z_m) > dimensions[2]/2:
@@ -268,7 +256,7 @@ def validation_configuration(config, path, material_id=None, grasp_width_mm=None
     config['motion']['object_to_grasp_tcp_quaternion'] = quaternion_product(material['pick_offset']['quaternion_xyzw'], [1., 0., 0., 0.])
     directory = resolve(config['orchestration']['recipe_directory'], path.parent)
     validation = config['validation']
-    options = dict(material_override=material, grasp_width_mm=grasp_width_mm,
+    options = dict(material_override=material,
                    pick_policy=validation['pick_policy'], place_task=validation['place_task'])
     config['orchestration']['recipe_directory'] = mission_directory(directory, overrides={identity: options})
     recipe, _ = compile_mission(directory / f'{identity}.yaml', **options)

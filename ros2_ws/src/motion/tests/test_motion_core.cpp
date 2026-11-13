@@ -38,11 +38,11 @@ TEST(RectangleGraspGeometry, MapsClosingAxisToMeasuredRectangleSpan)
   EXPECT_DOUBLE_EQ(*rectangle_expected_contact_width_mm(0.07, 0.07, false), 70.0);
 }
 
-TEST(RectangleGraspGeometry, RejectsMeasuredWidthsOutsideRecipeOrPhysicalLimits)
+TEST(RectangleGraspGeometry, RejectsMeasuredWidthsOutsidePhysicalLimits)
 {
-  EXPECT_TRUE(rectangle_contact_width_allowed(70.0, 60.0, 85.0, 0.0, 85.0));
-  EXPECT_FALSE(rectangle_contact_width_allowed(80.0, 60.0, 75.0, 0.0, 85.0));
-  EXPECT_FALSE(rectangle_contact_width_allowed(86.0, 60.0, 90.0, 0.0, 85.0));
+  EXPECT_TRUE(rectangle_contact_width_allowed(70.0, 0.0, 85.0));
+  EXPECT_TRUE(rectangle_contact_width_allowed(80.0, 0.0, 85.0));
+  EXPECT_FALSE(rectangle_contact_width_allowed(86.0, 0.0, 85.0));
 }
 
 struct CapturedLog
@@ -263,8 +263,6 @@ ExecuteTask::Goal pick_goal()
   goal.has_observed_rectangle = true;
   goal.rectangle_long_side_m = 0.07F;
   goal.rectangle_short_side_m = 0.07F;
-  goal.grasp_width_min_mm = 10.0F;
-  goal.grasp_width_max_mm = 85.0F;
   return goal;
 }
 }  // namespace
@@ -859,8 +857,6 @@ TEST(MotionCoreTest, PickAndPlaceUseTheMotionOwnedLifecycle)
   pick.has_observed_rectangle = true;
   pick.rectangle_long_side_m = 0.07F;
   pick.rectangle_short_side_m = 0.07F;
-  pick.grasp_width_min_mm = 10.0F;
-  pick.grasp_width_max_mm = 85.0F;
   ExecuteTask::Goal place;
   place.task_type.value = MotionTaskType::TASK_TYPE_PLACE;
   place.has_target_pose = true;

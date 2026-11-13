@@ -82,7 +82,8 @@ def test_validation_profile_selects_fixed_vision_and_its_recipe():
     )
     grasp_dimension_mm = profile["fixture"]["dimensions_m"][0] * 1000.0
     assert grasp_dimension_mm <= 85.0
-    assert recipe["grasp"]["min_expected_contact_width_mm"] <= grasp_dimension_mm <= recipe["grasp"]["max_expected_contact_width_mm"]
+    assert "min_expected_contact_width_mm" not in recipe["grasp"]
+    assert "max_expected_contact_width_mm" not in recipe["grasp"]
 
 
 def test_validation_profile_owns_moveit_planning_scaling():

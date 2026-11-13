@@ -156,8 +156,6 @@ struct PlanningContext
   double rectangle_long_side_m{0.0};
   double rectangle_short_side_m{0.0};
   double object_height_m{0.0};
-  double grasp_width_min_mm{0.0};
-  double grasp_width_max_mm{0.0};
   double gripper_max_width_mm{0.0};
   double grasp_ik_timeout_s{0.0};
   double approach_ik_timeout_s{0.0};

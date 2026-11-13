@@ -130,7 +130,6 @@ const char * recipe_reason_token(RecipeDiagnosticReason reason)
     case RecipeDiagnosticReason::INVALID_TOLERANCE: return "recipe_invalid_tolerance";
     case RecipeDiagnosticReason::INVALID_ORIENTATION_CONSTRAINT:
       return "recipe_invalid_orientation_constraint";
-    case RecipeDiagnosticReason::INVALID_GRASP_WIDTH: return "recipe_invalid_grasp_width";
     case RecipeDiagnosticReason::INVALID_GRASP_YAW: return "recipe_invalid_grasp_yaw";
     case RecipeDiagnosticReason::INVALID_UNOBSERVED_YAW_POLICY:
       return "recipe_invalid_unobserved_yaw_policy";
@@ -187,19 +186,7 @@ RecipeLoadResult RecipeRepository::load(const std::string & target_id) const
     }
 
     const auto & grasp = object(required(document, "grasp"), "grasp");
-    const double min_width = number_value(
-      required(grasp, "min_expected_contact_width_mm"),
-      "grasp.min_expected_contact_width_mm");
-    const double max_width = number_value(
-      required(grasp, "max_expected_contact_width_mm"),
-      "grasp.max_expected_contact_width_mm");
     const double yaw = number_value(required(grasp, "yaw_rad"), "grasp.yaw_rad");
-    if (!std::isfinite(min_width) || !std::isfinite(max_width) ||
-      min_width <= 0.0 || max_width < min_width || max_width > 85.0)
-    {
-      throw RecipeError(
-              RecipeDiagnosticReason::INVALID_GRASP_WIDTH, "grasp expected contact width range");
-    }
     if (!std::isfinite(yaw)) {
       throw RecipeError(RecipeDiagnosticReason::INVALID_GRASP_YAW, "grasp.yaw_rad");
     }
@@ -396,9 +383,6 @@ RecipeLoadResult RecipeRepository::load(const std::string & target_id) const
       t.rotation.x = quaternion[0]; t.rotation.y = quaternion[1];
       t.rotation.z = quaternion[2]; t.rotation.w = quaternion[3];
     }
-    recipe.grasp_width_min_mm = static_cast<float>(min_width);
-    recipe.grasp_width_max_mm = static_cast<float>(max_width);
-    recipe.has_grasp_width_policy = true;
     recipe.grasp_yaw_rad = yaw;
     recipe.has_grasp_yaw = true;
     recipe.unobserved_yaw_policy = unobserved_yaw_policy == "allowed" ?
