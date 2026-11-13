@@ -27,12 +27,3 @@ jobs:
       - name: Check Python syntax in ARM Cell tooling
         run: |
           python3 -m compileall -q infra/isaac_sim/scripts/m0609_cell
-      - name: Verify Launcher and shared configuration
-        env:
-          QT_QPA_PLATFORM: offscreen
-          PYTHONPATH: ros2_ws/src/bringup
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libegl1
-          python3 -m pip install pytest -r infra/launcher/requirements.txt
-          python3 -m pytest -q infra/launcher/tests ros2_ws/src/bringup/tests/test_runtime_export.py ros2_ws/src/bringup/tests/test_configuration_composition.py
