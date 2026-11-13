@@ -151,7 +151,7 @@ def test_scene_builder_refuses_stale_robot_artifact_before_referencing_it(
     tmp_path, monkeypatch, exported_configuration
 ):
     from runtime_configuration import load_runtime_configuration
-    from scene_selection import SceneConfiguration
+    from scene_builder.scene_configuration import SceneConfiguration
 
     (tmp_path / "infra/isaac_sim/assets/usd").mkdir(parents=True)
     (

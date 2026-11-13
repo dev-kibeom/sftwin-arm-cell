@@ -43,5 +43,5 @@ collision_objects:
 contact_objects:
   pick_retract: amr_tray
 isaac:
-  scene_builder: scene_builder.composition:run_scene_build
+  scene_builder: m0609_cell.scene_builder.composition:run_scene_build
   robot_prim_path: /World/SF_Twin_Cell/m0609

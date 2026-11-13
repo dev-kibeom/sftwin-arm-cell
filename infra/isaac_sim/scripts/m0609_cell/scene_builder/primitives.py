@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from scene_builder.materials import bind_material
+from .materials import bind_material
 
 
 def _pxr_modules():

@@ -31,7 +31,7 @@ jobs:
           PY
       - name: Check Python syntax in ARM Cell tooling
         run: |
-          python3 -m compileall -q infra/isaac_sim/scripts/m0609_cell
+          python3 -m compileall -q infra/isaac_sim/scripts
       - name: Verify Launcher and shared configuration
         env:
           QT_QPA_PLATFORM: offscreen

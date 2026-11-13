@@ -58,7 +58,7 @@ def test_another_assembly_uses_selected_input_and_separate_outputs(exported_conf
     profile_path = tmp_path / 'deployment.yaml'
     profile_path.write_text(yaml.safe_dump(profile))
     exported = export_runtime_configuration(profile_path, tmp_path / 'runtime.json')
-    from scene_selection import SceneConfiguration
+    from scene_builder.scene_configuration import SceneConfiguration
     selected = SceneConfiguration.from_runtime(load_runtime_configuration(exported), ROOT).model
     assert selected.source == tmp_path / 'selected.xacro'
     assert selected.xacro_arguments == (f'mesh_root:={tmp_path / "meshes"}',)

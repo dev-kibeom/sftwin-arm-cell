@@ -1,7 +1,7 @@
 """AMR mockup, tray, workpiece, docking target, and AMR-local metadata."""
 
-from scene_builder.rawpart_profile import author_support_fiducial
-from scene_builder.scene_roles import AMR_TRAY_ROLE
+from .rawpart_profile import author_support_fiducial
+from .scene_roles import AMR_TRAY_ROLE
 
 
 def build_amr(context):

@@ -10,7 +10,7 @@ from runtime_configuration import load_runtime_configuration
 
 
 def test_selected_cell_builder_receives_runtime_and_scene_dependencies(exported_configuration, monkeypatch):
-    from scene_selection import run_scene_build
+    from scene_entrypoint import run_scene_build
     config = load_runtime_configuration(exported_configuration)
     config['cell']['isaac']['scene_builder'] = 'alternate_cell:build'
     expected = object()
@@ -22,7 +22,7 @@ def test_selected_cell_builder_receives_runtime_and_scene_dependencies(exported_
 
 
 def test_default_scene_inputs_and_alternate_assembly(exported_configuration, tmp_path):
-    from scene_selection import SceneConfiguration
+    from scene_builder.scene_configuration import SceneConfiguration
     config = load_runtime_configuration(exported_configuration)
     selected = SceneConfiguration.from_runtime(config, tmp_path)
     assert selected.robot_prim_path == '/World/SF_Twin_Cell/m0609'
@@ -56,7 +56,7 @@ def test_selected_static_geometry_is_consumed(exported_configuration, tmp_path):
 
 @pytest.mark.parametrize("alternate", [False, True])
 def test_robot_station_authors_selected_reference_and_cell_transform(exported_configuration, tmp_path, monkeypatch, alternate):
-    from scene_selection import SceneConfiguration
+    from scene_builder.scene_configuration import SceneConfiguration
     from scene_builder import robot_station
     config = load_runtime_configuration(exported_configuration)
     if alternate:
@@ -100,8 +100,44 @@ def test_robot_station_authors_selected_reference_and_cell_transform(exported_co
 
 
 def test_unavailable_cell_builder_does_not_fall_back(exported_configuration):
-    from scene_selection import run_scene_build
+    from scene_entrypoint import run_scene_build
     config = load_runtime_configuration(exported_configuration)
     config['cell']['isaac']['scene_builder'] = 'unavailable_cell_scene:build'
     with pytest.raises(ModuleNotFoundError, match='unavailable_cell_scene'):
         run_scene_build(configuration=config)
+
+
+def test_script_editor_temporary_scene_step_uses_common_entrypoint(exported_configuration, tmp_path, monkeypatch):
+    import runpy
+    from pathlib import Path
+    from m0609_cell.scene_builder import composition
+
+    root = Path(__file__).resolve().parents[6]
+    scripts = root / 'infra/isaac_sim/scripts'
+    config = load_runtime_configuration(exported_configuration)
+    received = []
+
+    class SceneReached(Exception):
+        pass
+
+    def build(**kwargs):
+        received.append(kwargs['configuration'])
+        raise SceneReached
+
+    monkeypatch.setattr(composition, 'run_scene_build', build)
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(root))
+    monkeypatch.setattr(sys, 'path', [path for path in sys.path if path != str(scripts)])
+    monkeypatch.delitem(sys.modules, 'scene_entrypoint', raising=False)
+    monkeypatch.setitem(sys.modules, 'pxr', SimpleNamespace(
+        Gf=object(), UsdGeom=object(), UsdLux=object(), UsdPhysics=object()))
+    monkeypatch.setitem(sys.modules, 'isaacsim.core.api', SimpleNamespace(World=object()))
+    monkeypatch.setitem(sys.modules, 'isaacsim.core.utils.extensions', SimpleNamespace(enable_extension=object()))
+    monkeypatch.setitem(sys.modules, 'isaacsim.core.utils.prims', SimpleNamespace(delete_prim=object()))
+    monkeypatch.setitem(sys.modules, 'isaacsim.core.utils.stage', SimpleNamespace(add_reference_to_stage=object()))
+    script = tmp_path / 'carb.script_editor' / 'script_123.py'
+    script.parent.mkdir()
+    script.write_text((scripts / 'm0609_cell/runtime_steps/setup_scene.py').read_text())
+    with pytest.raises(SceneReached):
+        runpy.run_path(str(script))
+    assert received == [config]
+    assert Path(sys.modules['scene_entrypoint'].__file__) == scripts / 'scene_entrypoint.py'

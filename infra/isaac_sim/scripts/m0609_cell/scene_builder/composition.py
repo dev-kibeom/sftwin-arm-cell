@@ -6,30 +6,30 @@ from pathlib import Path
 
 import numpy as np
 
-from scene_builder.amr import build_amr
-from scene_builder.cell_metadata import (
+from .amr import build_amr
+from .cell_metadata import (
     apply_integration_metadata,
     build_status_hardware,
     initialize_cell_metadata,
 )
-from scene_builder.d455_camera import local_d455_asset, mount_d455
-from scene_builder.environment import build_environment
-from scene_builder.logical_camera import create_logical_camera_sensor
-from scene_builder.reachability import run_reachability_check
-from scene_builder.rawpart_profile import load_rawpart_profile
-from scene_builder.robot_station import build_robot_station
-from scene_builder.materials import create_preview_material
-from scene_builder.primitives import (
+from .d455_camera import local_d455_asset, mount_d455
+from .environment import build_environment
+from .logical_camera import create_logical_camera_sensor
+from .reachability import run_reachability_check
+from .rawpart_profile import validate_rawpart_profile
+from .robot_station import build_robot_station
+from .materials import create_preview_material
+from .primitives import (
     create_cylinder,
     create_sphere,
     dynamic_box,
     fixed_box,
 )
-from scene_builder.static_environment import (
+from .static_environment import (
     author_static_box,
     load_canonical_static_geometry,
 )
-from scene_builder.usd_authoring import (
+from .usd_authoring import (
     ensure_xform,
     set_custom_data,
     set_vec3_attribute,
@@ -177,7 +177,7 @@ def run_scene_build(
     if world is None:
         world = world_cls(stage_units_in_meters=1.0)
     stage = world.stage
-    from scene_selection import SceneConfiguration
+    from .scene_configuration import SceneConfiguration
 
     project_root = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
     selected = SceneConfiguration.from_runtime(configuration, project_root)
@@ -216,7 +216,7 @@ def run_scene_build(
         static_geometry,
     )
     context.scene_configuration = selected
-    context.rawpart_profile = load_rawpart_profile(project_root)
+    context.rawpart_profile = validate_rawpart_profile(configuration)
     for path in LEGACY_CLEANUP:
         if context.stage.GetPrimAtPath(path).IsValid():
             delete_prim(path)

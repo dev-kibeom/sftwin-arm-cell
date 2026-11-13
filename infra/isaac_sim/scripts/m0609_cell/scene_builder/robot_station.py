@@ -1,6 +1,6 @@
 """Robot pedestal, mounting hardware, and M0609 reference construction."""
 
-from scene_builder.model_provenance import verify_current_artifact
+from .model_provenance import verify_current_artifact
 
 
 def build_robot_station(context):

@@ -1,19 +1,8 @@
-"""Consume Bringup's Cell scene selection without owning compatibility policy.
-
-The selected callable accepts ``configuration`` plus the existing Isaac scene
-services and returns the Cell's scene context. Selection grants no support for
-other runtime bindings (Action Graph, articulation or gripper).
-"""
+"""Inputs consumed by the M0609 scene implementation."""
 from dataclasses import dataclass
-from importlib import import_module
 import math
 
-from scene_builder.model_build_configuration import ModelBuildConfiguration
-
-
-def run_scene_build(*, configuration, **services):
-    module, name = configuration['cell']['isaac']['scene_builder'].split(':')
-    return getattr(import_module(module), name)(configuration=configuration, **services)
+from .model_build_configuration import ModelBuildConfiguration
 
 
 @dataclass(frozen=True)

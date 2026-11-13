@@ -214,6 +214,11 @@ QT_QPA_PLATFORM=offscreen ~/.venvs/arm-cell-launcher/bin/python -m pytest -q inf
 
 기본 CLI 스크립트 `isaac_arm_cell.sh`는 선택한 운영 프로파일을 `.run_records/runtime_configuration.json`으로 export한 뒤 Isaac을 시작합니다. `ARM_CELL_PROFILE`로 입력 프로파일을, `ARM_CELL_RUNTIME_CONFIG`로 출력 파일을 선택할 수 있습니다.
 
+Scene 선택 진입점은 `infra/isaac_sim/scripts/scene_entrypoint.py`입니다. Cell Profile의 `isaac.scene_builder`는 scripts 루트 기준의 `모듈:함수`를 지정하며, 기본값은 `m0609_cell.scene_builder.composition:run_scene_build`입니다. 이 선택과 Builder import에는 M0609 디렉터리를 Python 검색 경로에 넣을 필요가 없습니다. Builder는 전달된 Runtime Configuration의 Assembly와 Cell 배치·Geometry를 소비합니다.
+
+공통 Startup은 기존 `m0609_cell/1_before_play.py`와 GUI/headless After Play 단계를 계속 호출합니다. 이 경로는 HOME·Joint Drive·Action Graph·Gripper·UI·진단·Material Supply의 기존 실행 생명주기를 위한 것이며, Scene Builder 선택은 Before Play에서 공통 진입점에 위임합니다. 다른 Cell의 Scene 선택만으로 그 Cell의 전체 Runtime이 지원되지는 않습니다.
+
+
 Script Editor로 직접 시작할 때는 ROS workspace를 빌드하고 overlay를 source한 터미널에서 먼저 export합니다.
 
 ```bash
