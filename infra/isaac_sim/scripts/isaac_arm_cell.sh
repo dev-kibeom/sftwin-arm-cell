@@ -19,11 +19,22 @@ if [[ ! -f "$STARTUP_SCRIPT" ]]; then
 fi
 
 export SFTWIN_PROJECT_ROOT="$PROJECT_ROOT"
-# Run the public producer CLI in a separate process. Isaac receives only JSON;
-# the temporary Python search path is not inherited by the simulator.
-export ARM_CELL_RUNTIME_CONFIG="${ARM_CELL_RUNTIME_CONFIG:-$PROJECT_ROOT/.run_records/runtime_configuration.json}"
-PYTHONPATH="$PROJECT_ROOT/ros2_ws/src/bringup${PYTHONPATH:+:$PYTHONPATH}" \
-    python3 "$PROJECT_ROOT/ros2_ws/src/bringup/scripts/export_runtime_configuration" \
-    --profile "${ARM_CELL_PROFILE:-$PROJECT_ROOT/ros2_ws/src/bringup/config/operational_profile.yaml}" \
-    --output "$ARM_CELL_RUNTIME_CONFIG"
+# The GUI owns an already exported snapshot until both runtime groups exit.
+# Default CLI export and all simulator startup arguments remain unchanged.
+if [[ "${1:-}" == "--runtime-config" ]]; then
+    if [[ $# -lt 2 || ! -f "$2" || ! -r "$2" ]]; then
+        printf 'Readable runtime configuration required after --runtime-config\n' >&2
+        exit 2
+    fi
+    export ARM_CELL_RUNTIME_CONFIG="$(realpath -- "$2")"
+    shift 2
+else
+    # Run the public producer CLI in a separate process. Isaac receives only JSON;
+    # the temporary Python search path is not inherited by the simulator.
+    export ARM_CELL_RUNTIME_CONFIG="${ARM_CELL_RUNTIME_CONFIG:-$PROJECT_ROOT/.run_records/runtime_configuration.json}"
+    PYTHONPATH="$PROJECT_ROOT/ros2_ws/src/bringup${PYTHONPATH:+:$PYTHONPATH}" \
+        python3 "$PROJECT_ROOT/ros2_ws/src/bringup/scripts/export_runtime_configuration" \
+        --profile "${ARM_CELL_PROFILE:-$PROJECT_ROOT/ros2_ws/src/bringup/config/operational_profile.yaml}" \
+        --output "$ARM_CELL_RUNTIME_CONFIG"
+fi
 exec "$ISAAC_LAUNCHER" "$@" --exec "$STARTUP_SCRIPT"
