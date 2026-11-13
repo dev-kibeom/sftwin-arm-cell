@@ -246,8 +246,6 @@ class FixtureRuntime(Protocol):
 
     def disable_gravity(self, prim_path: str) -> None: ...
 
-    def enable_gravity(self, prim_path: str) -> None: ...
-
     def register_eligible(self, prim_path: str, run_id: str) -> None: ...
 
     def retire_fixture_for_pending_delete(self, prim_path: str) -> bool: ...
@@ -450,16 +448,6 @@ class IsaacFixtureRuntime:
         except Exception as error:
             raise RuntimeError("failed to author canonical gravity policy") from error
         attribute.Set(True)
-
-    def enable_gravity(self, prim_path):
-        prim = self._owned_prim(prim_path)
-        try:
-            attribute = self._physx_rigid_body_api_factory(
-                prim
-            ).CreateDisableGravityAttr()
-            attribute.Set(False)
-        except Exception as error:
-            raise RuntimeError("failed to enable canonical fixture gravity") from error
 
     def register_eligible(self, prim_path, run_id):
         del run_id
@@ -1265,8 +1253,6 @@ class ValidationRun:
     physical_delete_state: str = "active"
     _pending_delete_request: dict | None = None
     _last_cleanup_log_key: tuple[bool, str] | None = None
-    gravity_activation_attempted: bool = False
-    gravity_activation_succeeded: bool | None = None
     post_release_observation_pending: bool = False
     _post_release_observation_ticks: int = 0
     _post_release_expected_position: tuple[float, float, float] | None = None
@@ -1337,27 +1323,11 @@ class ValidationRun:
         expected_position_world: tuple[float, float, float],
         confirmation_path: str | Path | None = None,
     ) -> CleanupDecision:
-        """Record accepted release, activate gravity, then observe the fixture."""
-        if (
-            success
-            and fresh_released
-            and detach_confirmed
-            and ownership_unambiguous
-            and self.ownership.owns(self.prim_path)
-            and not self.gravity_activation_attempted
-        ):
-            self.gravity_activation_attempted = True
-            try:
-                self.runtime.enable_gravity(self.prim_path)
-            except Exception as error:
-                self.gravity_activation_succeeded = False
-                print(
-                    "[WU-14] place_motion_result=SUCCESS "
-                    "gravity_activation=FAILED post-release diagnostic: "
-                    f"fixture={self.prim_path} error={error}"
-                )
-            else:
-                self.gravity_activation_succeeded = True
+        """Evaluate fixture cleanup after the common OPEN release handler.
+
+        Physics activation belongs to GraspManager's confirmed detach path;
+        PLACE results retain only fixture tolerance and cleanup policy.
+        """
         if success and fresh_released and detach_confirmed and ownership_unambiguous:
             self.post_release_observation_pending = True
             self._post_release_observation_ticks = 1
@@ -1403,7 +1373,7 @@ class ValidationRun:
         return self.cleanup
 
     def observe_post_release_position(self) -> str | None:
-        """Sample one post-gravity fixture pose after simulation advances."""
+        """Evaluate fixture tolerance after simulation advances past release."""
         if not self.post_release_observation_pending:
             return None
         if self._post_release_observation_ticks > 0:

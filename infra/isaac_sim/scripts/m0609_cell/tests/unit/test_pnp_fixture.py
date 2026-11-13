@@ -510,7 +510,7 @@ def test_validation_run_does_not_enable_gravity_without_all_release_gates(overri
     assert runtime.gravity_enabled == []
 
 
-def test_validation_run_enables_gravity_once_after_successful_place_eligibility():
+def test_place_results_do_not_repeat_common_open_release_physics():
     runtime = RuntimeSpy()
     run = ValidationRun(profile=profile(), runtime=runtime, run_id="run-42")
     runtime.existing.add(run.prim_path)
@@ -529,14 +529,13 @@ def test_validation_run_enables_gravity_once_after_successful_place_eligibility(
 
     assert first.eligible
     assert second.eligible
-    assert runtime.gravity_enabled == [run.prim_path]
+    assert runtime.gravity_enabled == []
     assert [event for event in runtime.events if event[0].startswith("gravity_")] == [
         ("gravity_off", run.prim_path),
-        ("gravity_on", run.prim_path),
     ]
 
 
-def test_gravity_activation_failure_preserves_place_acceptance_and_cleanup(tmp_path):
+def test_place_acceptance_and_cleanup_do_not_depend_on_fixture_gravity_callback(tmp_path):
     runtime = RuntimeSpy()
     runtime.fail_gravity_enable = True
     confirmation_path = tmp_path / "place-confirmation.json"
@@ -561,7 +560,7 @@ def test_gravity_activation_failure_preserves_place_acceptance_and_cleanup(tmp_p
 
     assert decision.eligible
     assert run.cleanup.eligible
-    assert runtime.gravity_enable_attempts == [run.prim_path]
+    assert runtime.gravity_enable_attempts == []
     assert (
         run.process_delete_request(
             {
@@ -652,7 +651,6 @@ def test_cleanup_request_defers_physical_delete_until_mission_completion(tmp_pat
     assert runtime.gravity_disabled == run.prim_path
     assert [event for event in runtime.events if event[0].startswith("gravity_")] == [
         ("gravity_off", run.prim_path),
-        ("gravity_on", run.prim_path),
         ("gravity_off", run.prim_path),
     ]
     assert run.physical_delete_state == "pending_physical_delete"
@@ -707,11 +705,8 @@ def test_successful_place_writes_validated_cleanup_confirmation_atomically(tmp_p
     assert run.post_release_observation_pending
     assert run.observe_post_release_position() is None
     assert run.observe_post_release_position() == "PASS"
-    assert runtime.events.index(("gravity_on", run.prim_path)) < max(
-        index
-        for index, event in enumerate(runtime.events)
-        if event == ("read_world_pose", run.prim_path)
-    )
+    assert ("read_world_pose", run.prim_path) in runtime.events
+    assert runtime.gravity_enable_attempts == []
 
 
 def test_failed_or_unconfirmed_place_does_not_write_cleanup_confirmation(tmp_path):
@@ -1158,22 +1153,6 @@ def test_fixture_gravity_policy_uses_canonical_physx_schema():
     runtime.disable_gravity(path)
 
     assert stage.prims[path].attributes["physxRigidBody:disableGravity"].value is True
-
-
-def test_fixture_gravity_enable_uses_canonical_physx_schema():
-    stage = _Stage()
-    path = "/World/Validation/Cube"
-    stage.prims[path] = _Prim(path)
-    runtime = IsaacFixtureRuntime(
-        stage,
-        physx_rigid_body_api_factory=_CanonicalPhysxRigidBodyAPI.Apply,
-    )
-    runtime._owned_path = path
-    runtime._set_owner(stage.prims[path])
-
-    runtime.enable_gravity(path)
-
-    assert stage.prims[path].attributes["physxRigidBody:disableGravity"].value is False
 
 
 def test_isaac_runtime_owns_one_fixture_and_registers_only_that_prim():
