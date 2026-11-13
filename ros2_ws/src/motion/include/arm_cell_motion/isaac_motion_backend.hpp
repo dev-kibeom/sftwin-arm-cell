@@ -114,6 +114,7 @@ public:
   virtual bool measured_tcp_pose(geometry_msgs::msg::PoseStamped &) const {return false;}
   virtual bool command_normalized_gripper(double opening) = 0;
   virtual bool command_gripper_close() {return false;}
+  virtual bool command_gripper_release() {return command_normalized_gripper(1.0);}
   virtual void begin_pick_grasp_relation() {}
   virtual void stage_selected_pick_grasp_relation(const geometry_msgs::msg::Transform &) {}
   virtual bool stage_pick_capture_reference(

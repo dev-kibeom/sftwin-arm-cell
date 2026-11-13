@@ -276,12 +276,12 @@ TEST_P(GraspPosePrecheck, RejectsSelectedObjectFingerIntersectionBeforeCallingIK
 {
   moveit::core::RobotModelBuilder builder("precheck", "base_link");
   builder.addChain("base_link->sf_grasp_tcp", "prismatic");
-  builder.addChain("sf_grasp_tcp->gripper_robotiq_85_right_finger_tip_link", "fixed");
+  builder.addChain("sf_grasp_tcp->tool_contact_pad", "fixed");
   builder.addGroupChain("base_link", "sf_grasp_tcp", "arm");
   builder.addChain("base_link->gripper_unrelated", "prismatic");
   geometry_msgs::msg::Pose origin;
   origin.orientation.w = 1.0;
-  builder.addCollisionBox("gripper_robotiq_85_right_finger_tip_link", {0.02, 0.02, 0.02}, origin);
+  builder.addCollisionBox("tool_contact_pad", {0.02, 0.02, 0.02}, origin);
   builder.addCollisionBox("gripper_unrelated", {0.02, 0.02, 0.02}, origin);
   const auto model = builder.build();
   ASSERT_NE(model, nullptr);
@@ -296,6 +296,7 @@ TEST_P(GraspPosePrecheck, RejectsSelectedObjectFingerIntersectionBeforeCallingIK
   context->robot_state = state;
   context->common_grasp_scene = std::make_shared<planning_scene::PlanningScene>(model);
   context->pick_clearance_objects = {GetParam(), "absent_object"};
+  context->tool_grasp_collision_links = {"tool_contact_pad"};
   context->common_grasp_scene->getWorldNonConst()->addToObject(
     GetParam(), shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
     Eigen::Isometry3d::Identity());
@@ -329,7 +330,7 @@ TEST_P(GraspPosePrecheck, RejectsSelectedObjectFingerIntersectionBeforeCallingIK
 
   // An explicit allowed-collision entry must also defer to normal IK checks.
   context->common_grasp_scene->getAllowedCollisionMatrixNonConst().setEntry(
-    GetParam(), "gripper_robotiq_85_right_finger_tip_link", true);
+    GetParam(), "tool_contact_pad", true);
   context->attempt.current_grasp_goal.pose.position.x = 0.0;
   tree.haltTree();
   EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
@@ -337,7 +338,7 @@ TEST_P(GraspPosePrecheck, RejectsSelectedObjectFingerIntersectionBeforeCallingIK
 
   // An unselected object still exists in the scene and its ACM is untouched.
   context->common_grasp_scene->getAllowedCollisionMatrixNonConst().setEntry(
-    GetParam(), "gripper_robotiq_85_right_finger_tip_link", false);
+    GetParam(), "tool_contact_pad", false);
   context->pick_clearance_objects = {"absent_object"};
   tree.haltTree();
   EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
@@ -345,7 +346,7 @@ TEST_P(GraspPosePrecheck, RejectsSelectedObjectFingerIntersectionBeforeCallingIK
   collision_detection::AllowedCollision::Type allowed;
   ASSERT_TRUE(
     context->common_grasp_scene->getAllowedCollisionMatrix().getAllowedCollision(
-      GetParam(), "gripper_robotiq_85_right_finger_tip_link", allowed));
+      GetParam(), "tool_contact_pad", allowed));
   EXPECT_EQ(allowed, collision_detection::AllowedCollision::NEVER);
 
 }

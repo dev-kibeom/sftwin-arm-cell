@@ -298,3 +298,17 @@ def test_robot_drive_scales_are_validated_at_composition(selection, scales):
     with pytest.raises(ValueError, match='Robot Isaac joint drive stiffness'):
         selection(lambda documents: documents['robot'].update(
             isaac={'joint_drive_stiffness_scales': scales}))
+
+
+def test_tool_grasp_collision_links_preserve_robotiq_geometry_selection():
+    """Replacing the old prefix selector must retain every collision-bearing Tool link."""
+    import xml.etree.ElementTree as ET
+    import xacro
+    config = load_profile(PROFILE)
+    model = config['model_configuration']
+    document = xacro.process_file(str(resolve(model['urdf'], PROFILE.parent)))
+    robot = ET.fromstring(document.toxml())
+    previous = {link.attrib['name'] for link in robot.findall('link')
+                if link.attrib['name'].startswith('gripper_') and link.find('collision') is not None}
+    assert set(config['tool']['grasp_pose_collision_links']) == previous
+    assert config['motion']['tool_grasp_collision_links'] == config['tool']['grasp_pose_collision_links']

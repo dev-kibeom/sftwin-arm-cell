@@ -325,7 +325,8 @@ BT::NodeStatus ValidateGraspPose::execute(PlanningContext & context)
   }
   auto collision = validate_pick_grasp_pose_rail_collision(
     *context.common_grasp_scene, *context.robot_state, context.joint_group,
-    context.attempt.current_grasp_goal, context.pick_clearance_objects);
+    context.attempt.current_grasp_goal, context.pick_clearance_objects,
+    context.tool_grasp_collision_links);
   if (!collision.collision) {return BT::NodeStatus::SUCCESS;}
   context.attempt.grasp_collision_result = std::move(collision);
   context.attempt.failure_stage = "GRASP_POSE_COLLISION";

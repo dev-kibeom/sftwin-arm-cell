@@ -74,7 +74,7 @@ Task Execution → Motion은 단방향 C++ MotionPort 의존이며 그 경계에
 | 설정 Owner | 소유하는 의미 |
 |---|---|
 | Robot | 논리적 관절 구성·Joint Limits, 로봇별 HOME·Retract·Return 자세, 관절별 동치각 허용과 IK Seed 대상 |
-| Tool | 그리퍼 특성·접촉 Geometry, TCP 축 관례와 도구별 접촉·부착 Link |
+| Tool | Capability·구동 구현·치수·접촉 Geometry, TCP 축 관례와 도구별 접촉·부착 Link 및 Grasp Pose 충돌 검사 Link |
 | Cell | 설비 Geometry·배치, 작업 위치, 설치 Calibration 참조 및 설비에 따른 경로 공간 제약 |
 | Motion | IK·Planning·경로 탐색·실행 정책 및 계획용 시간 매개화 설정 |
 
@@ -136,3 +136,7 @@ flowchart LR
 | 외부 Mock·센서 관측과 정식 판단 | VDA·Simulation·Camera·State Adapter는 각 외부 사실과 정규 관측을 제공하며 Gateway·Vision·Motion·Safety 등 각 Owner가 정식 의미를 판단 | Mock 결과, UI 표시 및 원본 센서값만으로 업무·인지·Safety 결과가 확정되지 않음 |
 
 세부 상태·단계·실패·복구 및 공유 필드 의미는 해당 CDS·FDS·ICD를 따른다. 이 문서는 새로운 Gate·상태·Retry·Timeout을 정의하지 않는다.
+
+Tool Plugin은 GRASP·RELEASE 의도를 장치 구동으로 변환하고 Tool별 후보 관측·Qualification·구동 완료 조건을 제공한다. Isaac Session은 선택된 Tool Profile의 구현에 선택된 Assembly의 Articulation Binding을 주입한다. Capture/Release의 Attach·Detach, 중력 복원 및 HELD·RELEASED 관측은 기존 GraspManager가 소유한다. Capability에 없는 폭·관절 API를 공통 실행에 요구하지 않는다.
+
+Tool의 `grasp_pose_collision_links`는 요청 TCP Pose에서 설비와 검사하는 물리 Tool Link 목록이다. `payload_touch_links`의 Payload 접촉 허용, `pick_retract`의 후퇴 접촉 예외, Validation 접촉 Link와 독립적이며 같은 목록으로 대체하지 않는다. Motion은 명시된 링크 중 기존 Arm 조상 관절이 TCP와 같은 Geometry를 검사한다. 조립 시 모델에 존재하는 Link인지 확인하고 충돌 계산·방문 순서는 보존한다.

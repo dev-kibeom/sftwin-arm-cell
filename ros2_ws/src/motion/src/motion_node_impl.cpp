@@ -230,6 +230,9 @@ MotionNode::MotionNode(
     "place_ik_seed_joints", std::vector<std::string>{});
   const auto pick_clearance_objects = declare_parameter<std::vector<std::string>>(
     "pick_clearance_objects", std::vector<std::string>{});
+  const auto tool_grasp_collision_links = declare_parameter<std::vector<std::string>>(
+    "tool_grasp_collision_links", std::vector<std::string>{});
+  const auto tool_width_control = declare_parameter<bool>("tool_width_control", true);
   const auto payload_touch_links = declare_parameter<std::vector<std::string>>(
     "payload_touch_links", std::vector<std::string>{});
   const auto pick_retract_contact_links = declare_parameter<std::vector<std::string>>(
@@ -448,6 +451,8 @@ MotionNode::MotionNode(
         rclcpp::Parameter("planning_group", planning_group),
         rclcpp::Parameter("model_id", model_id),
         rclcpp::Parameter("pick_clearance_objects", pick_clearance_objects),
+        rclcpp::Parameter("tool_grasp_collision_links", tool_grasp_collision_links),
+        rclcpp::Parameter("tool_width_control", tool_width_control),
         rclcpp::Parameter("payload_touch_links", payload_touch_links),
         rclcpp::Parameter("pick_retract_contact_links", pick_retract_contact_links),
         rclcpp::Parameter("pick_retract_contact_object", pick_retract_contact_object),

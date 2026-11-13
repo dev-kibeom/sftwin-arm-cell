@@ -29,7 +29,8 @@ PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
   const moveit::core::RobotState & state,
   const moveit::core::JointModelGroup * arm,
   const geometry_msgs::msg::PoseStamped & tcp_goal,
-  const std::vector<std::string> & clearance_objects)
+  const std::vector<std::string> & clearance_objects,
+  const std::vector<std::string> & tool_links)
 {
   PickCollisionValidationResult result;
   const auto model = state.getRobotModel();
@@ -61,7 +62,9 @@ PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
   const auto & env = *scene.getCollisionEnv();
   for (const auto * link : model->getLinkModelsWithCollisionGeometry()) {
     const auto & name = link->getName();
-    if (name.rfind("gripper_", 0U) != 0U || arm_ancestors(link) != tcp_ancestors) {continue;}
+    const bool selected_tool_link =
+      std::find(tool_links.begin(), tool_links.end(), name) != tool_links.end();
+    if (!selected_tool_link || arm_ancestors(link) != tcp_ancestors) {continue;}
     for (const auto & id : scene.getWorld()->getObjectIds()) {
       if (std::find(clearance_objects.begin(), clearance_objects.end(), id) ==
         clearance_objects.end()) {continue;}

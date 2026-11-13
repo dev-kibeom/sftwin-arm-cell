@@ -11,11 +11,12 @@ def qualify(
     *,
     material_shape="box",
     gripper_model=ROBOTIQ_2F_85_MODEL_ID,
+    supported_shapes=("box",),
 ):
     return GraspQualification.evaluate(
         material_shape=material_shape,
         gripper_characteristics=(
-            GripperCharacteristics(gripper_model) if gripper_model else None
+            GripperCharacteristics(gripper_model, supported_shapes) if gripper_model else None
         ),
     )
 
@@ -50,8 +51,12 @@ def test_missing_invalid_and_unsupported_material_shapes_fail_closed(
     assert result.reason == reason
 
 
-def test_unsupported_gripper_fails_closed_for_box_material():
-    result = qualify(gripper_model="other_gripper")
+def test_tool_without_shape_capability_fails_closed_for_box_material():
+    result = qualify(gripper_model="other_gripper", supported_shapes=())
 
     assert result.eligible is False
     assert result.reason == "unsupported_gripper"
+
+
+def test_qualification_uses_capability_without_vendor_model_identity():
+    assert qualify(gripper_model='another-parallel-tool').eligible

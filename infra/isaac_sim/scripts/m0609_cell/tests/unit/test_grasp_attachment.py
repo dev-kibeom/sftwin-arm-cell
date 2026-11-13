@@ -798,6 +798,8 @@ def test_orientation_rejects_closing_axis_outside_tolerance():
 
 
 class FakeGripper:
+    MAX_WIDTH_MM = 85.0
+    SUPPORTED_SHAPES = ("box",)
     MODEL_ID = ROBOTIQ_2F_85_MODEL_ID
 
     def __init__(self):
@@ -1286,11 +1288,12 @@ def test_invalid_or_unsupported_shape_fails_closed_after_close_completion(
     assert instance.gripper.stop_calls == 0
 
 
-def test_unsupported_gripper_fails_after_close_without_attachment():
+def test_tool_without_shape_capability_fails_after_grasp_without_attachment():
     source = FakeCandidateSource([valid_candidate()])
     joints = FakeJointOwner()
     instance = manager(source, joints, arm=False)
     instance.gripper.MODEL_ID = "other_gripper"
+    instance.gripper.SUPPORTED_SHAPES = ()
     instance.gripper.state.value = "holding"
     instance.arm_close_transaction()
 

@@ -29,6 +29,7 @@ class Robotiq2F85Actuator:
     """
 
     MODEL_ID = ROBOTIQ_2F_85_MODEL_ID
+    SUPPORTED_SHAPES = ("box",)
 
     JOINT_SIGNS = {
         "gripper_robotiq_85_left_knuckle_joint": +1.0,

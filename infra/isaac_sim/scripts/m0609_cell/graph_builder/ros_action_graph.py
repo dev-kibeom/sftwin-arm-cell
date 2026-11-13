@@ -114,6 +114,21 @@ def graph_declaration(sdf_path, *, binding=None, enable_arm_command_subscriber=N
         create_nodes.append(
             ("SubscribeGripperClose", "isaacsim.ros2.bridge.ROS2Subscriber")
         )
+        create_nodes.extend([
+            ("SubscribeToolIntent", "isaacsim.ros2.bridge.ROS2Subscriber"),
+            ("ToolIntentGeneration", "omni.graph.action.Counter"),
+        ])
+        set_values.extend([
+            ("SubscribeToolIntent.inputs:topicName", "/tool/intent"),
+            ("SubscribeToolIntent.inputs:messagePackage", "std_msgs"),
+            ("SubscribeToolIntent.inputs:messageSubfolder", "msg"),
+            ("SubscribeToolIntent.inputs:messageName", "String"),
+        ])
+        connect.extend([
+            ("OnPlaybackTick.outputs:tick", "SubscribeToolIntent.inputs:execIn"),
+            ("ROS2Context.outputs:context", "SubscribeToolIntent.inputs:context"),
+            ("SubscribeToolIntent.outputs:execOut", "ToolIntentGeneration.inputs:execIn"),
+        ])
         create_nodes.append(("GripperCloseGeneration", "omni.graph.action.Counter"))
         create_nodes.append(("GripperCommandGeneration", "omni.graph.action.Counter"))
         set_values.extend(

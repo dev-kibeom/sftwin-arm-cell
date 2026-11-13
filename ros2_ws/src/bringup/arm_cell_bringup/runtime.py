@@ -135,6 +135,8 @@ def compose_owner_profiles(config, path):
         merge_owned(motion, {key: owners['robot']['joint_policy'][key]}, 'motion')
     merge_owned(motion, {
         'pick_clearance_objects': owners['cell']['collision_objects']['pick_clearance'],
+        'tool_grasp_collision_links': owners['tool']['grasp_pose_collision_links'],
+        'tool_width_control': 'width' in owners['tool']['runtime']['capabilities'],
         'payload_touch_links': owners['tool']['contact_links']['payload_touch_links'],
         'pick_retract_contact_links': owners['tool']['contact_links']['pick_retract'],
         'pick_retract_contact_object': owners['cell']['contact_objects']['pick_retract'],
