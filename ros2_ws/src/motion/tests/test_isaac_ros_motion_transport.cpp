@@ -1000,8 +1000,6 @@ TEST_F(
   request.rectangle_long_side_m = 0.04F;
   request.rectangle_short_side_m = 0.02F;
   request.estimated_object_height_m = 0.04;
-  request.grasp_width_min_mm = 10.0F;
-  request.grasp_width_max_mm = 80.0F;
   request.has_non_target_occupancy = true;
   request.vision_acquisition_id = "vision-run-acq-1";
   request.vision_candidate_id = "selected-candidate";
@@ -1321,8 +1319,6 @@ TEST_F(IsaacRosMotionTransportTest, PickEvaluationConsumesSolverAndValidationFac
       request.rectangle_long_side_m = 0.04F;
       request.rectangle_short_side_m = 0.02F;
       request.estimated_object_height_m = 0.04;
-      request.grasp_width_min_mm = 10.0F;
-      request.grasp_width_max_mm = 80.0F;
     }
     bool interrupted = false;
     nlohmann::json previous_snapshot;
@@ -2499,7 +2495,7 @@ TEST_F(
   const auto candidates = generate_pick_grasp_search_candidates(
     object_orientation, Eigen::Quaterniond::Identity(), Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.2, 0.1, 0.7), Eigen::Vector3d(0.0, 0.0, -1.0),
-    0.08, 0.07, 0.07, 65.0, 75.0, 85.0,
+    0.08, 0.07, 0.07, 85.0,
     PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 48U, 0.005});
   ASSERT_GT(candidates.size(), 1U);
   const auto selected = std::find_if(
@@ -2522,15 +2518,13 @@ TEST_F(
   EXPECT_TRUE(resolution.failure_reason.empty());
   EXPECT_EQ(fixture_lookup_count, 0U);
   const auto diagnostic = capture_reference_diagnostic_json(
-    resolution, geometry_status, "", false, true, 0.08, 0.07, 0.07, 65.0, 75.0);
+    resolution, geometry_status, "", false, true, 0.08, 0.07, 0.07);
   EXPECT_EQ(diagnostic["source"], "vision_candidate_geometry");
   EXPECT_EQ(diagnostic["rectangle_geometry_status"], "available");
   EXPECT_FALSE(diagnostic["has_observed_rectangle"]);
   EXPECT_DOUBLE_EQ(diagnostic["rectangle_dimensions_m"][0], 0.08);
   EXPECT_DOUBLE_EQ(diagnostic["rectangle_dimensions_m"][1], 0.07);
   EXPECT_DOUBLE_EQ(diagnostic["estimated_object_height_m"], 0.07);
-  EXPECT_DOUBLE_EQ(diagnostic["recipe_contact_width_policy_mm"][0], 65.0);
-  EXPECT_DOUBLE_EQ(diagnostic["recipe_contact_width_policy_mm"][1], 75.0);
   EXPECT_DOUBLE_EQ(diagnostic["contact_width_input_mm"], 70.0);
 
   geometry_msgs::msg::PoseStamped selected_pose;
@@ -2569,7 +2563,7 @@ TEST_F(IsaacRosMotionTransportTest, GeometryMissingValidationPathStillUsesFixtur
   EXPECT_EQ(fixture_lookup_count, 1U);
   const auto diagnostic = capture_reference_diagnostic_json(
     resolution, RectangleGeometryStatus::UNAVAILABLE, "fixture-70", false, false,
-    0.0, 0.0, 0.0, 65.0, 75.0);
+    0.0, 0.0, 0.0);
   EXPECT_EQ(diagnostic["source"], "validation_fixture");
   EXPECT_EQ(diagnostic["fixture_id"], "fixture-70");
 }

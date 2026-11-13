@@ -64,15 +64,9 @@ uint8_t PickExecution::prepare_candidate(bool candidate_inputs_validated)
   const auto rectangle_geometry_status = classify_rectangle_geometry(
     rectangle_geometry_required, goal.has_estimated_object_height,
     goal.rectangle_long_side_m, goal.rectangle_short_side_m, goal.estimated_object_height_m);
-  const bool rectangle_geometry_available =
-    rectangle_geometry_status == RectangleGeometryStatus::AVAILABLE;
-  const bool valid_grasp_width = !rectangle_geometry_available ||
-    (finite(goal.grasp_width_min_mm) && finite(goal.grasp_width_max_mm) &&
-    goal.grasp_width_min_mm > 0.0F && goal.grasp_width_max_mm >= goal.grasp_width_min_mm &&
-    goal.grasp_width_max_mm <= 85.0F);
   const bool known_face_thickness = goal.has_estimated_object_height &&
     finite(goal.estimated_object_height_m) && goal.estimated_object_height_m > 0.0;
-  if (!known_face_thickness || !valid_pick_approach || !valid_pick_grasp_envelope || !valid_grasp_width ||
+  if (!known_face_thickness || !valid_pick_approach || !valid_pick_grasp_envelope ||
     goal.vision_acquisition_id.empty() || !goal.has_target_pose ||
     support_.object_state_tracker().state() != MotionObjectState::NO_OBJECT ||
     !support_.geometry().valid())

@@ -36,8 +36,6 @@ struct NormalizedMotionRequest
   bool has_observed_rectangle{false};
   float rectangle_long_side_m{0.0F};
   float rectangle_short_side_m{0.0F};
-  float grasp_width_min_mm{0.0F};
-  float grasp_width_max_mm{0.0F};
   bool has_unobserved_yaw_fallback{false};
   double unobserved_yaw_fallback_rad{0.0};
   std::string vision_acquisition_id;

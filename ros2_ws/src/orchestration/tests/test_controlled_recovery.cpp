@@ -106,9 +106,6 @@ struct RecoveryFixture
         recipe.recipe_id = "recovery-recipe-v1";
         recipe.target_id = "target";
         recipe.schema_version = 1;
-        recipe.has_grasp_width_policy = true;
-        recipe.grasp_width_min_mm = 40.0F;
-        recipe.grasp_width_max_mm = 80.0F;
         recipe.has_grasp_yaw = true;
         recipe.grasp_yaw_rad = 1.2;
         recipe.has_unobserved_yaw_policy = true;

@@ -23,5 +23,5 @@ PickGraspContactValidation validate_pick_grasp_contact(
   const std::optional<std::size_t> & expected_closing_axis,
   const Eigen::Quaterniond & object_orientation,
   double rectangle_long_side_m, double rectangle_short_side_m, double object_height_m,
-  double grasp_width_min_mm, double grasp_width_max_mm, double gripper_max_width_mm);
+  double gripper_max_width_mm);
 }  // namespace arm_cell_motion

@@ -66,8 +66,6 @@ try:
         setattr(goal.place_target_pose.pose.orientation, key, value)
     for key in ('approach_distance_m','grasp_backoff_m','grasp_position_tolerance_m','grasp_orientation_tolerance_rad'):
         setattr(goal, 'pick_'+key, recipe['pick'][key])
-    goal.grasp_width_min_mm = float(recipe['grasp']['min_expected_contact_width_mm'])
-    goal.grasp_width_max_mm = float(recipe['grasp']['max_expected_contact_width_mm'])
     goal.has_unobserved_yaw_fallback = (response.material_candidates[0].orientation_symmetry_order == 0 and recipe['grasp']['unobserved_yaw_policy'] == 'allowed')
     goal.unobserved_yaw_fallback_rad = float(recipe['grasp']['yaw_rad']) if goal.has_unobserved_yaw_fallback else 0.0
     goal.place_position_tolerance_m = recipe['place']['position_tolerance_m']

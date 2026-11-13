@@ -148,14 +148,14 @@ TEST(PickOrientationCandidates, UniqueAndUnobservableKeepTcpSeed)
   }
 }
 
-TEST(PickGraspPoseCandidates, EnumeratesDistinctRecipeValidBoxFacePairs)
+TEST(PickGraspPoseCandidates, EnumeratesDistinctGripperCompatibleBoxFacePairs)
 {
   const Eigen::Quaterniond object_orientation = Eigen::Quaterniond::Identity();
   const Eigen::Quaterniond reference_grasp_tcp_orientation(
     Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
 
   const auto candidates = generate_pick_grasp_pose_candidates(
-    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 60.0, 85.0, 85.0, 5U);
+    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 85.0, 5U);
 
   ASSERT_EQ(candidates.size(), 3U);
   ASSERT_TRUE(candidates[0].contact.has_value());
@@ -182,28 +182,28 @@ TEST(PickGraspPoseCandidates, EnumeratesDistinctRecipeValidBoxFacePairs)
         Eigen::Vector3d::UnitZ())), 0.0, 1e-12);
 }
 
-TEST(PickGraspPoseCandidates, AppliesRecipeContactWidthBoundsAndCandidateCap)
+TEST(PickGraspPoseCandidates, AppliesGripperOpeningAndCandidateCap)
 {
   const Eigen::Quaterniond object_orientation = Eigen::Quaterniond::Identity();
   const Eigen::Quaterniond reference_grasp_tcp_orientation(
     Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
 
-  const auto recipe_filtered = generate_pick_grasp_pose_candidates(
-    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 65.0, 75.0, 85.0, 5U);
-  ASSERT_EQ(recipe_filtered.size(), 1U);
-  ASSERT_TRUE(recipe_filtered.front().contact.has_value());
-  EXPECT_EQ(recipe_filtered.front().contact->closing_axis, 0U);
-  EXPECT_DOUBLE_EQ(recipe_filtered.front().contact->width_mm, 70.0);
+  const auto opening_filtered = generate_pick_grasp_pose_candidates(
+    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 85.0, 5U);
+  ASSERT_EQ(opening_filtered.size(), 3U);
+  ASSERT_TRUE(opening_filtered.front().contact.has_value());
+  EXPECT_EQ(opening_filtered.front().contact->closing_axis, 0U);
+  EXPECT_DOUBLE_EQ(opening_filtered.front().contact->width_mm, 70.0);
 
   const auto capped = generate_pick_grasp_pose_candidates(
-    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 60.0, 85.0, 85.0, 1U);
+    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 85.0, 1U);
   ASSERT_EQ(capped.size(), 1U);
   ASSERT_TRUE(capped.front().contact.has_value());
   EXPECT_EQ(capped.front().contact->closing_axis, 0U);
 
   EXPECT_TRUE(
     generate_pick_grasp_pose_candidates(
-      object_orientation, reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 90.0, 100.0, 85.0,
+      object_orientation, reference_grasp_tcp_orientation, 0.10, 0.09, 0.09, 85.0,
       5U).empty());
 }
 
@@ -214,7 +214,7 @@ TEST(PickGraspPoseCandidates, SquareKeepsDifferentAxesDespiteEqualContactWidths)
     Eigen::AngleAxisd(kPi, Eigen::Vector3d::UnitX()));
 
   const auto candidates = generate_pick_grasp_pose_candidates(
-    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.07, 0.07, 60.0, 85.0, 85.0, 5U);
+    object_orientation, reference_grasp_tcp_orientation, 0.07, 0.07, 0.07, 85.0, 5U);
 
   ASSERT_EQ(candidates.size(), 3U);
   for (std::size_t lhs = 0U; lhs < candidates.size(); ++lhs) {
@@ -361,12 +361,11 @@ TEST(PickGraspSearch, PreservesEligibleCenterFacesWithoutPrivilegedEvaluation)
       kPi,
       Eigen::Vector3d::UnitX()));
   const auto legacy = generate_pick_grasp_pose_candidates(
-    Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, 0.07, 0.06, 0.08,
-    60.0, 85.0, 85.0, 3U);
+    Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, 0.07, 0.06, 0.08, 85.0, 3U);
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-    0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+    0.07, 0.06, 0.08, 85.0,
     PickGraspSearchSampling{90.0, 0.0, 1U, 8U, 48U});
   for (const auto & seed : legacy) {
     EXPECT_TRUE(
@@ -387,7 +386,7 @@ TEST(PickGraspSearch, ExpandsRotationAndBothFaceTangentsWithinMeasuredBounds)
     object, reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(), Eigen::Vector3d(
       0.5, -0.2,
       0.0),
-    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.08, 85.0,
     PickGraspSearchSampling{80.0, 0.5, 3U, 8U, 100U});
   ASSERT_GT(candidates.size(), 3U);
   bool rotated = false;
@@ -430,7 +429,7 @@ TEST(PickGraspSearch, LimitsOnlyDownwardObjectNormalOffsets)
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-    0.07, 0.06, 0.0745, 60.0, 85.0, 85.0, sampling);
+    0.07, 0.06, 0.0745, 85.0, sampling);
   ASSERT_GT(candidates.size(), 3U);
   bool horizontal_positive = false;
   bool horizontal_negative = false;
@@ -460,7 +459,7 @@ TEST(PickGraspSearch, DownwardLimitUsesRotatedObjectTopNormal)
     object, reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(), Eigen::Vector3d(
       0.5, 0.0,
       0.0),
-    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.0745, 60.0, 85.0, 85.0, sampling);
+    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.0745, 85.0, sampling);
   bool rotated_downward_at_limit = false;
   const Eigen::Vector3d support_normal = object * Eigen::Vector3d::UnitZ();
   for (const auto & candidate : candidates) {
@@ -486,7 +485,7 @@ TEST(PickGraspSearch, FailedDownwardPositionCandidateIsClampedBelowFailureDepth)
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-    0.07, 0.06, 0.0745465, 60.0, 85.0, 85.0, sampling);
+    0.07, 0.06, 0.0745465, 85.0, sampling);
   for (const auto & candidate : candidates) {
     EXPECT_FALSE(std::abs(candidate.grasp_position_offset_object.z() + 0.0093183) < 1e-6);
     EXPECT_GE(candidate.grasp_position_offset_object.z(), -0.005 - 1e-12);
@@ -501,7 +500,7 @@ TEST(PickGraspSearch, TiltBoundAppliesToEveryPose)
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-    0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+    0.07, 0.06, 0.08, 85.0,
     PickGraspSearchSampling{0.0, 0.0, 1U, 8U, 100U});
   ASSERT_FALSE(candidates.empty());
   for (std::size_t i = 0; i < candidates.size(); ++i) {
@@ -520,7 +519,7 @@ TEST(PickGraspSearch, SelectionSpreadsFacesOrientationsAndOffsetsDeterministical
       return generate_pick_grasp_search_candidates(
         Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
         Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-        0.07, 0.06, 0.08, 60.0, 85.0, 85.0, PickGraspSearchSampling{});
+        0.07, 0.06, 0.08, 85.0, PickGraspSearchSampling{});
     };
   auto candidates = generate();
   const auto repeated = generate();
@@ -694,7 +693,7 @@ TEST(PickGraspSearch, HorizontalNinetyDegreePoseRemainsInSelectedSet)
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-    0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+    0.07, 0.06, 0.08, 85.0,
     PickGraspSearchSampling{90.0, 0.0, 1U, 8U, 48U});
   ASSERT_FALSE(candidates.empty());
   const auto horizontal = std::find_if(
@@ -738,7 +737,7 @@ TEST(PickGraspSearch, ReferenceTranslationAndCapPreserveEligibleFacePoses)
     const auto poses = generate_pick_grasp_search_candidates(
       Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, reference_grasp_position_object,
       Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ(),
-      0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+      0.07, 0.06, 0.08, 85.0,
       PickGraspSearchSampling{90.0, 0.5, 3U, 8U, cap});
     EXPECT_LE(poses.size(), cap);
     if (cap >= 3U) {
@@ -767,7 +766,7 @@ TEST(PickGraspSearch, FiniteLatticeDeduplicatesClampedOffsetsAndQuaternionSigns)
       return generate_pick_grasp_search_candidates(
         Eigen::Quaterniond::Identity(), rotation, Eigen::Vector3d(0.004, -0.003, 0.002),
         Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ(),
-        0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+        0.07, 0.06, 0.08, 85.0,
         PickGraspSearchSampling{90.0, 0.5, 3U, 8U, 1000U});
     };
   const auto poses = generate(reference_grasp_tcp_orientation);
@@ -806,7 +805,7 @@ TEST(PickGraspSearch, ExhaustedVerticalPoseCanAdvanceToAnotherDirection)
   const auto candidates = generate_pick_grasp_search_candidates(
     Eigen::Quaterniond::Identity(), reference_grasp_tcp_orientation, Eigen::Vector3d::Zero(),
     Eigen::Vector3d(0.5, 0.0, 0.0), Eigen::Vector3d::UnitZ(),
-    0.07, 0.06, 0.08, 60.0, 85.0, 85.0,
+    0.07, 0.06, 0.08, 85.0,
     PickGraspSearchSampling{90.0, 0.0, 1U, 8U, 48U});
   auto ordered_candidates = candidates;
   order_pick_grasp_search_candidates(
@@ -875,7 +874,7 @@ TEST(PickGraspSearch, InclinedObjectWithdrawalUsesTrayVertical)
       Eigen::Vector3d::UnitX()));
   const auto candidates = generate_pick_grasp_search_candidates(
     object, reference, Eigen::Vector3d::Zero(), Eigen::Vector3d(0.5, 0, 0),
-    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.0745, 60, 85, 85,
+    Eigen::Vector3d::UnitZ(), 0.07, 0.06, 0.0745, 85,
     PickGraspSearchSampling{50, 0, 1, 8, 48});
   ASSERT_FALSE(candidates.empty());
   for (const auto & candidate : candidates) {
@@ -902,4 +901,38 @@ TEST(PickOrientationCandidates, InclinedSymmetryPreservesObservedFaceNormal)
     EXPECT_LT((q * Eigen::Vector3d::UnitZ() - normal).norm(), 1e-12);
   }
 }
+}
+
+TEST(GripperCapabilityRegression, RotatedBilletRetainsLateralGrasps)
+{
+  using namespace arm_cell_motion;
+  const Eigen::Quaterniond object(0.68361404423820515, 0.00955021925649597,
+    0.01017112089778097, -0.72971033988297085);
+  PickGraspSearchSampling sampling;
+  sampling.maximum_withdrawal_tilt_deg = 70.0;
+  const auto candidates = generate_pick_grasp_search_candidates(
+    object, Eigen::Quaterniond::Identity(), Eigen::Vector3d::Zero(),
+    Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ(),
+    0.061175864189863205, 0.032105054706335068, 0.039999999105930328, 85.0, sampling);
+  ASSERT_FALSE(candidates.empty());
+  for (const auto & candidate : candidates) {
+    ASSERT_TRUE(candidate.contact);
+    EXPECT_NE(candidate.contact->closing_axis, 2U);
+    EXPECT_LE(candidate.contact->width_mm, 85.0);
+    EXPECT_LE(candidate.withdrawal_tilt_rad, 70.0 * 3.14159265358979323846 / 180.0);
+  }
+}
+
+TEST(GripperCapabilityRegression, RejectsOversizedAxesIndependently)
+{
+  using namespace arm_cell_motion;
+  const auto q = Eigen::Quaterniond::Identity();
+  const auto candidates = generate_pick_grasp_pose_candidates(q, q, .100, .060, .040, 85, 3);
+  ASSERT_EQ(candidates.size(), 2U);
+  for (const auto & candidate : candidates) {
+    EXPECT_NE(candidate.contact->closing_axis, 0U);
+  }
+  EXPECT_TRUE(generate_pick_grasp_pose_candidates(q, q, .120, .110, .100, 85, 3).empty());
+  EXPECT_TRUE(box_grasp_contact(q, q, .085, .060, .040, 85));
+  EXPECT_FALSE(box_grasp_contact(q, q, .086, .060, .040, 85));
 }

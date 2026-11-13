@@ -21,7 +21,7 @@ namespace arm_cell_motion
 inline std::optional<double> fixture_contact_width_mm(
   const std::vector<moveit_msgs::msg::CollisionObject> & objects,
   const std::string & fixture_id, const geometry_msgs::msg::PoseStamped & selected_tcp,
-  double policy_min_mm, double policy_max_mm, double gripper_max_mm)
+  double gripper_max_mm)
 {
   const moveit_msgs::msg::CollisionObject * fixture = nullptr;
   for (const auto & object : objects) {
@@ -36,9 +36,7 @@ inline std::optional<double> fixture_contact_width_mm(
     !fixture->meshes.empty() || !fixture->planes.empty() ||
     fixture->primitives[0].type != shape_msgs::msg::SolidPrimitive::BOX ||
     fixture->primitives[0].dimensions.size() != 3U ||
-    !std::isfinite(policy_min_mm) || !std::isfinite(policy_max_mm) ||
-    !std::isfinite(gripper_max_mm) || policy_min_mm <= 0.0 ||
-    policy_max_mm < policy_min_mm || gripper_max_mm <= 0.0)
+    !std::isfinite(gripper_max_mm) || gripper_max_mm <= 0.0)
   {
     return std::nullopt;
   }
@@ -72,7 +70,7 @@ inline std::optional<double> fixture_contact_width_mm(
     // Same numerical axis residual as box_grasp_contact; no process tolerance.
     if (closing.cross(Eigen::Vector3d::Unit(axis)).norm() <= 1e-4) {
       const double width = dimensions[axis] * 1000.0;
-      if (width >= policy_min_mm && width <= policy_max_mm && width <= gripper_max_mm) {
+      if (width > 0.0 && width <= gripper_max_mm) {
         return width;
       }
     }

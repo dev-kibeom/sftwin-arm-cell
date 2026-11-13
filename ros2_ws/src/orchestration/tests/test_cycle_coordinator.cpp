@@ -210,7 +210,6 @@ struct Fixture
         motion_tasks.size() > 1U &&
         motion_tasks[motion_tasks.size() - 2U] == MotionTaskType::TASK_TYPE_PLACE)
       {
-        recipe.grasp_width_max_mm = 55.0F;
         recipe.place_pose.pose.position.x = 1.3;
       }
       return successful_motion_result(goal);
@@ -218,12 +217,9 @@ struct Fixture
 
   Fixture()
   {
-    recipe.has_grasp_width_policy = true;
     recipe.recipe_id = "fixture-recipe-v1";
     recipe.target_id = "target_fixture";
     recipe.schema_version = 1;
-    recipe.grasp_width_min_mm = 40.0F;
-    recipe.grasp_width_max_mm = 80.0F;
     recipe.pick_approach_axis =
       arm_cell_orchestration::PickApproachAxis::TCP_INSERTION_AXIS;
     recipe.pick_approach_distance_m = 0.15;
@@ -331,8 +327,6 @@ struct Fixture
         pick.pick_grasp_position_tolerance_m = pnp_goal.pick_grasp_position_tolerance_m;
         pick.pick_grasp_orientation_tolerance_rad =
           pnp_goal.pick_grasp_orientation_tolerance_rad;
-        pick.grasp_width_min_mm = pnp_goal.grasp_width_min_mm;
-        pick.grasp_width_max_mm = pnp_goal.grasp_width_max_mm;
         pick.has_unobserved_yaw_fallback = pnp_goal.has_unobserved_yaw_fallback;
         pick.unobserved_yaw_fallback_rad = pnp_goal.unobserved_yaw_fallback_rad;
         auto picked = execute_motion(pick);
@@ -1827,8 +1821,6 @@ TEST(CycleCoordinatorTest, ReportsShortfallWhenVisionDepletesBeforeQuantity)
   EXPECT_DOUBLE_EQ(raw_candidate.target_pose.pose.position.z, 0.56);
   EXPECT_FLOAT_EQ(raw_candidate.estimated_height_m, 0.12F);
   EXPECT_TRUE(raw_candidate.has_observed_rectangle);
-  EXPECT_FLOAT_EQ(fixture.motion_goals[1].grasp_width_min_mm, 40.0F);
-  EXPECT_FLOAT_EQ(fixture.motion_goals[1].grasp_width_max_mm, 80.0F);
   EXPECT_DOUBLE_EQ(fixture.motion_goals[1].pick_approach_distance_m, 0.15);
   EXPECT_DOUBLE_EQ(fixture.motion_goals[1].pick_grasp_position_tolerance_m, 0.01);
   EXPECT_DOUBLE_EQ(
@@ -1846,7 +1838,7 @@ TEST(CycleCoordinatorTest, ReportsShortfallWhenVisionDepletesBeforeQuantity)
   EXPECT_DOUBLE_EQ(fixture.motion_goals[2].place_orientation_tolerance_rad, 0.05);
 }
 
-TEST(CycleCoordinatorTest, ForwardsEstimatedRectangleAndRecipeWidthWithoutObservedOutline)
+TEST(CycleCoordinatorTest, ForwardsEstimatedRectangleWithoutObservedOutline)
 {
   Fixture fixture;
   fixture.recipe.pick_approach_axis =
@@ -1874,8 +1866,6 @@ TEST(CycleCoordinatorTest, ForwardsEstimatedRectangleAndRecipeWidthWithoutObserv
   EXPECT_FLOAT_EQ(pnp.material_candidates.front().estimated_height_m, 0.12F);
   EXPECT_FLOAT_EQ(pnp.material_candidates.front().rectangle_long_side_m, 0.08F);
   EXPECT_FLOAT_EQ(pnp.material_candidates.front().rectangle_short_side_m, 0.07F);
-  EXPECT_FLOAT_EQ(pnp.grasp_width_min_mm, 40.0F);
-  EXPECT_FLOAT_EQ(pnp.grasp_width_max_mm, 80.0F);
   EXPECT_EQ(
     pnp.pick_approach_translation_direction,
     arm_cell_interfaces::action::ExecutePnp::Goal::PICK_APPROACH_PLANNING_FRAME_VERTICAL);
@@ -1978,9 +1968,7 @@ TEST(CycleCoordinatorTest, LaterIterationUsesTheInitiallySelectedRecipe)
 
   ASSERT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_QUANTITY_SHORTFALL);
   ASSERT_EQ(fixture.motion_goals.size(), 5U);
-  EXPECT_FLOAT_EQ(fixture.motion_goals[1].grasp_width_max_mm, 80.0F);
   EXPECT_DOUBLE_EQ(fixture.motion_goals[2].target_pose.pose.position.x, 0.8);
-  EXPECT_FLOAT_EQ(fixture.motion_goals[3].grasp_width_max_mm, 80.0F);
   EXPECT_DOUBLE_EQ(fixture.motion_goals[4].target_pose.pose.position.x, 0.8);
   EXPECT_EQ(fixture.recipe_load_count, 1);
 }
@@ -3275,17 +3263,6 @@ TEST(CycleCoordinatorTest, SafetyPreemptionWinsOverVisionErrorAtTerminalDecision
   EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_SAFETY_PREEMPTED);
 }
 
-TEST(CycleCoordinatorTest, MissingGraspWidthCannotEmitPickGoal)
-{
-  Fixture fixture;
-  fixture.recipe.has_grasp_width_policy = false;
-  auto coordinator = fixture.make_coordinator();
-
-  const auto result = coordinator.execute("target");
-
-  EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_CONFIGURATION_ERROR);
-  EXPECT_TRUE(fixture.motion_goals.empty());
-}
 
 TEST(CycleCoordinatorTest, MissingRecipeYawCannotEmitPickGoal)
 {
@@ -3311,17 +3288,6 @@ TEST(CycleCoordinatorTest, MissingRecipeCannotEmitPickOrPlaceGoal)
   EXPECT_TRUE(fixture.motion_goals.empty());
 }
 
-TEST(CycleCoordinatorTest, NonFiniteRecipeGraspWidthCannotEmitPickOrPlaceGoal)
-{
-  Fixture fixture;
-  fixture.recipe.grasp_width_min_mm = std::numeric_limits<float>::quiet_NaN();
-  auto coordinator = fixture.make_coordinator();
-
-  const auto result = coordinator.execute("target");
-
-  EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_CONFIGURATION_ERROR);
-  EXPECT_TRUE(fixture.motion_goals.empty());
-}
 
 TEST(CycleCoordinatorTest, ZeroQuaternionRecipePoseCannotEmitPickOrPlaceGoal)
 {

@@ -59,7 +59,7 @@ struct PickPlanningDiagnosticSummary
 class PickPlanningDiagnostics
 {
 public:
-  void resize(std::size_t candidates, bool has_recipe_candidates = true);
+  void resize(std::size_t candidates, bool has_grasp_candidates = true);
   void finish(const PickPlanningResult & result);
   void collect(
     const PickPlanningAttempt & attempt, const PickPlanningResult & result,

@@ -287,9 +287,6 @@ struct SyntheticCell
     callbacks.publish_phase = [this](uint8_t) {event("mission_phase");};
     callbacks.load_recipe = [](const std::string &) {
         Coordinator::MissionRecipe recipe;
-        recipe.has_grasp_width_policy = true;
-        recipe.grasp_width_min_mm = 40.0F;
-        recipe.grasp_width_max_mm = 80.0F;
         recipe.pick_approach_axis =
           arm_cell_orchestration::PickApproachAxis::TCP_INSERTION_AXIS;
         recipe.has_grasp_yaw = true;

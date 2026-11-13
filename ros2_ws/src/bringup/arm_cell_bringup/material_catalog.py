@@ -26,12 +26,6 @@ def load_material_catalog(directory):
         q = _vector(offset.get('quaternion_xyzw'), 4)
         if not math.isclose(sum(v*v for v in q), 1.0, abs_tol=1e-6):
             raise ValueError(f'Material offset quaternion must be normalized: {path}')
-        grasp = material.get('grasp', {})
-        low = grasp.get('min_expected_contact_width_mm', grasp.get('width_mm'))
-        high = grasp.get('max_expected_contact_width_mm', grasp.get('width_mm'))
-        _vector([low, high], 2, positive=True)
-        if low > high or not any(low <= d*1000 <= high for d in geometry['nominal_dimensions_m']):
-            raise ValueError(f'Material grasp policy excludes its geometry: {path}')
         _vector([material.get('mass_kg')], 1, positive=True)
         color = _vector(material.get('display_color_rgb'), 3)
         if any(v < 0 or v > 1 for v in color):

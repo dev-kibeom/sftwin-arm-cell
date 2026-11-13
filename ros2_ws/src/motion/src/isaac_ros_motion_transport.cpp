@@ -5621,7 +5621,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           reference_grasp_position_object, object_position_base,
           insertion_axis_tcp, request.rectangle_long_side_m,
           request.rectangle_short_side_m, request.estimated_object_height_m,
-          request.grasp_width_min_mm, request.grasp_width_max_mm,
           kFullyOpenWidthMm,
           PickGraspSearchSampling{
             pick_max_withdrawal_tilt_deg_, pick_position_range_half_length_fraction_,
@@ -5761,8 +5760,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       planning_context->rectangle_long_side_m = request.rectangle_long_side_m;
       planning_context->rectangle_short_side_m = request.rectangle_short_side_m;
       planning_context->object_height_m = request.estimated_object_height_m;
-      planning_context->grasp_width_min_mm = request.grasp_width_min_mm;
-      planning_context->grasp_width_max_mm = request.grasp_width_max_mm;
       planning_context->gripper_max_width_mm = kFullyOpenWidthMm;
       planning_context->interruption_result = request.interruption_result;
       const std::size_t candidate_count = pick_approach ?
@@ -5791,9 +5788,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       std::string capture_reference_fixture_id;
       double capture_reference_contact_width_mm{0.0};
       auto & final_pick_failure_stage = pick_diagnostics.legacy_output().final_pick_failure_stage;
-      final_pick_failure_stage = "IK";
+      final_pick_failure_stage = grasp_pose_candidates.empty() ? "CANDIDATE_GENERATION" : "IK";
       auto & final_pick_failure_reason = pick_diagnostics.legacy_output().final_pick_failure_reason;
-      final_pick_failure_reason = "NO_IK_SOLUTION";
+      final_pick_failure_reason = grasp_pose_candidates.empty() ?
+        "NO_GRIPPER_COMPATIBLE_GRASP_POSE" : "NO_IK_SOLUTION";
       auto & collision_rejected = pick_diagnostics.legacy_output().collision_rejected;
       collision_rejected = 0U;
       auto & ik_attempts = pick_diagnostics.legacy_output().ik_attempts;
@@ -5886,8 +5884,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           const auto contact_validation = validate_pick_grasp_contact(
             grasp.actual_orientation, expected_axis, object_orientation,
             request.rectangle_long_side_m, request.rectangle_short_side_m,
-            request.estimated_object_height_m, request.grasp_width_min_mm,
-            request.grasp_width_max_mm, kFullyOpenWidthMm);
+            request.estimated_object_height_m, kFullyOpenWidthMm);
           if (contact_validation.check == PickGraspContactCheck::MISMATCH) {
             ++geometry_rejected;
             pick_evaluation = PickSearchEvaluation::GRASP_CONTACT_MISMATCH;
@@ -6069,7 +6066,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             expected_width_candidates[index] = candidate.expected_contact_width_mm;
           }
           if (feasible_candidates.empty() && grasp_pose_candidates.empty()) {
-            candidate_results[0] = "NO_RECIPE_VALID_GRASP_POSE";
+            candidate_results[0] = "NO_GRIPPER_COMPATIBLE_GRASP_POSE";
           }
         };
       const auto save_candidate_evaluation = [&](int active, int selected) {
@@ -6201,8 +6198,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             rectangle_geometry_status, capture_reference_fixture_id,
             request.has_observed_rectangle, request.has_estimated_object_height,
             request.rectangle_long_side_m, request.rectangle_short_side_m,
-            request.estimated_object_height_m, request.grasp_width_min_mm,
-            request.grasp_width_max_mm).dump()
+            request.estimated_object_height_m).dump()
                  << ",\"expected_contact_width_mm\":"
                  << expected_width_candidates[diagnostic_index]
                  << ",\"global_planning\":{\"status\":\""
@@ -6660,8 +6656,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             }
             const auto width = fixture_contact_width_mm(
               scene->scene.world.collision_objects, capture_reference_fixture_id,
-              selected_candidate.target_pose, request.grasp_width_min_mm,
-              request.grasp_width_max_mm, kFullyOpenWidthMm);
+              selected_candidate.target_pose, kFullyOpenWidthMm);
             if (!width) {
               failure_reason = "fixture_geometry_or_width_policy_invalid";
             }

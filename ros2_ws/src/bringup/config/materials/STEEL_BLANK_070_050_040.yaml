@@ -1,9 +1,6 @@
 material_id: STEEL_BLANK_070_050_040
 display_name: Steel blank
 mass_kg: 1.099
-grasp:
-  min_expected_contact_width_mm: 49.0
-  max_expected_contact_width_mm: 51.0
 pick_offset:
   translation_m:
   - 0.0

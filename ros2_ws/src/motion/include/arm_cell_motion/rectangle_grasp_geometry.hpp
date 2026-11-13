@@ -18,15 +18,12 @@ inline std::optional<double> rectangle_expected_contact_width_mm(
 }
 
 inline bool rectangle_contact_width_allowed(
-  double expected_width_mm, double policy_min_mm, double policy_max_mm,
-  double physical_min_mm, double physical_max_mm)
+  double expected_width_mm, double physical_min_mm, double physical_max_mm)
 {
-  return std::isfinite(expected_width_mm) && std::isfinite(policy_min_mm) &&
-         std::isfinite(policy_max_mm) && std::isfinite(physical_min_mm) &&
-         std::isfinite(physical_max_mm) && policy_min_mm <= policy_max_mm &&
-         physical_min_mm <= physical_max_mm && expected_width_mm >= policy_min_mm &&
-         expected_width_mm <= policy_max_mm && expected_width_mm >= physical_min_mm &&
-         expected_width_mm <= physical_max_mm;
+  return std::isfinite(expected_width_mm) && std::isfinite(physical_min_mm) &&
+         std::isfinite(physical_max_mm) && physical_min_mm >= 0.0 &&
+         physical_min_mm <= physical_max_mm && expected_width_mm > 0.0 &&
+         expected_width_mm >= physical_min_mm && expected_width_mm <= physical_max_mm;
 }
 
 }  // namespace arm_cell_motion

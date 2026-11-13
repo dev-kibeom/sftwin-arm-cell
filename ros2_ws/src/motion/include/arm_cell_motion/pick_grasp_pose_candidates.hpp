@@ -54,14 +54,13 @@ struct PickGraspSearchSampling
   double maximum_downward_position_offset_m{0.005};
 };
 
-// Enumerate the box's recipe-width-feasible opposing face pairs in stable
+// Enumerate the box's gripper-compatible opposing face pairs in stable
 // priority order. The reference grasp pose comes first when it is already a
 // valid grasp; the existing box-face alignment is then reused for other pairs.
 inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_pose_candidates(
   const Eigen::Quaterniond & object_orientation,
   const Eigen::Quaterniond & reference_grasp_tcp_orientation,
-  double long_side_m, double short_side_m, double height_m,
-  double policy_min_mm, double policy_max_mm, double gripper_max_mm,
+  double long_side_m, double short_side_m, double height_m, double gripper_max_mm,
   std::size_t candidate_limit)
 {
   std::vector<PickGraspPoseCandidate> candidates;
@@ -76,7 +75,7 @@ inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_pose_candidates(
   const auto reference_grasp_tcp_rotation = reference_grasp_tcp_orientation.normalized();
   const auto reference_grasp_contact = box_grasp_contact(
     object_rotation, reference_grasp_tcp_rotation, long_side_m, short_side_m, height_m,
-    policy_min_mm, policy_max_mm, gripper_max_mm);
+    gripper_max_mm);
   if (reference_grasp_contact) {
     candidates.push_back({reference_grasp_tcp_rotation, *reference_grasp_contact});
   }
@@ -89,10 +88,7 @@ inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_pose_candidates(
   {
     if (!std::isfinite(box_lengths[axis]) || box_lengths[axis] <= 0.0) {continue;}
     const double width_mm = box_lengths[axis] * 1000.0;
-    if (!std::isfinite(policy_min_mm) || !std::isfinite(policy_max_mm) ||
-      !std::isfinite(gripper_max_mm) || width_mm < policy_min_mm ||
-      width_mm > policy_max_mm || width_mm > gripper_max_mm)
-    {
+    if (!std::isfinite(gripper_max_mm) || width_mm > gripper_max_mm) {
       continue;
     }
     if (reference_grasp_contact && reference_grasp_contact->closing_axis == axis) {continue;}
@@ -105,8 +101,7 @@ inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_pose_candidates(
       reference_grasp_closing_direction, face_normal);
     const auto candidate_rotation = (alignment * reference_grasp_tcp_rotation).normalized();
     const auto contact = box_grasp_contact(
-      object_rotation, candidate_rotation, long_side_m, short_side_m, height_m,
-      policy_min_mm, policy_max_mm, gripper_max_mm);
+      object_rotation, candidate_rotation, long_side_m, short_side_m, height_m, gripper_max_mm);
     if (contact && contact->closing_axis == axis) {
       candidates.push_back({candidate_rotation, *contact});
     }
@@ -122,13 +117,12 @@ inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_search_candidates
   const Eigen::Vector3d & reference_grasp_position_object,
   const Eigen::Vector3d & object_position_base,
   const Eigen::Vector3d & insertion_axis_tcp,
-  double long_side_m, double short_side_m, double height_m,
-  double policy_min_mm, double policy_max_mm, double gripper_max_mm,
+  double long_side_m, double short_side_m, double height_m, double gripper_max_mm,
   const PickGraspSearchSampling & sampling)
 {
   auto candidates = generate_pick_grasp_pose_candidates(
     object_orientation, reference_grasp_tcp_orientation, long_side_m, short_side_m,
-    height_m, policy_min_mm, policy_max_mm, gripper_max_mm, 3U);
+    height_m, gripper_max_mm, 3U);
   if (candidates.empty() || !reference_grasp_position_object.allFinite() ||
     !object_position_base.allFinite() || !insertion_axis_tcp.allFinite() ||
     insertion_axis_tcp.norm() < 1e-9 || sampling.candidate_limit == 0U)
@@ -156,8 +150,7 @@ inline std::vector<PickGraspPoseCandidate> generate_pick_grasp_search_candidates
       pose.tcp_orientation = (Eigen::Quaterniond(Eigen::AngleAxisd(angle, closing)) *
         seed.tcp_orientation).normalized();
       pose.contact = box_grasp_contact(
-        object_rotation, pose.tcp_orientation, long_side_m, short_side_m, height_m,
-        policy_min_mm, policy_max_mm, gripper_max_mm);
+        object_rotation, pose.tcp_orientation, long_side_m, short_side_m, height_m, gripper_max_mm);
       if (!pose.contact || pose.contact->closing_axis != seed.contact->closing_axis) {continue;}
       const Eigen::Vector3d withdrawal = -(pose.tcp_orientation * insertion);
       pose.withdrawal_tilt_rad = std::acos(std::clamp(withdrawal.dot(support_normal), -1.0, 1.0));

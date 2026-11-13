@@ -1,9 +1,6 @@
 material_id: AL_PLATE_080_060_020
 display_name: Aluminium plate
 mass_kg: 0.2592
-grasp:
-  min_expected_contact_width_mm: 59.0
-  max_expected_contact_width_mm: 61.0
 pick_offset:
   translation_m:
   - 0.0

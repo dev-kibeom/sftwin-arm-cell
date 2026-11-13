@@ -13,7 +13,7 @@
 | 구분 | 계산에 사용하는 정보 | 결과 |
 |---|---|---|
 | 입력 | 한 Acquisition의 전체 Material Candidate ID·`base_link` 상판 Pose·Orientation Symmetry·Rectangle Geometry·자체 두께와 현재 선택된 Candidate ID | 검증 가능한 후보 순위와 선택 target의 관측 Occupancy |
-| 입력 | Object Pose, Recipe의 접촉면·Closing Axis·폭 범위·Object-to-TCP 관계·Approach 거리, Motion 운영 Profile | TCP 위치·방향 후보 영역 및 탐색 예산 |
+| 입력 | Object Pose, 관측 형상·Gripper 개구 한계·Recipe의 Object-to-TCP 관계·Approach 거리, Motion 운영 Profile | TCP 위치·방향 후보 영역 및 탐색 예산 |
 | 입력 (Motion) | 최신 측정 관절, Robot/Gripper 모델, Planning Scene, IK/FK·Planner 결과 | 선택된 자재의 후보별 운동학 실현 가능성 평가 근거 |
 | 산출 | 결정적으로 정렬된 Material Candidate, Grasp Pose Candidate 및 평가·소진 근거 | FDS의 Action 실행 또는 최종 분류에 전달 |
 
@@ -84,13 +84,13 @@ q = q_0 + u e_j + v e_k
 |q_k| < L_k/2
 ```
 
-Closing Axis 방향 좌표는 보정된 공칭값으로 유지하며 위 부등식은 후보 생성의 영역 제한이지 Finger Pad의 실제 접촉 성공 판정이 아니다. Recipe가 허용하는 면의 **공칭 중앙 후보**는 추가 Offset 범위와 무관하게 생성하며, 다른 Pose와 동일한 기하학적 적격성을 적용하고 후보 상한 안에서 보존한다. 실제 Close/Capture·fresh `HELD`가 파지 성공을 결정하며 Capture Volume은 별도 Backend 검사다.
+Closing Axis 방향 좌표는 보정된 공칭값으로 유지하며 위 부등식은 후보 생성의 영역 제한이지 Finger Pad의 실제 접촉 성공 판정이 아니다. Gripper 개구 범위가 허용하는 면의 **공칭 중앙 후보**는 추가 Offset 범위와 무관하게 생성하며, 다른 Pose와 동일한 기하학적 적격성을 적용하고 후보 상한 안에서 보존한다. 실제 Close/Capture·fresh `HELD`가 파지 성공을 결정하며 Capture Volume은 별도 Backend 검사다.
 
 관측 상판 Normal의 음의 방향 추가 Offset은 `q_0` 기준 Motion Profile의 `pick_max_downward_position_offset_m`를 넘지 않는다. Normal은 Object `+Z`를 Planning Frame으로 변환한 것이다. 이 한계는 음의 Normal Offset에만 적용하며 공칭·상판 평행·양의 Normal Offset의 원래 적격성은 제한하지 않는다. 물체 회전과 관계없이 동일한 Object Frame 규칙을 적용한다.
 
 ### TCP 방향과 Approach
 
-파지 가능한 대향면 쌍은 기존 직육면체의 X/Y/Z축과 Recipe 허용 폭·실제 Gripper 최대 폭 85mm로 결정한다. TCP +X Closing Axis와 선택한 객체 축 사이에는 양방향 부호를 동등하게 취급하는 1° 이내 정렬 오차를 허용한다. 이는 FK/IK의 작은 방향 오차를 허용하는 범위이며 임의의 비스듬한 접촉을 허용하지 않는다. 후보 생성과 실제 FK 접촉 검증에 같은 기준을 적용한다. 유효한 위치에 이 Closing Axis와 예상 접촉 폭에 맞는 방향을 결합한다. Closing Axis 주위 회전과 삽입축을 탐색하며 고정된 소수 Quaternion으로 제한하지 않는다. 객체 Orientation 대칭 분류와 Top Plane의 두 Jaw Axis·폭 선택은 별개의 판단이다. Finger Pad 최소 면적, Edge Erosion, 추가 Tool Sweep·면별 충돌 Gate는 도입하지 않는다.
+파지 가능한 대향면 쌍은 기존 직육면체의 X/Y/Z축과 실제 Gripper 최대 폭 85mm로 결정한다. TCP +X Closing Axis와 선택한 객체 축 사이에는 양방향 부호를 동등하게 취급하는 1° 이내 정렬 오차를 허용한다. 이는 FK/IK의 작은 방향 오차를 허용하는 범위이며 임의의 비스듬한 접촉을 허용하지 않는다. 후보 생성과 실제 FK 접촉 검증에 같은 기준을 적용한다. 유효한 위치에 이 Closing Axis와 예상 접촉 폭에 맞는 방향을 결합한다. Closing Axis 주위 회전과 삽입축을 탐색하며 고정된 소수 Quaternion으로 제한하지 않는다. 객체 Orientation 대칭 분류와 Top Plane의 두 Jaw Axis·폭 선택은 별개의 판단이다. Finger Pad 최소 면적, Edge Erosion, 추가 Tool Sweep·면별 충돌 Gate는 도입하지 않는다.
 
 TCP 삽입축 `insertion_axis_tcp`가 주어질 때 Planning Frame에서
 
