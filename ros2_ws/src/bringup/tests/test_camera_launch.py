@@ -11,7 +11,7 @@ import pytest
 def load_module():
     share = Path(get_package_share_directory("arm_cell_bringup"))
     spec = importlib.util.spec_from_file_location(
-        "camera_launch", share / "launch/isaac_camera.launch.py"
+        "camera_launch", Path(__file__).resolve().parents[1] / "launch/isaac_camera.launch.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -132,3 +132,44 @@ def test_camera_overlay_uses_simulation_adapter_snapshot_by_default(
     profile.write_text("camera_snapshot: null\n")
     context.launch_configurations.update({"profile": str(profile), "snapshot": ""})
     assert len(module.compose(context)) == 2
+
+
+def test_runtime_selection_precedes_standalone_profile_and_snapshot(tmp_path):
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    import yaml
+    source = Path(__file__).resolve().parents[1] / 'config/operational_profile.yaml'
+    runtime = export_runtime_configuration(source, tmp_path / 'runtime.json')
+    document = json.loads(runtime.read_text())
+    camera = document['configuration']['cell']['camera']
+    camera['prim_path'] = '/World/Selected/Camera'
+    camera['snapshot'] = str(tmp_path / 'selected.json')
+    # Re-export an owner profile so the runtime checksum remains authoritative.
+    profile = yaml.safe_load(source.read_text())
+    cell_path = tmp_path / 'cell.yaml'
+    cell = yaml.safe_load((source.parent / 'cells/isaac_m0609.yaml').read_text())
+    cell['camera'] = camera
+    cell_path.write_text(yaml.safe_dump(cell))
+    profile['profiles']['cell'] = str(cell_path)
+    profile_path = tmp_path / 'profile.yaml'
+    profile_path.write_text(yaml.safe_dump(profile))
+    export_runtime_configuration(profile_path, runtime)
+    snapshot = {
+        'camera_prim': camera['prim_path'], 'camera_binding': {k: v for k, v in camera.items() if k != 'snapshot'},
+        'world_to_camera_link': {'parent_frame': 'world', 'child_frame': camera['link_frame_id'],
+                                 'translation_m': [1, 2, 3], 'quaternion_xyzw': [0, 0, 0, 1]},
+        'camera_link_to_optical': {'parent_frame': camera['link_frame_id'], 'child_frame': camera['frame_id'],
+                                   'translation_m': [0, 0, 0], 'quaternion_xyzw': [0, 0, 0, 1]},
+    }
+    Path(camera['snapshot']).write_text(json.dumps(snapshot))
+    context = LaunchContext()
+    context.launch_configurations.update(runtime_profile=str(runtime), profile='missing.yaml', snapshot='missing.json')
+    nodes = load_module().compose(context)
+    assert len(nodes) == 2
+    snapshot['camera_binding']['mount']['translation_offset_m'][0] += 1.0
+    Path(camera['snapshot']).write_text(json.dumps(snapshot))
+    with pytest.raises(RuntimeError, match='selected Cell camera configuration'):
+        load_module().compose(context)
+    snapshot['camera_prim'] = '/World/Other/Camera'
+    Path(camera['snapshot']).write_text(json.dumps(snapshot))
+    with pytest.raises(RuntimeError, match='selected Cell camera prim'):
+        load_module().compose(context)

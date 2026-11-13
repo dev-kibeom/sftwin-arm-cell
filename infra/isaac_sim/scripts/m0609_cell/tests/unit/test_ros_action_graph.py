@@ -1,11 +1,8 @@
+from runtime_configuration import selected_camera
 from graph_builder.graph_contract import (
-    CAMERA_INFO_TOPIC,
-    CAMERA_PATH,
-    DEPTH_TOPIC,
     GRAPH_PATH,
     JOINT_COMMAND_TOPIC,
     JOINT_STATE_TOPIC,
-    RGB_TOPIC,
     GRIPPER_STATUS_TOPIC,
 )
 from graph_builder.ros_action_graph import _report_summary, graph_declaration
@@ -70,10 +67,10 @@ def test_camera_helpers_share_one_render_product_and_camera_info_contract():
     assert nodes["CameraHelperDepth"] == "isaacsim.ros2.bridge.ROS2CameraHelper"
     assert nodes["CameraInfoHelper"] == "isaacsim.ros2.bridge.ROS2CameraInfoHelper"
     assert "CameraLifecycleSequence" not in nodes
-    assert values["CreateRenderProduct.inputs:cameraPrim"] == [CAMERA_PATH]
-    assert values["CameraHelperColor.inputs:topicName"] == RGB_TOPIC
-    assert values["CameraHelperDepth.inputs:topicName"] == DEPTH_TOPIC
-    assert values["CameraInfoHelper.inputs:topicName"] == CAMERA_INFO_TOPIC
+    assert values["CreateRenderProduct.inputs:cameraPrim"] == [selected_camera()['prim_path']]
+    assert values["CameraHelperColor.inputs:topicName"] == selected_camera()['rgb_topic']
+    assert values["CameraHelperDepth.inputs:topicName"] == selected_camera()['depth_topic']
+    assert values["CameraInfoHelper.inputs:topicName"] == selected_camera()['camera_info_topic']
 
     render_product_links = {
         destination

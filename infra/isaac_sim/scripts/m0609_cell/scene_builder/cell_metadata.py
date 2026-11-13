@@ -143,7 +143,7 @@ def apply_integration_metadata(context):
     semantic_map = {
         f"{CELL_ROOT}/CNC": "machine_tool",
         f"{CELL_ROOT}/m0609": "manipulator",
-        f"{CELL_ROOT}/Vision/Camera_Sensor": "vision_sensor",
+        context.camera_configuration["prim_path"]: "vision_sensor",
         f"{CELL_ROOT}/AMR/Mockup": "mobile_robot_placeholder",
         f"{CELL_ROOT}/AMR/Mockup/Tray": "material_receiver_and_robot_pick_surface",
         f"{CELL_ROOT}/CNC/WorkArea/Fixture": "cnc_fixture",

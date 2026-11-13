@@ -9,6 +9,7 @@ from pathlib import Path
 from camera_tooling.inspection_math import *  # compatibility re-export for inspect_camera
 from shared.script_editor_bootstrap import is_script_editor_path
 from shared.run_records import project_root
+from runtime_configuration import selected_camera
 
 
 def collision_scene_query_snapshot(camera_transform, reference_geometry):
@@ -199,7 +200,7 @@ def parent_local_transform_chain(prim):
     return chain
 
 
-def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache):
+def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache, *, camera_configuration=None):
     """Read and compare the D455 Color camera composed pose with Camera_Sensor.
 
     The D455 asset remains an externally authored referenced subtree.  This
@@ -214,11 +215,13 @@ def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache):
     sensor_diagnostic["parent_local_transform_chain"] = parent_local_transform_chain(
         sensor_prim
     )
-    root = stage.GetPrimAtPath(D455_ROOT_PATH)
+    selected = camera_configuration if camera_configuration is not None else selected_camera()
+    d455_root_path = selected['mount_prim_path']
+    root = stage.GetPrimAtPath(d455_root_path)
     if not root.IsValid():
         return {
             "status": "NOT VERIFIED",
-            "reason": f"D455 root not found: {D455_ROOT_PATH}",
+            "reason": f"D455 root not found: {d455_root_path}",
             "camera_sensor": sensor_diagnostic,
         }
 
@@ -229,7 +232,7 @@ def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache):
         # Stage traversal is retained for API compatibility across Isaac builds;
         # only descendants of the referenced D455 root are considered.
         path = str(prim.GetPath())
-        if not path.startswith(D455_ROOT_PATH + "/") or not prim.IsA(UsdGeom.Camera):
+        if not path.startswith(d455_root_path + "/") or not prim.IsA(UsdGeom.Camera):
             continue
         pose, rotation = composed_camera_transform_diagnostics(prim, xform_cache)
         pose["parent_local_transform_chain"] = parent_local_transform_chain(prim)
@@ -242,7 +245,7 @@ def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache):
         return {
             "status": "NOT VERIFIED",
             "reason": f"D455 Color camera not found by name: {D455_COLOR_CAMERA_NAME}",
-            "d455_root": D455_ROOT_PATH,
+            "d455_root": d455_root_path,
             "camera_sensor": sensor_diagnostic,
             "discovered_d455_cameras": cameras,
         }
@@ -257,7 +260,7 @@ def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache):
         return {
             "status": "NOT VERIFIED",
             "reason": "pose/quaternion comparison requires rigid composed transforms; raw matrix comparison exported without orthonormalization",
-            "d455_root": D455_ROOT_PATH,
+            "d455_root": d455_root_path,
             "camera_sensor": sensor_diagnostic,
             "d455_color_camera": selected,
             "raw_composed_matrix_comparison": raw_comparison,
@@ -280,7 +283,7 @@ def d455_color_camera_pose_comparison(stage, sensor_prim, xform_cache):
     ]
     return {
         "status": "VERIFIED",
-        "d455_root": D455_ROOT_PATH,
+        "d455_root": d455_root_path,
         "camera_sensor": sensor_diagnostic,
         "d455_color_camera": selected,
         "raw_composed_matrix_comparison": raw_comparison,
@@ -340,7 +343,7 @@ def graph_connection_descriptor(connection):
     return descriptor
 
 
-def depth_helper_runtime_snapshot(stage):
+def depth_helper_runtime_snapshot(stage, *, camera_configuration=None):
     """Read the existing helper inputs and its Render Product connection.
 
     ROS2CameraHelper creates its Replicator writer dynamically, so its renderVar
@@ -348,6 +351,8 @@ def depth_helper_runtime_snapshot(stage):
     separately from the live graph connection instead of being presented as an
     observed runtime edge.
     """
+    selected = camera_configuration if camera_configuration is not None else selected_camera()
+    camera_path = selected['prim_path']
     try:
         import omni.graph.core as og
 
@@ -377,7 +382,7 @@ def depth_helper_runtime_snapshot(stage):
         return {
             "status": (
                 "VERIFIED"
-                if render_product_path and CAMERA_PATH in targets
+                if render_product_path and camera_path in targets
                 else "NOT VERIFIED"
             ),
             "helper_path": DEPTH_HELPER_PATH,
@@ -389,7 +394,7 @@ def depth_helper_runtime_snapshot(stage):
                 graph_connection_descriptor(attribute) for attribute in upstream
             ],
             "render_product_camera_targets": targets,
-            "uses_camera_sensor": CAMERA_PATH in targets,
+            "uses_camera_sensor": camera_path in targets,
             "render_var_runtime_edge": "NOT VERIFIED: ROS2CameraHelper creates the writer dynamically",
             "source_mapping": "type=depth maps to SensorType.DistanceToImagePlane in ROS2CameraHelper source",
         }
@@ -399,12 +404,13 @@ def depth_helper_runtime_snapshot(stage):
         return {"status": "NOT VERIFIED", "reason": reason}
 
 
-def optical_transform_snapshot():
+def optical_transform_snapshot(*, camera_configuration=None):
+    selected = camera_configuration if camera_configuration is not None else selected_camera()
     # CAMERA_LINK_TO_OPTICAL_BASIS maps parent-frame coordinates into child
     # coordinates. A TF pose stores the inverse: child axes expressed in parent.
     return {
-        "parent_frame": "camera_link",
-        "child_frame": "camera_color_optical_frame",
+        "parent_frame": selected["link_frame_id"],
+        "child_frame": selected["frame_id"],
         "translation_m": [0.0, 0.0, 0.0],
         "quaternion_xyzw": list(
             quaternion_xyzw_from_rotation(transpose(CAMERA_LINK_TO_OPTICAL_BASIS))
@@ -445,17 +451,19 @@ def inset_top_surface_points(minimum, maximum):
     }
 
 
-def inspect_stage(output_path, reference_prim_paths=None):
+def inspect_stage(output_path, reference_prim_paths=None, *, camera_configuration=None):
     """Inspect the composed stage without defining, changing, or saving any prim."""
     import omni.usd
     from pxr import Gf, Usd, UsdGeom
 
+    selected = camera_configuration if camera_configuration is not None else selected_camera()
+    camera_path = selected['prim_path']
     stage = omni.usd.get_context().get_stage()
     if stage is None:
         raise RuntimeError("no USD stage is open")
-    camera = stage.GetPrimAtPath(CAMERA_PATH)
+    camera = stage.GetPrimAtPath(camera_path)
     if not camera.IsValid():
-        raise RuntimeError(f"camera prim not found: {CAMERA_PATH}")
+        raise RuntimeError(f"camera prim not found: {camera_path}")
     xform_cache = UsdGeom.XformCache()
     transform = xform_cache.GetLocalToWorldTransform(camera)
     # Gf.Matrix4d is row-vector based; transpose yields conventional W_R_usd.
@@ -523,7 +531,8 @@ def inspect_stage(output_path, reference_prim_paths=None):
             }
     snapshot = {
         "schema_version": 1,
-        "camera_prim": CAMERA_PATH,
+        "camera_prim": camera_path,
+        "camera_binding": {key: value for key, value in selected.items() if key != "snapshot"},
         "stage_meters_per_unit": float(UsdGeom.GetStageMetersPerUnit(stage)),
         "world_to_usd_camera": {
             "parent_frame": "world",
@@ -536,7 +545,7 @@ def inspect_stage(output_path, reference_prim_paths=None):
         ],
         "world_to_optical": {
             "parent_frame": "world",
-            "child_frame": "camera_color_optical_frame",
+            "child_frame": selected["frame_id"],
             "translation_m": [float(transform[3][i]) for i in range(3)],
             "quaternion_xyzw": list(quaternion_xyzw_from_rotation(optical_rotation)),
         },
@@ -550,18 +559,18 @@ def inspect_stage(output_path, reference_prim_paths=None):
             "camera_origin_world": [float(value) for value in origin],
             "basis_directions_world": axes,
         },
-        "render_product_bindings": render_product_camera_bindings(stage, CAMERA_PATH),
+        "render_product_bindings": render_product_camera_bindings(stage, camera_path),
         "d455_color_camera_pose_comparison": d455_color_camera_pose_comparison(
-            stage, camera, xform_cache
+            stage, camera, xform_cache, camera_configuration=selected
         ),
-        "depth_helper_runtime": depth_helper_runtime_snapshot(stage),
+        "depth_helper_runtime": depth_helper_runtime_snapshot(stage, camera_configuration=selected),
         "world_to_camera_link": {
             "parent_frame": "world",
-            "child_frame": "camera_link",
+            "child_frame": selected["link_frame_id"],
             "translation_m": [float(transform[3][i]) for i in range(3)],
             "quaternion_xyzw": list(quaternion_xyzw_from_rotation(link_rotation)),
         },
-        "camera_link_to_optical": optical_transform_snapshot(),
+        "camera_link_to_optical": optical_transform_snapshot(camera_configuration=selected),
         "projection": {
             name: camera.GetAttribute(name).Get()
             for name in (
@@ -586,8 +595,9 @@ def inspect_stage(output_path, reference_prim_paths=None):
 def script_editor_output_path(
     environ, script_path=None, default_filename="isaac_camera_stage_snapshot.json"
 ):
-    """Return an explicit override or the simulation adapter config path."""
-    output = environ.get("SFTWIN_CAMERA_SNAPSHOT_PATH")
+    """Use the selected runtime output; retain overrides for standalone tooling."""
+    output = (selected_camera(environ['ARM_CELL_RUNTIME_CONFIG'])['snapshot'] if environ.get('ARM_CELL_RUNTIME_CONFIG')
+              else environ.get("SFTWIN_CAMERA_SNAPSHOT_PATH"))
     path = (
         Path(output).expanduser()
         if output

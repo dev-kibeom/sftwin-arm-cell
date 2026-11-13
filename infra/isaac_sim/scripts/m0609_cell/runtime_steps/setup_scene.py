@@ -53,6 +53,7 @@ if str(scripts_root) not in sys.path:
 from scene_entrypoint import run_scene_build
 from scene_builder.material_supply import MaterialSupplyProfile
 from scene_builder.material_supply_adapter import IsaacMaterialSupplyAdapter
+from scene_builder.static_environment import supply_support_origin
 from scene_builder.material_supply_sidecar import MaterialSupplySidecarClient
 
 LOGGER = logging.getLogger(__name__)
@@ -258,11 +259,8 @@ def _start_material_supply_adapter(context):
             profile=profile,
             material_profiles=material_profiles,
             delivery_deadline_ms=material_handoff.get("delivery_deadline_ms"),
-            shelf_origin_m=(
-                context.tray_x,
-                context.tray_y,
-                context.amr_tray_z + 0.0225,
-            ),
+            delivery_root=operational_profile['cell']['material_supply']['delivery_root'],
+            shelf_origin_m=supply_support_origin(context.static_geometry, operational_profile['cell']['material_supply']),
             artifact_directory=(
                 diagnostic_component_directory(project_root, "simulation")
             ),

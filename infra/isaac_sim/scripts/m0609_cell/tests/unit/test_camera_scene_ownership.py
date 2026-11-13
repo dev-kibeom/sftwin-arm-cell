@@ -1,8 +1,9 @@
+from runtime_configuration import selected_camera
 import numpy as np
 import pytest
 
 import scene_builder.camera_extrinsic as camera_extrinsic
-from graph_builder.graph_contract import CAMERA_HEIGHT, CAMERA_WIDTH
+
 from scene_builder.camera_extrinsic import (
     author_camera_sensor_from_d455_color,
     d455_color_rigid_world_transform,
@@ -13,9 +14,6 @@ from scene_builder.d455_camera import (
     mount_d455,
 )
 from scene_builder.logical_camera import (
-    CAMERA_SENSOR_CLIPPING_RANGE_M,
-    CAMERA_SENSOR_FOCAL_LENGTH,
-    CAMERA_SENSOR_RESOLUTION,
     create_logical_camera_sensor,
 )
 
@@ -332,8 +330,9 @@ def test_extrinsic_authoring_clears_then_authors_the_derived_local_transform(
     assert messages[0].endswith("/D455/Color")
 
 
-def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
-    assert CAMERA_SENSOR_RESOLUTION == (CAMERA_WIDTH, CAMERA_HEIGHT)
+@pytest.mark.parametrize('prim_path', ['/World/SF_Twin_Cell/Vision/Camera_Sensor', '/World/Selected/Camera'])
+def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation(prim_path):
+    camera_configuration = dict(selected_camera(), prim_path=prim_path)
     camera_prim = _Prim(path="/World/SF_Twin_Cell/Vision/Camera_Sensor")
     focal = type(
         "Attribute", (), {"Set": lambda self, value: setattr(self, "value", value)}
@@ -376,6 +375,7 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
         object(),
         "/World/SF_Twin_Cell",
         "/D455",
+        camera_configuration=camera_configuration,
         gf=_Gf,
         usd_geom=usd_geom,
         extrinsic_author=lambda stage, prim, d455_path: extrinsic_calls.append(
@@ -384,27 +384,27 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
     )
 
     assert result is camera
-    assert paths == ["/World/SF_Twin_Cell/Vision/Camera_Sensor"]
-    assert focal.value == CAMERA_SENSOR_FOCAL_LENGTH
-    assert clipping.value == CAMERA_SENSOR_CLIPPING_RANGE_M
+    assert paths == [prim_path]
+    assert focal.value == selected_camera()['focal_length']
+    assert clipping.value == tuple(selected_camera()['clipping_range_m'])
     assert camera_prim.GetAttribute("verticalAperture").value == pytest.approx(
         horizontal_aperture.Get()
-        * CAMERA_SENSOR_RESOLUTION[1]
-        / CAMERA_SENSOR_RESOLUTION[0]
+        * tuple(selected_camera()['resolution'])[1]
+        / tuple(selected_camera()['resolution'])[0]
     )
     assert camera_prim.applied_apis == ["OmniLensDistortionOpenCvPinholeAPI"]
     assert (
         camera_prim.GetAttribute("omni:lensdistortion:model").value == "opencvPinhole"
     )
     assert camera_prim.GetAttribute("omni:lensdistortion:opencvPinhole:cx").value == (
-        CAMERA_SENSOR_RESOLUTION[0] / 2
+        tuple(selected_camera()['resolution'])[0] / 2
     )
     assert camera_prim.GetAttribute("omni:lensdistortion:opencvPinhole:cy").value == (
-        CAMERA_SENSOR_RESOLUTION[1] / 2
+        tuple(selected_camera()['resolution'])[1] / 2
     )
     expected_focal_px = (
-        CAMERA_SENSOR_FOCAL_LENGTH
-        * CAMERA_SENSOR_RESOLUTION[0]
+        selected_camera()['focal_length']
+        * tuple(selected_camera()['resolution'])[0]
         / horizontal_aperture.Get()
     )
     assert camera_prim.GetAttribute(
@@ -415,7 +415,7 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
     ).value == pytest.approx(expected_focal_px)
     assert (
         camera_prim.GetAttribute("omni:lensdistortion:opencvPinhole:imageSize").value
-        == CAMERA_SENSOR_RESOLUTION
+        == tuple(selected_camera()['resolution'])
     )
     for coefficient in (
         "k1",
@@ -468,7 +468,7 @@ def test_overhead_camera_calibration_covers_tray_and_rawpart_tops(exported_confi
     info = calibration["camera_info"]
     intrinsic = np.array(info["k"]).reshape(3, 3)
     assert intrinsic[0, 0] == pytest.approx(
-        CAMERA_SENSOR_FOCAL_LENGTH * info["width"] / 20.954999923706055
+        selected_camera()['focal_length'] * info["width"] / 20.954999923706055
     )
     for corner in itertools.product(tray["x"], tray["y"], (0.0, 0.08)):
         optical = rotation.T @ (np.array(corner) - transform["translation"])

@@ -3,8 +3,6 @@
 import math
 
 
-CAMERA_PATH = "/World/SF_Twin_Cell/Vision/Camera_Sensor"
-D455_ROOT_PATH = "/World/SF_Twin_Cell/CameraRig/RealSense_D455"
 D455_COLOR_CAMERA_NAME = "Camera_OmniVision_OV9782_Color"
 ACTION_GRAPH_PATH = "/World/SF_Twin_Cell/ROS2/ActionGraph"
 DEPTH_HELPER_PATH = ACTION_GRAPH_PATH + "/CameraHelperDepth"

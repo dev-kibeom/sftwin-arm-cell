@@ -1,3 +1,4 @@
+from runtime_configuration import selected_camera
 from pathlib import Path
 
 import pytest
@@ -152,11 +153,11 @@ def test_reference_ray_direction_rejects_camera_origin_as_a_surface_point():
 def test_render_product_binding_report_has_explicit_camera_match_flag():
     record = {
         "render_product": "/Render/Product",
-        "camera_targets": [camera.CAMERA_PATH],
+        "camera_targets": [selected_camera()['prim_path']],
         "uses_camera_sensor": True,
     }
     assert record["uses_camera_sensor"] is (
-        camera.CAMERA_PATH in record["camera_targets"]
+        selected_camera()['prim_path'] in record["camera_targets"]
     )
 
 
@@ -307,3 +308,19 @@ def test_standalone_cli_output_precedes_script_editor_filename_default():
         output_filename="wrapper.json",
     )
     assert observed == ["/tmp/cli.json"]
+
+
+def test_script_editor_uses_runtime_snapshot_from_supplied_environment(tmp_path):
+    import json
+    import hashlib
+    from runtime_configuration import load_runtime_configuration
+    configuration = load_runtime_configuration()
+    destination = tmp_path / 'selected/snapshot.json'
+    configuration['cell']['camera']['snapshot'] = str(destination)
+    document = {'kind': 'arm-cell-runtime-configuration', 'schema_version': 1,
+                'configuration': configuration,
+                'configuration_sha256': hashlib.sha256(json.dumps(configuration, sort_keys=True, allow_nan=False).encode()).hexdigest()}
+    runtime = tmp_path / 'runtime.json'
+    runtime.write_text(json.dumps(document))
+    assert camera.script_editor_output_path({'ARM_CELL_RUNTIME_CONFIG': str(runtime),
+                                             'SFTWIN_CAMERA_SNAPSHOT_PATH': '/wrong/snapshot.json'}) == str(destination)

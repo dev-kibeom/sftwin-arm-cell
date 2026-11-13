@@ -83,3 +83,18 @@ def author_static_box(
         color,
         material,
     )
+
+
+def supply_support_origin(static_geometry, binding):
+    """Supply falls onto the selected existing support's upper box surface."""
+    support = static_geometry[binding['support_geometry_object']]
+    x, y, z = support['pose']['position_m']
+    return (x, y, z + support['geometry']['dimensions_m'][2] / 2.0)
+
+
+def camera_mount_pose(static_geometry, camera):
+    """Resolve the Cell mount offset against its existing geometry origin."""
+    mount = camera['mount']
+    origin = static_geometry[mount['geometry_object']]['pose']['position_m']
+    return ([a + b for a, b in zip(origin, mount['translation_offset_m'])],
+            mount['rotation_xyz_deg'])

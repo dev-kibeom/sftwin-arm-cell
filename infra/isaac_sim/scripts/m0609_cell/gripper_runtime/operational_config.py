@@ -51,5 +51,5 @@ def production_capture_configuration(profile, mission_recipe):
         )
     ).validate()
     registry = EligibleObjectRegistry(profile["material_definitions"])
-    registry.register_subtree("/World/SF_Twin_Cell/MaterialSupply/Deliveries")
+    registry.register_subtree(profile['cell']['material_supply']['delivery_root'])
     return config, reference, registry

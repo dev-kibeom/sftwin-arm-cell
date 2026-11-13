@@ -368,15 +368,16 @@ def join_live_test_session(artifact_directory):
     return descriptor.parent
 
 
-def camera_configuration_provenance():
-    """Identify the default calibration input without changing camera behavior."""
+def camera_configuration_provenance(camera=None):
+    """Identify the selected snapshot; standalone recording retains its default."""
     try:
-        path = (Path(get_package_share_directory("arm_cell_sim_adapter")) /
+        path = (Path(camera['snapshot']) if camera is not None else
+                Path(get_package_share_directory("arm_cell_sim_adapter")) /
                 "config/isaac_camera_stage_snapshot.json")
         return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                "scope": "packaged_default"}
+                "scope": "selected_cell" if camera is not None else "packaged_default"}
     except (OSError, LookupError):
-        return {"path": None, "sha256": None, "scope": "packaged_default", "status": "unavailable"}
+        return {"path": None, "sha256": None, "scope": "selected_cell" if camera is not None else "packaged_default", "status": "unavailable"}
 
 
 def remove_empty_run(run_root):
@@ -497,6 +498,7 @@ def record_session_configuration(root, config, profile_path, selection, include_
             if data.get("status") != "open":
                 return
             data.update(selection_record)
+            data['camera_configuration'] = camera_configuration_provenance(config.get('cell', {}).get('camera'))
             temporary = descriptor.with_suffix(".json.tmp")
             temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
             os.replace(temporary, descriptor)
@@ -917,7 +919,8 @@ def compose(context):
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     str(share / "launch/isaac_camera.launch.py")
-                )
+                ),
+                launch_arguments={"runtime_profile": str(profile_path)}.items(),
             )
         )
 

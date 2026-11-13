@@ -1402,6 +1402,7 @@ def test_production_capture_configuration_uses_rawpart_geometry_and_recipe_width
 
     config, reference, registry = production_capture_configuration(
         {
+            "cell": {"material_supply": {"delivery_root": "/World/Selected/Deliveries"}},
             "orchestration": {"mission_target_id": "TestCube"},
             "vision": {"detector_profiles": {"TestCube": {"material_id": "TestCube"}}},
             "material_definitions": {
@@ -1431,7 +1432,7 @@ def test_production_capture_configuration_uses_rawpart_geometry_and_recipe_width
     assert reference.observation_to_grasp_tcp_m == pytest.approx(-0.04)
     assert config.capture_volume_dimensions_m == (0.12, 0.12, 0.12)
     assert registry.paths() == ()
-    assert registry._subtrees == {"/World/SF_Twin_Cell/MaterialSupply/Deliveries"}
+    assert registry._subtrees == {"/World/Selected/Deliveries"}
 
 
 def test_production_profile_uses_requested_capture_limits():

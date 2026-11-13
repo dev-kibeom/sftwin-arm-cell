@@ -30,7 +30,7 @@ def test_camera_entrypoint_exports_inspection_contract():
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert module.CAMERA_PATH == inspection_math.CAMERA_PATH
+    assert callable(module.inspect_stage)
     assert module.usd_camera_to_optical((0.0, 0.0, -1.0)) == (0.0, 0.0, 1.0)
 
 

@@ -27,6 +27,7 @@ from .primitives import (
 )
 from .static_environment import (
     author_static_box,
+    camera_mount_pose,
     load_canonical_static_geometry,
 )
 from .usd_authoring import (
@@ -146,16 +147,18 @@ def build_camera_rig(context):
     ]:
         static_box(object_id, path, name, color, material)
     realsense_url = local_d455_asset()
-    rs_path = f"{cell_root}/CameraRig/RealSense_D455"
+    camera = context.camera_configuration
+    rs_path = camera['mount_prim_path']
+    mount_position, mount_rotation = camera_mount_pose(context.static_geometry, camera)
     mount_d455(
         stage,
         realsense_url,
         rs_path,
-        [context.amr_x, context.amr_y + 0.02, 1.735],
-        [0.0, 90.0, 0.0],
+        mount_position,
+        mount_rotation,
         add_reference=context.add_reference_to_stage,
     )
-    create_logical_camera_sensor(stage, cell_root, rs_path)
+    create_logical_camera_sensor(stage, cell_root, rs_path, camera_configuration=camera)
 
 
 def run_scene_build(
@@ -215,6 +218,7 @@ def run_scene_build(
         add_reference_to_stage,
         static_geometry,
     )
+    context.camera_configuration = configuration['cell']['camera']
     context.scene_configuration = selected
     context.rawpart_profile = validate_rawpart_profile(configuration)
     for path in LEGACY_CLEANUP:

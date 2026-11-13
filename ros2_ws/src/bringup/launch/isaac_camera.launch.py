@@ -2,15 +2,17 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch_ros.actions import Node
 import yaml
+from arm_cell_bringup.runtime import load_profile
 
 
 def _load_console_output_format():
@@ -46,12 +48,14 @@ def _transform_arguments(transform):
 
 
 def compose(context):
-    snapshot_path = LaunchConfiguration("snapshot").perform(context).strip()
+    runtime_path = context.launch_configurations.get('runtime_profile', '') or os.environ.get('ARM_CELL_RUNTIME_CONFIG', '')
+    camera = load_profile(runtime_path)['cell']['camera'] if runtime_path else None
+    snapshot_path = camera['snapshot'] if camera is not None else LaunchConfiguration("snapshot").perform(context).strip()
     if not snapshot_path:
         profile = Path(LaunchConfiguration("profile").perform(context))
         config = yaml.safe_load(profile.read_text()) or {}
         snapshot_path = config.get("camera_snapshot")
-    if not snapshot_path:
+    if not snapshot_path and camera is None:
         candidate = (
             Path(get_package_share_directory("arm_cell_sim_adapter"))
             / "config/isaac_camera_stage_snapshot.json"
@@ -63,13 +67,18 @@ def compose(context):
             "camera overlay needs an inspector-generated camera_snapshot; no pose is assumed"
         )
     snapshot = json.loads(Path(snapshot_path).read_text())
+    if camera is not None:
+        if snapshot.get('camera_prim') != camera['prim_path']:
+            raise RuntimeError('camera snapshot does not match selected Cell camera prim')
+        if snapshot.get('camera_binding') != {key: value for key, value in camera.items() if key != 'snapshot'}:
+            raise RuntimeError('camera snapshot does not match selected Cell camera configuration')
     required = ("world_to_camera_link", "camera_link_to_optical")
     if any(key not in snapshot for key in required):
         raise RuntimeError("camera snapshot is incomplete")
     transforms = [snapshot[key] for key in required]
     if [(item["parent_frame"], item["child_frame"]) for item in transforms] != [
-        ("world", "camera_link"),
-        ("camera_link", "camera_color_optical_frame"),
+        ("world", camera['link_frame_id'] if camera else "camera_link"),
+        (camera['link_frame_id'] if camera else "camera_link", camera['frame_id'] if camera else "camera_color_optical_frame"),
     ]:
         raise RuntimeError("camera snapshot violates approved TF ownership")
     return [
@@ -107,6 +116,7 @@ def generate_launch_description():
                 "profile", default_value=str(share / "config/isaac_camera.yaml")
             ),
             DeclareLaunchArgument("snapshot", default_value=""),
+            DeclareLaunchArgument("runtime_profile", default_value=EnvironmentVariable("ARM_CELL_RUNTIME_CONFIG", default_value="")),
             OpaqueFunction(function=compose),
         ]
     )

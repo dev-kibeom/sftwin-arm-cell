@@ -96,6 +96,10 @@ def selected_profiles(references, base):
         if 'validation_planning_scene' in owner and 'static_scene_file' in owner['validation_planning_scene']:
             owner['validation_planning_scene']['static_scene_file'] = str(resolve(
                 owner['validation_planning_scene']['static_scene_file'], path.parent))
+        if 'camera' in owner:
+            owner['camera']['snapshot'] = str(resolve(owner['camera']['snapshot'], path.parent))
+        if name == 'cell':
+            validate_cell_configuration(owner)
         owners[name] = owner
     return owners
 
@@ -233,6 +237,9 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
     if 'calibration_file' in config['vision']:
         raise ValueError('Duplicate configuration owner: vision.calibration_file')
     config['vision']['calibration_file'] = owners['cell']['calibration_file']
+    camera = owners['cell']['camera']
+    merge_owned(config['vision'], {key: camera[key] for key in
+                ('rgb_topic', 'depth_topic', 'camera_info_topic')}, 'vision')
     if material_id is not None:
         config['orchestration']['mission_target_id'] = material_id
     target = config['orchestration']['mission_target_id']
@@ -372,3 +379,41 @@ def validation_configuration(config, path, material_id=None, pick_offset_z_m=Non
     config['material_catalog'] = {identity: material}
     config['material_definitions'] = {identity: material['geometry']}
     return config
+
+
+def validate_cell_configuration(cell):
+    """Check Cell inputs at Bringup composition, before exporting to consumers."""
+    import math
+    from .model_validation import prim_path
+
+    camera = cell['camera']
+    supply = cell['material_supply']
+    for label, value in (('camera.prim_path', camera['prim_path']),
+                         ('camera.mount_prim_path', camera['mount_prim_path']),
+                         ('material_supply.delivery_root', supply['delivery_root'])):
+        prim_path(value, label, absolute=True)
+    resolution = camera['resolution']
+    if len(resolution) != 2 or any(type(v) is not int or v <= 0 for v in resolution):
+        raise ValueError('Camera resolution requires two positive integers')
+    for key in ('translation_offset_m', 'rotation_xyz_deg'):
+        values = camera['mount'][key]
+        if len(values) != 3 or any(type(v) not in (int, float) or not math.isfinite(v) for v in values):
+            raise ValueError(f'Camera mount {key} requires three finite values')
+    if not math.isfinite(camera['focal_length']) or camera['focal_length'] <= 0:
+        raise ValueError('Camera focal_length must be positive')
+    near, far = camera['clipping_range_m']
+    if not (math.isfinite(near) and math.isfinite(far) and 0 < near < far):
+        raise ValueError('Camera clipping range requires 0 < near < far')
+    geometry = json.loads(Path(cell['geometry']).read_text())
+    objects = {item['id'] for item in geometry['objects']}
+    for identity in (camera['mount']['geometry_object'], supply['support_geometry_object']):
+        if identity not in objects:
+            raise ValueError(f'Cell binding geometry object not found: {identity}')
+    # OpenCV's YAML directive is not understood by PyYAML.
+    calibration = yaml.safe_load(Path(cell['calibration_file']).read_text().replace('%YAML:1.0', ''))
+    info = calibration['camera_info']
+    if [info['width'], info['height']] != resolution:
+        raise ValueError('Calibration and Camera resolution must match')
+    if (calibration['camera_optical_frame'] != camera['frame_id'] or
+            calibration['camera_info_topic'] != camera['camera_info_topic']):
+        raise ValueError('Calibration and Camera frame/topic must match')

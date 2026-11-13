@@ -91,7 +91,9 @@ def test_scenario_intents_are_owner_local_and_fail_closed_when_port_missing():
 
 def test_rgbd_source_adapter_applies_and_clears_fault_before_ros_consumers():
     from graph_builder.ros_action_graph import apply_rgbd_source_scenario
-    from graph_builder.graph_contract import CAMERA_FRAME_ID, GRAPH_PATH
+    from graph_builder.graph_contract import GRAPH_PATH
+    from runtime_configuration import selected_camera
+    CAMERA_FRAME_ID = selected_camera()['frame_id']
 
     class Attribute:
         def __init__(self):

@@ -17,10 +17,7 @@ from scene_builder.material_supply_pose_recorder import RawPartPoseRecorder
 from scene_builder.cuboid_demonstration import bind_adapter
 from scene_builder.material_supply_run import MaterialSupplyRun
 from scene_builder.material_supply_sidecar import simulation_time_ns
-
-
-CELL_ROOT = "/World/SF_Twin_Cell"
-DELIVERY_ROOT = f"{CELL_ROOT}/MaterialSupply/Deliveries"
+from runtime_configuration import selected_delivery_root
 
 
 def _world_pose_to_local_transform(
@@ -40,9 +37,9 @@ def _world_pose_to_local_transform(
     return world_transform * parent_inverse
 
 
-def _delivery_prim_path(delivery_id: str) -> str:
+def _delivery_prim_path(delivery_id: str, delivery_root: str | None = None) -> str:
     """Return a USD-safe prim path while keeping the delivery UUID intact."""
-    return f"{DELIVERY_ROOT}/Delivery_{delivery_id}"
+    return f"{delivery_root if delivery_root is not None else selected_delivery_root()}/Delivery_{delivery_id}"
 
 
 class IsaacMaterialSupplyAdapter:
@@ -59,7 +56,9 @@ class IsaacMaterialSupplyAdapter:
         artifact_directory: Path | None = None,
         timeline: Any | None = None,
         material_profiles: dict[str, MaterialSupplyProfile] | None = None,
+        delivery_root: str | None = None,
     ) -> None:
+        self.delivery_root = delivery_root if delivery_root is not None else selected_delivery_root()
         self.stage = stage
         self.sidecar = sidecar
         self.timeline = timeline
@@ -71,6 +70,7 @@ class IsaacMaterialSupplyAdapter:
             artifact_directory if artifact_directory is not None else (
                 diagnostic_component_directory(Path(__file__).resolve().parents[5], "simulation")
             ),
+            delivery_root=self.delivery_root,
         )
         self.shelf_origin_m = shelf_origin_m
         if type(delivery_deadline_ms) is not int or delivery_deadline_ms <= 0:
@@ -258,7 +258,7 @@ class IsaacMaterialSupplyAdapter:
         if any(
             prim.IsValid()
             and prim.GetName().startswith("Material_")
-            and "/MaterialSupply/Deliveries/" in str(prim.GetPath())
+            and str(prim.GetPath()).startswith(self.delivery_root + "/")
             for prim in self.stage.Traverse()
         ):
             return "Demonstration requires all existing RawParts to be removed"
@@ -270,7 +270,7 @@ class IsaacMaterialSupplyAdapter:
         if self._stop_reset_pending:
             raise RuntimeError("Demonstration requires Timeline Play")
         demo_id = uuid.uuid4().hex
-        demo_root = f"{DELIVERY_ROOT}/Demonstration_{demo_id}"
+        demo_root = f"{self.delivery_root}/Demonstration_{demo_id}"
         try:
             from pxr import UsdGeom
 
@@ -454,7 +454,7 @@ class IsaacMaterialSupplyAdapter:
             seed=seed,
         )
         self._deliveries.add(delivery_id)
-        self._delivery_paths.add(_delivery_prim_path(delivery_id))
+        self._delivery_paths.add(_delivery_prim_path(delivery_id, self.delivery_root))
         self._runs[delivery_id] = MaterialSupplyRun(
             delivery_id=delivery_id,
             material_type=profile.material_type,
@@ -591,7 +591,7 @@ class IsaacMaterialSupplyAdapter:
 
     def _delivery_prim_exists(self, delivery_id: str) -> bool:
         try:
-            prim = self.stage.GetPrimAtPath(_delivery_prim_path(delivery_id))
+            prim = self.stage.GetPrimAtPath(_delivery_prim_path(delivery_id, self.delivery_root))
             return bool(prim.IsValid())
         except Exception as error:
             self._logger.error(
@@ -609,7 +609,7 @@ class IsaacMaterialSupplyAdapter:
     ) -> None:
         from pxr import Sdf, UsdGeom
 
-        path = _delivery_prim_path(delivery_id)
+        path = _delivery_prim_path(delivery_id, self.delivery_root)
         prim = UsdGeom.Xform.Define(self.stage, path).GetPrim()
         metadata = {
             "delivery_id": (Sdf.ValueTypeNames.String, delivery_id),
@@ -642,7 +642,7 @@ class IsaacMaterialSupplyAdapter:
         profile = self._delivery_profiles.get(delivery_id, self.profile)
         dimensions = dimensions_m or profile.dimensions_m
         mass = profile.mass_kg if mass_kg is None else mass_kg
-        root_path = part_root_path or _delivery_prim_path(delivery_id)
+        root_path = part_root_path or _delivery_prim_path(delivery_id, self.delivery_root)
         part_path = f"{root_path}/Material_{index:04d}"
         part = UsdGeom.Xform.Define(self.stage, part_path)
         prim = part.GetPrim()
