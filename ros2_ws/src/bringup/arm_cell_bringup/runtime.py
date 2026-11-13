@@ -115,8 +115,10 @@ def compose_owner_profiles(config, path):
     for name in ('robot', 'tool'):
         if model[f'{name}_id'] != owners[name][f'{name}_id']:
             raise ValueError(f'Selected model is incompatible with {name} profile')
-    for key in ('urdf', 'semantic'):
+    for key in ('urdf', 'semantic', 'mesh_root'):
         model[key] = str(resolve(model[key], model_path.parent))
+    if 'urdf' in model['isaac']:
+        model['isaac']['urdf'] = str(resolve(model['isaac']['urdf'], model_path.parent))
     config['model_configuration'] = model
     config['robot'] = owners['robot']
     config['tool'] = owners['tool']
