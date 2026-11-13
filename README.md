@@ -137,9 +137,62 @@ source /opt/ros/humble/setup.bash
 ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
+### PySide6 ARM Cell Launcher (호스트)
+
+Robot·Tool·Cell·Backend 선택과 호스트 프로세스 시작·종료를 GUI에서 관리합니다.
+ROS 2 Humble과 Isaac Sim 5.1을 설치하고, 아래 [호스트 빌드 절차](#방법-1-호스트에서-ros-2-빌드-및-실행)로
+`ros2_ws/install/setup.bash`를 먼저 준비합니다. 저장소 루트에서 Python 3.10 이상으로 설치합니다.
+Ubuntu 22.04 X11 기준 예시입니다.
+
+```bash
+sudo apt-get install python3-venv libegl1 libxcb-cursor0
+python3 -m venv ~/.venvs/arm-cell-launcher
+~/.venvs/arm-cell-launcher/bin/python -m pip install -r infra/launcher/requirements.txt
+~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
+```
+
+Isaac 설치 경로가 기본값 `~/isaac_sim`과 다르면 실행 전에 `ISAAC_SIM_ROOT`를 지정합니다.
+필요한 `ROS_DOMAIN_ID`도 GUI 시작 시 환경변수로 지정합니다.
+
+```bash
+ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 \
+  ~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
+```
+
+1. Robot·Tool·Cell·Backend를 선택합니다. 첫 버전은 M0609 + Robotiq 2F85 + 기존
+   `isaac_m0609` Cell만 지원합니다. 기존 YAML에서 목록을 읽고, production 배포 Profile에
+   등록되지 않았거나 실제 Isaac 지원 범위 밖인 조합은 실행을 차단합니다.
+2. `Isaac 시작`을 누르고 기존 씬·Timeline·After Playing 초기화가 끝났는지 확인합니다.
+3. `ROS 2 시작`을 누릅니다. GUI의 실행 표시는 프로세스 상태이며 시스템 readiness나
+   PnP 성공을 뜻하지 않습니다. 기존 Endpoint·Fresh Readiness 확인 절차를 따릅니다.
+4. `모두 종료` 또는 창 닫기로 실행한 프로세스를 정리합니다. SIGINT 후 15초 동안
+   기다리고, 필요하면 SIGTERM 후 5초를 더 기다린 뒤 SIGKILL로 정리합니다.
+
+Bringup의 기존 조립·검증·export로 `runtime_configuration.json`을 OS 임시 디렉터리에
+한 번 생성합니다. Isaac과 ROS는 **동일한 파일**을 읽으며 재export하지 않습니다.
+관련 프로세스 그룹이 모두 종료될 때까지 Snapshot을 유지하고, 정상 종료·실행 실패·
+창 닫기 시 임시 디렉터리와 함께 삭제합니다. 원본 Profile은 변경하지 않습니다.
+
+stdout/stderr는 GUI에 실시간 표시하고 별도 영구 로그를 만들지 않습니다.
+`.run_records`에는 GUI의 임시 설정이나 중복 로그를 저장하지 않습니다.
+Isaac·ROS가 기존 정책으로 생산하는 진단·디버깅 기록, Kit 로그와 세션 관리는 그대로 유지합니다.
+GUI 출력은 최근 내용만 화면에 유지하므로 영속 진단은 기존 기록을 사용합니다.
+같은 사용자로 실행한 GUI 사이에는 중복 실행 잠금을 사용합니다. 외부 CLI·Docker로
+별도 실행한 프로세스는 관리하지 않으므로 동시에 실행하지 않습니다.
+
+목록과 조합 판정은 GUI 위젯에 고정하지 않습니다. 새 조합에는 실제 어댑터 지원과
+production 배포 Profile이 필요하며, Isaac 지원을 확장할 때 Launcher의 지원 판정도
+함께 갱신합니다. 기존 CLI 및 Docker 실행 방법은 아래 안내를 그대로 사용할 수 있습니다.
+Isaac 없이 GUI 회귀 테스트를 실행하려면 같은 Python 환경에 `pytest`를 설치합니다.
+
+```bash
+~/.venvs/arm-cell-launcher/bin/python -m pip install pytest
+QT_QPA_PLATFORM=offscreen ~/.venvs/arm-cell-launcher/bin/python -m pytest -q infra/launcher/tests
+```
+
 ### 설정 export와 Script Editor 실행
 
-기본 launcher는 선택한 운영 프로파일을 `.run_records/runtime_configuration.json`으로 export한 뒤 Isaac을 시작합니다. `ARM_CELL_PROFILE`로 입력 프로파일을, `ARM_CELL_RUNTIME_CONFIG`로 출력 파일을 선택할 수 있습니다.
+기본 CLI 스크립트 `isaac_arm_cell.sh`는 선택한 운영 프로파일을 `.run_records/runtime_configuration.json`으로 export한 뒤 Isaac을 시작합니다. `ARM_CELL_PROFILE`로 입력 프로파일을, `ARM_CELL_RUNTIME_CONFIG`로 출력 파일을 선택할 수 있습니다.
 
 Script Editor로 직접 시작할 때는 ROS workspace를 빌드하고 overlay를 source한 터미널에서 먼저 export합니다.
 
