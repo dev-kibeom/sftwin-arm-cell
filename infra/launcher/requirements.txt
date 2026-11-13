@@ -1,3 +1,5 @@
 # 6.12.0 corrupts None/bool refcounts on Python 3.10/3.11 (PYSIDE-3486).
 PySide6>=6.5,<7,!=6.12.0
 PyYAML>=6,<7
+# Standalone model expansion for Bringup composition validation.
+xacro>=2.0,<3

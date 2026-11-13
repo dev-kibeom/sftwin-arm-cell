@@ -3,3 +3,10 @@ mesh_root: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/meshes
 semantic: package://arm_cell_motion/config/moveit/m0609_robotiq_2f85.srdf
 robot_id: m0609
 tool_id: robotiq_2f85
+# Assembly identity matches the canonical URDF/SRDF robot name.
+model_id: m0609_robotiq_2f85
+planning_group: arm
+# Imported-model-relative bindings; Cell owns the placement in the stage.
+isaac:
+  articulation_root: root_joint
+  articulation_base: base_link

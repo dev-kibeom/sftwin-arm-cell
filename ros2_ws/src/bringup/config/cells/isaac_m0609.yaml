@@ -32,3 +32,7 @@ work_locations:
   validation: package://arm_cell_bringup/config/cells/isaac_m0609/validation_location.yaml
 validation_planning_scene:
   static_scene_file: package://arm_cell_motion/config/moveit/m0609_pnp_static_scene.json
+contact_objects:
+  pick_retract: amr_tray
+isaac:
+  robot_prim_path: /World/SF_Twin_Cell/m0609

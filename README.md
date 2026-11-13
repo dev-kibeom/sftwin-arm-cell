@@ -236,6 +236,10 @@ ros2 run arm_cell_bringup export_runtime_configuration \
 
 배포 YAML의 `profiles.robot`, `profiles.tool`, `profiles.cell`에서 조합할 설정 파일을 선택합니다. 기본 선택은 각각 `motion/config/robots/m0609.yaml`, `motion/config/tools/robotiq_2f85.yaml`, `bringup/config/cells/isaac_m0609.yaml`입니다. 결합 URDF/SRDF 자산은 `model_configuration`에서 별도로 선택하며 기본 M0609+2F85 모델은 그대로 사용합니다. Motion 실행 정책은 `components.motion`, IK·Planning 파일 선택은 `motion_configuration`에서 지정합니다. 가져올 Motion 입력 묶음은 `motion_profile_sections`, capture 출력 이름은 `capture_section`에 명시합니다. 검증 Profile은 Tool의 `validation_motion`을 선택하고 생산 Cell 경로 제약·손가락 탐색 치수를 제외하며, `validation.planning_scene_profiles`에서 접촉·Scene 입력 Owner를 선택합니다. HOME·관절 자세는 Robot, 그리퍼 치수·축 관례는 Tool, 작업 위치·Calibration 참조는 Cell에서 수정하고 다시 export합니다. 여러 소유자에 같은 파라미터를 정의하면 조립을 거부합니다. MoveIt 단독 실행은 `robot_profile:=<Robot YAML>`과 `model_configuration:=<결합 모델 YAML>`을 지원하며 생략 시 기존 기본 조합을 사용합니다. 설정 책임과 실행 책임의 구분은 [Components Architecture](docs/design/architecture/components.md)를 따릅니다.
 
+Plugin 전환 기반 설정은 기존 owner 아래에 포함됩니다. Robot의 `joint_policy`는 동치각 허용·PLACE IK Seed 관절, Assembly의 `model_id`·`planning_group`·`isaac`는 모델 식별·그룹·모델 내부 Articulation Binding, Tool의 `contact_links.payload_touch_links`는 실제 도구 접촉 Link, Cell의 `contact_objects.pick_retract`·`isaac.robot_prim_path`는 설비 접촉 대상·Stage 배치를 나타냅니다. 기존 HOME·관절 목록·Limits·Tool validation 접촉 Link·Cell 작업 위치는 그대로 재사용합니다. 이 메타데이터는 runtime JSON에 보존되지만 아직 Motion·Isaac의 하드코딩을 대체하지 않습니다. Launcher의 지원 조합과 실행 경로도 그대로입니다.
+
+원본 Profile 조립·export는 기존 Xacro 확장기를 사용해 URDF/SRDF와 선택 설정을 대조합니다. ROS 환경에는 기존 `xacro` 의존성을 사용하고, 독립 Launcher 환경에는 `infra/launcher/requirements.txt`로 설치합니다. export된 JSON을 읽는 소비자는 추가 모델 검사나 Xacro import를 수행하지 않습니다. Isaac Articulation 경로의 형식은 조립 시 검사하지만 실제 USD Prim 존재와 Play 이후 바인딩은 라이브 검증 대상입니다.
+
 자재는 `bringup/config/materials/*.yaml`에서 관리합니다. `TestCube`(70×70×80 mm), 알루미늄 빌릿(60×40×30 mm), 철강 블랭크(70×50×40 mm), 알루미늄 판재(80×60×20 mm)를 제공합니다. UI Hub의 Material type 목록은 export에 포함된 자재에서 생성되며, Random Drop 한 요청은 선택한 한 종류만 공급합니다. 새 cuboid는 자재 정의와 미션을 추가하고 runtime 설정을 다시 export하면 목록에 반영됩니다.
 
 판재의 일반 파지는 60 mm 방향으로 제한합니다. 80 mm 방향을 명시적으로 시험하거나 pick offset을 조정할 때는 별도의 검증 export를 사용합니다.

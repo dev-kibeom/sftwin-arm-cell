@@ -9,6 +9,7 @@ import tempfile
 import yaml
 
 from .material_catalog import load_material_catalog
+from .model_validation import validate_model_configuration
 
 
 def project_root():
@@ -125,6 +126,7 @@ def compose_owner_profiles(config, path):
     owner_path = resolve(reference, path.parent)
     config['motion_configuration'] = {key: str(resolve(value, owner_path.parent))
                                       for key, value in read(owner_path).items()}
+    validate_model_configuration(config)
     return owners
 
 

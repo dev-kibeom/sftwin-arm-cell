@@ -73,12 +73,16 @@ Task Execution → Motion은 단방향 C++ MotionPort 의존이며 그 경계에
 
 | 설정 Owner | 소유하는 의미 |
 |---|---|
-| Robot | 논리적 관절 구성·Joint Limits, 로봇별 HOME·Retract·Return 자세 |
+| Robot | 논리적 관절 구성·Joint Limits, 로봇별 HOME·Retract·Return 자세, 관절별 동치각 허용과 IK Seed 대상 |
 | Tool | 그리퍼 특성·접촉 Geometry, TCP 축 관례와 도구별 접촉·부착 Link |
 | Cell | 설비 Geometry·배치, 작업 위치, 설치 Calibration 참조 및 설비에 따른 경로 공간 제약 |
 | Motion | IK·Planning·경로 탐색·실행 정책 및 계획용 시간 매개화 설정 |
 
+Model Assembly는 결합 모델의 Identity·Planning Group과 Backend에서 사용하는 모델 내부 Binding을 소유한다. Cell은 Stage 안의 Robot 배치를 소유하며 모델 내부 Binding과 구분한다.
+
 Robot·Tool의 논리 설정과 결합 URDF/SRDF 모델 자산의 선택은 구분한다. Bringup의 배포 설정이 두 논리 Profile과 호환되는 결합 모델을 선택하며, Robot이나 Tool이 특정 결합 모델을 역으로 소유하지 않는다. 기존 M0609+2F85 모델의 내부 분해는 요구하지 않는다. 배포는 실행 목적에 필요한 Profile 입력을 명시적으로 선택하며 공통 설정 조립은 자재 Fixture의 존재나 파라미터 이름으로 입력을 선택하지 않는다.
+
+Bringup은 원본 설정을 조립할 때 Robot의 관절·Limits·HOME과 선택 Assembly의 관절 체인·Identity·Planning Group, Tool의 접촉 Link 및 Cell 참조의 정합성을 확인한다. 이 검사는 실행 중 관측이나 USD Topology 검증을 대신하지 않으며, export된 Runtime Configuration을 읽을 때 원본 자산을 재검증하는 Runtime Gate를 추가하지 않는다.
 
 Motion은 Robot·Tool·Cell의 입력을 소비해 기존 좌표 변환·계획·실행을 수행한다. Tool 데이터의 소유권은 Motion의 target 변환 책임을 이전하지 않는다. Material의 형상·파지 Offset과 Mission의 자재·작업 선택 구조는 유지하며, 작업의 장소는 Cell이, 작업의 Approach·허용오차 등 정책은 해당 작업 Owner가 소유한다. Process Profile은 현재 도입하지 않는다. Profile 선택은 다중 로봇의 동시 실행이나 실물 Backend의 준비 완료를 보장하지 않는다.
 
