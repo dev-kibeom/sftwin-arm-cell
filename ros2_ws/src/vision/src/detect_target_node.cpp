@@ -581,7 +581,8 @@ private:
     {
       std::lock_guard<std::mutex> lock(acquisition_state_mutex_);
       if (acquisition_active_ || calibration_request_active_ || detector_profiles_.empty() ||
-        detector_profiles_.front().target_id != target_id)
+        std::none_of(detector_profiles_.begin(), detector_profiles_.end(),
+          [&target_id](const DetectorProfile & profile) {return profile.target_id == target_id;}))
       {
         if (acquisition_active_ || calibration_request_active_) {
           return arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_BUSY;
