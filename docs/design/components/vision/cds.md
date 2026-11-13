@@ -158,9 +158,9 @@ Sensor 관측 가능성과 시뮬레이터 ground truth 독립성은 [Simulation
 
 배포 설정은 논리적 `target_id`와 Vision Detector Profile의 대응 관계 및 Profile별 매개변수를 소유한다. 지원되는 운영 Profile에서는 배포가 소유한 `vision` 설정 아래 정의하며, 공용 ROS 메시지·서비스 스키마가 아니다.
 
-매핑은 `target_id`를 키로 사용한다. 설치 Calibration 참조는 Cell, 평가에 필요한 손가락 접촉 치수는 Tool 설정에서 공급받으며 Vision이 별도 값을 소유하지 않는다. Material Definition은 물리 형상과 공칭 치수를, Vision Profile은 선택한 Material을 참조하며 Algorithm 실행 설정·작업 영역/support 제약·관측 품질을, Recipe는 Detector 선택·Grasp·Approach·PLACE 정책을 소유한다. 이 책임 분리는 별도의 Material Registry 도입이나 Recipe로의 치수 소유권 이전을 뜻하지 않는다. Isaac Material Supply도 동일한 정의에서 `material_type`을 해석한다.
+매핑은 `target_id`를 키로 사용한다. 설치 Calibration 참조는 Cell, 평가에 필요한 손가락 접촉 치수는 Tool 설정에서 공급받으며 Vision이 별도 값을 소유하지 않는다. Material은 물리 형상·공칭 치수·자재별 파지 Offset을, Vision Profile은 Algorithm 실행 설정·작업 영역/support 제약·관측 품질을 소유한다. Mission은 자재·Detector와 PICK/PLACE 작업 정책을 선택하고, 작업 정책의 의미는 Task Execution에, 작업 위치는 Cell에 남는다. 기존 Recipe snapshot은 이 입력을 조립한 실행 전달 형식이며 별도 설정 Owner가 아니다. 이 책임 분리는 별도의 Material Registry를 도입하거나 Material의 치수를 Mission으로 이전하지 않는다. Isaac Material Supply도 동일한 Material 정의에서 `material_type`을 해석한다.
 
-Vision은 Orchestration이 Mission Recipe에 따라 요청한 Detector Strategy를 실행한다. Recipe가 선택을, Vision Profile이 실행 설정을 소유한다. 허용 값·기본값·검증은 [TestCube FDS](fds-rawpart-depth-perception.md)와 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)를 따른다. 하나의 Acquisition 동안 Strategy는 고정되지만 요청 간에는 Vision 재시작 없이 Algorithm을 바꿀 수 있다. 검증 전용 대체는 아래 5.1절의 제한을 따른다. 새로운 Registry Service나 동적 Plugin Loader는 도입하지 않는다.
+Vision은 Orchestration이 Mission의 선택에 따라 요청한 Detector Strategy를 실행한다. Mission이 선택을, Vision Profile이 실행 설정을 소유한다. 허용 값·기본값·검증은 [TestCube FDS](fds-rawpart-depth-perception.md)와 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)를 따른다. 하나의 Acquisition 동안 Strategy는 고정되지만 요청 간에는 Vision 재시작 없이 Algorithm을 바꿀 수 있다. 검증 전용 대체는 아래 5.1절의 제한을 따른다. 새로운 Registry Service나 동적 Plugin Loader는 도입하지 않는다.
 
 ### 내부 Detector Strategy 경계
 
@@ -168,7 +168,7 @@ Strategy는 공통 관측 처리와 구체 Detector 사이에 놓인 최소한�
 
 | 경계 | 계약 |
 |---|---|
-| 입력 | 유효하고 신선한 Depth, 호환 CameraInfo, 선택적 표시 RGB, 원본 Frame/Time, 로드된 support Transform·Geometry와 TF 문맥, Material Definition, 작업 영역·품질 설정을 포함한 Vision Profile, 요청 Algorithm. Recipe의 Grasp/Approach/PLACE 정책이나 simulator truth는 입력하지 않음 |
+| 입력 | 유효하고 신선한 Depth, 호환 CameraInfo, 선택적 표시 RGB, 원본 Frame/Time, 로드된 support Transform·Geometry와 TF 문맥, Material Definition, 작업 영역·품질 설정을 포함한 Vision Profile, 요청 Algorithm. PICK/PLACE 작업 정책이나 simulator truth는 입력하지 않음 |
 | 공통 준비 | Acquisition/Ingress, Calibration 호환성, freshness, deprojection/support 좌표와 공통 품질 검사는 공유. Algorithm 고유 Fit은 공통 필수 조건이 아니며 기존 데이터를 재사용할 수 있음 |
 | 후보 출력 | 관측된 상판 기준 Pose, 측정된 수직 변, symmetry, 근거 있는 자체 두께, 단일 관측 geometry feature와 안정된 열거를 갖춘 0개 이상의 적격 후보. Source identity를 포함하고 유효한 부재와 무효·모호한 근거를 구별 |
 | 점유맵 출력 | 없음. Vision 결과는 검출 후보의 관측 Pose·Geometry이며 Planning Occupancy를 포함하지 않음 |
@@ -176,7 +176,7 @@ Strategy는 공통 관측 처리와 구체 Detector 사이에 놓인 최소한�
 | 공통 적격성 | Depth Scene Stability는 유효한 연속 Depth 관측으로 Detector를 Gate하며 정확히 STABLE이 된 관측에서 Detector를 한 번 실행. Strategy는 해당 관측에 기존 geometry 적격성 규칙 적용 |
 | 인계 및 수명 | 공통 Acquisition은 ID·직렬화·응답 구성 전까지 최종 관측 보존·deadline 소유. Vision은 내부 평가된 SELECTED HIGH·MEDIUM 전체를 단일 `material_candidates` 목록으로 한 번 반환하고, 적격 후보 부재 시 기존 미해결·부재 결과 계약을 적용하고 Task Execution이 PnP Action 안에서 우선순위·소비·전환을 소유하며 Motion은 선택 후보의 Grasp Pose·계획·movement를 소유. Strategy 상태가 반환 목록의 수명을 연장하거나 순서를 바꾸지 않음 |
 
-Orchestration은 Recipe의 Algorithm 이름을 전달하고 Task Execution은 Material Candidate 우선순위를, Motion은 Grasp Pose 후보 생성·계획 가능성을 소유한다. 소비자는 공통 Candidate payload 의미를 검증하고 Vision은 선택된 Profile의 Producer 의무를 지킨다. 후보 평가·등급 및 HIGH·MEDIUM 단일 목록 반환 동작은 TestCube FDS, L자 가설 생성·정규화·기하 근거 평가는 통합 [Algorithm 설계](../../algorithms/cuboid-top-face-grasp-selection.md)가 소유한다. 완전·부분 관측은 하나의 Algorithm 책임이며 별도 복원 fallback/module contract를 만들지 않는다. 별도 Strategy Registry나 공개 인터페이스는 도입하지 않는다.
+Orchestration은 Mission이 선택한 Algorithm 이름을 전달하고 Task Execution은 Material Candidate 우선순위를, Motion은 Grasp Pose 후보 생성·계획 가능성을 소유한다. 소비자는 공통 Candidate payload 의미를 검증하고 Vision은 선택된 Profile의 Producer 의무를 지킨다. 후보 평가·등급 및 HIGH·MEDIUM 단일 목록 반환 동작은 TestCube FDS, L자 가설 생성·정규화·기하 근거 평가는 통합 [Algorithm 설계](../../algorithms/cuboid-top-face-grasp-selection.md)가 소유한다. 완전·부분 관측은 하나의 Algorithm 책임이며 별도 복원 fallback/module contract를 만들지 않는다. 별도 Strategy Registry나 공개 인터페이스는 도입하지 않는다.
 
 ## 5.1 검증 전용 Fixed Adapter
 

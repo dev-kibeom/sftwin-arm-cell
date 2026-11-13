@@ -135,7 +135,7 @@ Motion Progress는 수행 중 비정상 진행 정체, Trajectory Clock은 시�
 | Runtime Planning Scene | Motion planning-scene responsibility의 runtime collision authority | planning과 validation이 소비 | 고정 geometry와 attached-object state는 공유 Scene에 유지; 후보별 임시 Occupancy는 관련 planning 요청에서만 사용하며 공유 Scene을 변경하지 않음 |
 | canonical nominal environment geometry | Simulation Environment Semantics 및 구성의 지정 owner | 선택된 고정 geometry를 planning projection에 소비 | 생성 artifact는 canonical authority가 아님; static projection은 선택적 profile 경계 |
 | Gripper physical state / Holding observation | backend adapter가 관측 제공; PnP material disposition은 Task Execution | Task Execution은 GripperPort 결과를 소비; MotionStatus는 observation projection | command success와 physical disposition 분리; adapter topology/attachment를 task state authority로 승격하지 않음 |
-| motion target·Recipe-derived constraints·Vision geometry | Task Execution이 motion request로 변환, 원본 의미는 Orchestration/Vision ICD | MotionPort가 전달된 pose/constraint만 소비 | 원본 Recipe/Observation 또는 mission/candidate policy를 재해석하지 않고 TCP realization과 planning을 수행 |
+| motion target·Recipe-derived constraints·Vision geometry | Task Execution이 조립된 Recipe snapshot을 motion request로 변환, 원본 설정 소유권은 Components Architecture, 공유 의미는 Orchestration/Vision ICD | MotionPort가 전달된 pose/constraint만 소비 | 원본 Recipe/Observation 또는 mission/candidate policy를 재해석하지 않고 TCP realization과 planning을 수행 |
 
 ### 교란 작업의 Motion 책임
 
@@ -178,8 +178,8 @@ Motion은 Task Execution이 MotionPort로 제출한 교란 요청의 후보 우�
 | `VR-MOT-OWN-03` | MotionStatus authority | externally meaningful Motion execution state의 canonical owner/publisher는 Motion이다. |
 | `VR-MOT-OWN-04` | Backend insulation | Mission/Vision 계약은 simulator-specific gripper articulation topology에 의존하지 않는다. |
 | `VR-MOT-GEO-01` | Object-reference conversion | observed reference에서 candidate TCP/tool rigid transform으로의 변환은 Motion만 소유한다. |
-| `VR-MOT-GEO-02` | Distinct PICK geometry | Motion은 Recipe 소유 PICK Approach 방향/거리를 실현하고 Approach, Grasp, Retract pose를 구별한다. |
-| `VR-MOT-GEO-03` | Approach/retract direction | TCP insertion-axis 모드에서 Approach/default Retract는 설정된 TCP insertion axis의 반대 방향으로 각각의 거리만큼 이동하고, Descent는 Grasp 쪽을 따른다. 선택 orientation은 동일하며 TestCube Recipe는 해당 모드를 선택한다. 실행 완료 oracle은 FDS가 소유한다. |
+| `VR-MOT-GEO-02` | Distinct PICK geometry | Motion은 Mission이 선택한 작업 정책의 PICK Approach 방향/거리를 실현하고 Approach, Grasp, Retract pose를 구별한다. |
+| `VR-MOT-GEO-03` | Approach/retract direction | TCP insertion-axis 모드에서 Approach/default Retract는 설정된 TCP insertion axis의 반대 방향으로 각각의 거리만큼 이동하고, Descent는 Grasp 쪽을 따른다. 선택 orientation은 동일하며 TestCube Mission이 선택한 PICK 정책은 해당 모드를 사용한다. 실행 완료 oracle은 FDS가 소유한다. |
 | `VR-MOT-GEO-04` | Height and transform authority | measured-height 기반 Object Pose와 Motion 소유 object-to-TCP transform을 보존하며 nominal TestCube 높이로 measured extent를 대체하지 않는다. |
 | `VR-MOT-STATIC-01` | Canonical projection | 선택된 canonical static geometry가 생성 planning artifact로 projection된다. |
 | `VR-MOT-STATIC-02` | Bounded mutation | static scene 재적용이 무관한 Planning Scene state를 보존한다. |

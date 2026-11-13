@@ -82,25 +82,35 @@ def compose(context):
         LaunchConfiguration("log_level").perform(context)
     )
     share = Path(get_package_share_directory("arm_cell_motion"))
-    robot = yaml.safe_load((share / 'config/robots/m0609.yaml').read_text())
+    robot_path = Path(LaunchConfiguration(
+        'robot_profile', default=str(share / 'config/robots/m0609.yaml')).perform(context))
+    robot = yaml.safe_load(robot_path.read_text())
+    model_path = Path(LaunchConfiguration(
+        'model_configuration', default=str(share / 'config/models/m0609_robotiq_2f85.yaml')).perform(context))
+    model = yaml.safe_load(model_path.read_text())
+    if model['robot_id'] != robot['robot_id']:
+        raise ValueError('Selected model is incompatible with robot profile')
     policy = yaml.safe_load((share / 'config/planning.yaml').read_text())
 
-    def resource(reference):
-        package, relative = reference.removeprefix('package://').split('/', 1)
-        return Path(get_package_share_directory(package)) / relative
+    def resource(reference, base):
+        if reference.startswith('package://'):
+            package, relative = reference[10:].split('/', 1)
+            return Path(get_package_share_directory(package)) / relative
+        path = Path(reference).expanduser()
+        return path if path.is_absolute() else (base / path).resolve()
 
-    def selected_path(argument, reference):
-        default = str(resource(reference))
+    def selected_path(argument, reference, base):
+        default = str(resource(reference, base))
         return Path(LaunchConfiguration(argument, default=default).perform(context))
 
     def config(name):
         return yaml.safe_load((share / 'config/moveit' / name).read_text())
 
-    description = selected_path('robot_description_file', robot['model']['urdf'])
-    semantic = selected_path('robot_semantic_file', robot['model']['semantic'])
-    mesh_root = LaunchConfiguration('mesh_root', default=robot['model']['mesh_root']).perform(context)
-    planning_limits = yaml.safe_load(selected_path('joint_limits_file', robot['joint_limits']).read_text())
-    planning_pipeline = yaml.safe_load(selected_path('planning_pipeline_file', policy['planning_pipeline']).read_text())
+    description = selected_path('robot_description_file', model['urdf'], model_path.parent)
+    semantic = selected_path('robot_semantic_file', model['semantic'], model_path.parent)
+    mesh_root = LaunchConfiguration('mesh_root', default=model['mesh_root']).perform(context)
+    planning_limits = yaml.safe_load(selected_path('joint_limits_file', robot['joint_limits'], robot_path.parent).read_text())
+    planning_pipeline = yaml.safe_load(selected_path('planning_pipeline_file', policy['planning_pipeline'], share / 'config').read_text())
     planning_profile = LaunchConfiguration("planning_profile").perform(context)
     if planning_profile:
         profile = yaml.safe_load(Path(planning_profile).read_text()) or {}
@@ -127,7 +137,7 @@ def compose(context):
                 str(description), mappings={"mesh_root": mesh_root},
             ).toxml(),
             "robot_description_semantic": semantic.read_text(),
-            "robot_description_kinematics": yaml.safe_load(selected_path('kinematics_file', policy['kinematics']).read_text()),
+            "robot_description_kinematics": yaml.safe_load(selected_path('kinematics_file', policy['kinematics'], share / 'config').read_text()),
             "robot_description_planning": planning_limits,
             "planning_pipelines": ["ompl"],
             "default_planning_pipeline": "ompl",
@@ -166,6 +176,10 @@ def generate_launch_description():
                 "[{severity}] [{name}] {message}",
             ),
             SetEnvironmentVariable("TZ", "UTC"),
+            DeclareLaunchArgument(
+                "robot_profile", default_value=str(Path(get_package_share_directory("arm_cell_motion")) / "config/robots/m0609.yaml")),
+            DeclareLaunchArgument(
+                "model_configuration", default_value=str(Path(get_package_share_directory("arm_cell_motion")) / "config/models/m0609_robotiq_2f85.yaml")),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument("joint_states", default_value="/joint_states"),
             DeclareLaunchArgument("planning_profile", default_value=""),

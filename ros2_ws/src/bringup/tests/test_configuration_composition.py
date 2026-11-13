@@ -103,7 +103,8 @@ def test_selected_robot_tool_cell_values_reach_runtime(tmp_path):
     ):
         owner_path = resolve(profile['profiles'][owner], PROFILE.parent)
         selected = yaml.safe_load(owner_path.read_text())
-        selected['motion'][key] = value
+        section = 'grasp_motion' if owner == 'tool' else 'motion'
+        selected[section][key] = value
         path = tmp_path / f'{owner}.yaml'
         path.write_text(yaml.safe_dump(selected))
         profile['profiles'][owner] = str(path)
@@ -205,4 +206,51 @@ def test_validation_cannot_override_tool_owned_links(tmp_path, section, key, val
     path = tmp_path / 'profile.yaml'
     path.write_text(yaml.safe_dump(profile))
     with pytest.raises(ValueError, match='Duplicate configuration owner'):
+        load_profile(path)
+
+
+def test_logical_profiles_do_not_select_the_combined_model():
+    config = load_profile(PROFILE)
+    assert 'model' not in config['robot']
+    assert 'compatible_robot_model' not in config['tool']
+    assert Path(config['model_configuration']['urdf']).is_file()
+    assert config['model_configuration']['robot_id'] == config['robot']['robot_id']
+    assert config['model_configuration']['tool_id'] == config['tool']['tool_id']
+
+
+def test_common_composition_is_independent_of_fixture_marker(tmp_path):
+    from arm_cell_bringup.runtime import compose_owner_profiles
+    profile = yaml.safe_load(PROFILE.read_text())
+    first = copy.deepcopy(profile)
+    second = copy.deepcopy(profile)
+    second['fixture'] = {'only_a_marker': True}
+    compose_owner_profiles(first, PROFILE)
+    compose_owner_profiles(second, PROFILE)
+    assert first['motion'] == second['motion']
+    assert first['gripper_capture'] == second['gripper_capture']
+
+
+def test_validation_motion_inputs_follow_explicit_profile_selection(tmp_path):
+    profile = yaml.safe_load((PROFILE.parent / 'pnp_validation_profile.yaml').read_text())
+    profile['motion_profile_sections']['tool'].append('grasp_motion')
+    profile['motion_profile_sections']['cell'] = ['motion']
+    path = tmp_path / 'validation.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    actual = load_profile(path)
+    assert actual['motion']['finger_contact_span_m'] == 0.02
+    assert actual['motion']['place_waypoint_clearance_y_boundary_m'] == -0.926
+
+
+@pytest.mark.parametrize('owner', ['robot', 'tool'])
+def test_combined_model_must_match_selected_logical_profiles(tmp_path, owner):
+    profile = yaml.safe_load(PROFILE.read_text())
+    selected = yaml.safe_load(resolve(profile['profiles'][owner], PROFILE.parent).read_text())
+    selected[f'{owner}_id'] = 'other'
+    owner_path = tmp_path / f'{owner}.yaml'
+    owner_path.write_text(yaml.safe_dump(selected))
+    profile['profiles'][owner] = str(owner_path)
+    profile['components']['simulation'] = str(resolve(profile['components']['simulation'], PROFILE.parent))
+    path = tmp_path / 'deployment.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match=f'Selected model is incompatible with {owner} profile'):
         load_profile(path)

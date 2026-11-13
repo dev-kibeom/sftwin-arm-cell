@@ -45,6 +45,7 @@ orchestration:
   recipe_directory: package://arm_cell_bringup/config/missions
 
 validation:
+  planning_scene_profiles: [tool, cell]
   pick_policy: package://arm_cell_task_execution/config/validation_pick_policy.yaml
   place_task: package://arm_cell_task_execution/config/place_tasks/validation.yaml
   runtime_runner_entrypoint: infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py
@@ -105,3 +106,12 @@ profiles:
   tool: package://arm_cell_motion/config/tools/robotiq_2f85.yaml
   cell: package://arm_cell_bringup/config/cells/isaac_m0609.yaml
 motion_configuration: package://arm_cell_motion/config/planning.yaml
+model_configuration: package://arm_cell_motion/config/models/m0609_robotiq_2f85.yaml
+motion_profile_sections:
+  robot:
+  - motion
+  tool:
+  - motion
+  - validation_motion
+  cell: []
+capture_section: capture

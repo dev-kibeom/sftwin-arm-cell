@@ -17,3 +17,13 @@ profiles:
   tool: package://arm_cell_motion/config/tools/robotiq_2f85.yaml
   cell: package://arm_cell_bringup/config/cells/isaac_m0609.yaml
 motion_configuration: package://arm_cell_motion/config/planning.yaml
+model_configuration: package://arm_cell_motion/config/models/m0609_robotiq_2f85.yaml
+motion_profile_sections:
+  robot:
+  - motion
+  tool:
+  - motion
+  - grasp_motion
+  cell:
+  - motion
+capture_section: gripper_capture

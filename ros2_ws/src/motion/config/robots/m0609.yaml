@@ -1,7 +1,3 @@
-model:
-  urdf: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/urdf/m0609_robotiq_2f85.urdf.xacro
-  mesh_root: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/meshes
-  semantic: package://arm_cell_motion/config/moveit/m0609_robotiq_2f85.srdf
 home: package://arm_cell_motion/config/home_joint_positions.yaml
 joint_limits: package://arm_cell_motion/config/moveit/joint_limits.yaml
 motion:
@@ -26,3 +22,4 @@ motion:
   - 0.0
   - 0.0
   - 1.5707963267948966
+robot_id: m0609

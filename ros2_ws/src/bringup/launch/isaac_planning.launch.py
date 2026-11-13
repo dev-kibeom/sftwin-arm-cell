@@ -90,6 +90,7 @@ def compose(context):
     if runtime_profile:
         selected = load_profile(runtime_profile)
         robot, cell = selected['robot'], selected['cell']
+        description = selected['model_configuration']
         motion_configuration = selected['motion_configuration']
     else:
         references = dict(DEFAULT_PROFILES)
@@ -100,7 +101,13 @@ def compose(context):
         motion_path = resolve(config['motion_configuration'], Path(LaunchConfiguration("profile").perform(context)).parent)
         motion_configuration = {key: str(resolve(value, motion_path.parent))
                                 for key, value in read(motion_path).items()}
-    description = robot['model']
+        model_path = resolve(config['model_configuration'], Path(LaunchConfiguration("profile").perform(context)).parent)
+        description = read(model_path)
+        for key in ('urdf', 'semantic'):
+            description[key] = str(resolve(description[key], model_path.parent))
+        for name in ('robot', 'tool'):
+            if description[f'{name}_id'] != owners[name][f'{name}_id']:
+                raise ValueError(f'Selected model is incompatible with {name} profile')
     model = {
         "robot_description": xacro.process_file(
             description['urdf'], mappings={'mesh_root': description['mesh_root']},

@@ -86,47 +86,37 @@ def selected_profiles(references, base):
     for name, reference in references.items():
         path = resolve(reference, base)
         owner = read(path)
-        for key in ('home', 'joint_limits', 'geometry', 'static_scene', 'validation_static_scene', 'calibration_file', 'capture'):
+        for key in ('home', 'joint_limits', 'geometry', 'static_scene', 'calibration_file', 'capture'):
             if key in owner:
                 owner[key] = str(resolve(owner[key], path.parent))
-        if 'model' in owner:
-            for key in ('urdf', 'semantic'):
-                owner['model'][key] = str(resolve(owner['model'][key], path.parent))
         if 'work_locations' in owner:
             owner['work_locations'] = {key: read(resolve(value, path.parent))
                                        for key, value in owner['work_locations'].items()}
+        if 'validation_planning_scene' in owner and 'static_scene_file' in owner['validation_planning_scene']:
+            owner['validation_planning_scene']['static_scene_file'] = str(resolve(
+                owner['validation_planning_scene']['static_scene_file'], path.parent))
         owners[name] = owner
-    # The canonical asset currently includes the tool; incompatible combinations
-    # need a matching asset, not a silent model substitution.
-    compatible = owners['tool'].get('compatible_robot_model')
-    if compatible and str(resolve(compatible, resolve(references['tool'], base).parent)) != owners['robot']['model']['urdf']:
-        raise ValueError('Tool is incompatible with selected robot model')
     return owners
 
 
 def compose_owner_profiles(config, path):
     owners = selected_profiles(config.pop('profiles', DEFAULT_PROFILES), path.parent)
     motion = config.setdefault('motion', {})
-    for name, owner in owners.items():
-        # Validation intentionally excludes production-cell swept-path constraints.
-        if name == 'cell' and 'fixture' in config:
-            continue
-        for key, value in owner.get('motion', {}).items():
-            if 'fixture' in config and key.startswith('finger_'):
-                continue
-            merge_owned(motion, {key: value}, 'motion')
-    capture_key = 'capture' if 'fixture' in config else 'gripper_capture'
+    for name, sections in config.pop('motion_profile_sections').items():
+        for section in sections:
+            merge_owned(motion, owners[name][section], 'motion')
+    capture_key = config.pop('capture_section')
     if capture_key in config:
         raise ValueError(f'Duplicate configuration owner: {capture_key}')
     config[capture_key] = read(owners['tool']['capture'])
-    if 'fixture' in config:
-        tool_validation = owners['tool']['validation']
-        merge_owned(motion, {'validation_grasp_contact_links': tool_validation['contact_links']}, 'motion')
-        merge_owned(config['validation']['planning_scene'], {
-            'attachment_link': tool_validation['attachment_link'],
-            'touch_links': tool_validation['touch_links'],
-            'static_scene_file': owners['cell']['validation_static_scene'],
-        }, 'validation.planning_scene')
+    model_path = resolve(config['model_configuration'], path.parent)
+    model = read(model_path)
+    for name in ('robot', 'tool'):
+        if model[f'{name}_id'] != owners[name][f'{name}_id']:
+            raise ValueError(f'Selected model is incompatible with {name} profile')
+    for key in ('urdf', 'semantic'):
+        model[key] = str(resolve(model[key], model_path.parent))
+    config['model_configuration'] = model
     config['robot'] = owners['robot']
     config['tool'] = owners['tool']
     config['cell'] = owners['cell']
@@ -212,7 +202,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
         configuration['orchestration']['recipe_directory'] = write_recipes(recipes)
         return configuration
     if 'components' not in config:
-        if 'fixture' in config:
+        if 'profiles' in config:
             compose_owner_profiles(config, path)
         return validation_configuration(config, path, material_id, pick_offset_z_m)
     if any(value is not None for value in (pick_offset_z_m,)):
@@ -329,6 +319,10 @@ def validation_configuration(config, path, material_id=None, pick_offset_z_m=Non
     """Resolve the validation fixture from the same material owner as production."""
     if 'fixture' not in config:
         return config
+    validation = config['validation']
+    for owner in validation.pop('planning_scene_profiles'):
+        merge_owned(validation['planning_scene'],
+                    config[owner]['validation_planning_scene'], 'validation.planning_scene')
     catalog = load_material_catalog(resolve('package://arm_cell_bringup/config/materials', path.parent))
     identity = material_id or config['orchestration']['mission_target_id']
     if identity not in catalog:

@@ -84,7 +84,7 @@ def compose(context):
     if len(home_joint_positions) != len(config['motion']['arm_joint_names']):
         raise RuntimeError("HOME and arm joint counts must match")
     use_sim_time = config.get("use_sim_time", True)
-    model = config['robot']['model']
+    model = config['model_configuration']
     robot_description = xacro.process_file(
         model['urdf'], mappings={'mesh_root': model['mesh_root']},
     ).toxml()
@@ -211,7 +211,7 @@ def compose(context):
                 "planning_profile": str(profile_path),
                 "static_scene": "true",
                 "verify_nominal_state": "true",
-                "scene_file": config["cell"]["validation_static_scene"],
+                "scene_file": validation["planning_scene"]["static_scene_file"],
             }.items(),
         ),
     ]

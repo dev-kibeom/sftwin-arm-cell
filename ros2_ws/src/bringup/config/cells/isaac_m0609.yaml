@@ -30,4 +30,5 @@ motion:
 work_locations:
   cnc_loading: package://arm_cell_bringup/config/cells/isaac_m0609/cnc_loading_location.yaml
   validation: package://arm_cell_bringup/config/cells/isaac_m0609/validation_location.yaml
-validation_static_scene: package://arm_cell_motion/config/moveit/m0609_pnp_static_scene.json
+validation_planning_scene:
+  static_scene_file: package://arm_cell_motion/config/moveit/m0609_pnp_static_scene.json

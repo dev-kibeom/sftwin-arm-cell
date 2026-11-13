@@ -241,3 +241,19 @@ def test_production_operational_profile_has_no_fixed_adapter_selection():
     assert "fixed_vision" not in production
     assert "validation_grasp_contact_policy_enabled" not in production.get("motion", {})
     assert "validation_grasp_contact_links" not in production.get("motion", {})
+
+
+def test_validation_launch_uses_explicitly_composed_scene_selection(tmp_path):
+    from launch.actions import IncludeLaunchDescription
+    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile['validation']['planning_scene_profiles'] = ['tool']
+    selected_scene = str(tmp_path / 'selected_scene.json')
+    profile['validation']['planning_scene']['static_scene_file'] = selected_scene
+    selected = tmp_path / 'validation.yaml'
+    selected.write_text(yaml.safe_dump(profile))
+    context = LaunchContext()
+    context.launch_configurations['profile'] = str(selected)
+    includes = [action for action in _load_launch_module().compose(context)
+                if isinstance(action, IncludeLaunchDescription)]
+    planning = next(action for action in includes if 'scene_file' in dict(action.launch_arguments))
+    assert dict(planning.launch_arguments)['scene_file'] == selected_scene

@@ -196,7 +196,7 @@ def test_selected_profiles_reach_home_tf_and_nested_moveit(tmp_path):
     include = next(action for action in actions if isinstance(action, IncludeLaunchDescription))
     forwarded = dict(include.launch_arguments)
     assert forwarded['joint_limits_file'] == str(limits)
-    assert forwarded['robot_description_file'] == load_profile(selected)['robot']['model']['urdf']
+    assert forwarded['robot_description_file'] == load_profile(selected)['model_configuration']['urdf']
     assert Path(forwarded['kinematics_file']).is_file()
 
     planning = Path(get_package_share_directory('arm_cell_motion')) / 'launch/planning_only.launch.py'
