@@ -224,3 +224,32 @@ TEST(DepthSceneStability, CameraAndResolutionMustMatchTheReference)
   auto other_resolution = frame(4, cv::Mat(10, 20, CV_32F, cv::Scalar(1.0F)));
   EXPECT_EQ(monitor.observe(other_resolution).reason, "invalid_or_incompatible_depth_frame");
 }
+
+TEST(DepthSceneStability, RequiresConfiguredSourceTimeSpan)
+{
+  DepthSceneStabilityConfig config;
+  config.minimum_stable_duration_s = 0.5;
+  DepthSceneStabilityMonitor monitor(config);
+  const auto depth = stationary_depth();
+  for (int i = 1; i <= 16; ++i) {
+    EXPECT_NE(monitor.observe(frame(i, depth)).status, DepthSceneStatus::kStable);
+  }
+  EXPECT_EQ(monitor.observe(frame(17, depth)).status, DepthSceneStatus::kStable);
+}
+
+TEST(DepthSceneStability, MotionRestartsStableDuration)
+{
+  DepthSceneStabilityConfig config;
+  config.minimum_stable_duration_s = 0.5;
+  DepthSceneStabilityMonitor monitor(config);
+  auto depth = stationary_depth();
+  for (int i = 1; i <= 16; ++i) {
+    monitor.observe(frame(i, depth));
+  }
+  depth.setTo(0.8F);
+  EXPECT_EQ(monitor.observe(frame(17, depth)).status, DepthSceneStatus::kUnstable);
+  for (int i = 18; i <= 32; ++i) {
+    EXPECT_NE(monitor.observe(frame(i, depth)).status, DepthSceneStatus::kStable);
+  }
+  EXPECT_EQ(monitor.observe(frame(33, depth)).status, DepthSceneStatus::kStable);
+}

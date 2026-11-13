@@ -9,6 +9,7 @@ camera_info_topic: /camera/color/camera_info
 tray_aligned_depth_resolution_m: 0.002
 scene_stability:
   stable_observation_count: 5
+  minimum_stable_duration_s: 0.5
 observation:
   maximum_frame_age_ms: 1000.0
 snapshot_style:

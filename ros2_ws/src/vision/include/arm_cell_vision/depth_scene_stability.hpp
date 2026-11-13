@@ -25,6 +25,7 @@ struct DepthSceneFrame
 struct DepthSceneStabilityConfig
 {
   uint32_t stable_observation_count = 5;
+  double minimum_stable_duration_s = 0.0;
   double depth_difference_tolerance_m = 0.003;
   double changed_pixel_ratio_tolerance = 0.01;
   bool detailed_diagnostics_enabled = false;
@@ -67,6 +68,7 @@ private:
   cv::Mat reference_depth_m_;
   cv::Mat previous_depth_m_;
   std::string frame_id_;
+  int64_t stable_start_stamp_ns_ = 0;
   int64_t previous_stamp_ns_ = 0;
   int64_t previous_receipt_ns_ = 0;
 };

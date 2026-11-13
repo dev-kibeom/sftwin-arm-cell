@@ -68,11 +68,11 @@ DetectTarget(target_id, algorithm)
 → HIGH·MEDIUM 단일 목록의 전체 Qualified Material Candidate Geometry 반환
 ```
 
-각 활성 DetectTarget Acquisition에서 Vision은 공유 Tray Scene Stability Gate로 연속 5개 유효 Depth Sample을 평가한 다음 Profile을 한 번 실행한다. 이 Gate는 RawPart를 Segmentation·Detection·Classification하지 않는다. Candidate Geometry 및 Valid Absence는 선택 Detector가 최종 Depth Observation 하나로 결정한다. 후보 적격성은 Temporal Tracking이 아닌 단일 Observation Geometry 판단이다. Acquisition이 없을 때 Camera Ingress는 활성화돼도 TestCube Profile Processing은 실행되지 않는다.
+각 활성 DetectTarget Acquisition에서 Vision은 공유 Tray Scene Stability Gate로 연속 5개 이상의 유효 Depth Sample과 설정된 안정 유지 시간(기본 0.5초)을 충족한 다음 Profile을 한 번 실행한다. 이 Gate는 RawPart를 Segmentation·Detection·Classification하지 않는다. Candidate Geometry 및 Valid Absence는 선택 Detector가 최종 Depth Observation 하나로 결정한다. 후보 적격성은 Temporal Tracking이 아닌 단일 Observation Geometry 판단이다. Acquisition이 없을 때 Camera Ingress는 활성화돼도 TestCube Profile Processing은 실행되지 않는다.
 
 유효 Absence에는 최종 Detector Observation의 완전한 Projected Workspace Coverage와 충분한 Valid Depth가 필요하다. 이 조건은 Detector 실행 자체를 막거나 이미 관측된 유효 Candidate를 거부하는 조건이 아니다. Unobservable·Ambiguous·Insufficient Geometry는 Absence가 아니다. Scene Stability는 원본 Camera Depth Frame을 비교하며 Detector Heightmap이나 Support-relative Projection에 의존하지 않는다.
 
-Scene Stability를 완료한 다섯 번째 Observation을 Detector Input으로 직접 사용한다. 추가 Frame을 취득하거나 Detection을 반복하지 않는다. 성공 인계는 Sensor Processing Slot을 해제하고 동일 DetectTarget Response에서 그 Observation의 정렬된 Candidate List와 Geometry를 반환한다. Vision은 Handoff 뒤 Candidate List를 보존하지 않는다. Orchestration은 List를 변경 없이 전달하고 Motion은 유한한 PICK Search 안에서 소비한다. Failed·Absent·Timed-out·Internally Cancelled Result는 Terminal Outcome에서 폐기한다.
+Scene Stability의 관측 횟수·유지 시간 조건을 완료한 최종 Observation을 Detector Input으로 직접 사용한다. 추가 Frame을 취득하거나 Detection을 반복하지 않는다. 성공 인계는 Sensor Processing Slot을 해제하고 동일 DetectTarget Response에서 그 Observation의 정렬된 Candidate List와 Geometry를 반환한다. Vision은 Handoff 뒤 Candidate List를 보존하지 않는다. Orchestration은 List를 변경 없이 전달하고 Motion은 유한한 PICK Search 안에서 소비한다. Failed·Absent·Timed-out·Internally Cancelled Result는 Terminal Outcome에서 폐기한다.
 
 단일 Request의 Monotonic Deadline은 Input Wait·Qualification·Detection·Handoff를 모두 포함한다. Caller가 ROS Service Request를 포기해도 기존 Service Shape에는 Server Cancellation 신호가 없으므로 Server의 Result는 같은 Deadline으로 제한되고 Terminal Completion에서 폐기된다. 이 제약이 별도 Lifecycle Owner를 추가하지 않는다. Qualified Candidate Geometry와 공통 Wire 의미는 ICD를 따른다.
 
@@ -292,3 +292,17 @@ Vision은 객체 해석의 HIGH/MEDIUM/LOW Confidence와 SELECTED/ALTERNATIVE/UN
 ### VR-VIS-RAWPART-21 — 단일 목록의 후보 전체 반환
 
 Vision은 한 Acquisition의 모든 가설을 내부 평가하고 SELECTED인 적격 HIGH와 MEDIUM 전체를 단일 `material_candidates` Stable Enumeration 목록으로 반환해야 한다(SHALL). 미선택 대안·미해결·거부 상태는 Confidence와 분리하여 진단에 남기고 반환하지 않는다. LOW·REJECTED와 미해결 관측은 일반 PICK 목록에서 제외하고 진단·Snapshot에 보존해야 한다(SHALL). 단일 목록이 비었을 때 유효한 최종 관측의 Geometry 미해결은 기존 Geometry Failure, 일시적인 관측 Evidence 부족은 Temporary Invalid 결과로 구분하며, 유효 부재가 기존 Coverage·Support 조건으로 확인된 경우에만 `OBJECT_NOT_FOUND`를 반환한다(SHALL). 단일 목록 안에서 단일 후보 선택이나 PICK 작업 우선순위를 부여해서는 안 된다(SHALL NOT). Motion Action Payload에는 confidence field를 추가하지 않는다(SHALL NOT). Orchestration은 전체 후보를 변경 없이 전달하고 PICK 실행 우선순위는 Task Execution이 소유한다. Confidence는 PICK 우선순위 근거가 아니다.
+
+### Tray stability observation scope and duration
+
+Scene Stability compares original camera Depth pixels only inside the fixed image
+footprint of the configured Tray workspace on the calibrated support plane (Tray Z=0).
+The footprint is independent of current measured object depth. Changed-pixel ratios
+use comparable pixels inside that footprint; pixels outside it do not contribute.
+Both the baseline and previous-frame comparisons must meet the configured tolerance.
+At least `scene_stability.stable_observation_count` observations and
+`scene_stability.minimum_stable_duration_s` (deployment default 0.5 seconds) of
+Depth source time must qualify before the latest observation is sent to the detector.
+Motion or invalid input resets the consecutive stable interval. The request's existing
+steady deadline still bounds the entire acquisition; elapsed wall time alone does not
+satisfy the stable duration.
