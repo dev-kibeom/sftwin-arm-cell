@@ -139,6 +139,15 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 
 ### PySide6 ARM Cell Launcher (호스트)
 
+ROS 시작 스크립트는 같은 checkout에서 실행한 이전 `ros2 launch arm_cell_bringup
+arm_cell.launch.py`와 자식 프로세스를 확인하고 SIGINT → SIGTERM → SIGKILL 순서로
+종료한 뒤 새 bringup을 시작합니다. PID 시작 시각과 pidfd로 종료 대상을 확인합니다.
+다른 checkout이나 부모가 사라진 노드는 자동 종료하지 않고 PID를 표시하며 시작을
+차단합니다. 새 시작 경로의 잠금을 보유한 bringup은 먼저 기존 launcher에서 종료해야
+합니다. 이 검사는 Isaac Timeline을 초기화하지 않으므로 Stop → Before Playing →
+Play → After Playing → 새 ROS bringup 순서는 계속 지켜야 합니다.
+
+
 Robot·Tool·Cell·Backend 선택과 호스트 프로세스 시작·종료를 GUI에서 관리합니다.
 ROS 2 Humble과 Isaac Sim 5.1을 설치하고, 아래 [호스트 빌드 절차](#방법-1-호스트에서-ros-2-빌드-및-실행)로
 `ros2_ws/install/setup.bash`를 먼저 준비합니다. 저장소 루트에서 Python 3.10 이상으로 설치합니다.
