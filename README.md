@@ -145,11 +145,15 @@ ROS 2 Humble과 Isaac Sim 5.1을 설치하고, 아래 [호스트 빌드 절차](
 Ubuntu 22.04 X11 기준 예시입니다.
 
 ```bash
-sudo apt-get install python3-venv libegl1 libxcb-cursor0
+sudo apt-get install python3-venv libegl1 libxcb-cursor0 xterm
 python3 -m venv ~/.venvs/arm-cell-launcher
 ~/.venvs/arm-cell-launcher/bin/python -m pip install -r infra/launcher/requirements.txt
 ~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
 ```
+
+기존 설치도 위 requirements 설치 명령을 다시 실행해 의존성 제한을 적용합니다.
+PySide6 6.12.0은 Python 3.10/3.11에서 GUI 갱신 중 비정상 종료를 일으키는
+[참조 수 결함](https://qt-project.atlassian.net/browse/PYSIDE-3486) 때문에 제외합니다.
 
 Isaac 설치 경로가 기본값 `~/isaac_sim`과 다르면 실행 전에 `ISAAC_SIM_ROOT`를 지정합니다.
 필요한 `ROS_DOMAIN_ID`도 GUI 시작 시 환경변수로 지정합니다.
@@ -163,7 +167,10 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 \
    `isaac_m0609` Cell만 지원합니다. 기존 YAML에서 목록을 읽고, production 배포 Profile에
    등록되지 않았거나 실제 Isaac 지원 범위 밖인 조합은 실행을 차단합니다.
 2. `Isaac 시작`을 누르고 기존 씬·Timeline·After Playing 초기화가 끝났는지 확인합니다.
-3. `ROS 2 시작`을 누릅니다. GUI의 실행 표시는 프로세스 상태이며 시스템 readiness나
+3. 필요하면 `ROS 2 디버그 모드`를 선택하고 `ROS 2 시작`을 누릅니다. 기본값은 `info`,
+   디버그 모드는 기존 Bringup의 `log_level:=debug`입니다. 별도 diagnostics override 없이
+   기존 debug 기본 진단 선택을 따릅니다. 실행 중 모드 변경은 종료 후 재시작으로 적용합니다.
+   GUI의 실행 표시는 프로세스 상태이며 시스템 readiness나
    PnP 성공을 뜻하지 않습니다. 기존 Endpoint·Fresh Readiness 확인 절차를 따릅니다.
 4. `모두 종료` 또는 창 닫기로 실행한 프로세스를 정리합니다. SIGINT 후 15초 동안
    기다리고, 필요하면 SIGTERM 후 5초를 더 기다린 뒤 SIGKILL로 정리합니다.
@@ -173,10 +180,14 @@ Bringup의 기존 조립·검증·export로 `runtime_configuration.json`을 OS �
 관련 프로세스 그룹이 모두 종료될 때까지 Snapshot을 유지하고, 정상 종료·실행 실패·
 창 닫기 시 임시 디렉터리와 함께 삭제합니다. 원본 Profile은 변경하지 않습니다.
 
-stdout/stderr는 GUI에 실시간 표시하고 별도 영구 로그를 만들지 않습니다.
+Isaac과 ROS 2 실행마다 별도 `xterm` 창이 열리고 stdout/stderr는 해당 창에 표시됩니다.
+GUI에는 설정·실행 상태·오류만 표시하며 출력 영역이나 별도 영구 로그를 만들지 않습니다.
+각 터미널의 `Ctrl+C` 또는 창 닫기도 실행 종료로 처리하며, 나머지 환경을 정리합니다.
+정상 종료 중에는 runtime이 끝날 때까지 터미널을 유지한 뒤 닫습니다.
 `.run_records`에는 GUI의 임시 설정이나 중복 로그를 저장하지 않습니다.
 Isaac·ROS가 기존 정책으로 생산하는 진단·디버깅 기록, Kit 로그와 세션 관리는 그대로 유지합니다.
-GUI 출력은 최근 내용만 화면에 유지하므로 영속 진단은 기존 기록을 사용합니다.
+터미널 출력은 창이 닫히면 사라지므로 영속 진단은 기존 기록을 사용합니다.
+터미널 시작에는 X11 또는 XWayland 디스플레이와 `xterm`이 필요합니다.
 같은 사용자로 실행한 GUI 사이에는 중복 실행 잠금을 사용합니다. 외부 CLI·Docker로
 별도 실행한 프로세스는 관리하지 않으므로 동시에 실행하지 않습니다.
 

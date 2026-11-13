@@ -25,13 +25,30 @@ def window(app, tmp_path, monkeypatch):
     widget.timer.stop()
     widget.lock = QLockFile(str(tmp_path / 'launcher.lock'))
     monkeypatch.setattr(launcher.tempfile, 'tempdir', str(tmp_path))
+    def fake_terminal(name, slave, master):
+        code = """import os,sys,signal
+fd = int(sys.argv[1])
+signal.signal(signal.SIGUSR1, lambda *_: os.write(fd, bytes([3])))
+os.write(fd, b'fake-window-id\\n')
+with open(sys.argv[2], 'wb', buffering=0) as stream:
+    while True:
+        try:
+            data = os.read(fd, 65536)
+        except OSError:
+            break
+        if not data:
+            break
+        stream.write(data)
+"""
+        return [sys.executable, '-c', code, str(master), str(tmp_path / f'{name}.txt')]
+    widget.test_output_root = tmp_path
+    monkeypatch.setattr(launcher, 'terminal_command', fake_terminal)
     yield widget
-    if widget.processes:
-        widget.signal_groups(signal.SIGKILL)
-        for process in widget.processes.values():
-            process.wait(timeout=5)
-    for stream in widget.streams.values():
-        stream.close()
+    owned = [*widget.processes.values(), *widget.terminals.values()]
+    launcher.signal_processes(owned, signal.SIGKILL)
+    for process in owned:
+        process.wait(timeout=5)
+    widget.terminals.clear()
     if widget.run is not None:
         widget.run.cleanup()
     widget.processes.clear()
@@ -60,6 +77,11 @@ def fake_spawn(widget, monkeypatch, commands):
     return calls
 
 
+def terminal_text(widget, name):
+    path = widget.test_output_root / f'{name}.txt'
+    return path.read_text(errors='replace') if path.exists() else ''
+
+
 WAIT = [sys.executable, '-c', 'import time; print("started", flush=True); time.sleep(100)']
 
 
@@ -81,7 +103,7 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
     window.start_ros()
     assert [call[0] for call in calls] == ['isaac', 'ros']
     assert exports == [window.runtime]
-    assert calls[1][1][-1] == str(window.runtime)
+    assert calls[1][1][-2:] == [str(window.runtime), 'info']
     assert calls[0][2]['ARM_CELL_PROFILE'] == str(window.runtime)
     assert calls[0][2] == calls[1][2]
     # Exercise existing Isaac CLI using this snapshot and a stand-in simulator.
@@ -149,7 +171,7 @@ def test_stop_escalates_for_unresponsive_process(app, window, monkeypatch):
     command = [sys.executable, '-c', 'import signal,time; signal.signal(signal.SIGINT, signal.SIG_IGN); signal.signal(signal.SIGTERM, signal.SIG_IGN); print("ready",flush=True); time.sleep(100)']
     fake_spawn(window, monkeypatch, {'isaac': command})
     window.start_isaac()
-    until(app, window, lambda: 'ready' in window.output.toPlainText())
+    until(app, window, lambda: 'ready' in terminal_text(window, 'isaac'))
     window.begin_stop()
     window.deadline = 0
     window.poll()
@@ -161,8 +183,13 @@ def test_stop_escalates_for_unresponsive_process(app, window, monkeypatch):
 
 
 def test_exited_leader_does_not_orphan_child(app, window, monkeypatch):
+    child_code = ('import signal,time; '
+                  'signal.signal(signal.SIGINT, signal.SIG_IGN); '
+                  'signal.signal(signal.SIGHUP, signal.SIG_IGN); '
+                  'print("CHILD_READY",flush=True); time.sleep(100)')
     code = ('import subprocess,sys; '
-            'child=subprocess.Popen([sys.executable,"-c","import signal,time; signal.signal(signal.SIGINT, signal.SIG_IGN); time.sleep(100)"]); '
+            f'child=subprocess.Popen([sys.executable,"-c",{child_code!r}],stdout=subprocess.PIPE); '
+            'assert child.stdout.readline().strip() == b"CHILD_READY"; '
             'print(child.pid,flush=True)')
     fake_spawn(window, monkeypatch, {'isaac': [sys.executable, '-c', code]})
     window.start_isaac()
@@ -175,15 +202,16 @@ def test_exited_leader_does_not_orphan_child(app, window, monkeypatch):
     assert not runtime.parent.exists()
 
 
-def test_output_streams_live_without_disk_logs(app, window, monkeypatch):
+def test_output_uses_terminal_without_gui_or_disk_logs(app, window, monkeypatch):
     records = launcher.ROOT / '.run_records'
     before = {p: p.stat().st_mtime_ns for p in records.rglob('*')}
     command = [sys.executable, '-u', '-c', 'import sys,time; print("stdout marker"); print("stderr marker",file=sys.stderr); time.sleep(100)']
     fake_spawn(window, monkeypatch, {'isaac': command})
     window.start_isaac()
     run = Path(window.run.name)
-    until(app, window, lambda: 'stderr marker' in window.output.toPlainText())
-    assert 'stdout marker' in window.output.toPlainText()
+    assert not hasattr(window, 'output')
+    until(app, window, lambda: 'stderr marker' in terminal_text(window, 'isaac'))
+    assert 'stdout marker' in terminal_text(window, 'isaac')
     assert [path.name for path in run.iterdir()] == ['runtime_configuration.json']
     assert {p: p.stat().st_mtime_ns for p in records.rglob('*')} == before
     window.begin_stop()
@@ -206,10 +234,81 @@ def test_export_failure_removes_partial_snapshot(app, window, monkeypatch):
     assert 'export failed' in window.status.text()
 
 
-def test_pipe_backpressure_does_not_deadlock(app, window, monkeypatch):
+def test_terminal_backpressure_does_not_deadlock(app, window, monkeypatch):
     command = [sys.executable, '-u', '-c', 'import time; print("x" * 200000); print("OUTPUT COMPLETE"); time.sleep(100)']
     fake_spawn(window, monkeypatch, {'isaac': command})
     window.start_isaac()
-    until(app, window, lambda: 'OUTPUT COMPLETE' in window.output.toPlainText())
+    until(app, window, lambda: 'OUTPUT COMPLETE' in terminal_text(window, 'isaac'))
     window.begin_stop()
     until(app, window, lambda: not window.processes)
+
+
+def test_repeated_status_refresh_keeps_gui_process_alive():
+    # A binding refcount regression can abort Python rather than raise an
+    # exception, so keep this sustained refresh check in a separate process.
+    import subprocess
+    code = '''
+import sys
+sys.path.insert(0, sys.argv[1])
+from PySide6.QtWidgets import QApplication
+from launcher import Launcher
+app = QApplication([])
+window = Launcher()
+window.timer.stop()
+for _ in range(2000):
+    window.poll()
+    app.processEvents()
+window.close()
+print('REFRESH_SURVIVED', flush=True)
+'''
+    result = subprocess.run([sys.executable, '-c', code, str(Path(launcher.__file__).parent)],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert 'REFRESH_SURVIVED' in result.stdout
+
+
+@pytest.mark.parametrize('debug,expected', [(False, 'info'), (True, 'debug')])
+def test_ros_debug_option_uses_existing_bringup_mode(app, window, monkeypatch, debug, expected):
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    assert window.debug.isEnabled()
+    window.debug.setChecked(debug)
+    window.start_ros()
+    assert calls[-1][1][-1] == expected
+    assert not window.debug.isEnabled()
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)
+
+
+def test_terminal_close_stops_consumers_before_snapshot_cleanup(app, window, monkeypatch):
+    fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    window.start_ros()
+    runtime = window.runtime
+    processes = list(window.processes.values())
+    window.terminals['isaac'].terminate()
+    until(app, window, lambda: not window.stopping and not window.processes)
+    assert all(p.poll() is not None for p in processes)
+    assert not window.terminals
+    assert not runtime.parent.exists()
+    assert 'isaac' in window.status.text() and '종료' in window.status.text()
+
+
+def test_terminal_start_failure_cleans_snapshot(app, window, monkeypatch):
+    monkeypatch.setattr(launcher, 'terminal_command', lambda *_: (_ for _ in ()).throw(FileNotFoundError('xterm missing')))
+    window.start_isaac()
+    until(app, window, lambda: not window.stopping)
+    assert not window.processes and not window.terminals
+    assert window.run is None
+    assert 'xterm missing' in window.status.text()
+
+
+def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
+    command = [sys.executable, '-u', '-c', 'import os,time; print("TTY_READY", os.isatty(0), os.tcgetpgrp(0) == os.getpgrp(), flush=True); time.sleep(100)']
+    fake_spawn(window, monkeypatch, {'isaac': command})
+    window.start_isaac()
+    until(app, window, lambda: 'TTY_READY True True' in terminal_text(window, 'isaac'))
+    runtime = window.processes['isaac']
+    window.terminals['isaac'].send_signal(signal.SIGUSR1)
+    until(app, window, lambda: not window.stopping and not window.processes)
+    assert runtime.returncode == -signal.SIGINT
