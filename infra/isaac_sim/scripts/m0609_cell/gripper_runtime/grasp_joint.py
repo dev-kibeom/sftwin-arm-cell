@@ -203,6 +203,10 @@ class UsdFixedJointOwner:
         self._target_path = None
         return True
 
+    @property
+    def target_path(self):
+        return self._target_path
+
     def target_exists(self):
         return (
             self._target_path is not None

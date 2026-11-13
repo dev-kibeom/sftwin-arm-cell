@@ -870,6 +870,10 @@ class FakeJointOwner:
         self.created.append((self.owned_path, target_path))
         return self.owned_path
 
+    @property
+    def target_path(self):
+        return self.created[-1][1] if self.owned_path else None
+
     def remove_owned(self):
         if self.owned_path is not None:
             self.removed.append(self.owned_path)
@@ -2811,3 +2815,108 @@ def test_holding_capture_does_not_apply_closing_width_threshold():
     instance.update(0.01)
     assert instance.gripper.stop_calls == 0
     assert len(joints.created) == 1
+
+
+@pytest.mark.parametrize(
+    "target", ["/World/Validation/Cube", "/World/MaterialSupply/AL_PLATE"]
+)
+@pytest.mark.parametrize("release_path", ["pending", "direct"])
+def test_open_routes_detached_material_once_to_common_handler(target, release_path):
+    joints = FakeJointOwner()
+    instance = manager(FakeCandidateSource([valid_candidate(target)]), joints)
+    instance.update(0.01)
+    calls = []
+    instance.released_material_handler = SimpleNamespace(
+        on_detached=lambda path, generation: calls.append((path, generation)),
+        on_physics_step=lambda dt: None,
+        reset=lambda: None,
+    )
+    instance.gripper.finish_open()
+    if release_path == "pending":
+        instance.note_open_release_command_applied(17, 85.0)
+        instance.update(0.01)
+    else:
+        instance.release(open_gripper=False)
+    instance.update(0.01)
+    instance.note_open_release_command_applied(18, 85.0)
+    instance.update(0.01)
+
+    assert calls == [(target, 17 if release_path == "pending" else None)]
+    assert instance.holding_observation().state is HoldingState.RELEASED
+
+
+@pytest.mark.parametrize(
+    "operation", ["incomplete_open", "failed_detach", "stop", "shutdown"]
+)
+def test_common_release_handler_skips_unconfirmed_release_and_lifecycle_cleanup(
+    operation,
+):
+    joints = FakeJointOwner()
+    instance = manager(FakeCandidateSource([valid_candidate()]), joints)
+    instance.update(0.01)
+    calls = []
+    instance.released_material_handler = SimpleNamespace(
+        on_detached=lambda *args: calls.append(args),
+        on_physics_step=lambda dt: None,
+        reset=lambda: None,
+    )
+    if operation == "stop":
+        instance.reset_for_simulation_stop()
+    elif operation == "shutdown":
+        instance.shutdown()
+    else:
+        instance.note_open_release_command_applied(17, 85.0)
+        if operation == "failed_detach":
+            instance.gripper.finish_open()
+            joints.remove_result = False
+        instance.update(0.01)
+    assert calls == []
+
+
+@pytest.mark.parametrize("fail_gravity", [False, True])
+def test_open_release_physics_and_diagnostics_share_target_without_changing_release(
+    monkeypatch, fail_gravity
+):
+    joints = FakeJointOwner()
+    instance = manager(FakeCandidateSource([valid_candidate("/World/Plate")]), joints)
+    instance.update(0.01)
+    events, records = [], []
+
+    def enable(stage, path):
+        assert not joints.has_owned_joint()
+        events.append(("gravity", path))
+        if fail_gravity:
+            raise RuntimeError("gravity activation unavailable")
+
+    monkeypatch.setattr(grasp_attachment, "enable_material_gravity", enable)
+    instance.set_diagnostic_observers(writer=SimpleNamespace(submit=records.append))
+    instance.gripper.finish_open()
+    instance.note_open_release_command_applied(17, 85.0)
+    instance.update(0.01)
+    assert events == [("gravity", "/World/Plate")]
+    assert instance.holding_observation().state is HoldingState.RELEASED
+    assert records == []
+    for _ in range(4):
+        instance.update(0.01)
+    assert len(records) == 1
+    assert records[0]["prim_path"] == "/World/Plate"
+    assert records[0]["gravity_activation"]["status"] == (
+        "failed" if fail_gravity else "enabled"
+    )
+    assert len(records[0]["samples"]) == 4
+    assert instance.holding_observation().state is HoldingState.RELEASED
+
+
+def test_post_release_keeps_stage_pose_when_optional_physx_observation_fails():
+    source = FakeCandidateSource([valid_candidate()])
+    source._world_transform = lambda path: path
+    source._pose_dict = lambda path: {"position_m": (0.1, 0.2, 0.3)}
+    instance = manager(source, FakeJointOwner())
+
+    def unavailable(*args):
+        raise RuntimeError("PhysX view unavailable")
+
+    instance.physx_observer = SimpleNamespace(observe_pair=unavailable)
+    observation = instance._observe_released_material("/World/Cube")
+    assert observation["stage"]["pose"]["position_m"] == (0.1, 0.2, 0.3)
+    assert observation["physx"]["status"] == "unavailable"

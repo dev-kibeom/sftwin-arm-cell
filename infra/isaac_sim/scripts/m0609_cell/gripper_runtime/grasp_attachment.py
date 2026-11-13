@@ -25,6 +25,10 @@ from gripper_runtime.grasp_stage import (
     StageCaptureQuery,
 )
 from gripper_runtime.holding_scenario import observe_with_scenario
+from gripper_runtime.released_material import (
+    ReleasedMaterialHandler,
+    enable_material_gravity,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -154,6 +158,45 @@ class GraspManager:
         self.capture_diagnostic_record = None
         self.capture_diagnostic_target_path = None
         self._close_command_generation = None
+        self.released_material_handler = ReleasedMaterialHandler(
+            lambda path: enable_material_gravity(self.stage, path),
+            self._observe_released_material,
+            self._submit_release_diagnostic,
+        )
+
+    def _observe_released_material(self, target_path):
+        observation = {}
+        try:
+            source = self.candidate_source
+            observation["stage"] = {
+                "source": "usd_stage_world",
+                "pose": source._pose_dict(source._world_transform(target_path)),
+            }
+        except Exception as error:
+            observation["stage"] = {
+                "status": "unavailable",
+                "reason": f"{type(error).__name__}: {error}",
+            }
+        if self.physx_observer is not None:
+            try:
+                observation["physx"] = self.physx_observer.observe_pair(
+                    self.tcp_path, target_path
+                )["rawpart"]
+            except Exception as error:
+                observation["physx"] = {
+                    "status": "unavailable",
+                    "reason": f"{type(error).__name__}: {error}",
+                }
+        else:
+            observation["physx"] = {
+                "status": "unavailable",
+                "reason": "detailed PhysX observer is not enabled",
+            }
+        return observation
+
+    def _submit_release_diagnostic(self, record):
+        if self.capture_diagnostic_writer is not None:
+            self.capture_diagnostic_writer.submit(record)
 
     def set_diagnostic_observers(self, writer=None, physx_observer=None):
         self.capture_diagnostic_writer = writer
@@ -718,6 +761,7 @@ class GraspManager:
         return result
 
     def shutdown(self):
+        self.released_material_handler.reset()
         self._capture_transaction_armed = False
         cleanup_ok = True
         if self.joint_owner.has_owned_joint():
@@ -736,6 +780,7 @@ class GraspManager:
 
     def reset_for_simulation_stop(self):
         """Drop only Isaac-owned grasp state before the Stage clears material."""
+        self.released_material_handler.reset()
         self._capture_transaction_armed = False
         self._close_command_generation = None
         self._pending_release_command = None
@@ -1280,6 +1325,7 @@ class GraspManager:
             if owned:
                 if pending is None or not self.joint_owner.owned_joint_valid():
                     return False
+                target_path = self.joint_owner.target_path
                 attempted = True
                 result = "joint_remove_failed"
                 if not self.joint_owner.remove_owned():
@@ -1290,6 +1336,8 @@ class GraspManager:
                     if remaining is True:
                         result = "joint_remove_failed"
                     return False
+                generation = pending[0]
+                self.released_material_handler.on_detached(target_path, generation)
             result = "released"
             return True
         except Exception as error:
@@ -1326,7 +1374,7 @@ class GraspManager:
                     self._mark_unknown("release_not_confirmed_" + result)
 
     def update(self, dt):
-        del dt
+        self.released_material_handler.on_physics_step(dt)
         if not self.ready:
             self._capture_transaction_armed = False
             self._mark_unknown("runtime_unavailable")
