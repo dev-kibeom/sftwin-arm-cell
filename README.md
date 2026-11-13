@@ -137,6 +137,44 @@ source /opt/ros/humble/setup.bash
 ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
+### PySide6 ARM Cell Launcher (호스트)
+
+기존 CLI 및 Docker 실행과 별도로, Robot·Tool·Cell·Backend를 선택하고 호스트
+프로세스를 관리하는 GUI를 사용할 수 있습니다. 먼저 아래 호스트 빌드 절차로
+`ros2_ws/install/setup.bash`를 준비합니다. Python 3.10 이상 환경에 의존성을 설치한 뒤 실행합니다.
+Linux에서는 Qt 시스템 의존성인 `libegl1`이, X11에서는 `libxcb-cursor0`도 설치되어 있어야 합니다.
+
+```bash
+python3 -m pip install -r infra/launcher/requirements.txt
+python3 infra/launcher/launcher.py
+```
+
+`ISAAC_SIM_ROOT`와 `ROS_DOMAIN_ID` 등 기존 환경변수는 GUI 시작 전에 지정합니다.
+`Isaac 시작` → 기존 Isaac 씬·Timeline·After Playing 초기화 확인 → `ROS 2 시작`
+순서로 사용합니다. GUI는 Isaac 시작 생명주기나 readiness 판정을 대신하지 않으며,
+표시되는 실행 상태는 프로세스 상태입니다. `모두 종료` 또는 창 닫기는 실행한
+프로세스 그룹에 SIGINT를 보내고, 응답하지 않으면 15초 후 SIGTERM,
+다시 5초 후 SIGKILL로 정리합니다. 외부에서 따로 시작한 CLI·Docker 프로세스는
+관리하지 않으므로 함께 실행하지 않습니다. 같은 사용자로 실행한 Launcher 사이에는
+호스트 잠금을 사용해 중복 실행을 막습니다.
+
+목록은 기존 Robot·Tool·Cell YAML과 production 배포 Profile의 simulation 참조에서
+조회합니다. 실행은 production Profile에 선언된 조합 중 현재 Isaac 스크립트가 지원하는
+M0609 + Robotiq 2F85 + `isaac_m0609` Cell로 한정됩니다. 다른 Profile을 조회해도
+지원되지 않거나 배포 Profile이 모호한 조합은 실행할 수 없습니다. 원본 YAML은 수정하지
+않고 Bringup의 기존 조립·검증·export를 사용합니다. 실행마다 `.run_records/launcher/`
+아래에 설정 snapshot과 프로세스별 로그를 보존하며, Isaac과 ROS에 같은 snapshot의
+설정을 전달합니다. 이 경로는 Simulation Session 진단 디렉터리와 별개입니다.
+
+Profile 목록과 조합 판정은 GUI 위젯에 고정하지 않습니다. 새 실행 조합은 해당
+runtime의 실제 지원과 production 배포 Profile이 필요하며, 현재 Isaac 어댑터의
+지원 범위를 넓힐 때는 Launcher의 지원 판정도 함께 갱신합니다. UI 수정은 필요하지 않습니다.
+GUI 테스트는 다음과 같이 Isaac 없이 실행할 수 있습니다.
+
+```bash
+QT_QPA_PLATFORM=offscreen python3 -m pytest -q infra/launcher/tests
+```
+
 ### 설정 export와 Script Editor 실행
 
 기본 launcher는 선택한 운영 프로파일을 `.run_records/runtime_configuration.json`으로 export한 뒤 Isaac을 시작합니다. `ARM_CELL_PROFILE`로 입력 프로파일을, `ARM_CELL_RUNTIME_CONFIG`로 출력 파일을 선택할 수 있습니다.
