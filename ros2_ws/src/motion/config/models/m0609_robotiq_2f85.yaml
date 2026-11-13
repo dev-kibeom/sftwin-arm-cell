@@ -10,3 +10,13 @@ planning_group: arm
 isaac:
   articulation_root: root_joint
   articulation_base: base_link
+  # Preserve the standalone importer wrapper and its canonical composition.
+  urdf: project://infra/isaac_sim/assets/urdf/assemblies/m0609_robotiq_2f85.xacro
+  # Imported Tool joints whose revolute topology and absent PhysX mimic are checked.
+  revolute_joints:
+  - gripper_robotiq_85_left_knuckle_joint
+  - gripper_robotiq_85_right_knuckle_joint
+  - gripper_robotiq_85_left_inner_knuckle_joint
+  - gripper_robotiq_85_right_inner_knuckle_joint
+  - gripper_robotiq_85_left_finger_tip_joint
+  - gripper_robotiq_85_right_finger_tip_joint

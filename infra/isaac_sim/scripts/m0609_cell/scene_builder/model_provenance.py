@@ -39,10 +39,12 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def xacro_output_hash(xacro_path: Path, executable: str = "xacro") -> str:
+def xacro_output_hash(
+    xacro_path: Path, executable: str = "xacro", *, xacro_arguments=(),
+) -> str:
     try:
         expanded = subprocess.check_output(
-            [executable, str(xacro_path)], env=xacro_subprocess_environment()
+            [executable, str(xacro_path), *xacro_arguments], env=xacro_subprocess_environment()
         )
     except FileNotFoundError as error:
         raise RuntimeError(
@@ -58,10 +60,13 @@ def build_manifest(
     generated_urdf: Path,
     usd: Path,
     executable: str = "xacro",
+    *, xacro_arguments=(),
 ) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
-        "canonical_xacro_output_sha256": xacro_output_hash(canonical_xacro, executable),
+        "canonical_xacro_output_sha256": xacro_output_hash(
+            canonical_xacro, executable, xacro_arguments=xacro_arguments,
+        ),
         "generated_urdf_sha256": sha256_file(generated_urdf),
         "usd_sha256": sha256_file(usd),
     }
@@ -86,11 +91,14 @@ def verify_manifest(
     generated_urdf: Path,
     usd: Path,
     executable: str = "xacro",
+    *, xacro_arguments=(),
 ) -> None:
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("robot artifact provenance schema is unsupported")
     expected = {
-        "canonical Xacro": xacro_output_hash(canonical_xacro, executable),
+        "canonical Xacro": xacro_output_hash(
+            canonical_xacro, executable, xacro_arguments=xacro_arguments,
+        ),
         "generated URDF": sha256_file(generated_urdf),
         "USD": sha256_file(usd),
     }
@@ -114,6 +122,10 @@ def verify_current_artifact(
     usd: Path,
     provenance: Path,
     executable: str = "xacro",
+    *, xacro_arguments=(),
 ) -> None:
     manifest = load_manifest(provenance)
-    verify_manifest(manifest, xacro_path, generated_urdf, usd, executable)
+    verify_manifest(
+        manifest, xacro_path, generated_urdf, usd, executable,
+        xacro_arguments=xacro_arguments,
+    )

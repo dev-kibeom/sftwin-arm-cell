@@ -8,7 +8,7 @@ Pipeline:
       -> USD validation
 
 Target:
-    Doosan M0609 + Robotiq 2F-85
+    Assembly selected by Runtime Configuration
     Isaac Sim 5.1
 
 Design note:
@@ -21,6 +21,9 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+
+from runtime_configuration import load_runtime_configuration, selected_configuration
+from scene_builder.model_build_configuration import ModelBuildConfiguration
 
 import omni.kit.commands
 
@@ -54,24 +57,14 @@ def resolve_project_root():
 
 
 PROJECT_ROOT = resolve_project_root()
-ASSET_ROOT = PROJECT_ROOT / "infra" / "isaac_sim" / "assets"
-
-XACRO_PATH = ASSET_ROOT / "urdf" / "assemblies" / "m0609_robotiq_2f85.xacro"
-GENERATED_URDF = ASSET_ROOT / "urdf" / "generated" / "m0609_robotiq_2f85.urdf"
-OUTPUT_USD = ASSET_ROOT / "usd" / "m0609_robotiq_2f85_generated.usd"
-PROVENANCE = OUTPUT_USD.with_suffix(".provenance.json")
-GENERATED_BASE_LAYER = (
-    OUTPUT_USD.parent / "configuration" / f"{OUTPUT_USD.stem}_base.usd"
+MODEL = ModelBuildConfiguration.from_runtime(
+    load_runtime_configuration(selected_configuration(PROJECT_ROOT)), PROJECT_ROOT
 )
-
-ROBOTIQ_JOINTS = [
-    "gripper_robotiq_85_left_knuckle_joint",
-    "gripper_robotiq_85_right_knuckle_joint",
-    "gripper_robotiq_85_left_inner_knuckle_joint",
-    "gripper_robotiq_85_right_inner_knuckle_joint",
-    "gripper_robotiq_85_left_finger_tip_joint",
-    "gripper_robotiq_85_right_finger_tip_joint",
-]
+XACRO_PATH = MODEL.source
+GENERATED_URDF = MODEL.generated_urdf
+OUTPUT_USD = MODEL.usd
+PROVENANCE = MODEL.provenance
+GENERATED_BASE_LAYER = MODEL.base_layer
 
 
 # ---------------------------------------------------------
@@ -160,6 +153,7 @@ def build_urdf_from_xacro():
     command = [
         xacro_exe,
         str(XACRO_PATH),
+        *MODEL.xacro_arguments,
         "-o",
         str(GENERATED_URDF),
     ]
@@ -215,7 +209,7 @@ def build_usd_from_urdf():
     # Preserve semantic/tool frames such as tool0, tool_mount and sf_grasp_tcp.
     import_config.merge_fixed_joints = False
 
-    # M0609 is mounted on a fixed pedestal.
+    # Preserve the fixed-base import used by the current Isaac backend.
     import_config.fix_base = True
     import_config.make_default_prim = True
 
@@ -234,7 +228,7 @@ def build_usd_from_urdf():
 
     print(f">>> Input URDF:\n    {GENERATED_URDF}")
     print(f">>> Output USD:\n    {OUTPUT_USD}")
-    print(">>> Robotiq PhysX mimic import: DISABLED")
+    print(">>> PhysX mimic import: DISABLED")
 
     status, result = omni.kit.commands.execute(
         "URDFParseAndImportFile",
@@ -252,7 +246,10 @@ def build_usd_from_urdf():
         print(">>> [SUCCESS] Removed dangling visual references: " + ", ".join(cleaned))
     write_manifest(
         PROVENANCE,
-        build_manifest(XACRO_PATH, GENERATED_URDF, OUTPUT_USD, find_xacro()),
+        build_manifest(
+            XACRO_PATH, GENERATED_URDF, OUTPUT_USD, find_xacro(),
+            xacro_arguments=MODEL.xacro_arguments,
+        ),
     )
     print(f">>> [SUCCESS] Robot USD generated:\n    {OUTPUT_USD}")
     print(f">>> [SUCCESS] Provenance  : {PROVENANCE}")
@@ -266,14 +263,14 @@ def build_usd_from_urdf():
 def validate_isaac_gripper_import():
     """
     Verify the assumptions required by the simplified SF-Twin gripper model:
-      1) all six Robotiq revolute joints still exist;
+      1) all selected Assembly revolute joints still exist;
       2) no PhysX mimic attributes were authored on those joints;
       3) each joint remains a revolute joint for the next controller step.
 
     This function intentionally does not alter the generated USD.
     """
     print("\n" + "=" * 70)
-    print(">>> [3/3] Validate simplified Robotiq import")
+    print(">>> [3/3] Validate Assembly joint import")
 
     check_file(OUTPUT_USD, "Generated USD")
     stage = Usd.Stage.Open(str(OUTPUT_USD))
@@ -283,7 +280,7 @@ def validate_isaac_gripper_import():
 
     mimic_attrs_found = []
 
-    for joint_name in ROBOTIQ_JOINTS:
+    for joint_name in MODEL.revolute_joints:
         prim = find_joint_prim(stage, joint_name)
         joint = UsdPhysics.RevoluteJoint(prim)
 
@@ -317,8 +314,8 @@ def validate_isaac_gripper_import():
         )
 
     print(
-        ">>> [SUCCESS] Simplified Robotiq import validated: "
-        "6 revolute joints present, PhysX mimic absent."
+        f">>> [SUCCESS] Assembly import validated: "
+        f"{len(MODEL.revolute_joints)} revolute joints present, PhysX mimic absent."
     )
 
 
@@ -328,7 +325,7 @@ def validate_isaac_gripper_import():
 
 try:
     print("\n" + "=" * 70)
-    print(">>> SF-Twin Robot Builder : M0609 + Robotiq 2F-85")
+    print(f">>> SF-Twin Robot Builder : {MODEL.model_id}")
 
     build_urdf_from_xacro()
     validate_urdf()
