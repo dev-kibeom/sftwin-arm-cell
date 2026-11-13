@@ -126,7 +126,7 @@ flowchart TD
 |---|---|---|---|
 | 카메라 샘플·CameraInfo | 선택된 Sensor Adapter | Frame Ingress, Calibration | 메시지 시각·단위 재작성 금지 |
 | 요청별 Acquisition·retained result | Vision | Orchestration·Task Execution | 결과 반환 뒤 후보 실행은 Task Execution이 소유하며 연속 재검출로 재판정하지 않음 |
-| 선택 Calibration 경로 | Deployment Profile | Vision | 생성된 파일은 자동 선택·적용하지 않음 |
+| 선택 Calibration 경로 | Cell Profile | Vision | 생성된 파일은 자동 선택·적용하지 않음 |
 | 측정 Calibration 산출물 | Vision Calibration | 운영자·Vision | 선택 파일과 새 출력 파일은 별도 lifecycle |
 | Detector Strategy·후보 품질·관측 Geometry | Vision의 선택 Strategy | Task Execution·Motion은 전달된 검출 결과 소비 | 관측 불확실성 보존; Vision 열거 순위는 실행 우선순위나 grasp feasibility가 아님 |
 | Mission admission·Material Candidate 우선순위·전환 | Orchestration은 Mission admission, Task Execution은 후보 우선순위·전환 | Vision은 후보 목록을 변경 없이 제공 | Safety·Motion 판단을 Vision이 대신하지 않음 |
@@ -158,7 +158,7 @@ Sensor 관측 가능성과 시뮬레이터 ground truth 독립성은 [Simulation
 
 배포 설정은 논리적 `target_id`와 Vision Detector Profile의 대응 관계 및 Profile별 매개변수를 소유한다. 지원되는 운영 Profile에서는 배포가 소유한 `vision` 설정 아래 정의하며, 공용 ROS 메시지·서비스 스키마가 아니다.
 
-매핑은 `target_id`를 키로 사용한다. Material Definition은 물리 형상과 공칭 치수를, Vision Profile은 선택한 Material을 참조하며 Algorithm 실행 설정·작업 영역/support 제약·관측 품질을, Recipe는 Detector 선택·Grasp·Approach·PLACE 정책을 소유한다. 이 책임 분리는 별도의 Material Registry 도입이나 Recipe로의 치수 소유권 이전을 뜻하지 않는다. Isaac Material Supply도 동일한 정의에서 `material_type`을 해석한다.
+매핑은 `target_id`를 키로 사용한다. 설치 Calibration 참조는 Cell, 평가에 필요한 손가락 접촉 치수는 Tool 설정에서 공급받으며 Vision이 별도 값을 소유하지 않는다. Material Definition은 물리 형상과 공칭 치수를, Vision Profile은 선택한 Material을 참조하며 Algorithm 실행 설정·작업 영역/support 제약·관측 품질을, Recipe는 Detector 선택·Grasp·Approach·PLACE 정책을 소유한다. 이 책임 분리는 별도의 Material Registry 도입이나 Recipe로의 치수 소유권 이전을 뜻하지 않는다. Isaac Material Supply도 동일한 정의에서 `material_type`을 해석한다.
 
 Vision은 Orchestration이 Mission Recipe에 따라 요청한 Detector Strategy를 실행한다. Recipe가 선택을, Vision Profile이 실행 설정을 소유한다. 허용 값·기본값·검증은 [TestCube FDS](fds-rawpart-depth-perception.md)와 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)를 따른다. 하나의 Acquisition 동안 Strategy는 고정되지만 요청 간에는 Vision 재시작 없이 Algorithm을 바꿀 수 있다. 검증 전용 대체는 아래 5.1절의 제한을 따른다. 새로운 Registry Service나 동적 Plugin Loader는 도입하지 않는다.
 

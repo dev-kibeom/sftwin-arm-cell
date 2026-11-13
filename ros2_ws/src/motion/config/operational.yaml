@@ -7,9 +7,6 @@ general_ik_timeout_s: 1.0
 pick_max_withdrawal_tilt_deg: 70.0
 pick_grasp_pose_order_policy: distance_then_tilt
 grasp_occupancy_mode: FINGER_CLEARANCE
-finger_clearance_radius_m: 0.01
-finger_contact_span_m: 0.02
-finger_clearance_depth_m: 0.025
 pick_position_range_half_length_fraction: 0.5
 pick_max_downward_position_offset_m: 0.005
 pick_position_offset_samples_per_tangent_axis: 3
@@ -39,47 +36,14 @@ disturbance_speed_fraction: 0.2
 planning_max_acceleration_rad_s2: 5.0
 place_candidate_planning_time_s: 2.0
 qualification_total_planning_time_s: 60.0
-place_tray_return_joint_positions:
-- -1.5707963267948966
-- 0.17453292519943295
-- 1.7453292519943295
-- 0.0
-- 0.0
-- 1.5707963267948966
 holding_confirmation_timeout_ms: 2000
 motion_progress_stall_timeout_s: 60.0
 cartesian_tcp_orientation_tolerance_rad: 0.08726646259971647
 trajectory_goal_tolerance_rad: 0.03
-arm_joint_names:
-- joint_1
-- joint_2
-- joint_3
-- joint_4
-- joint_5
-- joint_6
-retract_joint_positions:
-- 0.0
-- -0.5
-- 1.0
-- -1.3
-- -1.0
-- 0.0
 observation_to_object_quaternion:
 - 0.0
 - 0.0
 - 0.0
 - 1.0
-tool_axis_quaternion_xyzw:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
-insertion_axis_tcp:
-- 0.0
-- 0.0
-- 1.0
 pick_retract_distance_m: 0.1
-place_waypoint_clearance_y_boundary_m: -0.926
-place_waypoint_clearance_direction: POSITIVE_Y
-place_waypoint_clearance_y_margin_m: 0.05
 enable_test_backend_controls: false

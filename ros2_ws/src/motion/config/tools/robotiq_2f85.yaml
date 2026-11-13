@@ -1,0 +1,26 @@
+compatible_robot_model: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/urdf/m0609_robotiq_2f85.urdf.xacro
+motion:
+  tool_axis_quaternion_xyzw:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  insertion_axis_tcp:
+  - 0.0
+  - 0.0
+  - 1.0
+  finger_clearance_radius_m: 0.01
+  finger_contact_span_m: 0.02
+  finger_clearance_depth_m: 0.025
+vision:
+  finger_contact_width_m: 0.02
+  finger_height_m: 0.03
+capture: project://infra/isaac_sim/config/gripper_capture.yaml
+validation:
+  contact_links:
+  - gripper_robotiq_85_left_finger_tip_link
+  - gripper_robotiq_85_right_finger_tip_link
+  attachment_link: gripper_robotiq_85_base_link
+  touch_links:
+  - gripper_robotiq_85_left_finger_link
+  - gripper_robotiq_85_right_finger_link

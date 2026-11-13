@@ -82,37 +82,39 @@ def compose(context):
         LaunchConfiguration("log_level").perform(context)
     )
     share = Path(get_package_share_directory("arm_cell_motion"))
-    description = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "assets/robots/m0609_robotiq_2f85"
-    )
+    robot = yaml.safe_load((share / 'config/robots/m0609.yaml').read_text())
+    policy = yaml.safe_load((share / 'config/planning.yaml').read_text())
+
+    def resource(reference):
+        package, relative = reference.removeprefix('package://').split('/', 1)
+        return Path(get_package_share_directory(package)) / relative
+
+    def selected_path(argument, reference):
+        default = str(resource(reference))
+        return Path(LaunchConfiguration(argument, default=default).perform(context))
 
     def config(name):
-        return yaml.safe_load((share / "config/moveit" / name).read_text())
+        return yaml.safe_load((share / 'config/moveit' / name).read_text())
 
-    planning_limits = config("joint_limits.yaml")
-    planning_pipeline = config("ompl_planning.yaml")
+    description = selected_path('robot_description_file', robot['model']['urdf'])
+    semantic = selected_path('robot_semantic_file', robot['model']['semantic'])
+    mesh_root = LaunchConfiguration('mesh_root', default=robot['model']['mesh_root']).perform(context)
+    planning_limits = yaml.safe_load(selected_path('joint_limits_file', robot['joint_limits']).read_text())
+    planning_pipeline = yaml.safe_load(selected_path('planning_pipeline_file', policy['planning_pipeline']).read_text())
     planning_profile = LaunchConfiguration("planning_profile").perform(context)
     if planning_profile:
         profile = yaml.safe_load(Path(planning_profile).read_text()) or {}
+        if profile.get("kind") == "arm-cell-runtime-configuration":
+            profile = profile["configuration"]
         acceleration = profile.get("motion", {}).get("planning_max_acceleration_rad_s2")
         if acceleration is not None:
             acceleration = float(acceleration)
             if acceleration <= 0.0:
                 raise RuntimeError("planning acceleration seed must be positive")
             planning_limits.setdefault("joint_limits", {})
-            for joint_name in (
-                "joint_1",
-                "joint_2",
-                "joint_3",
-                "joint_4",
-                "joint_5",
-                "joint_6",
-            ):
-                planning_limits["joint_limits"][joint_name] = {
-                    "has_acceleration_limits": True,
-                    "max_acceleration": acceleration,
-                }
+            for joint_name in LaunchConfiguration('arm_joint_names', default=','.join(robot['motion']['arm_joint_names'])).perform(context).split(','):
+                planning_limits["joint_limits"].setdefault(joint_name, {}).update(
+                    has_acceleration_limits=True, max_acceleration=acceleration)
             planning_pipeline["request_adapters"] = (
                 planning_pipeline["request_adapters"]
                 + " default_planner_request_adapters/AddTimeOptimalParameterization"
@@ -122,18 +124,10 @@ def compose(context):
         {
             "use_sim_time": True,
             "robot_description": xacro.process_file(
-                str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
-                mappings={
-                    "mesh_root": (
-                        "package://arm_cell_motion/assets/robots/"
-                        "m0609_robotiq_2f85/meshes"
-                    )
-                },
+                str(description), mappings={"mesh_root": mesh_root},
             ).toxml(),
-            "robot_description_semantic": (
-                share / "config/moveit/m0609_robotiq_2f85.srdf"
-            ).read_text(),
-            "robot_description_kinematics": config("kinematics.yaml"),
+            "robot_description_semantic": semantic.read_text(),
+            "robot_description_kinematics": yaml.safe_load(selected_path('kinematics_file', policy['kinematics']).read_text()),
             "robot_description_planning": planning_limits,
             "planning_pipelines": ["ompl"],
             "default_planning_pipeline": "ompl",

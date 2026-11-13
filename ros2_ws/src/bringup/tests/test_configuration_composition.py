@@ -81,7 +81,7 @@ def test_material_transform_reaches_motion_without_changing_pick_policy(tmp_path
     owner_path.write_text(yaml.safe_dump(orchestration))
     profile = yaml.safe_load(PROFILE.read_text())
     profile['components']['orchestration'] = str(owner_path)
-    for key in ('simulation', 'gripper_capture'):
+    for key in ('simulation',):
         profile['components'][key] = str(resolve(profile['components'][key], PROFILE.parent))
     profile_path = tmp_path / 'deployment.yaml'
     profile_path.write_text(yaml.safe_dump(profile))
@@ -92,3 +92,117 @@ def test_material_transform_reaches_motion_without_changing_pick_policy(tmp_path
     actual_recipe = json.loads((Path(actual['orchestration']['recipe_directory']) / 'TestCube.json').read_text())
     baseline_recipe = json.loads((Path(baseline['orchestration']['recipe_directory']) / 'TestCube.json').read_text())
     assert actual_recipe['pick'] == baseline_recipe['pick']
+
+
+def test_selected_robot_tool_cell_values_reach_runtime(tmp_path):
+    profile = yaml.safe_load(PROFILE.read_text())
+    for owner, key, value in (
+        ('robot', 'retract_joint_positions', [0.1] * 6),
+        ('tool', 'finger_contact_span_m', 0.031),
+        ('cell', 'place_waypoint_clearance_y_boundary_m', -0.8),
+    ):
+        owner_path = resolve(profile['profiles'][owner], PROFILE.parent)
+        selected = yaml.safe_load(owner_path.read_text())
+        selected['motion'][key] = value
+        path = tmp_path / f'{owner}.yaml'
+        path.write_text(yaml.safe_dump(selected))
+        profile['profiles'][owner] = str(path)
+    for key in ('simulation',):
+        profile['components'][key] = str(resolve(profile['components'][key], PROFILE.parent))
+    path = tmp_path / 'deployment.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    actual = load_profile(path)
+    assert actual['motion']['retract_joint_positions'] == [0.1] * 6
+    assert actual['motion']['finger_contact_span_m'] == 0.031
+    assert actual['motion']['place_waypoint_clearance_y_boundary_m'] == -0.8
+    assert actual['motion']['planning_planner_id'] == 'RRTConnect'
+
+
+def test_duplicate_owner_is_rejected_instead_of_silently_overridden(tmp_path):
+    profile = yaml.safe_load(PROFILE.read_text())
+    owner = yaml.safe_load(resolve(profile['components']['motion'], PROFILE.parent).read_text())
+    owner['arm_joint_names'] = ['wrong']
+    motion = tmp_path / 'motion.yaml'
+    motion.write_text(yaml.safe_dump(owner))
+    profile['components']['motion'] = str(motion)
+    for key in ('simulation',):
+        profile['components'][key] = str(resolve(profile['components'][key], PROFILE.parent))
+    path = tmp_path / 'deployment.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match='Duplicate configuration owner.*arm_joint_names'):
+        load_profile(path)
+
+
+def test_cell_location_and_tool_orientation_reach_recipe_and_motion(tmp_path):
+    profile = yaml.safe_load(PROFILE.read_text())
+    cell = yaml.safe_load(resolve(profile['profiles']['cell'], PROFILE.parent).read_text())
+    location = tmp_path / 'location.yaml'
+    location.write_text(yaml.safe_dump({'frame': 'base_link', 'position': [0.4, 0.2, 0.3],
+                                       'orientation_xyzw': [0., 0., 0., 1.]}))
+    cell['work_locations']['cnc_loading'] = str(location)
+    cell['calibration_file'] = 'selected_calibration.yaml'
+    (tmp_path / 'selected_calibration.yaml').write_text('selected: true\n')
+    selected_cell = tmp_path / 'cell.yaml'
+    selected_cell.write_text(yaml.safe_dump(cell))
+    tool = yaml.safe_load(resolve(profile['profiles']['tool'], PROFILE.parent).read_text())
+    tool['motion']['tool_axis_quaternion_xyzw'] = [0., 1., 0., 0.]
+    tool_path = tmp_path / 'tool.yaml'
+    tool_path.write_text(yaml.safe_dump(tool))
+    profile['profiles'].update(cell=str(selected_cell), tool=str(tool_path))
+    profile['components']['simulation'] = str(resolve(profile['components']['simulation'], PROFILE.parent))
+    path = tmp_path / 'profile.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    actual = load_profile(path)
+    recipe = json.loads((Path(actual['orchestration']['recipe_directory']) / 'TestCube.json').read_text())
+    assert actual['motion']['place_waypoint_target_pose_xyzw'] == [0.4, 0.2, 0.3, 0., 0., 0., 1.]
+    assert recipe['place']['desired_object_pose']['position'] == [0.4, 0.2, 0.3]
+    assert recipe['object_to_grasp_tcp']['quaternion_xyzw'] == [0., 1., 0., 0.]
+    assert actual['motion']['object_to_grasp_tcp_quaternion'] == [0., 1., 0., 0.]
+    assert actual['vision']['calibration_file'] == str(tmp_path / 'selected_calibration.yaml')
+    assert recipe['pick'] == compile_mission(MISSIONS / 'TestCube.yaml')[0]['pick']
+
+
+def test_owner_selections_require_complete_set(tmp_path):
+    profile = yaml.safe_load(PROFILE.read_text())
+    del profile['profiles']['tool']
+    profile['components']['simulation'] = str(resolve(profile['components']['simulation'], PROFILE.parent))
+    path = tmp_path / 'profile.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match='exactly robot, tool and cell'):
+        load_profile(path)
+
+
+def test_validation_excludes_production_cell_constraints_and_preserves_tool():
+    config = load_profile(PROFILE.parent / 'pnp_validation_profile.yaml')
+    assert 'place_waypoint_clearance_y_boundary_m' not in config['motion']
+    assert config['motion']['object_to_grasp_tcp_quaternion'] == [1., 0., 0., 0.]
+    assert config['motion']['place_tray_return_joint_positions'] == load_profile(PROFILE)['motion']['place_tray_return_joint_positions']
+    assert config['capture'] == load_profile(PROFILE)['gripper_capture']
+
+
+def test_task_execution_cannot_override_robot_owned_joint_poses(tmp_path):
+    profile = yaml.safe_load(PROFILE.read_text())
+    task = yaml.safe_load(resolve(profile['components']['task_execution'], PROFILE.parent).read_text())
+    task['retract_joint_positions'] = [9.] * 6
+    task_path = tmp_path / 'task.yaml'
+    task_path.write_text(yaml.safe_dump(task))
+    profile['components']['task_execution'] = str(task_path)
+    profile['components']['simulation'] = str(resolve(profile['components']['simulation'], PROFILE.parent))
+    path = tmp_path / 'profile.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match='Duplicate configuration owner.*retract_joint_positions'):
+        load_profile(path)
+
+
+@pytest.mark.parametrize('section,key,value', [
+    ('motion', 'validation_grasp_contact_links', ['wrong']),
+    ('planning_scene', 'attachment_link', 'wrong'),
+])
+def test_validation_cannot_override_tool_owned_links(tmp_path, section, key, value):
+    profile = yaml.safe_load((PROFILE.parent / 'pnp_validation_profile.yaml').read_text())
+    destination = profile['motion'] if section == 'motion' else profile['validation']['planning_scene']
+    destination[key] = value
+    path = tmp_path / 'profile.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    with pytest.raises(ValueError, match='Duplicate configuration owner'):
+        load_profile(path)

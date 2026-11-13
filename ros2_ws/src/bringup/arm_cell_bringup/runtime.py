@@ -39,6 +39,11 @@ def resolve(reference, base):
                 raise ValueError(f'Cannot resolve configuration package {package}')
             root = roots[0]
         path = root / relative
+        # Motion installs the checkout's canonical assets alongside its config.
+        if package == 'arm_cell_motion' and relative.startswith('assets/') and not path.exists():
+            source_asset = root.resolve().parents[2] / relative
+            if source_asset.exists():
+                path = source_asset
         if '..' in Path(relative).parts or Path(relative).is_absolute():
             raise ValueError('Package configuration must stay inside its package')
         return path.resolve()
@@ -58,7 +63,82 @@ def read(path):
     return value
 
 
-def compile_mission(path, *, pick_policy=None, place_task=None, material_override=None, tool_quaternion=None):
+def merge_owned(destination, values, section):
+    """Reject competing source owners before producing transport parameters."""
+    overlap = destination.keys() & values.keys()
+    if overlap:
+        raise ValueError(f'Duplicate configuration owner: {section}.{sorted(overlap)[0]}')
+    destination.update(values)
+
+
+DEFAULT_PROFILES = {
+    'robot': 'package://arm_cell_motion/config/robots/m0609.yaml',
+    'tool': 'package://arm_cell_motion/config/tools/robotiq_2f85.yaml',
+    'cell': 'package://arm_cell_bringup/config/cells/isaac_m0609.yaml',
+}
+
+
+def selected_profiles(references, base):
+    """Load explicit owner selections; resolve references at each owner's location."""
+    if set(references) != set(DEFAULT_PROFILES):
+        raise ValueError('Profiles require exactly robot, tool and cell owners')
+    owners = {}
+    for name, reference in references.items():
+        path = resolve(reference, base)
+        owner = read(path)
+        for key in ('home', 'joint_limits', 'geometry', 'static_scene', 'validation_static_scene', 'calibration_file', 'capture'):
+            if key in owner:
+                owner[key] = str(resolve(owner[key], path.parent))
+        if 'model' in owner:
+            for key in ('urdf', 'semantic'):
+                owner['model'][key] = str(resolve(owner['model'][key], path.parent))
+        if 'work_locations' in owner:
+            owner['work_locations'] = {key: read(resolve(value, path.parent))
+                                       for key, value in owner['work_locations'].items()}
+        owners[name] = owner
+    # The canonical asset currently includes the tool; incompatible combinations
+    # need a matching asset, not a silent model substitution.
+    compatible = owners['tool'].get('compatible_robot_model')
+    if compatible and str(resolve(compatible, resolve(references['tool'], base).parent)) != owners['robot']['model']['urdf']:
+        raise ValueError('Tool is incompatible with selected robot model')
+    return owners
+
+
+def compose_owner_profiles(config, path):
+    owners = selected_profiles(config.pop('profiles', DEFAULT_PROFILES), path.parent)
+    motion = config.setdefault('motion', {})
+    for name, owner in owners.items():
+        # Validation intentionally excludes production-cell swept-path constraints.
+        if name == 'cell' and 'fixture' in config:
+            continue
+        for key, value in owner.get('motion', {}).items():
+            if 'fixture' in config and key.startswith('finger_'):
+                continue
+            merge_owned(motion, {key: value}, 'motion')
+    capture_key = 'capture' if 'fixture' in config else 'gripper_capture'
+    if capture_key in config:
+        raise ValueError(f'Duplicate configuration owner: {capture_key}')
+    config[capture_key] = read(owners['tool']['capture'])
+    if 'fixture' in config:
+        tool_validation = owners['tool']['validation']
+        merge_owned(motion, {'validation_grasp_contact_links': tool_validation['contact_links']}, 'motion')
+        merge_owned(config['validation']['planning_scene'], {
+            'attachment_link': tool_validation['attachment_link'],
+            'touch_links': tool_validation['touch_links'],
+            'static_scene_file': owners['cell']['validation_static_scene'],
+        }, 'validation.planning_scene')
+    config['robot'] = owners['robot']
+    config['tool'] = owners['tool']
+    config['cell'] = owners['cell']
+    config['home_joint_positions'] = read(owners['robot']['home'])['home_joint_positions']
+    reference = config['motion_configuration']
+    owner_path = resolve(reference, path.parent)
+    config['motion_configuration'] = {key: str(resolve(value, owner_path.parent))
+                                      for key, value in read(owner_path).items()}
+    return owners
+
+
+def compile_mission(path, *, pick_policy=None, place_task=None, material_override=None, tool_quaternion=None, work_locations=None):
     mission = read(path)
     if mission.get('schema_version') != 2:
         raise ValueError(f'Unsupported mission schema: {path}')
@@ -70,13 +150,17 @@ def compile_mission(path, *, pick_policy=None, place_task=None, material_overrid
     for key in ('yaw_rad', 'unobserved_yaw_policy'):
         grasp[key] = pick.pop(key)
     transform = copy.deepcopy(material['pick_offset'])
-    tool = tool_quaternion or read(resolve('package://arm_cell_motion/config/operational.yaml', Path(path).parent))['tool_axis_quaternion_xyzw']
+    tool = tool_quaternion or read(resolve(DEFAULT_PROFILES['tool'], Path(path).parent))['motion']['tool_axis_quaternion_xyzw']
     transform['quaternion_xyzw'] = quaternion_product(transform['quaternion_xyzw'], tool)
+    place = read(resolve(place_task or mission['place_task'], Path(path).parent))
+    if 'work_location' in place:
+        locations = work_locations if work_locations is not None else selected_profiles(DEFAULT_PROFILES, Path(path).parent)['cell']['work_locations']
+        place['desired_object_pose'] = copy.deepcopy(locations[place.pop('work_location')])
     return {'schema_version': 1, 'recipe_id': mission['mission_id'], 'object_to_grasp_tcp': transform,
             'target_id': mission['target_id'], 'grasp': grasp,
             'vision': mission.get('vision', {}),
             'pick': pick,
-            'place': read(resolve(place_task or mission['place_task'], Path(path).parent))}, material
+            'place': place}, material
 
 
 def mission_directory(directory, output_root=None, *, overrides=None):
@@ -128,6 +212,8 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
         configuration['orchestration']['recipe_directory'] = write_recipes(recipes)
         return configuration
     if 'components' not in config:
+        if 'fixture' in config:
+            compose_owner_profiles(config, path)
         return validation_configuration(config, path, material_id, pick_offset_z_m)
     if any(value is not None for value in (pick_offset_z_m,)):
         raise ValueError('Grasp calibration trial settings require a validation profile')
@@ -137,15 +223,23 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
         if section in config:
             raise ValueError(f'Duplicate configuration owner: {section}')
         config[section] = read(resolve(reference, path.parent))
-    config['vision']['calibration_file'] = str(resolve(config['vision']['calibration_file'], path.parent))
+    owners = compose_owner_profiles(config, path)
+    if 'calibration_file' in config['vision']:
+        raise ValueError('Duplicate configuration owner: vision.calibration_file')
+    config['vision']['calibration_file'] = owners['cell']['calibration_file']
     if material_id is not None:
         config['orchestration']['mission_target_id'] = material_id
     target = config['orchestration']['mission_target_id']
     detectors = config['vision']['detector_profiles']
     template = copy.deepcopy(next(iter(detectors.values())))
     detectors.setdefault(target, template)
-    detectors[target]['fiducial'] = config.pop('cell_geometry')['tray_fiducial']
-    config['motion'].update(config.get('task_execution', {}))
+    detectors[target]['fiducial'] = owners['cell']['tray_fiducial']
+    for detector in detectors.values():
+        for key, value in owners['tool']['vision'].items():
+            if key in detector['cuboid']:
+                raise ValueError(f'Duplicate configuration owner: vision.{key}')
+            detector['cuboid'][key] = value
+    merge_owned(config['motion'], config.get('task_execution', {}), 'motion')
     # Preserve the existing ROS parameter contract at the composition boundary.
     for owned, runtime in (
         ('general_ik_timeout_s', 'pick_ik_timeout_s'),
@@ -156,7 +250,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
     orchestration = config['orchestration']
     directory = resolve(orchestration['recipe_directory'], path.parent)
     tool_convention = config['motion']['object_to_grasp_tcp_quaternion']
-    recipe, material = compile_mission(directory / f"{orchestration['mission_target_id']}.yaml", tool_quaternion=tool_convention)
+    recipe, material = compile_mission(directory / f"{orchestration['mission_target_id']}.yaml", tool_quaternion=tool_convention, work_locations=owners['cell']['work_locations'])
     catalog = load_material_catalog(resolve('package://arm_cell_bringup/config/materials', path.parent))
     # An explicit mission may override a catalog material for calibration trials.
     catalog[material['material_id']] = material
@@ -181,7 +275,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
     q = material['pick_offset']['quaternion_xyzw']
     if len(q) != 4 or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in q) or not math.isclose(sum(v*v for v in q), 1.0, abs_tol=1e-6):
         raise ValueError('Material pick_offset.quaternion_xyzw must be a unit quaternion')
-    # Material-frame rotation followed by the Motion-owned tool axis convention.
+    # Material-frame rotation followed by the Tool-owned axis convention.
     x, y, z, w = q
     a, b, c, d = config['motion']['object_to_grasp_tcp_quaternion']
     config['motion']['object_to_grasp_tcp_quaternion'] = [
@@ -193,7 +287,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
     config['motion']['place_waypoint_target_pose_xyzw'] = pose['position'] + pose['orientation_xyzw']
     config['motion']['place_waypoint_approach_distance_m'] = place['approach']['distance_m']
     config['motion']['place_waypoint_approach_direction_object'] = place['approach']['direction_object']
-    orchestration['recipe_directory'] = mission_directory(directory, overrides={key: {'tool_quaternion': tool_convention} for key in catalog})
+    orchestration['recipe_directory'] = mission_directory(directory, overrides={key: {'tool_quaternion': tool_convention, 'work_locations': owners['cell']['work_locations']} for key in catalog})
     return config
 
 
@@ -210,8 +304,6 @@ def export_runtime_configuration(profile_path, output_path, **trial_settings):
     configuration['_mission_recipes'] = {p.stem: json.loads(p.read_text()) for p in Path(directory).glob('*.json')}
     # External runtimes consume the embedded recipe, never ROS-local temp paths.
     configuration['orchestration'].pop('recipe_directory', None)
-    home = read(resolve('package://arm_cell_motion/config/home_joint_positions.yaml', profile_path.parent))
-    configuration['home_joint_positions'] = home['home_joint_positions']
     configuration['_mission_recipe'] = recipe
     document = {'kind': 'arm-cell-runtime-configuration', 'schema_version': 1,
                 'source_profile': str(profile_path), 'configuration': configuration}
@@ -253,12 +345,18 @@ def validation_configuration(config, path, material_id=None, pick_offset_z_m=Non
     config['fixture']['dimensions_m'] = dimensions
     config['fixture']['grasp_recipe']['object_top_to_grasp_tcp_z_m'] = material['pick_offset']['translation_m'][2] - dimensions[2]/2
     config['motion']['object_to_grasp_tcp_translation'] = material['pick_offset']['translation_m']
-    config['motion']['object_to_grasp_tcp_quaternion'] = quaternion_product(material['pick_offset']['quaternion_xyzw'], [1., 0., 0., 0.])
+    config['motion']['object_to_grasp_tcp_quaternion'] = quaternion_product(material['pick_offset']['quaternion_xyzw'], config['motion'].pop('tool_axis_quaternion_xyzw'))
     directory = resolve(config['orchestration']['recipe_directory'], path.parent)
     validation = config['validation']
     options = dict(material_override=material,
-                   pick_policy=validation['pick_policy'], place_task=validation['place_task'])
-    config['orchestration']['recipe_directory'] = mission_directory(directory, overrides={identity: options})
+                   pick_policy=validation['pick_policy'], place_task=validation['place_task'],
+                   tool_quaternion=config['tool']['motion']['tool_axis_quaternion_xyzw'],
+                   work_locations=config['cell']['work_locations'])
+    overrides = {p.stem: {'tool_quaternion': options['tool_quaternion'],
+                           'work_locations': options['work_locations']}
+                 for p in directory.glob('*.yaml')}
+    overrides[identity] = options
+    config['orchestration']['recipe_directory'] = mission_directory(directory, overrides=overrides)
     recipe, _ = compile_mission(directory / f'{identity}.yaml', **options)
     config['_mission_recipe'] = recipe
     config['material_catalog'] = {identity: material}

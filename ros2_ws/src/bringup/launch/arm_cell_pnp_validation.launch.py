@@ -80,30 +80,16 @@ def compose(context):
     config = load_profile(profile_path)
     validate_motion_completion_tolerances(config)
     share = Path(get_package_share_directory("arm_cell_bringup"))
-    home_config = (
-        yaml.safe_load((Path(get_package_share_directory("arm_cell_motion")) / "config/home_joint_positions.yaml").read_text()) or {}
-    )
-    home_joint_positions = home_config["home_joint_positions"]
-    if len(home_joint_positions) != 6:
-        raise RuntimeError("home_joint_positions must contain six arm joints")
-    description = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "assets/robots/m0609_robotiq_2f85"
-    )
-    moveit_share = Path(get_package_share_directory("arm_cell_motion"))
+    home_joint_positions = config['home_joint_positions']
+    if len(home_joint_positions) != len(config['motion']['arm_joint_names']):
+        raise RuntimeError("HOME and arm joint counts must match")
+    use_sim_time = config.get("use_sim_time", True)
+    model = config['robot']['model']
     robot_description = xacro.process_file(
-        str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
-        mappings={
-            "mesh_root": (
-                "package://arm_cell_motion/assets/robots/"
-                "m0609_robotiq_2f85/meshes"
-            )
-        },
+        model['urdf'], mappings={'mesh_root': model['mesh_root']},
     ).toxml()
-    robot_description_semantic = (
-        moveit_share / "config/moveit/m0609_robotiq_2f85.srdf"
-    ).read_text()
-    kinematics = yaml.safe_load((moveit_share / "config/moveit/kinematics.yaml").read_text())
+    robot_description_semantic = Path(model['semantic']).read_text()
+    kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())
     kinematics_parameters = {
         f"robot_description_kinematics.arm.{key}": value
         for key, value in kinematics["arm"].items()
@@ -217,6 +203,7 @@ def compose(context):
             ),
             launch_arguments={
                 "profile": str(share / "config/isaac_planning.yaml"),
+                "runtime_profile": str(profile_path),
                 # Pass the already-resolved validation profile path through the
                 # nested planning launch.  Keeping this as a nested
                 # LaunchConfiguration loses the profile at runtime and leaves
@@ -224,10 +211,7 @@ def compose(context):
                 "planning_profile": str(profile_path),
                 "static_scene": "true",
                 "verify_nominal_state": "true",
-                "scene_file": str(
-                    Path(get_package_share_directory("arm_cell_motion"))
-                    / "config/moveit/m0609_pnp_static_scene.json"
-                ),
+                "scene_file": config["cell"]["validation_static_scene"],
             }.items(),
         ),
     ]

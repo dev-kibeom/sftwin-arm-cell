@@ -1,10 +1,5 @@
-# Must match the loaded Isaac stage, not merely a nominal robot model.
-world_to_base:
-  x: 0.15
-  y: -0.15
-  z: 0.68
-  roll: 0.0
-  pitch: 0.0
-  yaw: 0.0
 raw_joint_states: /isaac/joint_states
 joint_states: /joint_states
+cell_profile: package://arm_cell_bringup/config/cells/isaac_m0609.yaml
+robot_profile: package://arm_cell_motion/config/robots/m0609.yaml
+motion_configuration: package://arm_cell_motion/config/planning.yaml

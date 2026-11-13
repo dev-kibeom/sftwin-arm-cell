@@ -108,14 +108,13 @@ def test_validation_profile_owns_moveit_planning_scaling():
 
 
 def test_validation_place_target_is_above_the_cnc_workarea():
-    planning = yaml.safe_load((PACKAGE_ROOT / "config/isaac_planning.yaml").read_text())
-
-    recipe = load_profile(PROFILE_PATH)["_mission_recipe"]
+    profile = load_profile(PROFILE_PATH)
+    recipe = profile["_mission_recipe"]
     assert recipe["place"]["desired_object_pose"]["frame"] == "base_link"
     assert recipe["place"]["desired_object_pose"]["position"] == pytest.approx(
         [0.50, 0.25, 0.37]
     )
-    world_to_base = planning["world_to_base"]
+    world_to_base = profile["cell"]["world_to_base"]
     target_in_world = [
         recipe["place"]["desired_object_pose"]["position"][0] + world_to_base["x"],
         recipe["place"]["desired_object_pose"]["position"][1] + world_to_base["y"],

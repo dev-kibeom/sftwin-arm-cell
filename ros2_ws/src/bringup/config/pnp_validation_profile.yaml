@@ -11,11 +11,6 @@ safety:
 
 motion:
   backend_mode: isaac
-  arm_joint_names: [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
-  # Fixed tray return target; degrees [-90, 10, 100, 0, 0, 90] converted to radians.
-  place_tray_return_joint_positions: [-1.5707963267948966, 0.17453292519943295, 1.7453292519943295, 0.0, 0.0, 1.5707963267948966]
-  # Validation-only planning/time-parameterization policy seed.  This is not
-  # a measured M0609 or Isaac acceleration ceiling.
   planning_max_acceleration_rad_s2: 5.0
   # Use the full velocity limits in the URDF and the acceleration limits above
   # for this validation planning profile. MoveGroupInterface otherwise uses
@@ -33,23 +28,12 @@ motion:
   holding_confirmation_timeout_ms: 1500
   cartesian_tcp_orientation_tolerance_rad: 0.08726646259971647
   trajectory_goal_tolerance_rad: 0.03
-  retract_joint_positions: [0.0, -0.5, 1.0, -1.3, -1.0, 0.0]
-  # The fixture detected pose is the top-surface centroid. Motion derives the
-  # fixture object's geometric center. This is validation-only geometry; the
-  # historical WU-14 contact seed remains isolated from production config.
   observation_reference: fixture_visible_top_surface_centroid
   observation_to_object_quaternion: [0.0, 0.0, 0.0, 1.0]
   object_to_grasp_tcp_translation: [0.0, 0.0, 0.0375]
-  # Relative X-180 tool convention: TCP +X remains the closing axis and
-  # TCP +Z is the physical body-to-contact/insertion axis.
-  object_to_grasp_tcp_quaternion: [1.0, 0.0, 0.0, 0.0]
-  insertion_axis_tcp: [0.0, 0.0, 1.0]
   pick_retract_distance_m: 0.05
   validation_grasp_contact_policy_enabled: true
   validation_grasp_contact_object_id_prefix: wu14_fixture_
-  validation_grasp_contact_links:
-    - gripper_robotiq_85_left_finger_tip_link
-    - gripper_robotiq_85_right_finger_tip_link
   enable_test_backend_controls: false
   calibration_profile_reference: config/isaac_planning.yaml
   tolerance_profile_reference: docs/design/components/simulation/fds-deterministic-pnp-fixture.md#calibration-boundary
@@ -78,12 +62,7 @@ validation:
   planning_scene:
     # Validation-only scene keeps support/contact geometry excluded while
     # retaining the observed CNC top frame and pedestal swept-path obstacles.
-    static_scene_file: config/moveit/m0609_pnp_static_scene.json
     fixture_object_id_prefix: wu14_fixture_
-    attachment_link: gripper_robotiq_85_base_link
-    touch_links:
-      - gripper_robotiq_85_left_finger_link
-      - gripper_robotiq_85_right_finger_link
     cleanup_operation: remove
 
 fixture:
@@ -112,9 +91,6 @@ fixture:
     - min: [0.25, -0.05, 0.70]
       max: [0.40, 0.10, 0.90]
 
-capture:
-  volume_dimensions_m: [0.12, 0.12, 0.12]
-
 place:
   # Validation tolerance for final fixture orientation after PLACE.
   orientation_tolerance_deg: 10.0
@@ -123,3 +99,9 @@ place:
   # object_to_grasp_tcp transform above; this is a WU-14 validation tolerance.
   position_tolerance_m: 0.05
   deletion_delay_s: 3.0
+
+profiles:
+  robot: package://arm_cell_motion/config/robots/m0609.yaml
+  tool: package://arm_cell_motion/config/tools/robotiq_2f85.yaml
+  cell: package://arm_cell_bringup/config/cells/isaac_m0609.yaml
+motion_configuration: package://arm_cell_motion/config/planning.yaml

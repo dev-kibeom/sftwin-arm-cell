@@ -6,7 +6,6 @@ sync_queue_size: 20
 rgb_topic: /camera/color/image_raw
 depth_topic: /camera/aligned_depth_to_color/image_raw
 camera_info_topic: /camera/color/camera_info
-calibration_file: package://arm_cell_vision/config/calibration/isaac_overhead_wide.yaml
 tray_aligned_depth_resolution_m: 0.002
 scene_stability:
   stable_observation_count: 5
@@ -43,8 +42,6 @@ detector_profiles:
       height_tolerance_m: 0.003
       line_residual_limit_px: 1.25
       minimum_line_support: 0.8
-      finger_contact_width_m: 0.02
-      finger_height_m: 0.03
       clearance_probe_m: 0.06
       contact_z_fraction: 0.5
     observation_reference: visible_top_surface_centroid
