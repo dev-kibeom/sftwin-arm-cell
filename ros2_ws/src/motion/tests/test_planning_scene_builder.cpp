@@ -52,6 +52,40 @@ TEST(PlanningSceneBuilder, VisionAndTrayPolicyAreIndependentRequestInputs)
   EXPECT_EQ(builder.snapshot().world.collision_objects.front().id, "static_fixture");
 }
 
+TEST(PlanningSceneBuilder, RetractUsesSelectedContactsAndRequiresSelectedObject)
+{
+  moveit_msgs::msg::PlanningScene snapshot;
+  snapshot.world.collision_objects.resize(1U);
+  snapshot.world.collision_objects.front().id = "selected_support";
+  PlanningSceneBuilder builder(snapshot, {}, std_msgs::msg::Header{},
+    "selected_support", {"tool_contact_a", "tool_contact_b"});
+  PlanningScenePolicy policy;
+  policy.apply_pick_retract_tray_exception = true;
+  const auto result = builder.build(policy);
+  ASSERT_TRUE(result.valid);
+  const auto & acm = result.diff.allowed_collision_matrix;
+  const auto index = [&acm](const std::string & name) {
+      return std::distance(
+        acm.entry_names.begin(),
+        std::find(acm.entry_names.begin(), acm.entry_names.end(), name));
+    };
+  const auto support = index("selected_support");
+  const auto first = index("tool_contact_a");
+  const auto second = index("tool_contact_b");
+  ASSERT_LT(support, acm.entry_names.size());
+  ASSERT_LT(first, acm.entry_names.size());
+  ASSERT_LT(second, acm.entry_names.size());
+  EXPECT_TRUE(acm.entry_values[support].enabled[first]);
+  EXPECT_TRUE(acm.entry_values[support].enabled[second]);
+  EXPECT_FALSE(acm.entry_values[first].enabled[second]);
+  EXPECT_TRUE(snapshot.allowed_collision_matrix.entry_names.empty());
+  EXPECT_TRUE(builder.build(PlanningScenePolicy{}).diff.allowed_collision_matrix.entry_names.empty());
+
+  PlanningSceneBuilder missing(snapshot, {}, std_msgs::msg::Header{},
+    "other_support", {"tool_contact_a", "tool_contact_b"});
+  EXPECT_FALSE(missing.build(policy).valid);
+}
+
 TEST(PlanningSceneBuilder, DuplicateCandidateIdentityFailsClosed)
 {
   moveit_msgs::msg::PlanningScene snapshot;

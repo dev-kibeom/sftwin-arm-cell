@@ -31,10 +31,14 @@ public:
   PlanningSceneBuilder(
     moveit_msgs::msg::PlanningScene snapshot,
     std::vector<arm_cell_interfaces::msg::CollisionPrimitive> occupancy,
-    std_msgs::msg::Header observation_header)
+    std_msgs::msg::Header observation_header,
+    std::string pick_retract_contact_object = {},
+    std::vector<std::string> pick_retract_contact_links = {})
   : snapshot_(std::move(snapshot)), occupancy_(std::move(occupancy)),
     observation_header_(std::move(observation_header)),
-    previous_candidate_ids_(candidate_occupancy_ids(snapshot_))
+    previous_candidate_ids_(candidate_occupancy_ids(snapshot_)),
+    pick_retract_contact_object_(std::move(pick_retract_contact_object)),
+    pick_retract_contact_links_(std::move(pick_retract_contact_links))
   {}
 
   PlanningSceneDiffResult build(const PlanningScenePolicy & policy) const
@@ -55,9 +59,10 @@ public:
     if (policy.apply_pick_retract_tray_exception) {
       const bool tray_present = std::any_of(
         snapshot_.world.collision_objects.begin(), snapshot_.world.collision_objects.end(),
-        [](const auto & object) {return object.id == kPickRetractTrayCollisionObject;});
+        [this](const auto & object) {return object.id == pick_retract_contact_object_;});
       const auto allowed = make_pick_retract_allowed_collision_matrix(
-        snapshot_.allowed_collision_matrix);
+        snapshot_.allowed_collision_matrix, pick_retract_contact_object_,
+        pick_retract_contact_links_);
       if (!tray_present || !allowed) {
         result.failure_reason = tray_present ? "ACM_INVALID" : "TRAY_NOT_FOUND";
         return result;
@@ -75,6 +80,8 @@ private:
   const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> occupancy_;
   const std_msgs::msg::Header observation_header_;
   const std::vector<std::string> previous_candidate_ids_;
+  const std::string pick_retract_contact_object_;
+  const std::vector<std::string> pick_retract_contact_links_;
 };
 
 }  // namespace arm_cell_motion

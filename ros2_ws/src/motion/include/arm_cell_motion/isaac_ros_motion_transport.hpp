@@ -311,6 +311,9 @@ private:
   mutable std::mutex current_fixture_object_id_mutex_;
   std::string current_fixture_object_id_;
   std::vector<std::string> validation_grasp_contact_links_;
+  std::vector<std::string> payload_touch_links_;
+  std::string pick_retract_contact_object_;
+  std::vector<std::string> pick_retract_contact_links_;
   double planning_max_acceleration_rad_s2_{0.0};
   double planning_velocity_scaling_factor_{0.1};
   double planning_acceleration_scaling_factor_{0.1};

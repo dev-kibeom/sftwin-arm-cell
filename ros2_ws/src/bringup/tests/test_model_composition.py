@@ -79,6 +79,8 @@ def test_motion_consumes_selected_model_and_joint_policy():
     (lambda d: d['model'].__setitem__('model_id', 'wrong_model'), 'model identity'),
     (lambda d: d['model'].__setitem__('planning_group', 'missing_group'), 'planning group'),
     (lambda d: d['tool']['contact_links']['payload_touch_links'].append('missing_link'), 'payload_touch_links'),
+    (lambda d: d['tool']['contact_links']['pick_retract'].append('missing_link'),
+     'contact_links.pick_retract'),
     (lambda d: d['tool']['validation_motion']['validation_grasp_contact_links'].append('missing_link'), 'validation_grasp_contact_links'),
     (lambda d: d['tool']['validation_planning_scene'].__setitem__('attachment_link', 'missing_link'), 'attachment_link'),
     (lambda d: d['cell']['contact_objects'].__setitem__('pick_retract', 'missing_object'), 'pick_retract'),
@@ -230,3 +232,36 @@ def test_selected_assembly_identity_and_group_reach_motion(selection, tmp_path):
     config = selection(change)
     assert config['motion']['model_id'] == 'selected_assembly'
     assert config['motion']['planning_group'] == 'selected_group'
+
+
+def test_production_contacts_are_forwarded_independently_of_validation(selection):
+    def change(d):
+        d['tool']['contact_links']['payload_touch_links'] = ['sf_grasp_tcp']
+        d['tool']['contact_links']['pick_retract'] = ['base_link', 'sf_grasp_tcp']
+        # Use another existing Cell object, so composition checks the same owners.
+        scene = yaml.safe_load(Path(d['cell']['static_scene']).read_text())
+        d['cell']['contact_objects']['pick_retract'] = next(
+            obj['id'] for obj in scene['objects'] if obj['id'] != 'amr_tray')
+    config = selection(change)
+    assert config['motion']['payload_touch_links'] == ['sf_grasp_tcp']
+    assert config['motion']['pick_retract_contact_links'] == ['base_link', 'sf_grasp_tcp']
+    assert (config['motion']['pick_retract_contact_object'] ==
+            config['cell']['contact_objects']['pick_retract'])
+    assert 'validation_grasp_contact_links' not in config['motion']
+    assert (config['tool']['validation_motion'] ==
+            load_profile(PROFILE)['tool']['validation_motion'])
+    assert (config['tool']['validation_planning_scene']['touch_links'] !=
+            config['motion']['payload_touch_links'])
+
+
+@pytest.mark.parametrize('profile', ['operational_profile.yaml', 'pnp_validation_profile.yaml'])
+def test_export_preserves_production_contact_owners(tmp_path, profile):
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    path = export_runtime_configuration(PROFILE.parent / profile, tmp_path / 'runtime.json')
+    config = load_profile(path)
+    for parameter, owner in (
+        ('payload_touch_links', config['tool']['contact_links']['payload_touch_links']),
+        ('pick_retract_contact_links', config['tool']['contact_links']['pick_retract']),
+        ('pick_retract_contact_object', config['cell']['contact_objects']['pick_retract']),
+    ):
+        assert config['motion'][parameter] == owner

@@ -139,7 +139,8 @@ def validate_model_configuration(config):
             raise ValueError(f'Assembly planning group is absent from {key}')
     for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
         names(robot['joint_policy'][key], f'Robot joint_policy.{key}', arm)
-    names(tool['contact_links']['payload_touch_links'], 'Tool payload_touch_links', links)
+    for key in ('payload_touch_links', 'pick_retract'):
+        names(tool['contact_links'][key], f'Tool contact_links.{key}', links)
     names(tool['validation_motion']['validation_grasp_contact_links'],
           'Tool validation_grasp_contact_links', links)
     scene = tool['validation_planning_scene']

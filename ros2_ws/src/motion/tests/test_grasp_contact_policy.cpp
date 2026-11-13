@@ -209,12 +209,15 @@ TEST(GraspContactPolicyTest, ACMAllowsOnlyCurrentTargetAndAuthorizedLinks)
   EXPECT_FALSE(result->entry_values[target].enabled[unrelated]);
 }
 
+const std::string retract_object = "selected_support";
+const std::vector<std::string> retract_links{"selected_left_tip", "selected_right_tip"};
+
 TEST(PickRetractCollisionPolicyTest, AllowsOnlyTheTwoFingerTipTrayPairsAndPreservesOtherEntries)
 {
   moveit_msgs::msg::AllowedCollisionMatrix original;
   original.entry_names = {
-    "robot_link", kPickRetractTrayCollisionObject,
-    kPickRetractTrayAllowedLinks[0], kPickRetractTrayAllowedLinks[1], "other_world_object"};
+    "robot_link", retract_object,
+    retract_links[0], retract_links[1], "other_world_object"};
   original.entry_values.resize(original.entry_names.size());
   for (auto & row : original.entry_values) {
     row.enabled.assign(original.entry_names.size(), false);
@@ -224,16 +227,17 @@ TEST(PickRetractCollisionPolicyTest, AllowsOnlyTheTwoFingerTipTrayPairsAndPreser
   original.entry_values[1].enabled[0] = true;
   original.entry_values[0].enabled[1] = true;
 
-  const auto allowed = make_pick_retract_allowed_collision_matrix(original);
+  const auto allowed = make_pick_retract_allowed_collision_matrix(
+    original, retract_object, retract_links);
   ASSERT_TRUE(allowed.has_value());
   const auto index = [&allowed](const std::string & name) {
       return static_cast<std::size_t>(std::distance(
         allowed->entry_names.begin(),
         std::find(allowed->entry_names.begin(), allowed->entry_names.end(), name)));
     };
-  const auto tray = index(kPickRetractTrayCollisionObject);
-  const auto left = index(kPickRetractTrayAllowedLinks[0]);
-  const auto right = index(kPickRetractTrayAllowedLinks[1]);
+  const auto tray = index(retract_object);
+  const auto left = index(retract_links[0]);
+  const auto right = index(retract_links[1]);
   const auto robot = index("robot_link");
   const auto other = index("other_world_object");
   EXPECT_TRUE(allowed->entry_values[tray].enabled[left]);
@@ -250,7 +254,7 @@ TEST(PickRetractCollisionPolicyTest, AllowsOnlyTheTwoFingerTipTrayPairsAndPreser
 TEST(PickRetractCollisionPolicyTest, BuildsOnlyARequestScopedPlanningSceneDiff)
 {
   const moveit_msgs::msg::AllowedCollisionMatrix original;
-  const auto diff = make_pick_retract_planning_scene_diff(original);
+  const auto diff = make_pick_retract_planning_scene_diff(original, retract_object, retract_links);
   EXPECT_TRUE(diff.is_diff);
   EXPECT_TRUE(diff.robot_state.is_diff);
   EXPECT_FALSE(diff.world.collision_objects.size());
@@ -259,8 +263,8 @@ TEST(PickRetractCollisionPolicyTest, BuildsOnlyARequestScopedPlanningSceneDiff)
       diff.allowed_collision_matrix.entry_names.begin(),
       std::find(
         diff.allowed_collision_matrix.entry_names.begin(),
-        diff.allowed_collision_matrix.entry_names.end(), kPickRetractTrayCollisionObject)));
-  for (const auto * link : kPickRetractTrayAllowedLinks) {
+        diff.allowed_collision_matrix.entry_names.end(), retract_object)));
+  for (const auto & link : retract_links) {
     const auto index = static_cast<std::size_t>(std::distance(
         diff.allowed_collision_matrix.entry_names.begin(),
         std::find(
