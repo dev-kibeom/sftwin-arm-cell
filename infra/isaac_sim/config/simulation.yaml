@@ -2,4 +2,3 @@ planning_profile: isaac_planning.yaml
 static_scene: true
 external_handoff_material_type: TestCube
 external_handoff_default_quantity: 1
-joint_2_stiffness_scale: 2.75

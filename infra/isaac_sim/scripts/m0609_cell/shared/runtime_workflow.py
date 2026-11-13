@@ -6,8 +6,8 @@ import os
 from shared.script_editor_bootstrap import module_root_from_project_root
 
 
-# setup_scene consumes the selected Cell builder; the surrounding runtime
-# steps keep their existing bindings until the separate Graph/runtime migration.
+# Scene and arm control consume the selected owner configuration. Tool,
+# Camera and other runtime steps still use the established Cell modules.
 ROLES = {
     "pre_build": ("build_robot_usd.py",),
     "before_play": ("setup_scene.py", "snapshot_camera.py", "build_actiongraph.py"),

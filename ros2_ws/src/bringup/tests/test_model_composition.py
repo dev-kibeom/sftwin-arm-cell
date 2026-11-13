@@ -288,3 +288,13 @@ def test_pick_clearance_objects_follow_selected_cell(selection):
         d['cell']['collision_objects']['pick_clearance'] = ['amr_tray']
     config = selection(change)
     assert config['motion']['pick_clearance_objects'] == ['amr_tray']
+
+
+@pytest.mark.parametrize('scales', [
+    {'unknown_joint': 2.75}, {'joint_2': 0}, {'joint_2': -1},
+    {'joint_2': float('nan')}, {'joint_2': True}, {'joint_2': '2.75'}, [],
+])
+def test_robot_drive_scales_are_validated_at_composition(selection, scales):
+    with pytest.raises(ValueError, match='Robot Isaac joint drive stiffness'):
+        selection(lambda documents: documents['robot'].update(
+            isaac={'joint_drive_stiffness_scales': scales}))
