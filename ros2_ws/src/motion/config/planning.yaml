@@ -1,0 +1,2 @@
+kinematics: package://arm_cell_motion/config/moveit/kinematics.yaml
+planning_pipeline: package://arm_cell_motion/config/moveit/ompl_planning.yaml

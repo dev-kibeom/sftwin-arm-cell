@@ -1,0 +1,5 @@
+urdf: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/urdf/m0609_robotiq_2f85.urdf.xacro
+mesh_root: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/meshes
+semantic: package://arm_cell_motion/config/moveit/m0609_robotiq_2f85.srdf
+robot_id: m0609
+tool_id: robotiq_2f85

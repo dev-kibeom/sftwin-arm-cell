@@ -1,0 +1,28 @@
+motion:
+  tool_axis_quaternion_xyzw:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  insertion_axis_tcp:
+  - 0.0
+  - 0.0
+  - 1.0
+vision:
+  finger_contact_width_m: 0.02
+  finger_height_m: 0.03
+capture: project://infra/isaac_sim/config/gripper_capture.yaml
+tool_id: robotiq_2f85
+grasp_motion:
+  finger_clearance_radius_m: 0.01
+  finger_contact_span_m: 0.02
+  finger_clearance_depth_m: 0.025
+validation_motion:
+  validation_grasp_contact_links:
+  - gripper_robotiq_85_left_finger_tip_link
+  - gripper_robotiq_85_right_finger_tip_link
+validation_planning_scene:
+  attachment_link: gripper_robotiq_85_base_link
+  touch_links:
+  - gripper_robotiq_85_left_finger_link
+  - gripper_robotiq_85_right_finger_link

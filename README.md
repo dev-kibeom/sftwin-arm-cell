@@ -161,6 +161,8 @@ ros2 run arm_cell_bringup export_runtime_configuration \
 
 검증 entrypoint는 이 파일을 기본으로 읽으며, `SFTWIN_PNP_PROFILE`에 다른 export 파일의 절대 경로를 지정할 수 있습니다. 상대 설정 경로는 선언 파일 기준, `package://`는 해당 ROS 패키지 기준, `project://`는 프로젝트 기준으로 해석합니다.
 
+배포 YAML의 `profiles.robot`, `profiles.tool`, `profiles.cell`에서 조합할 설정 파일을 선택합니다. 기본 선택은 각각 `motion/config/robots/m0609.yaml`, `motion/config/tools/robotiq_2f85.yaml`, `bringup/config/cells/isaac_m0609.yaml`입니다. 결합 URDF/SRDF 자산은 `model_configuration`에서 별도로 선택하며 기본 M0609+2F85 모델은 그대로 사용합니다. Motion 실행 정책은 `components.motion`, IK·Planning 파일 선택은 `motion_configuration`에서 지정합니다. 가져올 Motion 입력 묶음은 `motion_profile_sections`, capture 출력 이름은 `capture_section`에 명시합니다. 검증 Profile은 Tool의 `validation_motion`을 선택하고 생산 Cell 경로 제약·손가락 탐색 치수를 제외하며, `validation.planning_scene_profiles`에서 접촉·Scene 입력 Owner를 선택합니다. HOME·관절 자세는 Robot, 그리퍼 치수·축 관례는 Tool, 작업 위치·Calibration 참조는 Cell에서 수정하고 다시 export합니다. 여러 소유자에 같은 파라미터를 정의하면 조립을 거부합니다. MoveIt 단독 실행은 `robot_profile:=<Robot YAML>`과 `model_configuration:=<결합 모델 YAML>`을 지원하며 생략 시 기존 기본 조합을 사용합니다. 설정 책임과 실행 책임의 구분은 [Components Architecture](docs/design/architecture/components.md)를 따릅니다.
+
 자재는 `bringup/config/materials/*.yaml`에서 관리합니다. `TestCube`(70×70×80 mm), 알루미늄 빌릿(60×40×30 mm), 철강 블랭크(70×50×40 mm), 알루미늄 판재(80×60×20 mm)를 제공합니다. UI Hub의 Material type 목록은 export에 포함된 자재에서 생성되며, Random Drop 한 요청은 선택한 한 종류만 공급합니다. 새 cuboid는 자재 정의와 미션을 추가하고 runtime 설정을 다시 export하면 목록에 반영됩니다.
 
 판재의 일반 파지는 60 mm 방향으로 제한합니다. 80 mm 방향을 명시적으로 시험하거나 pick offset을 조정할 때는 별도의 검증 export를 사용합니다.

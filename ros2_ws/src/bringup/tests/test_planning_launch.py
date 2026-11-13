@@ -153,3 +153,58 @@ def test_planning_launches_filter_moveit_raw_detail_loggers(monkeypatch):
             and action.name[0].perform(context) == "RCUTILS_CONSOLE_OUTPUT_FORMAT"
         )
         assert output_format == "[{severity}] [{name}] {message}"
+
+
+def test_selected_profiles_reach_home_tf_and_nested_moveit(tmp_path):
+    import yaml
+    from arm_cell_bringup.runtime import load_profile, resolve
+    from launch_ros.utilities import evaluate_parameters
+
+    package = Path(__file__).parents[1]
+    source = package / 'config/operational_profile.yaml'
+    profile = yaml.safe_load(source.read_text())
+    robot = yaml.safe_load(resolve(profile['profiles']['robot'], source.parent).read_text())
+    home = tmp_path / 'home.yaml'
+    home.write_text(yaml.safe_dump({'home_joint_positions': [0.2] * 6}))
+    limits = tmp_path / 'limits.yaml'
+    limits.write_text(yaml.safe_dump({'joint_limits': {'joint_1': {
+        'has_velocity_limits': True, 'max_velocity': 0.25}}}))
+    robot.update(home=str(home), joint_limits=str(limits))
+    robot_path = tmp_path / 'robot.yaml'
+    robot_path.write_text(yaml.safe_dump(robot))
+    cell = yaml.safe_load(resolve(profile['profiles']['cell'], source.parent).read_text())
+    cell['world_to_base']['x'] = 0.3
+    cell_path = tmp_path / 'cell.yaml'
+    cell_path.write_text(yaml.safe_dump(cell))
+    profile['profiles'].update(robot=str(robot_path), cell=str(cell_path))
+    profile['components']['simulation'] = str(resolve(profile['components']['simulation'], source.parent))
+    selected = tmp_path / 'profile.yaml'
+    selected.write_text(yaml.safe_dump(profile))
+    assert load_profile(selected)['home_joint_positions'] == [0.2] * 6
+
+    spec = importlib.util.spec_from_file_location('selected_isaac_planning', package / 'launch/isaac_planning.launch.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    context = LaunchContext()
+    context.launch_configurations.update(profile=str(package / 'config/isaac_planning.yaml'),
+                                         runtime_profile=str(selected), use_rviz='false',
+                                         planning_profile='', log_level='info')
+    actions = module.compose(context)
+    base = next(node for node in actions if isinstance(node, Node) and node.node_package == 'tf2_ros')
+    arguments = [value.perform(context) if hasattr(value, 'perform') else value for value in base._Node__arguments]
+    assert arguments[arguments.index('--x') + 1] == '0.3'
+    include = next(action for action in actions if isinstance(action, IncludeLaunchDescription))
+    forwarded = dict(include.launch_arguments)
+    assert forwarded['joint_limits_file'] == str(limits)
+    assert forwarded['robot_description_file'] == load_profile(selected)['model_configuration']['urdf']
+    assert Path(forwarded['kinematics_file']).is_file()
+
+    planning = Path(get_package_share_directory('arm_cell_motion')) / 'launch/planning_only.launch.py'
+    spec = importlib.util.spec_from_file_location('selected_moveit', planning)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    nested = LaunchContext()
+    nested.launch_configurations.update({key: value.perform(context) if hasattr(value, 'perform') else value
+                                         for key, value in forwarded.items()})
+    (parameters, _) = evaluate_parameters(nested, module.compose(nested)[0]._Node__parameters)
+    assert parameters['robot_description_planning.joint_limits.joint_1.max_velocity'] == 0.25

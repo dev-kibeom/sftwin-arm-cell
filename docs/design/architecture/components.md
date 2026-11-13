@@ -69,6 +69,20 @@ Task Execution → Motion은 단방향 C++ MotionPort 의존이며 그 경계에
 
 설정의 선택·조립·전달은 Bringup이 담당하고, 설정의 의미와 유효성 검증은 해당 컴포넌트가 소유한다. 외부 Runtime은 전달된 설정을 소비하며 Bringup의 내부 구현에 의존하지 않는다.
 
+설정은 변경 이유에 따라 다음 소유권으로 분리한다. Bringup은 배포에 맞는 Profile을 선택해 기존 Backend·Adapter 계약으로 전달하며, 한 설정에 여러 소유자의 값을 덮어써 조립하지 않는다.
+
+| 설정 Owner | 소유하는 의미 |
+|---|---|
+| Robot | 논리적 관절 구성·Joint Limits, 로봇별 HOME·Retract·Return 자세 |
+| Tool | 그리퍼 특성·접촉 Geometry, TCP 축 관례와 도구별 접촉·부착 Link |
+| Cell | 설비 Geometry·배치, 작업 위치, 설치 Calibration 참조 및 설비에 따른 경로 공간 제약 |
+| Motion | IK·Planning·경로 탐색·실행 정책 및 계획용 시간 매개화 설정 |
+
+Robot·Tool의 논리 설정과 결합 URDF/SRDF 모델 자산의 선택은 구분한다. Bringup의 배포 설정이 두 논리 Profile과 호환되는 결합 모델을 선택하며, Robot이나 Tool이 특정 결합 모델을 역으로 소유하지 않는다. 기존 M0609+2F85 모델의 내부 분해는 요구하지 않는다. 배포는 실행 목적에 필요한 Profile 입력을 명시적으로 선택하며 공통 설정 조립은 자재 Fixture의 존재나 파라미터 이름으로 입력을 선택하지 않는다.
+
+Motion은 Robot·Tool·Cell의 입력을 소비해 기존 좌표 변환·계획·실행을 수행한다. Tool 데이터의 소유권은 Motion의 target 변환 책임을 이전하지 않는다. Material의 형상·파지 Offset과 Mission의 자재·작업 선택 구조는 유지하며, 작업의 장소는 Cell이, 작업의 Approach·허용오차 등 정책은 해당 작업 Owner가 소유한다. Process Profile은 현재 도입하지 않는다. Profile 선택은 다중 로봇의 동시 실행이나 실물 Backend의 준비 완료를 보장하지 않는다.
+
+
 ### BT 계층과 재시도 경계
 
 Orchestration BT는 Mission lifecycle·재진입·Safety Recovery를, Task Execution BT는 Material Candidate 전환·PICK/PLACE 공정 및 작업 내부 Recovery를 소유한다. Motion 내부 Planning BT는 선택된 Material Candidate의 Grasp Pose·IK Seed 탐색과 검증·계획 순서 및 그 범위의 재시도를 소유한다. 각 계층은 하위 결과를 기존 계약으로 소비하며 다른 계층의 결과 분류나 Recovery를 재구현하지 않는다. Motion BT는 내부 구현이며 새 ROS node·package·Action server가 아니다. Task Execution은 MotionPort만 사용한다.

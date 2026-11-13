@@ -700,28 +700,16 @@ def compose(context):
         trajectory_file = project_checkout_root() / trajectory_file
     motion_parameters["place_waypoint_trajectory_file"] = str(trajectory_file.resolve())
     share = Path(get_package_share_directory("arm_cell_bringup"))
-    home_config = (
-        yaml.safe_load((motion_share / "config/home_joint_positions.yaml").read_text()) or {}
-    )
-    home_joint_positions = home_config["home_joint_positions"]
-    if len(home_joint_positions) != 6:
-        raise RuntimeError("home_joint_positions must contain six arm joints")
+    home_joint_positions = config['home_joint_positions']
+    if len(home_joint_positions) != len(config['motion']['arm_joint_names']):
+        raise RuntimeError("HOME and arm joint counts must match")
     use_sim_time = config.get("use_sim_time", True)
-    description = motion_share / "assets/robots/m0609_robotiq_2f85"
-    moveit_share = motion_share
+    model = config['model_configuration']
     robot_description = xacro.process_file(
-        str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
-        mappings={
-            "mesh_root": (
-                "package://arm_cell_motion/assets/robots/"
-                "m0609_robotiq_2f85/meshes"
-            )
-        },
+        model['urdf'], mappings={'mesh_root': model['mesh_root']},
     ).toxml()
-    robot_description_semantic = (
-        moveit_share / "config/moveit/m0609_robotiq_2f85.srdf"
-    ).read_text()
-    kinematics = yaml.safe_load((moveit_share / "config/moveit/kinematics.yaml").read_text())
+    robot_description_semantic = Path(model['semantic']).read_text()
+    kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())
     kinematics_parameters = {
         f"robot_description_kinematics.arm.{key}": value
         for key, value in kinematics["arm"].items()
@@ -917,6 +905,7 @@ def compose(context):
                 ),
                 launch_arguments={
                     "profile": str(planning_path),
+                    "runtime_profile": str(profile_path),
                     "static_scene": str(
                         config.get("simulation", {}).get("static_scene", False)
                     ).lower(),

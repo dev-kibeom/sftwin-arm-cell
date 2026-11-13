@@ -86,7 +86,8 @@ def test_move_group_uses_simulation_time():
     assert evaluated[0]["use_sim_time"] is True
 
 
-def test_validation_profile_selects_time_parameterization_and_acceleration_limits():
+@pytest.mark.parametrize('runtime_document', [False, True])
+def test_validation_profile_selects_time_parameterization_and_acceleration_limits(tmp_path, runtime_document):
     source_package = Path(__file__).resolve().parents[1]
     spec = importlib.util.spec_from_file_location(
         "planning_only_launch", source_package / "launch/planning_only.launch.py"
@@ -99,6 +100,14 @@ def test_validation_profile_selects_time_parameterization_and_acceleration_limit
         Path(__file__).resolve().parents[2]
         / "bringup/config/pnp_validation_profile.yaml"
     )
+    if runtime_document:
+        source = Path(context.launch_configurations['planning_profile'])
+        exported = tmp_path / 'runtime.json'
+        exported.write_text(json.dumps({
+            'kind': 'arm-cell-runtime-configuration', 'schema_version': 1,
+            'configuration': yaml.safe_load(source.read_text()),
+        }))
+        context.launch_configurations['planning_profile'] = str(exported)
     move_group = next(
         entity
         for entity in module.compose(context)
@@ -279,3 +288,49 @@ def test_isaac_builder_preserves_canonical_static_environment_semantics():
     objects = resolver["load_canonical_static_geometry"](project_root=repo_root)
     assert set(objects) == resolver["REQUIRED_STATIC_OBJECT_IDS"]
     assert len(objects) == 23
+
+
+def test_selected_robot_limits_survive_validation_time_parameterization(tmp_path):
+    source = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location('selected_robot_limits_launch', source / 'launch/planning_only.launch.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    limits = tmp_path / 'joint_limits.yaml'
+    limits.write_text(yaml.safe_dump({'joint_limits': {'joint_1': {
+        'has_velocity_limits': True, 'max_velocity': 0.25}}}))
+    context = LaunchContext()
+    context.launch_configurations.update(
+        use_rviz='false', joint_states='/joint_states', log_level='info',
+        joint_limits_file=str(limits), arm_joint_names='joint_1',
+        planning_profile=str(source.parent / 'bringup/config/pnp_validation_profile.yaml'))
+    move_group = module.compose(context)[0]
+    (parameters, _) = evaluate_parameters(context, move_group._Node__parameters)
+    # launch_ros flattens nested parameter dictionaries into dotted keys.
+    assert parameters['robot_description_planning.joint_limits.joint_1.max_velocity'] == 0.25
+    assert parameters['robot_description_planning.joint_limits.joint_1.has_velocity_limits'] is True
+    assert parameters['robot_description_planning.joint_limits.joint_1.max_acceleration'] == 5.0
+
+
+def test_standalone_moveit_uses_selected_logical_robot_profile(tmp_path):
+    source = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location('selected_robot_profile_launch', source / 'launch/planning_only.launch.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    robot = yaml.safe_load((source / 'config/robots/m0609.yaml').read_text())
+    robot['motion']['arm_joint_names'] = ['joint_2']
+    robot['joint_limits'] = 'limits.yaml'
+    (tmp_path / 'limits.yaml').write_text(yaml.safe_dump({'joint_limits': {
+        'joint_2': {'has_velocity_limits': True, 'max_velocity': 0.25}}}))
+    selected = tmp_path / 'robot.yaml'
+    selected.write_text(yaml.safe_dump(robot))
+    context = LaunchContext()
+    context.launch_configurations.update(
+        robot_profile=str(selected), use_rviz='false', joint_states='/joint_states', log_level='info',
+        planning_profile=str(source.parent / 'bringup/config/pnp_validation_profile.yaml'))
+    (parameters, _) = evaluate_parameters(context, module.compose(context)[0]._Node__parameters)
+    assert parameters['robot_description_planning.joint_limits.joint_2.max_velocity'] == 0.25
+    assert parameters['robot_description_planning.joint_limits.joint_2.max_acceleration'] == 5.0
+    assert 'robot_description_planning.joint_limits.joint_1.max_acceleration' not in parameters
+    from launch.actions import DeclareLaunchArgument
+    assert 'robot_profile' in {item.name for item in module.generate_launch_description().entities
+                               if isinstance(item, DeclareLaunchArgument)}

@@ -108,14 +108,13 @@ def test_validation_profile_owns_moveit_planning_scaling():
 
 
 def test_validation_place_target_is_above_the_cnc_workarea():
-    planning = yaml.safe_load((PACKAGE_ROOT / "config/isaac_planning.yaml").read_text())
-
-    recipe = load_profile(PROFILE_PATH)["_mission_recipe"]
+    profile = load_profile(PROFILE_PATH)
+    recipe = profile["_mission_recipe"]
     assert recipe["place"]["desired_object_pose"]["frame"] == "base_link"
     assert recipe["place"]["desired_object_pose"]["position"] == pytest.approx(
         [0.50, 0.25, 0.37]
     )
-    world_to_base = planning["world_to_base"]
+    world_to_base = profile["cell"]["world_to_base"]
     target_in_world = [
         recipe["place"]["desired_object_pose"]["position"][0] + world_to_base["x"],
         recipe["place"]["desired_object_pose"]["position"][1] + world_to_base["y"],
@@ -242,3 +241,19 @@ def test_production_operational_profile_has_no_fixed_adapter_selection():
     assert "fixed_vision" not in production
     assert "validation_grasp_contact_policy_enabled" not in production.get("motion", {})
     assert "validation_grasp_contact_links" not in production.get("motion", {})
+
+
+def test_validation_launch_uses_explicitly_composed_scene_selection(tmp_path):
+    from launch.actions import IncludeLaunchDescription
+    profile = yaml.safe_load(PROFILE_PATH.read_text())
+    profile['validation']['planning_scene_profiles'] = ['tool']
+    selected_scene = str(tmp_path / 'selected_scene.json')
+    profile['validation']['planning_scene']['static_scene_file'] = selected_scene
+    selected = tmp_path / 'validation.yaml'
+    selected.write_text(yaml.safe_dump(profile))
+    context = LaunchContext()
+    context.launch_configurations['profile'] = str(selected)
+    includes = [action for action in _load_launch_module().compose(context)
+                if isinstance(action, IncludeLaunchDescription)]
+    planning = next(action for action in includes if 'scene_file' in dict(action.launch_arguments))
+    assert dict(planning.launch_arguments)['scene_file'] == selected_scene

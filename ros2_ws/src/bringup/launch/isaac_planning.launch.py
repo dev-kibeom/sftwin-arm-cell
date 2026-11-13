@@ -21,6 +21,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
+from arm_cell_bringup.runtime import load_profile, selected_profiles, DEFAULT_PROFILES, read, resolve
 
 
 def _load_console_output_format():
@@ -85,28 +86,40 @@ def compose(context):
     config = yaml.safe_load(
         Path(LaunchConfiguration("profile").perform(context)).read_text()
     )
-    description = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "assets/robots/m0609_robotiq_2f85"
-    )
+    runtime_profile = LaunchConfiguration("runtime_profile", default="").perform(context)
+    if runtime_profile:
+        selected = load_profile(runtime_profile)
+        robot, cell = selected['robot'], selected['cell']
+        description = selected['model_configuration']
+        motion_configuration = selected['motion_configuration']
+    else:
+        references = dict(DEFAULT_PROFILES)
+        references['robot'] = config['robot_profile']
+        references['cell'] = config['cell_profile']
+        owners = selected_profiles(references, Path(LaunchConfiguration("profile").perform(context)).parent)
+        robot, cell = owners['robot'], owners['cell']
+        motion_path = resolve(config['motion_configuration'], Path(LaunchConfiguration("profile").perform(context)).parent)
+        motion_configuration = {key: str(resolve(value, motion_path.parent))
+                                for key, value in read(motion_path).items()}
+        model_path = resolve(config['model_configuration'], Path(LaunchConfiguration("profile").perform(context)).parent)
+        description = read(model_path)
+        for key in ('urdf', 'semantic'):
+            description[key] = str(resolve(description[key], model_path.parent))
+        for name in ('robot', 'tool'):
+            if description[f'{name}_id'] != owners[name][f'{name}_id']:
+                raise ValueError(f'Selected model is incompatible with {name} profile')
     model = {
         "robot_description": xacro.process_file(
-            str(description / "urdf/m0609_robotiq_2f85.urdf.xacro"),
-        mappings={
-            "mesh_root": (
-                "package://arm_cell_motion/assets/robots/"
-                "m0609_robotiq_2f85/meshes"
-            )
-        },
+            description['urdf'], mappings={'mesh_root': description['mesh_root']},
         ).toxml(),
         "use_sim_time": True,
     }
-    pose = config["world_to_base"]
+    pose = cell["world_to_base"]
     arguments = ["--frame-id", "world", "--child-frame-id", "base_link"]
     for key in ("x", "y", "z", "roll", "pitch", "yaw"):
         arguments.extend(["--" + key, str(pose[key])])
     moveit = Path(get_package_share_directory("arm_cell_motion"))
-    default_scene_file = str(moveit / "config/moveit/m0609_static_scene.json")
+    default_scene_file = cell["static_scene"]
     static_loader = Node(
         package="arm_cell_motion",
         executable="load_static_scene.py",
@@ -117,9 +130,7 @@ def compose(context):
             {
                 "use_sim_time": True,
                 "scene_file": str(
-                    LaunchConfiguration(
-                        "scene_file", default=default_scene_file
-                    ).perform(context)
+                    LaunchConfiguration("scene_file", default="").perform(context) or default_scene_file
                 ),
                 "verify_nominal_state": LaunchConfiguration(
                     "verify_nominal_state", default="false"
@@ -169,6 +180,13 @@ def compose(context):
             launch_arguments={
                 "use_rviz": LaunchConfiguration("use_rviz"),
                 "joint_states": config["joint_states"],
+                "robot_description_file": description['urdf'],
+                "robot_semantic_file": description['semantic'],
+                "mesh_root": description['mesh_root'],
+                "joint_limits_file": robot['joint_limits'],
+                "arm_joint_names": ','.join(robot['motion']['arm_joint_names']),
+                "kinematics_file": motion_configuration['kinematics'],
+                "planning_pipeline_file": motion_configuration['planning_pipeline'],
                 "planning_profile": LaunchConfiguration("planning_profile", default=""),
                 "log_level": LaunchConfiguration("log_level"),
             }.items(),
@@ -207,19 +225,14 @@ def generate_launch_description():
             SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument("static_scene", default_value="false"),
+            DeclareLaunchArgument("scene_file", default_value=""),
             DeclareLaunchArgument("log_level", default_value="info"),
             DeclareLaunchArgument("verify_nominal_state", default_value="false"),
-            DeclareLaunchArgument(
-                "scene_file",
-                default_value=str(
-                    Path(get_package_share_directory("arm_cell_motion"))
-                    / "config/moveit/m0609_static_scene.json"
-                ),
-            ),
             DeclareLaunchArgument(
                 "profile", default_value=str(share / "config/isaac_planning.yaml")
             ),
             DeclareLaunchArgument("planning_profile", default_value=""),
+            DeclareLaunchArgument("runtime_profile", default_value=""),
             OpaqueFunction(function=compose),
         ]
     )
