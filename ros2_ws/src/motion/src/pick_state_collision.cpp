@@ -3,6 +3,7 @@
 #include <moveit/collision_detection/collision_common.h>
 #include <moveit/collision_detection_fcl/collision_common.h>
 #include <fcl/narrowphase/collision.h>
+#include <algorithm>
 
 namespace arm_cell_motion
 {
@@ -27,7 +28,8 @@ PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
   const planning_scene::PlanningScene & scene,
   const moveit::core::RobotState & state,
   const moveit::core::JointModelGroup * arm,
-  const geometry_msgs::msg::PoseStamped & tcp_goal)
+  const geometry_msgs::msg::PoseStamped & tcp_goal,
+  const std::vector<std::string> & clearance_objects)
 {
   PickCollisionValidationResult result;
   const auto model = state.getRobotModel();
@@ -61,7 +63,8 @@ PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
     const auto & name = link->getName();
     if (name.rfind("gripper_", 0U) != 0U || arm_ancestors(link) != tcp_ancestors) {continue;}
     for (const auto & id : scene.getWorld()->getObjectIds()) {
-      if (id.rfind("amr_tray_rail_", 0U) != 0U) {continue;}
+      if (std::find(clearance_objects.begin(), clearance_objects.end(), id) ==
+        clearance_objects.end()) {continue;}
       collision_detection::AllowedCollision::Type allowed;
       if (scene.getAllowedCollisionMatrix().getAllowedCollision(name, id, allowed) &&
         allowed != collision_detection::AllowedCollision::NEVER) {continue;}
@@ -89,5 +92,36 @@ PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
     }
   }
   return result;
+}
+
+void append_pick_clearance_scene_occupancy(
+  const planning_scene::PlanningScene & scene,
+  const std::vector<std::string> & clearance_objects,
+  std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy)
+{
+  const auto & world = scene.getWorld();
+  for (const auto & id : clearance_objects) {
+    const auto rail = world->getObject(id);
+    if (!rail) {continue;}
+    for (std::size_t i = 0; i < rail->shapes_.size(); ++i) {
+      if (rail->shapes_[i]->type != shapes::BOX) {continue;}
+      const auto & box = static_cast<const shapes::Box &>(*rail->shapes_[i]);
+      const auto & transform = rail->global_shape_poses_[i];
+      arm_cell_interfaces::msg::CollisionPrimitive primitive;
+      primitive.shape_type =
+        arm_cell_interfaces::msg::CollisionPrimitive::SOLID_PRIMITIVE;
+      primitive.shape.type = shape_msgs::msg::SolidPrimitive::BOX;
+      primitive.shape.dimensions.assign(box.size, box.size + 3);
+      primitive.pose.position.x = transform.translation().x();
+      primitive.pose.position.y = transform.translation().y();
+      primitive.pose.position.z = transform.translation().z();
+      const Eigen::Quaterniond orientation(transform.linear());
+      primitive.pose.orientation.x = orientation.x();
+      primitive.pose.orientation.y = orientation.y();
+      primitive.pose.orientation.z = orientation.z();
+      primitive.pose.orientation.w = orientation.w();
+      occupancy.push_back(std::move(primitive));
+    }
+  }
 }
 }  // namespace arm_cell_motion

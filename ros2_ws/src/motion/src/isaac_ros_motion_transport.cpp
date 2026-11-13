@@ -1591,7 +1591,7 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   planning_group_ = node_->get_parameter("planning_group").as_string();
   model_id_ = node_->get_parameter("model_id").as_string();
   for (const auto * name : {"wrap_equivalent_joints", "place_ik_seed_joints",
-      "payload_touch_links", "pick_retract_contact_links"})
+      "payload_touch_links", "pick_retract_contact_links", "pick_clearance_objects"})
   {
     if (!node_->has_parameter(name)) {
       node_->declare_parameter<std::vector<std::string>>(name, std::vector<std::string>{});
@@ -1599,6 +1599,7 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   }
   wrap_equivalent_joints_ = node_->get_parameter("wrap_equivalent_joints").as_string_array();
   place_ik_seed_joints_ = node_->get_parameter("place_ik_seed_joints").as_string_array();
+  pick_clearance_objects_ = node_->get_parameter("pick_clearance_objects").as_string_array();
   payload_touch_links_ = node_->get_parameter("payload_touch_links").as_string_array();
   pick_retract_contact_object_ = node_->get_parameter("pick_retract_contact_object").as_string();
   pick_retract_contact_links_ =
@@ -5671,29 +5672,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         if (request_validation_scene &&
           request.target_pose.header.frame_id == request_validation_scene->getPlanningFrame())
         {
-          const auto & world = request_validation_scene->getWorld();
-          for (const auto * rail_id : {"amr_tray_rail_left", "amr_tray_rail_right",
-              "amr_tray_rail_front", "amr_tray_rail_rear"})
-          {
-            const auto rail = world->getObject(rail_id);
-            if (!rail) {continue;}
-            for (std::size_t i = 0; i < rail->shapes_.size(); ++i) {
-              if (rail->shapes_[i]->type != shapes::BOX) {continue;}
-              const auto & box = static_cast<const shapes::Box &>(*rail->shapes_[i]);
-              const auto & transform = rail->global_shape_poses_[i];
-              arm_cell_interfaces::msg::CollisionPrimitive primitive;
-              primitive.shape_type =
-                arm_cell_interfaces::msg::CollisionPrimitive::SOLID_PRIMITIVE;
-              primitive.shape.type = shape_msgs::msg::SolidPrimitive::BOX;
-              primitive.shape.dimensions.assign(box.size, box.size + 3);
-              primitive.pose.position.x = transform.translation().x();
-              primitive.pose.position.y = transform.translation().y();
-              primitive.pose.position.z = transform.translation().z();
-              primitive.pose.orientation = quaternion_message(
-                Eigen::Quaterniond(transform.linear()));
-              clearance_occupancy.push_back(std::move(primitive));
-            }
-          }
+          append_pick_clearance_scene_occupancy(
+            *request_validation_scene, pick_clearance_objects_, clearance_occupancy);
         }
         const auto & position = request.object_pose.pose.position;
         const Eigen::Vector3d object_center(position.x, position.y, position.z);
@@ -5776,6 +5756,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       planning_context->expected_joint_count = measured_start.size();
       planning_context->grasp_occupancy_mode = grasp_occupancy_mode_;
       planning_context->finger_clearance = finger_clearance_;
+      planning_context->pick_clearance_objects = pick_clearance_objects_;
       planning_context->non_target_occupancy = request.non_target_occupancy;
       planning_context->grasp_ik_timeout_s = pick_grasp_ik_timeout_s_;
       planning_context->approach_ik_timeout_s = pick_approach_ik_timeout_s_;

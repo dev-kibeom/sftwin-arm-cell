@@ -271,7 +271,8 @@ TEST_F(GraspCollisionValidatorTest, FingerCollisionUsesExistingPoseSeedRetry)
   EXPECT_EQ(context->attempt.attempt_evaluation, PickSearchEvaluation::GRASP_COLLISION);
 }
 }  // namespace
-TEST(GraspPosePrecheck, RejectsRailFingerIntersectionBeforeCallingIK)
+class GraspPosePrecheck : public ::testing::TestWithParam<std::string> {};
+TEST_P(GraspPosePrecheck, RejectsSelectedObjectFingerIntersectionBeforeCallingIK)
 {
   moveit::core::RobotModelBuilder builder("precheck", "base_link");
   builder.addChain("base_link->sf_grasp_tcp", "prismatic");
@@ -294,8 +295,9 @@ TEST(GraspPosePrecheck, RejectsRailFingerIntersectionBeforeCallingIK)
   state->setVariablePosition(context->joint_group->getVariableNames().front(), 0.5);
   context->robot_state = state;
   context->common_grasp_scene = std::make_shared<planning_scene::PlanningScene>(model);
+  context->pick_clearance_objects = {GetParam(), "absent_object"};
   context->common_grasp_scene->getWorldNonConst()->addToObject(
-    "amr_tray_rail_left", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
+    GetParam(), shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
     Eigen::Isometry3d::Identity());
   context->attempt.current_grasp_goal.header.frame_id = "base_link";
   context->attempt.current_grasp_goal.pose.orientation.w = 1.0;
@@ -314,7 +316,7 @@ TEST(GraspPosePrecheck, RejectsRailFingerIntersectionBeforeCallingIK)
   EXPECT_FALSE(context->attempt.grasp_ik_result.solver_returned);
   EXPECT_EQ(context->attempt.stage_elapsed_s.count("SolveGraspIK"), 0U);
   ASSERT_EQ(context->attempt.grasp_collision_result.contacts.size(), 1U);
-  EXPECT_EQ(context->attempt.grasp_collision_result.contacts.front().first, "amr_tray_rail_left");
+  EXPECT_EQ(context->attempt.grasp_collision_result.contacts.front().first, GetParam());
 
   // Relocating the TCP away from the rail must pass through to the IK leaf.
   context->attempt = PickPlanningAttempt();
@@ -327,12 +329,86 @@ TEST(GraspPosePrecheck, RejectsRailFingerIntersectionBeforeCallingIK)
 
   // An explicit allowed-collision entry must also defer to normal IK checks.
   context->common_grasp_scene->getAllowedCollisionMatrixNonConst().setEntry(
-    "amr_tray_rail_left", "gripper_robotiq_85_right_finger_tip_link", true);
+    GetParam(), "gripper_robotiq_85_right_finger_tip_link", true);
   context->attempt.current_grasp_goal.pose.position.x = 0.0;
   tree.haltTree();
   EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
   EXPECT_EQ(context->attempt.failure_reason, "IK_SOLVER_UNAVAILABLE");
 
+  // An unselected object still exists in the scene and its ACM is untouched.
+  context->common_grasp_scene->getAllowedCollisionMatrixNonConst().setEntry(
+    GetParam(), "gripper_robotiq_85_right_finger_tip_link", false);
+  context->pick_clearance_objects = {"absent_object"};
+  tree.haltTree();
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::FAILURE);
+  EXPECT_EQ(context->attempt.failure_reason, "IK_SOLVER_UNAVAILABLE");
+  collision_detection::AllowedCollision::Type allowed;
+  ASSERT_TRUE(
+    context->common_grasp_scene->getAllowedCollisionMatrix().getAllowedCollision(
+      GetParam(), "gripper_robotiq_85_right_finger_tip_link", allowed));
+  EXPECT_EQ(allowed, collision_detection::AllowedCollision::NEVER);
+
 }
 
+INSTANTIATE_TEST_SUITE_P(
+  CellObjectIds, GraspPosePrecheck,
+  ::testing::Values("amr_tray_rail_left", "fixture_guard"));
+
+TEST_F(GraspCollisionValidatorTest, SelectedSceneBoxesPreserveFingerClearanceResults)
+{
+  planning_scene::PlanningScene scene(model);
+  const auto world = scene.getWorldNonConst();
+  Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+  pose.translation() = Eigen::Vector3d(0.035, 0.0, -0.01);
+  const auto guard = shapes::ShapeConstPtr(new shapes::Box(0.002, 0.002, 0.002));
+  world->addToObject("fixture_guard", guard, pose);
+  world->addToObject("unrelated", shapes::ShapeConstPtr(new shapes::Box(1.0, 1.0, 1.0)), pose);
+  world->addToObject("round_guard", shapes::ShapeConstPtr(new shapes::Sphere(0.1)), pose);
+  scene.getAllowedCollisionMatrixNonConst().setEntry("unrelated", "sf_grasp_tcp", true);
+  moveit_msgs::msg::PlanningScene before;
+  scene.getPlanningSceneMsg(before);
+  std::vector<Primitive> occupancy;
+  append_pick_clearance_scene_occupancy(
+    scene, {"fixture_guard", "missing", "round_guard"}, occupancy);
+  ASSERT_EQ(occupancy.size(), 1U);
+  EXPECT_EQ(occupancy.front(), box(0.035));
+  const auto evaluate = [](const std::vector<Primitive> & values) {
+      return evaluate_finger_occupancy(
+        Eigen::Isometry3d::Identity(), Eigen::Vector3d::Zero(),
+        Eigen::Quaterniond::Identity(), BoxGraspContact{0U, 60.0},
+        Eigen::Vector3d::UnitZ(), values, FingerClearanceParameters{});
+    };
+  const auto intrusion = evaluate(occupancy);
+  const auto previous = evaluate({box(0.035)});
+  ASSERT_TRUE(intrusion.valid);
+  EXPECT_FALSE(intrusion.allowed);
+  EXPECT_EQ(intrusion.allowed, previous.allowed);
+  ASSERT_EQ(intrusion.intrusions.size(), previous.intrusions.size());
+  EXPECT_EQ(intrusion.intrusions.front().finger_index, previous.intrusions.front().finger_index);
+
+  // Scene transforms and every BOX on a selected object remain the geometry source.
+  Eigen::Isometry3d far = Eigen::Isometry3d::Identity();
+  far.translation().x() = 0.5;
+  far.linear() = Eigen::AngleAxisd(0.4, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+  world->addToObject("clear_guard", shapes::ShapeConstPtr(new shapes::Box(0.01, 0.02, 0.03)), far);
+  world->addToObject("clear_guard", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.03, 0.04)), far);
+  occupancy = {box(-0.5)};
+  append_pick_clearance_scene_occupancy(scene, {"clear_guard"}, occupancy);
+  ASSERT_EQ(occupancy.size(), 3U);
+  EXPECT_EQ(occupancy.front(), box(-0.5));
+  EXPECT_DOUBLE_EQ(occupancy[1].pose.position.x, 0.5);
+  EXPECT_DOUBLE_EQ(occupancy[1].pose.orientation.z, std::sin(0.2));
+  EXPECT_EQ(
+    (std::vector<double>(
+      occupancy[1].shape.dimensions.begin(),
+      occupancy[1].shape.dimensions.end())),
+    (std::vector<double>{0.01, 0.02, 0.03}));
+  EXPECT_TRUE(evaluate(occupancy).allowed);
+  // Neither projection nor the precheck writes world objects or ACM entries.
+  world->removeObject("clear_guard");
+  moveit_msgs::msg::PlanningScene after;
+  scene.getPlanningSceneMsg(after);
+  EXPECT_EQ(before.world, after.world);
+  EXPECT_EQ(before.allowed_collision_matrix, after.allowed_collision_matrix);
+}
 }  // namespace arm_cell_motion

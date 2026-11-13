@@ -132,6 +132,7 @@ def compose_owner_profiles(config, path):
     for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
         merge_owned(motion, {key: owners['robot']['joint_policy'][key]}, 'motion')
     merge_owned(motion, {
+        'pick_clearance_objects': owners['cell']['collision_objects']['pick_clearance'],
         'payload_touch_links': owners['tool']['contact_links']['payload_touch_links'],
         'pick_retract_contact_links': owners['tool']['contact_links']['pick_retract'],
         'pick_retract_contact_object': owners['cell']['contact_objects']['pick_retract'],
