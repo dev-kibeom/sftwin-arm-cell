@@ -46,7 +46,12 @@ def _add_cell_module_root():
 
 _add_cell_module_root()
 
-from scene_builder.composition import run_scene_build
+# Scene discovery uses only the common scripts root. The Cell path above is
+# still needed by the unchanged HOME/drive/material-supply runtime below.
+scripts_root = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve() / "infra/isaac_sim/scripts"
+if str(scripts_root) not in sys.path:
+    sys.path.insert(0, str(scripts_root))
+from scene_entrypoint import run_scene_build
 from scene_builder.material_supply import MaterialSupplyProfile
 from scene_builder.material_supply_adapter import IsaacMaterialSupplyAdapter
 from scene_builder.material_supply_sidecar import MaterialSupplySidecarClient
@@ -376,6 +381,7 @@ def _start_material_supply_adapter(context):
 
 
 context = run_scene_build(
+    configuration=_load_operational_profile(),
     world_cls=World,
     enable_extension=enable_extension,
     delete_prim=delete_prim,

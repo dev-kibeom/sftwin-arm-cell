@@ -1,9 +1,6 @@
 """Robot pedestal, mounting hardware, and M0609 reference construction."""
 
-import os
-from pathlib import Path
-
-from scene_builder.model_provenance import verify_current_artifact
+from .model_provenance import verify_current_artifact
 
 
 def build_robot_station(context):
@@ -21,7 +18,8 @@ def build_robot_station(context):
     # -----------------------------------------------------------------------------
     # 4. Robot pedestal + Doosan M0609
     # -----------------------------------------------------------------------------
-    robot_x, robot_y = 0.15, -0.15
+    selected = context.scene_configuration
+    robot_x, robot_y, robot_z = selected.position_m
 
     static_box(
         "pedestal",
@@ -63,36 +61,24 @@ def build_robot_station(context):
             mat_steel,
         )
 
-    configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
-    if not configured_root:
-        raise RuntimeError(
-            "SFTWIN_PROJECT_ROOT is not configured. Run 1_before_play.py "
-            "before constructing the robot station."
-        )
-    project_root = Path(configured_root).expanduser().resolve()
-    robot_usd = (
-        project_root / "infra/isaac_sim/assets/usd/m0609_robotiq_2f85_generated.usd"
-    )
-    generated_urdf = (
-        project_root / "infra/isaac_sim/assets/urdf/generated/m0609_robotiq_2f85.urdf"
-    )
-    source_xacro = (
-        project_root / "infra/isaac_sim/assets/urdf/assemblies/m0609_robotiq_2f85.xacro"
-    )
-    provenance = robot_usd.with_suffix(".provenance.json")
-    robot_path = f"{CELL_ROOT}/m0609"
+    model = selected.model
+    robot_usd = model.usd
+    robot_path = selected.robot_prim_path
 
     if robot_usd.exists():
-        verify_current_artifact(source_xacro, generated_urdf, robot_usd, provenance)
+        verify_current_artifact(
+            model.source, model.generated_urdf, robot_usd, model.provenance,
+            xacro_arguments=model.xacro_arguments,
+        )
         add_reference_to_stage(str(robot_usd), robot_path, prim_type="Xform")
         robot_prim = stage.GetPrimAtPath(robot_path)
         if robot_prim.IsValid():
             rx = UsdGeom.Xformable(robot_prim)
             rx.ClearXformOpOrder()
             rx.AddTranslateOp(precision=UsdGeom.XformOp.PrecisionDouble).Set(
-                Gf.Vec3d(robot_x, robot_y, 0.68)
+                Gf.Vec3d(robot_x, robot_y, robot_z)
             )
-            rx.AddRotateXYZOp().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+            rx.AddRotateXYZOp().Set(Gf.Vec3f(*selected.rotation_deg))
             robot_prim.SetCustomDataByKey("sf_twin:role", "manipulator")
     else:
         print(

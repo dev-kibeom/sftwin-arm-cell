@@ -2,8 +2,8 @@
 
 import json
 
-from scene_builder.camera_alignment_policy import near_rigid_rotation
-from scene_builder.d455_camera import D455_COLOR_CAMERA_NAME
+from .camera_alignment_policy import near_rigid_rotation
+from .d455_camera import D455_COLOR_CAMERA_NAME
 
 
 def _pxr_modules():

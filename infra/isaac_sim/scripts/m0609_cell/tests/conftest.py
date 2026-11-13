@@ -9,6 +9,8 @@ CELL_MODULE_ROOT = TEST_ROOT.parent
 if str(CELL_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(CELL_MODULE_ROOT))
 
+sys.path.insert(0, str(CELL_MODULE_ROOT.parent))
+
 for directory in ("support", "tooling", "acceptance"):
     path = str(TEST_ROOT / directory)
     if path not in sys.path:

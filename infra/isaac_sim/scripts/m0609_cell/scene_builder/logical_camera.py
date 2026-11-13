@@ -1,6 +1,6 @@
 """Logical Camera_Sensor construction owned by the M0609 scene builder."""
 
-from scene_builder.camera_extrinsic import author_camera_sensor_from_d455_color
+from .camera_extrinsic import author_camera_sensor_from_d455_color
 
 
 CAMERA_SENSOR_RELATIVE_PATH = "/Vision/Camera_Sensor"
