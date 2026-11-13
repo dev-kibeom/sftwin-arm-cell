@@ -52,6 +52,8 @@ DepthSceneStabilityMonitor::DepthSceneStabilityMonitor(DepthSceneStabilityConfig
 : config_(config)
 {
   if (config_.stable_observation_count == 0 ||
+    !std::isfinite(config_.minimum_stable_duration_s) ||
+    config_.minimum_stable_duration_s < 0.0 ||
     !std::isfinite(config_.depth_difference_tolerance_m) ||
     config_.depth_difference_tolerance_m < 0.0 ||
     !std::isfinite(config_.changed_pixel_ratio_tolerance) ||
@@ -68,7 +70,7 @@ void DepthSceneStabilityMonitor::reset()
   reference_depth_m_.release();
   previous_depth_m_.release();
   frame_id_.clear();
-  previous_stamp_ns_ = previous_receipt_ns_ = 0;
+  previous_stamp_ns_ = previous_receipt_ns_ = stable_start_stamp_ns_ = 0;
 }
 
 DepthSceneStabilityState DepthSceneStabilityMonitor::observe(const DepthSceneFrame & frame)
@@ -130,6 +132,7 @@ DepthSceneStabilityState DepthSceneStabilityMonitor::observe(const DepthSceneFra
 
   const bool collect_histogram = config_.detailed_diagnostics_enabled;
   if (reference_depth_m_.empty()) {
+    stable_start_stamp_ns_ = frame.stamp_ns;
     reference_depth_m_ = frame.depth_m.clone();
     previous_depth_m_ = frame.depth_m.clone();
     frame_id_ = frame.frame_id;
@@ -169,6 +172,7 @@ DepthSceneStabilityState DepthSceneStabilityMonitor::observe(const DepthSceneFra
       state_.reference_comparison.changed_pixel_ratio > config_.changed_pixel_ratio_tolerance ||
       state_.previous_comparison.changed_pixel_ratio > config_.changed_pixel_ratio_tolerance;
     if (changed) {
+      stable_start_stamp_ns_ = frame.stamp_ns;
       reference_depth_m_ = frame.depth_m.clone();
       state_.qualifying_observations = 1;
       state_.status = DepthSceneStatus::kUnstable;
@@ -177,7 +181,9 @@ DepthSceneStabilityState DepthSceneStabilityMonitor::observe(const DepthSceneFra
     } else {
       state_.qualifying_observations = std::min(
         state_.qualifying_observations + 1, config_.stable_observation_count);
-      state_.status = state_.qualifying_observations >= config_.stable_observation_count ?
+      state_.status = state_.qualifying_observations >= config_.stable_observation_count &&
+        static_cast<double>(frame.stamp_ns - stable_start_stamp_ns_) / 1e9 >=
+        config_.minimum_stable_duration_s ?
         DepthSceneStatus::kStable : DepthSceneStatus::kUnobservable;
       state_.reason = state_.status == DepthSceneStatus::kStable ? "depth_scene_stable" :
         "awaiting_stable_observations";

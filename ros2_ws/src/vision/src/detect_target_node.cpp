@@ -154,6 +154,8 @@ public:
     scene_stability_required_observations_ = static_cast<uint32_t>(stable_observation_count);
     DepthSceneStabilityConfig depth_scene_config;
     depth_scene_config.stable_observation_count = scene_stability_required_observations_;
+    depth_scene_config.minimum_stable_duration_s = declare_parameter<double>(
+      "scene_stability.minimum_stable_duration_s", 0.5);
     depth_difference_tolerance_m_ = declare_parameter<double>(
       "diagnostics.depth_scene_stability.depth_difference_tolerance_m", 0.003);
     changed_pixel_ratio_tolerance_ = declare_parameter<double>(
@@ -358,6 +360,35 @@ private:
     frame.stamp_ns = stamp;
     frame.receipt_monotonic_ns = observation.depth_receipt_monotonic_ns;
     frame.depth_m = depth_image_to_meters(observation.depth);
+    // Fixed camera-pixel footprint of the calibrated tray support plane.
+    // Intersect each camera ray with Tray Z=0, independent of current object depth.
+    if (!frame.depth_m.empty() && detector_profiles_.empty()) {
+      frame.depth_m.setTo(std::numeric_limits<float>::quiet_NaN());
+    }
+    if (!frame.depth_m.empty() && !detector_profiles_.empty()) {
+      const auto & transform = selected_calibration_file_.tray_from_camera.transform;
+      const tf2::Quaternion rotation(
+        transform.rotation.x, transform.rotation.y, transform.rotation.z, transform.rotation.w);
+      const tf2::Vector3 origin(
+        transform.translation.x, transform.translation.y, transform.translation.z);
+      const auto & camera = observation.camera_info;
+      const auto & profile = detector_profiles_.front();
+      for (int row = 0; row < frame.depth_m.rows; ++row) {
+        for (int col = 0; col < frame.depth_m.cols; ++col) {
+          const auto ray = tf2::quatRotate(rotation, tf2::Vector3(
+            (col - camera.k[2]) / camera.k[0],
+            (row - camera.k[5]) / camera.k[4], 1.0));
+          const double distance = std::abs(ray.z()) > 1e-12 ? -origin.z() / ray.z() : -1.0;
+          const auto point = origin + ray * distance;
+          if (distance <= 0.0 || !std::isfinite(distance) ||
+            point.x() < profile.tray_roi_min_m[0] || point.x() >= profile.tray_roi_max_m[0] ||
+            point.y() < profile.tray_roi_min_m[1] || point.y() >= profile.tray_roi_max_m[1])
+          {
+            frame.depth_m.at<float>(row, col) = std::numeric_limits<float>::quiet_NaN();
+          }
+        }
+      }
+    }
     frame.frame_id = observation.depth.header.frame_id;
     const std::string invalid_reason = frame.depth_m.empty() ?
       "invalid_depth_encoding_or_layout" : std::string();

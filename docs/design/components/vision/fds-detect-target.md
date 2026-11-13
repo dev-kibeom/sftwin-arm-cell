@@ -91,7 +91,7 @@ Algorithm 선택은 Recipe가 소유한다. Orchestration은 `vision.algorithm`�
 
 운영 검출은 요청 기반이다. 카메라 스트림의 연속 발행은 관측 가능성을 제공할 뿐, Profile 처리는 활성 Acquisition 요청 동안에만 실행한다. 요청마다 서비스 수신부터 신선한 Depth 관측, Scene Stability, Profile 검증, terminal 응답까지 **하나의 steady monotonic deadline**을 사용한다. 안정화나 DetectTarget 대기 예산을 별도로 누적하지 않는다. 서비스 `timeout`은 전체 Acquisition 예산이며, Vision은 예산 내에서 불충분하거나 일시적으로 무효인 관측을 내부 재시도한다.
 
-Detector를 실행하려면 유효한 Depth 관측이 연속 5회 필요하다. TF preflight가 불가능하면 Detector 결과를 기록하지 않고 같은 deadline 내 대기한다. 이후 새 관측을 사용하려면 그 관측 자체의 Depth 평가가 STABLE이어야 한다. 선택 Detector는 STABLE이 된 정확한 Depth 관측에서 한 번 실행하며, 근처 시각의 호환 RGB는 선택적인 표시 자료일 뿐이다. Detector는 모든 가설을 내부 평가하고 SELECTED HIGH·MEDIUM 후보 전체를 단일 `material_candidates` 목록으로 같은 Acquisition에 반환한다. 단일 목록이 비어 있고 유효한 최종 관측에서 개별 Geometry를 확정하지 못한 경우 기존 `DETECT_RESULT_GEOMETRY_ERROR` 및 근거가 있는 `disturbance_candidates` 의미를 적용한다. `DETECT_RESULT_TEMPORARY_INVALID_TARGET`은 일시적인 관측 Evidence 부족에 한정한다. LOW·REJECTED는 일반 PICK 후보로 반환하지 않는다. `OBJECT_NOT_FOUND`는 유효한 Absence 조건이 부재를 확정한 경우에만 반환하며 불충분하거나 모호한 관측은 부재가 아니다.
+Detector를 실행하려면 유효한 Depth 관측이 연속 5회 이상이며 설정된 안정 유지 시간(기본 0.5초)을 충족해야 한다. TF preflight가 불가능하면 Detector 결과를 기록하지 않고 같은 deadline 내 대기한다. 이후 새 관측을 사용하려면 그 관측 자체의 Depth 평가가 STABLE이어야 한다. 선택 Detector는 STABLE이 된 정확한 Depth 관측에서 한 번 실행하며, 근처 시각의 호환 RGB는 선택적인 표시 자료일 뿐이다. Detector는 모든 가설을 내부 평가하고 SELECTED HIGH·MEDIUM 후보 전체를 단일 `material_candidates` 목록으로 같은 Acquisition에 반환한다. 단일 목록이 비어 있고 유효한 최종 관측에서 개별 Geometry를 확정하지 못한 경우 기존 `DETECT_RESULT_GEOMETRY_ERROR` 및 근거가 있는 `disturbance_candidates` 의미를 적용한다. `DETECT_RESULT_TEMPORARY_INVALID_TARGET`은 일시적인 관측 Evidence 부족에 한정한다. LOW·REJECTED는 일반 PICK 후보로 반환하지 않는다. `OBJECT_NOT_FOUND`는 유효한 Absence 조건이 부재를 확정한 경우에만 반환하며 불충분하거나 모호한 관측은 부재가 아니다.
 
 모든 후보 Geometry는 동일한 최종 Depth 관측에서 나온다. Vision은 단일 대표 후보를 선택하거나 Pose·ID·Geometry·Confidence를 Acquisition 공통 결과에 투영하지 않는다. Acquisition 진단과 전체 가설·Selection·Boundary·Plane Map·Replay·Disturbance 근거는 특정 후보와 독립적으로 보존한다. 성공적으로 인계한 뒤 Vision은 목록을 보존하지 않는다. Orchestration은 전체 목록을 변경 없이 한 PICK Goal로 전달하고 Task Execution은 후보 우선순위·전환을 소유한다. Strategy별 후보 참여 및 필수 출력은 [TestCube FDS](fds-rawpart-depth-perception.md), ROS 필드와 후보 Geometry 의미는 ICD를 따른다. 물체 하나를 처리한 후 다음 물체는 새로운 관측에서 검출한다. 요청은 `/vision/scene_stability_active`를 사용하지 않는다. `scene_generation`은 호환·진단 식별자로 채울 수 있으나 호출자의 추가 수락 Gate가 아니다.
 
@@ -257,3 +257,9 @@ Robot/Tool Geometry가 바뀌거나 제거되어도 Vision Object Reference 결�
 ### VR-VIS-DETECT-20 — Depth Scene Stability Detector Gate
 
 Depth Scene Stability는 RGB Pixel·Candidate Output·Simulator Ground Truth 없이 Depth 값만으로 판정한다. 샘플은 RGB Pairing과 독립적인, 호환 CameraInfo·Calibration을 가진 신선한 Depth 관측이다. Detection 전에 연속 유효 샘플 5개가 필요하며 Detector는 정확히 STABLE로 평가된 Depth 관측을 받아야 한다. TF Preflight로 호출할 수 없으면 동일 Acquisition Deadline 내 대기할 수 있고 이후 관측을 쓰려면 그 관측도 STABLE이어야 한다. Stable 판정만으로 유효한 부재·후보 인계를 생성할 수 없다. 무효 Time·비호환 CameraInfo/Calibration·유효 Depth Pixel 부재·두 시간 비교 중 하나라도 Comparable Pixel 부재·설정 Tolerance를 초과한 Changed-Pixel Ratio는 STABLE을 만들 수 없다. Tray Visibility·Coverage Ratio는 Detector 진입 조건이 아니다. Scene Stability는 원래 Camera Depth(m 단위)를 Filter·Projection·Segmentation·Candidate Data 없이 비교하며 Detector Geometry 적격성·후보 결과·유효 부재 Coverage 규칙을 변경하지 않는다.
+
+### 트레이 안정화 관측 범위와 유지 시간
+
+Scene Stability는 보정된 지지 평면(Tray Z=0)에서 설정된 트레이 작업 영역을 영상에 투영한 고정 영역 안의 원본 Camera Depth 픽셀만 비교한다. 이 영역은 현재 측정된 자재 깊이와 독립적이다. Changed-pixel Ratio의 분모는 해당 영역 안에서 비교 가능한 픽셀이며, 영역 밖 픽셀은 계산에 포함하지 않는다. 기준 프레임 및 직전 프레임과의 비교가 모두 설정된 허용치를 만족해야 한다.
+
+최신 관측을 Detector에 전달하려면 최소 `scene_stability.stable_observation_count`회의 관측과 Depth 촬영 시각 기준 `scene_stability.minimum_stable_duration_s`(배포 기본값 0.5초)의 안정 유지 시간을 모두 충족해야 한다. 움직임이나 무효 입력은 연속 안정 구간을 초기화한다. 요청의 기존 steady deadline은 전체 Acquisition을 계속 제한하며, 실제 시간의 경과만으로 안정 유지 시간을 충족하지 않는다.
