@@ -26,8 +26,8 @@ constexpr double kMarkerY = -0.105;
 arm_cell_vision::DetectorProfile rawpart_profile()
 {
   arm_cell_vision::DetectorProfile profile;
-  profile.target_id = "RawPart";
-  profile.material_id = "RawPart";
+  profile.target_id = "TestCube";
+  profile.material_id = "TestCube";
   profile.shape = "box";
   profile.dimensions_m = {0.07, 0.07, 0.08};
   profile.dimension_tolerance_m = {0.01, 0.01, 0.01};
@@ -121,7 +121,7 @@ arm_cell_vision::SupportCalibrationSnapshot fixture_calibration()
   static const auto calibration = []() {
       auto input = rgbd_input(true);
       arm_cell_vision::DetectTargetProcessor calibrator;
-      (void)calibrator.process(input, "RawPart", {rawpart_profile()}, true);
+      (void)calibrator.process(input, "TestCube", {rawpart_profile()}, true);
       return calibrator.support_calibration_snapshot();
     }();
   return calibration;
@@ -205,6 +205,70 @@ void set_rotated_rectangle(
   }
 }
 
+TEST(CuboidMaterialProfiles, DetectsEachConfiguredCncMaterialThroughTheProcessor)
+{
+  struct Material
+  {
+    std::string id;
+    std::array<double, 3> dimensions;
+  };
+  for (const auto & material : std::vector<Material>{
+      {"TestCube", {0.07, 0.07, 0.08}},
+      {"AL_BILLET_060_040_030", {0.06, 0.04, 0.03}},
+      {"STEEL_BLANK_070_050_040", {0.07, 0.05, 0.04}},
+      {"AL_PLATE_080_060_020", {0.08, 0.06, 0.02}},
+      {"FutureCuboid", {0.06, 0.04, 0.03}}})
+  {
+    SCOPED_TRACE(material.id);
+    auto profile = rawpart_profile();
+    profile.target_id = material.id;
+    profile.material_id = material.id;
+    profile.dimensions_m = material.dimensions;
+    auto input = rgbd_input(false);
+    clear_candidate(input, 72, 168, 16, 16);
+    const float depth = static_cast<float>(1.0 - material.dimensions[2]);
+    set_rotated_rectangle(input, 0.0,
+      static_cast<int>(std::lround(material.dimensions[0] * kFocalLength / depth)),
+      static_cast<int>(std::lround(material.dimensions[1] * kFocalLength / depth)), depth);
+    const auto result = process_with_fixture_calibration(input, material.id, {profile});
+    ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
+    ASSERT_FALSE(result.ordered_candidates.empty());
+    EXPECT_NEAR(result.ordered_candidates.front().estimated_height_m, material.dimensions[2], 0.005);
+    ASSERT_TRUE(result.applied_profile);
+    EXPECT_EQ(result.applied_profile->material_id, material.id);
+  }
+}
+
+TEST(CuboidMaterialProfiles, CalibratesSupportWithoutDependingOnMaterialIdentity)
+{
+  for (const auto & id : {"AL_BILLET_060_040_030", "STEEL_BLANK_070_050_040", "AL_PLATE_080_060_020"}) {
+    SCOPED_TRACE(id);
+    auto profile = rawpart_profile();
+    profile.target_id = id;
+    profile.material_id = id;
+    arm_cell_vision::DetectTargetProcessor processor;
+    const auto result = processor.process(rgbd_input(true), id, {profile}, true);
+    EXPECT_EQ(result.processing_stage, "calibration_only") << result.diagnostic_detail;
+    EXPECT_TRUE(processor.support_calibration_snapshot().ready);
+  }
+}
+
+TEST(CuboidMaterialProfiles, StillRejectsMismatchedIdentityAndInvalidGeometry)
+{
+  auto profile = rawpart_profile();
+  profile.target_id = "AL_PLATE_080_060_020";
+  const auto mismatched = process_with_fixture_calibration(rgbd_input(false), profile.target_id, {profile});
+  EXPECT_EQ(mismatched.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
+  profile.material_id = profile.target_id;
+  profile.shape = "sphere";
+  const auto wrong_shape = process_with_fixture_calibration(rgbd_input(false), profile.target_id, {profile});
+  EXPECT_EQ(wrong_shape.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
+  profile.shape = "box";
+  profile.dimensions_m[0] = 0.0;
+  const auto invalid_size = process_with_fixture_calibration(rgbd_input(false), profile.target_id, {profile});
+  EXPECT_EQ(invalid_size.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
+}
+
 TEST(RawPartDetectTarget, CuboidAlgorithmRemainsSelectableAcrossAcquisitions)
 {
   auto input = rgbd_input(true);
@@ -214,7 +278,7 @@ TEST(RawPartDetectTarget, CuboidAlgorithmRemainsSelectableAcrossAcquisitions)
   auto profile = rawpart_profile();
   for (const auto & algorithm : {"cuboid_top_face", "cuboid_top_face"}) {
     profile.algorithm = algorithm;
-    const auto result = processor.process(input, "RawPart", {profile});
+    const auto result = processor.process(input, "TestCube", {profile});
     ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
     EXPECT_EQ(result.algorithm, algorithm);
     EXPECT_EQ(result.ordered_candidates.at(0).target_pose.header.frame_id, "base_link");
@@ -230,7 +294,7 @@ TEST(RawPartDetectTarget, RejectsLegacyRectangleProfile)
   auto profile = rawpart_profile();
   profile.algorithm = "legacy_rectangle";
 
-  const auto result = processor.process(input, "RawPart", {profile});
+  const auto result = processor.process(input, "TestCube", {profile});
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
   EXPECT_EQ(result.processing_stage, "profile_resolution");
@@ -245,13 +309,13 @@ TEST(RawPartDetectTarget, LoadedCalibrationAllowsDepthOnlyCuboidDetection)
     profile.algorithm = algorithm;
     auto rgbd = rgbd_input(true);
     clear_candidate(rgbd, 72, 168, 16, 16);
-    const auto with_rgb = processor.process(rgbd, "RawPart", {profile});
+    const auto with_rgb = processor.process(rgbd, "TestCube", {profile});
     auto invalid_encoding_input = rgbd;
     invalid_encoding_input.rgb.encoding = "bgr8";
     auto short_buffer_input = rgbd;
     short_buffer_input.rgb.data.resize(short_buffer_input.rgb.data.size() - 1);
     rgbd.rgb = sensor_msgs::msg::Image{};
-    const auto depth_only = processor.process(rgbd, "RawPart", {profile});
+    const auto depth_only = processor.process(rgbd, "TestCube", {profile});
 
     ASSERT_EQ(with_rgb.result_code, ResultCode::DETECT_RESULT_SUCCESS)
       << with_rgb.diagnostic_detail;
@@ -264,7 +328,7 @@ TEST(RawPartDetectTarget, LoadedCalibrationAllowsDepthOnlyCuboidDetection)
     EXPECT_TRUE(depth_only.source_rgb_header.frame_id.empty());
 
     const auto invalid_encoding = processor.process(
-      invalid_encoding_input, "RawPart", {profile});
+      invalid_encoding_input, "TestCube", {profile});
     EXPECT_EQ(invalid_encoding.result_code, with_rgb.result_code);
     EXPECT_EQ(invalid_encoding.ordered_candidates.size(), with_rgb.ordered_candidates.size());
     EXPECT_NEAR(invalid_encoding.target_pose.pose.position.x,
@@ -273,7 +337,7 @@ TEST(RawPartDetectTarget, LoadedCalibrationAllowsDepthOnlyCuboidDetection)
       with_rgb.target_pose.pose.position.y, 1e-9);
     EXPECT_TRUE(invalid_encoding.source_rgb_header.frame_id.empty());
 
-    const auto short_buffer = processor.process(short_buffer_input, "RawPart", {profile});
+    const auto short_buffer = processor.process(short_buffer_input, "TestCube", {profile});
     EXPECT_EQ(short_buffer.result_code, with_rgb.result_code);
     EXPECT_EQ(short_buffer.ordered_candidates.size(), with_rgb.ordered_candidates.size());
     EXPECT_NEAR(short_buffer.target_pose.pose.position.x,
@@ -292,13 +356,13 @@ TEST(RawPartDetectTarget, RecordsProfileResolvedByTheAcquisitionTargetId)
   distractor.target_id = "OtherTarget";
   distractor.cuboid.grid_resolution_m = 0.009;
   auto selected = rawpart_profile();
-  selected.target_id = "RawPart";
+  selected.target_id = "TestCube";
   selected.cuboid.grid_resolution_m = 0.0031;
   arm_cell_vision::DetectTargetProcessor processor;
   install_fixture_calibration(processor);
-  const auto result = processor.process(input, "RawPart", {distractor, selected});
+  const auto result = processor.process(input, "TestCube", {distractor, selected});
   ASSERT_TRUE(result.applied_profile);
-  EXPECT_EQ(result.applied_profile->target_id, "RawPart");
+  EXPECT_EQ(result.applied_profile->target_id, "TestCube");
   EXPECT_DOUBLE_EQ(result.applied_profile->cuboid.grid_resolution_m, 0.0031);
 }
 
@@ -308,7 +372,7 @@ TEST(RawPartDetectTarget, ObservedSupportSelectsCompetingRecipeFacesWithoutConfi
   for (const float depth : {0.92F, 0.93F}) {
     auto input = rgbd_input(true);
     set_rotated_rectangle(input, 0.0, 86, 76, depth);
-    const auto result = process_with_fixture_calibration(input, "RawPart", {rawpart_profile()});
+    const auto result = process_with_fixture_calibration(input, "TestCube", {rawpart_profile()});
     ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS);
     EXPECT_FALSE(result.ordered_candidates.empty());
     const auto selected = std::find_if(result.cuboid_hypotheses.begin(), result.cuboid_hypotheses.end(),
@@ -336,7 +400,7 @@ TEST(RawPartDetectTarget, ReportsMeasuredRectangleSidesAndConsistentTwofoldPose)
     auto profile = rawpart_profile();
     // Isolate Pose transport from overlapping Recipe-face tolerances.
     profile.dimension_tolerance_m = {0.0035, 0.0035, 0.0035};
-    const auto result = process_with_fixture_calibration(input, "RawPart", {profile});
+    const auto result = process_with_fixture_calibration(input, "TestCube", {profile});
     ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS)
       << degrees << " deg: " << result.diagnostic_detail;
     ASSERT_TRUE(result.ordered_candidates.at(0).has_observed_rectangle);
@@ -371,7 +435,7 @@ TEST(RawPartDetectTarget, SideLyingRawPartReportsMeasuredTopAndHeightAsRectangle
     auto profile = rawpart_profile();
     // Isolate Pose transport from overlapping Recipe-face tolerances.
     profile.dimension_tolerance_m = {0.0035, 0.0035, 0.0035};
-    const auto result = process_with_fixture_calibration(input, "RawPart", {profile});
+    const auto result = process_with_fixture_calibration(input, "TestCube", {profile});
     ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS)
       << degrees << " deg: " << result.diagnostic_detail;
     ASSERT_TRUE(result.ordered_candidates.at(0).has_observed_rectangle);
@@ -405,7 +469,7 @@ TEST(RawPartDetectTarget, FitsWithOrdinaryDepthNoiseAndSparseBoundaryOutlier)
     }
     set_depth_pixel(input, 158, 112, 0.921F);
     const auto result = process_with_fixture_calibration(
-      input, "RawPart", {rawpart_profile()});
+      input, "TestCube", {rawpart_profile()});
     ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS)
       << degrees << " deg: " << result.diagnostic_detail;
     const auto match = std::find_if(
@@ -423,7 +487,7 @@ TEST(RawPartCalibration, RuntimeDoesNotCreateCalibrationFromObservedFrames)
 {
   auto input = rgbd_input(true);
   arm_cell_vision::DetectTargetProcessor processor;
-  const auto result = processor.process(input, "RawPart", {rawpart_profile()});
+  const auto result = processor.process(input, "TestCube", {rawpart_profile()});
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_GEOMETRY_ERROR);
   EXPECT_EQ(result.processing_stage, "calibration_readiness");
   EXPECT_FALSE(processor.support_calibration_snapshot().ready);
@@ -434,7 +498,7 @@ TEST(RawPartCalibration, ExplicitRequestUsesOneObservationAndDoesNotRunDetection
 {
   auto input = rgbd_input(true);
   arm_cell_vision::DetectTargetProcessor calibrator;
-  const auto result = calibrator.process(input, "RawPart", {rawpart_profile()}, true);
+  const auto result = calibrator.process(input, "TestCube", {rawpart_profile()}, true);
   const auto calibration = calibrator.support_calibration_snapshot();
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET);
   EXPECT_FALSE(result.has_target_pose);
@@ -451,7 +515,7 @@ TEST(RawPartCalibration, ExplicitFiducialCalibrationStillRequiresRgb)
   input.rgb = sensor_msgs::msg::Image{};
   arm_cell_vision::DetectTargetProcessor calibrator;
 
-  const auto result = calibrator.process(input, "RawPart", {rawpart_profile()}, true);
+  const auto result = calibrator.process(input, "TestCube", {rawpart_profile()}, true);
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_SENSOR_ERROR);
   EXPECT_EQ(result.processing_stage, "observation_validation");
@@ -465,7 +529,7 @@ TEST(RawPartCalibration, ExplicitCalibrationDoesNotRequireAnOpticalToBaseTransfo
   arm_cell_vision::DetectTargetProcessor calibrator;
 
   const auto result = calibrator.process(
-    input, "RawPart", {rawpart_profile()}, true);
+    input, "TestCube", {rawpart_profile()}, true);
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET);
   EXPECT_TRUE(calibrator.support_calibration_snapshot().ready);
@@ -476,7 +540,7 @@ TEST(RawPartCalibration, LoadedTransformSupportsRuntimeWithoutMarkerObservation)
   arm_cell_vision::DetectTargetProcessor processor;
   install_fixture_calibration(processor);
   auto input = rgbd_input(false);
-  const auto result = processor.process(input, "RawPart", {rawpart_profile()});
+  const auto result = processor.process(input, "TestCube", {rawpart_profile()});
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
   EXPECT_FALSE(result.ordered_candidates.empty());
   EXPECT_TRUE(processor.support_calibration_snapshot().ready);
@@ -488,12 +552,12 @@ TEST(RawPartCalibration, FailedExplicitRequestLeavesLoadedRuntimeTransformUsable
   install_fixture_calibration(runtime);
   auto missing_marker = rgbd_input(false);
   arm_cell_vision::DetectTargetProcessor calibrator;
-  const auto failed = calibrator.process(missing_marker, "RawPart", {rawpart_profile()}, true);
+  const auto failed = calibrator.process(missing_marker, "TestCube", {rawpart_profile()}, true);
   EXPECT_EQ(failed.result_code, ResultCode::DETECT_RESULT_GEOMETRY_ERROR);
   EXPECT_FALSE(calibrator.support_calibration_snapshot().ready);
   EXPECT_TRUE(runtime.support_calibration_snapshot().ready);
   auto runtime_input = rgbd_input(false);
-  EXPECT_EQ(runtime.process(runtime_input, "RawPart", {rawpart_profile()}).result_code,
+  EXPECT_EQ(runtime.process(runtime_input, "TestCube", {rawpart_profile()}).result_code,
     ResultCode::DETECT_RESULT_SUCCESS);
 }
 
@@ -504,13 +568,13 @@ TEST(RawPartCalibration, RuntimeDoesNotDependOnArUcoDictionaryConfiguration)
   auto profile = rawpart_profile();
   profile.fiducial_dictionary = "DICT_NOT_SUPPORTED";
   const auto runtime = process_with_fixture_calibration(
-    rgbd_input(false), "RawPart", {profile});
+    rgbd_input(false), "TestCube", {profile});
   EXPECT_EQ(runtime.result_code, ResultCode::DETECT_RESULT_SUCCESS)
     << runtime.diagnostic_detail;
 
   arm_cell_vision::DetectTargetProcessor calibrator;
   const auto request = calibrator.process(
-    rgbd_input(true), "RawPart", {profile}, true);
+    rgbd_input(true), "TestCube", {profile}, true);
   EXPECT_EQ(request.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
   EXPECT_FALSE(calibrator.support_calibration_snapshot().ready);
 }
@@ -521,7 +585,7 @@ TEST(RawPartCalibration, ExplicitRequestUsesConfiguredFiducialDictionary)
   profile.fiducial_dictionary = "DICT_5X5_50";
   arm_cell_vision::DetectTargetProcessor calibrator;
   (void)calibrator.process(rgbd_input(true, profile.fiducial_dictionary),
-    "RawPart", {profile}, true);
+    "TestCube", {profile}, true);
   EXPECT_TRUE(calibrator.support_calibration_snapshot().ready);
 }
 
@@ -530,7 +594,7 @@ TEST(RawPartDetectTarget, ProcessingStageIsIndependentOfDiagnosticText)
   auto input = rgbd_input(true);
   input.camera_info.k[0] = 0.0;
   auto result = process_with_fixture_calibration(
-    input, "RawPart", {rawpart_profile()});
+    input, "TestCube", {rawpart_profile()});
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_SENSOR_ERROR);
   EXPECT_EQ(result.processing_stage, "observation_validation");
@@ -555,7 +619,7 @@ TEST(RawPartDetectTarget, UnresolvedOutlineMeanUsesObservationTimeBaseLinkFrame)
   input.optical_to_base.transform.rotation.z = rotation.z();
   input.optical_to_base.transform.rotation.w = rotation.w();
 
-  const auto result = process_with_fixture_calibration(input, "RawPart", {rawpart_profile()});
+  const auto result = process_with_fixture_calibration(input, "TestCube", {rawpart_profile()});
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_GEOMETRY_ERROR);
   ASSERT_EQ(result.disturbance_candidates.size(), 1U);
@@ -577,7 +641,7 @@ TEST(RawPartDetectTarget, UnresolvedOutlineMeanUsesObservationTimeBaseLinkFrame)
   camera_input.optical_to_base.transform.rotation.y = 0;
   camera_input.optical_to_base.transform.rotation.z = 0;
   camera_input.optical_to_base.transform.rotation.w = 1;
-  const auto reference = process_with_fixture_calibration(camera_input, "RawPart", {rawpart_profile()});
+  const auto reference = process_with_fixture_calibration(camera_input, "TestCube", {rawpart_profile()});
   ASSERT_EQ(reference.disturbance_candidates.size(), 1U);
   const auto & p = reference.disturbance_candidates[0].center.pose.position;
   const tf2::Transform base_T_camera(rotation, {0.2, -0.1, 0.3});
@@ -606,7 +670,7 @@ TEST(RawPartDetectTarget, ValidCandidateCanBeSelectedWithLowWholeWorkspaceCovera
   // This foreground-only observation tests loaded calibration/coverage, not
   // ambiguous 70/80 mm face selection. A cube has one Recipe face class.
   profile.dimensions_m = {0.07, 0.07, 0.07};
-  const auto result = process_with_fixture_calibration(input, "RawPart", {profile});
+  const auto result = process_with_fixture_calibration(input, "TestCube", {profile});
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS)
     << result.diagnostic_detail;
@@ -629,7 +693,7 @@ TEST(RawPartDetectTarget, UnobservableWorkspaceAndInsufficientDepthAreNotDepleti
   profile.workspace_roi_min_m = {-0.5, -0.5, 0.01};
   profile.workspace_roi_max_m = {0.5, 0.5, 0.12};
   const auto clipped_result = process_with_fixture_calibration(
-    clipped_workspace, "RawPart", {profile});
+    clipped_workspace, "TestCube", {profile});
   EXPECT_NE(clipped_result.result_code, ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND);
   if (clipped_result.has_target_pose) {
     EXPECT_FALSE(clipped_result.ordered_candidates.at(0).has_observed_rectangle);
@@ -645,7 +709,7 @@ TEST(RawPartDetectTarget, UnobservableWorkspaceAndInsufficientDepthAreNotDepleti
   profile = rawpart_profile();
   profile.algorithm = "cuboid_top_face";
   const auto insufficient_result = process_with_fixture_calibration(
-    insufficient_depth, "RawPart", {profile});
+    insufficient_depth, "TestCube", {profile});
   EXPECT_EQ(insufficient_result.result_code, ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET);
   EXPECT_FALSE(insufficient_result.has_target_pose);
 }
@@ -661,7 +725,7 @@ TEST(RawPartDetectTarget, UniqueRoiAndCameraClippedGeometryIsMedium)
   profile.dimensions_m = {0.07, 0.07, 0.07};
   profile.workspace_roi_max_m[0] = 0.025;
   const auto outside_result = process_with_fixture_calibration(
-    outside_workspace, "RawPart", {profile});
+    outside_workspace, "TestCube", {profile});
   ASSERT_EQ(outside_result.result_code, ResultCode::DETECT_RESULT_SUCCESS)
     << outside_result.diagnostic_detail;
   EXPECT_LE(
@@ -680,7 +744,7 @@ TEST(RawPartDetectTarget, UniqueRoiAndCameraClippedGeometryIsMedium)
   profile.tray_roi_min_m = {-0.20, -0.08};
   profile.tray_roi_max_m = {0.08, 0.08};
   const auto clipped_result = process_with_fixture_calibration(
-    clipped_at_image_edge, "RawPart", {profile});
+    clipped_at_image_edge, "TestCube", {profile});
   ASSERT_EQ(clipped_result.result_code, ResultCode::DETECT_RESULT_SUCCESS)
     << clipped_result.diagnostic_detail;
   EXPECT_FALSE(clipped_result.ordered_candidates.empty());
@@ -698,7 +762,7 @@ TEST(RawPartDetectTarget, CuboidGeometryFailureIsNotRewrittenAsAbsence)
       value.cuboid.grid_resolution_m = 0.0;
       return value;
     }();
-  const auto result = process_with_fixture_calibration(input, "RawPart", {profile});
+  const auto result = process_with_fixture_calibration(input, "TestCube", {profile});
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_GEOMETRY_ERROR);
   EXPECT_FALSE(result.rawpart_absence_confirmed);
   EXPECT_EQ(result.failure_cause, "Cuboid required geometry/occupancy failed");
@@ -725,7 +789,7 @@ TEST(RawPartDetectTarget, RuntimeDoesNotRepeatSupportDepthCalibrationCheck)
   // This foreground-only observation tests loaded calibration/coverage, not
   // ambiguous 70/80 mm face selection. A cube has one Recipe face class.
   profile.dimensions_m = {0.07, 0.07, 0.07};
-  const auto result = process_with_fixture_calibration(input, "RawPart", {profile});
+  const auto result = process_with_fixture_calibration(input, "TestCube", {profile});
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
   EXPECT_FALSE(result.ordered_candidates.empty());
@@ -747,7 +811,7 @@ TEST(RawPartDetectTarget, RuntimeUsesSelectedTransformDespiteSupportDepthChange)
   }
   std::memcpy(input.depth.data.data(), depth.data(), input.depth.data.size());
   const auto result = process_with_fixture_calibration(
-    input, "RawPart", {rawpart_profile()});
+    input, "TestCube", {rawpart_profile()});
 
   EXPECT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
   EXPECT_FALSE(result.ordered_candidates.empty());
@@ -771,13 +835,13 @@ TEST(RawPartDetectTarget, EmptyTrayRequiresEntireTrayInFrame)
   profile.algorithm = "cuboid_top_face";
   profile.tray_roi_min_m = {-0.08, -0.08};
   profile.tray_roi_max_m = {0.08, 0.08};
-  const auto visible = process_with_fixture_calibration(input, "RawPart", {profile});
+  const auto visible = process_with_fixture_calibration(input, "TestCube", {profile});
   EXPECT_EQ(visible.result_code, ResultCode::DETECT_RESULT_OBJECT_NOT_FOUND)
     << visible.diagnostic_detail;
   EXPECT_TRUE(visible.rawpart_absence_confirmed);
 
   profile.tray_roi_max_m[0] = 0.5;
-  const auto clipped = process_with_fixture_calibration(input, "RawPart", {profile});
+  const auto clipped = process_with_fixture_calibration(input, "TestCube", {profile});
   EXPECT_EQ(clipped.result_code, ResultCode::DETECT_RESULT_TEMPORARY_INVALID_TARGET)
     << clipped.diagnostic_detail;
   EXPECT_FALSE(clipped.rawpart_absence_confirmed);

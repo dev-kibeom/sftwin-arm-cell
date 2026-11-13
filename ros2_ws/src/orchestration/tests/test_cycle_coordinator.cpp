@@ -3392,7 +3392,7 @@ TEST(CycleCoordinatorTest, PlaceUsesMissionRecipeInsteadOfVisionDestination)
 TEST(CycleCoordinatorTest, RawPartBoundedSelectedObjectOrientationReachesPlaceGoal)
 {
   const auto loaded = arm_cell_orchestration::RecipeRepository(
-    std::filesystem::path(ARM_CELL_TEST_RECIPE_DIR)).load("RawPart");
+    std::filesystem::path(ARM_CELL_TEST_RECIPE_DIR)).load("TestCube");
   ASSERT_TRUE(loaded.recipe);
   EXPECT_EQ(
     loaded.recipe->place_orientation_constraint,
@@ -3413,7 +3413,7 @@ TEST(CycleCoordinatorTest, RawPartBoundedSelectedObjectOrientationReachesPlaceGo
     };
   auto coordinator = fixture.make_coordinator();
 
-  const auto result = coordinator.execute("RawPart");
+  const auto result = coordinator.execute("TestCube");
 
   EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_QUANTITY_REACHED);
   ASSERT_GE(fixture.motion_goals.size(), 3U);

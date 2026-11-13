@@ -339,6 +339,7 @@ def run_current_stage():
             planning["world_to_base"]["yaw"],
         ),
         registry=runtime_session.registry,
+        material_properties=profile.get("material_catalog", {}).get(profile["orchestration"]["mission_target_id"]),
     )
     from graph_builder.graph_contract import GRAPH_PATH
     from graph_builder.graph_lifecycle import release_graph_controller_node

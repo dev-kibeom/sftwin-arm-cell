@@ -1,0 +1,8 @@
+schema_version: 2
+mission_id: testcube-placement-v1
+target_id: TestCube
+material: package://arm_cell_bringup/config/materials/TestCube.yaml
+pick_policy: package://arm_cell_task_execution/config/pick_policy.yaml
+place_task: package://arm_cell_task_execution/config/place_tasks/cnc_loading.yaml
+vision:
+  algorithm: cuboid_top_face

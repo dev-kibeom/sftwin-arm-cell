@@ -58,11 +58,14 @@ class IsaacMaterialSupplyAdapter:
         delivery_deadline_ms: int,
         artifact_directory: Path | None = None,
         timeline: Any | None = None,
+        material_profiles: dict[str, MaterialSupplyProfile] | None = None,
     ) -> None:
         self.stage = stage
         self.sidecar = sidecar
         self.timeline = timeline
         self.profile = profile
+        self.material_profiles = dict(material_profiles or {profile.material_type: profile})
+        self._delivery_profiles: dict[str, MaterialSupplyProfile] = {}
         self.pose_recorder = RawPartPoseRecorder(
             stage,
             artifact_directory if artifact_directory is not None else (
@@ -124,6 +127,7 @@ class IsaacMaterialSupplyAdapter:
         # Missing completion evidence keeps Integration fail-closed on shutdown.
         self._pending_parts.clear()
         self._runs.clear()
+        self._delivery_profiles.clear()
         self.sidecar.close()
 
     def set_live_test_session_id(
@@ -215,6 +219,7 @@ class IsaacMaterialSupplyAdapter:
             ):
                 return False
         self._runs.clear()
+        self._delivery_profiles.clear()
         self._stop_reset_pending = False
         return True
 
@@ -252,7 +257,7 @@ class IsaacMaterialSupplyAdapter:
             return "Demonstration requires an empty Material Supply"
         if any(
             prim.IsValid()
-            and prim.GetName().startswith("RawPart_")
+            and prim.GetName().startswith("Material_")
             and "/MaterialSupply/Deliveries/" in str(prim.GetPath())
             for prim in self.stage.Traverse()
         ):
@@ -353,7 +358,7 @@ class IsaacMaterialSupplyAdapter:
         ) as error:
             if not self._pose_recorder_error_reported:
                 self._logger.warning(
-                    "Isaac RawPart pose diagnostics are unavailable path=%s reason=%s: %s",
+                    "Isaac TestCube pose diagnostics are unavailable path=%s reason=%s: %s",
                     self.pose_recorder.artifact_directory,
                     type(error).__name__,
                     error,
@@ -378,6 +383,7 @@ class IsaacMaterialSupplyAdapter:
             self._sidecar_unavailable_reported = True
         self._pending_parts.clear()
         self._runs.clear()
+        self._delivery_profiles.clear()
 
     def _on_accepted_trigger(self, trigger: Any) -> None:
         required = {
@@ -412,7 +418,7 @@ class IsaacMaterialSupplyAdapter:
             self._logger.warning("ignoring invalid accepted-handoff event")
             return
         now_ns = self._now_ns()
-        if trigger["material_type"] != self.profile.material_type:
+        if trigger["material_type"] not in self.material_profiles:
             self._logger.error(
                 f"accepted material type is not configured: {trigger['material_type']}"
             )
@@ -439,8 +445,10 @@ class IsaacMaterialSupplyAdapter:
         seed = (
             int(trigger["random_seed"]) if seed_was_supplied else secrets.randbits(64)
         )
+        profile = self.material_profiles[trigger["material_type"]]
+        self._delivery_profiles[delivery_id] = profile
         poses = sample_initial_poses(
-            self.profile,
+            profile,
             int(trigger["quantity"]),
             shelf_origin_m=self.shelf_origin_m,
             seed=seed,
@@ -449,7 +457,7 @@ class IsaacMaterialSupplyAdapter:
         self._delivery_paths.add(_delivery_prim_path(delivery_id))
         self._runs[delivery_id] = MaterialSupplyRun(
             delivery_id=delivery_id,
-            material_type=self.profile.material_type,
+            material_type=profile.material_type,
             requested_quantity=int(trigger["quantity"]),
             deadline_ns=now_ns + self.delivery_deadline_ns,
         )
@@ -468,7 +476,7 @@ class IsaacMaterialSupplyAdapter:
             return
         self._logger.info(
             "material Physics Drop scheduled "
-            f"material_type={self.profile.material_type} "
+            f"material_type={profile.material_type} "
             f"quantity={int(trigger['quantity'])}"
         )
 
@@ -500,7 +508,7 @@ class IsaacMaterialSupplyAdapter:
                 next_delivery,
                 next_index,
                 next_pose,
-                now_ns + int(self.profile.spawn_interval_s * 1_000_000_000),
+                now_ns + int(self._delivery_profiles.get(next_delivery, self.profile).spawn_interval_s * 1_000_000_000),
             )
 
     def _finish_deliveries(self) -> None:
@@ -610,7 +618,7 @@ class IsaacMaterialSupplyAdapter:
             "random_seed_was_supplied": (Sdf.ValueTypeNames.Bool, seed_was_supplied),
             "effective_supply_profile_json": (
                 Sdf.ValueTypeNames.String,
-                json.dumps(asdict(self.profile), sort_keys=True),
+                json.dumps(asdict(self._delivery_profiles.get(delivery_id, self.profile)), sort_keys=True),
             ),
         }
         for name, (value_type, value) in metadata.items():
@@ -631,10 +639,11 @@ class IsaacMaterialSupplyAdapter:
     ) -> str:
         from pxr import Gf, PhysxSchema, Sdf, UsdGeom, UsdPhysics
 
-        dimensions = dimensions_m or self.profile.dimensions_m
-        mass = self.profile.mass_kg if mass_kg is None else mass_kg
+        profile = self._delivery_profiles.get(delivery_id, self.profile)
+        dimensions = dimensions_m or profile.dimensions_m
+        mass = profile.mass_kg if mass_kg is None else mass_kg
         root_path = part_root_path or _delivery_prim_path(delivery_id)
-        part_path = f"{root_path}/RawPart_{index:04d}"
+        part_path = f"{root_path}/Material_{index:04d}"
         part = UsdGeom.Xform.Define(self.stage, part_path)
         prim = part.GetPrim()
         xform = UsdGeom.Xformable(prim)
@@ -675,7 +684,7 @@ class IsaacMaterialSupplyAdapter:
             Gf.Vec3d(*dimensions)
         )
 
-        color = Gf.Vec3f(0.42, 0.30, 0.18)
+        color = Gf.Vec3f(*profile.display_color_rgb)
         UsdGeom.Gprim(shape.GetPrim()).CreateDisplayColorPrimvar().Set([color])
         UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
         UsdPhysics.RigidBodyAPI.Apply(prim)
@@ -689,10 +698,10 @@ class IsaacMaterialSupplyAdapter:
             ).Set(delivery_id)
         prim.CreateAttribute(
             "sf_twin:material_type", Sdf.ValueTypeNames.String, custom=True
-        ).Set(self.profile.material_type)
+        ).Set(profile.material_type)
         prim.CreateAttribute(
             "sf_twin:shape", Sdf.ValueTypeNames.String, custom=True
-        ).Set(self.profile.shape)
+        ).Set(profile.shape)
         if demonstration_position is None:
             prim.CreateAttribute(
                 "sf_twin:delivery_sequence", Sdf.ValueTypeNames.UInt, custom=True

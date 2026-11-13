@@ -7,7 +7,7 @@
 
 ## 1. 목적과 범위
 
-외부에서 이미 배정된 자재 Delivery에 필요한 최소 Event 계약을 정의한다. ARM Cell은 Delivery를 요청·배정·Scheduling하지 않는다. 외부 Trigger는 Delivery Identity·Material Type·목표 Quantity를 지정한다. Demo Terminal과 Isaac UI Hub는 동일한 Event 의미를 사용한다. 현재 지원 자재는 `RawPart`이며 이 경계는 Job Scheduling·Database·다중 Material Process Logic을 추가하지 않는다. Publish Trigger 한 번은 기존 공급을 대체하는 요청이 아닌 **추가 공급 Event 하나**다. Simulation과 Production은 Gateway Trigger 계약 및 구현이 같고 Supply Provider만 다르다. Simulation UI Hub는 외부 공급자를 모사하는 Demo/Development 편의 입력원이며 로컬 Trigger 발행만 보고한다.
+외부에서 이미 배정된 자재 Delivery에 필요한 최소 Event 계약을 정의한다. ARM Cell은 Delivery를 요청·배정·Scheduling하지 않는다. 외부 Trigger는 Delivery Identity·Material Type·목표 Quantity를 지정한다. Demo Terminal과 Isaac UI Hub는 동일한 Event 의미를 사용한다. 지원 자재는 배포 시 export된 카탈로그로 결정하며 이 경계는 Job Scheduling·Database·다중 Material Process Logic을 추가하지 않는다. Publish Trigger 한 번은 기존 공급을 대체하는 요청이 아닌 **추가 공급 Event 하나**다. Simulation과 Production은 Gateway Trigger 계약 및 구현이 같고 Supply Provider만 다르다. Simulation UI Hub는 외부 공급자를 모사하는 Demo/Development 편의 입력원이며 로컬 Trigger 발행만 보고한다.
 
 ## 2. 이벤트 및 소유권
 
@@ -24,7 +24,7 @@
 
 정상 성공 Phase의 상호운용 순서는 `ARRIVED → DOCKED → UNLOADED → DEPARTED`다. 상태는 같은 전달의 `delivery_id`를 유지해야 하며 다른 전달의 증거로 귀속할 수 없다. 실패했거나 유효하지 않은 Phase는 후속 성공 Phase를 뜻하지 않는다. `UNLOADED`와 `DEPARTED`는 자재 공급 완료 또는 `MATERIAL_READY`를 뜻하지 않고, VDA 상태 자체는 Mission Admission을 승인하지 않는다. VDA 상태 생성과 Gateway의 검증 순서는 각 FDS가 소유한다.
 
-`HandoffTrigger`에는 `std_msgs/Header header`, `unique_identifier_msgs/UUID delivery_id`, `uint32 quantity`, `string material_type`, `bool has_random_seed`, `uint64 random_seed`, `bool valid`가 포함된다. `quantity`는 0보다 커야 하고 `material_type`은 설정된 Material Profile을 식별해야 한다. 현재 Demo Profile은 `RawPart`다. 선택적인 `has_random_seed`/`random_seed`는 Isaac Demo Replay 자극으로, 동일 Scene·Profile·Adapter Version 및 Simulator Determinism 조건에서 Initial Pose Sampling을 반복할 수 있도록 한다. Production Supply 동작을 정의하지 않으며 실제 Provider는 이를 무시할 수 있다. Gateway는 Demo Trigger를 전달할 때 Seed 필드를 그대로 보존하지만 Seed 사용 여부는 수락·완료·Readiness를 바꾸지 않는다.
+`HandoffTrigger`에는 `std_msgs/Header header`, `unique_identifier_msgs/UUID delivery_id`, `uint32 quantity`, `string material_type`, `bool has_random_seed`, `uint64 random_seed`, `bool valid`가 포함된다. `quantity`는 0보다 커야 하고 `material_type`은 설정된 Material Profile을 식별해야 한다. 기본 Demo Profile은 `TestCube`이며 CNC cuboid 자재도 같은 계약을 사용한다. 선택적인 `has_random_seed`/`random_seed`는 Isaac Demo Replay 자극으로, 동일 Scene·Profile·Adapter Version 및 Simulator Determinism 조건에서 Initial Pose Sampling을 반복할 수 있도록 한다. Production Supply 동작을 정의하지 않으며 실제 Provider는 이를 무시할 수 있다. Gateway는 Demo Trigger를 전달할 때 Seed 필드를 그대로 보존하지만 Seed 사용 여부는 수락·완료·Readiness를 바꾸지 않는다.
 
 Trigger Producer는 `delivery_id`를 소유하고 Gateway는 수락 후에도 이를 보존한다. Gateway만 원본 Trigger의 수락·거부와 Accepted Event를 확정한다. Hub는 Trigger 발행 결과만 알리며 Gateway 수락, 공급 완료, `MATERIAL_READY` 또는 Mission Admission을 확정하지 않는다. 하위 근거가 누락·실패한 Delivery는 Ready가 아니며 다른 Delivery Identity를 대신 만들지 않는다.
 
@@ -43,7 +43,7 @@ Gateway의 수락은 Provider Completion이나 `MATERIAL_READY`와 별개의 사
 
 거부 Reason Code는 `NONE`, `INVALID_TRIGGER`, `INVALID_DELIVERY_ID`, `STALE_SOURCE_TIMESTAMP`, `INVALID_QUANTITY`, `UNSUPPORTED_MATERIAL_TYPE`, `DUPLICATE_DELIVERY_ID`다. Status는 Source Delivery ID를 상관관계 식별에 사용할 수 있을 때만 발행한다. 이 Status는 Gateway의 Raw Trigger 판단만 설명하고 이후 Delivery 실패는 Transfer Completion/Readiness 경로로 보고한다.
 
-`TransferCompletion`은 수락된 Delivery 하나에 대해 Provider가 Gateway로 전달하는 사실이다. Delivery Identity·Material Type·`requested_quantity`·Provider가 보고한 `supplied_quantity`·Completion Result·Validity·유한한 실행 실패 Reason을 포함한다. `supplied_quantity`는 Provider가 자체 Completion 계약으로 공급 완료를 확인한 수량이다. 생성 시도 횟수나 Region Occupancy 관측 수, Vision 검출 수량이 아니다. Isaac Material Supply Adapter에서는 RawPart 생성 및 Physics Drop 수행이 정상 완료된 수량을 뜻한다. Production Provider는 설비별 완료 조건으로 확인한 수량을 보고한다. 현재 ROS Message 필드는 `supplied_quantity`다.
+`TransferCompletion`은 수락된 Delivery 하나에 대해 Provider가 Gateway로 전달하는 사실이다. Delivery Identity·Material Type·`requested_quantity`·Provider가 보고한 `supplied_quantity`·Completion Result·Validity·유한한 실행 실패 Reason을 포함한다. `supplied_quantity`는 Provider가 자체 Completion 계약으로 공급 완료를 확인한 수량이다. 생성 시도 횟수나 Region Occupancy 관측 수, Vision 검출 수량이 아니다. Isaac Material Supply Adapter에서는 TestCube 생성 및 Physics Drop 수행이 정상 완료된 수량을 뜻한다. Production Provider는 설비별 완료 조건으로 확인한 수량을 보고한다. 현재 ROS Message 필드는 `supplied_quantity`다.
 
 성공 사실은 `supplied_quantity == requested_quantity`, 성공 Completion Result 및 Valid Evidence를 요구한다. 이 계약에 Isaac Prim·Region·Sensor·Simulator Observation을 필수로 추가해서는 안 된다. Gateway는 Delivery Identity·Material Type·요청 및 공급 Quantity·Validity·Freshness·Completion Result·필수 VDA Context를 검증하지만 Provider의 물리적 완료 알고리즘은 소유하지 않는다. `valid`는 Provider 사실의 계약 유효성을 뜻한다. Provider 전용 진단은 별도로 보존할 수 있으나 공유 Success 계약에 새로운 Predicate를 추가하지 않는다.
 
@@ -118,7 +118,7 @@ Trigger Acceptance·Provider 독립 Completion 의미·Gateway Validation/Readin
 - [Material Readiness ICD](icd-integration-orchestration-material.md)
 - [ExecuteCycle ICD](icd-orchestration-execute-cycle.md)
 - [Vision ↔ Orchestration ICD](icd-vision-orchestration.md)
-- [RawPart Vision FDS](../components/vision/fds-rawpart-depth-perception.md)
+- [TestCube Vision FDS](../components/vision/fds-rawpart-depth-perception.md)
 - [Simulation Environment Semantics](../components/simulation-environment-semantics.md)
 - [Simulation UI Hub FDS](../components/ui-hub/fds.md)
 - [Safety Operator ICD](icd-safety-operator.md)

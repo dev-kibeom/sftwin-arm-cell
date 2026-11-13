@@ -1,6 +1,7 @@
 """AMR mockup, tray, workpiece, docking target, and AMR-local metadata."""
 
 from scene_builder.rawpart_profile import author_support_fiducial
+from scene_builder.scene_roles import AMR_TRAY_ROLE
 
 
 def build_amr(context):
@@ -138,7 +139,7 @@ def build_amr(context):
         stage,
         f"{CELL_ROOT}/AMR/Mockup/Tray",
         "sf_twin:role",
-        "material_receiver_and_direct_pick_tray",
+        AMR_TRAY_ROLE,
     )
     context.amr_x = amr_x
     context.amr_y = amr_y

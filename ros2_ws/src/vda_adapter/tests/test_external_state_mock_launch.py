@@ -208,7 +208,7 @@ class TestExternalStateMockLaunch(unittest.TestCase):
         trigger = HandoffTrigger()
         trigger.delivery_id.uuid[0] = 42
         trigger.quantity = 1
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.valid = False
         self.accepted_handoff_publisher.publish(trigger)
         quiet_deadline = time.monotonic() + 0.25
@@ -253,7 +253,7 @@ class TestExternalStateMockLaunch(unittest.TestCase):
         trigger = HandoffTrigger()
         trigger.delivery_id.uuid[0] = 43
         trigger.quantity = 1
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.valid = True
         self.accepted_handoff_publisher.publish(trigger)
         self.spin_until(

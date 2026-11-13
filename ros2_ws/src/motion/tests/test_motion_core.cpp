@@ -18,6 +18,7 @@
 
 #include "arm_cell_motion/fake_motion_backend.hpp"
 #include "arm_cell_motion/motion_core.hpp"
+#include "arm_cell_motion/motion_execution_support.hpp"
 #include "arm_cell_motion/motion_result_code_name.hpp"
 #include "arm_cell_motion/pick_symmetry.hpp"
 #include "arm_cell_motion/rectangle_grasp_geometry.hpp"
@@ -223,6 +224,26 @@ MotionGeometry valid_geometry()
   geometry.insertion_axis_tcp.z = 1.0;
   geometry.pick_retract_distance_m = 0.2;
   return geometry;
+}
+
+TEST(MaterialGraspTransform, UsesRequestOffsetWithoutChangingDefaultGeometry)
+{
+  const auto geometry = valid_geometry();
+  MotionExecutionSupport support(nullptr, geometry);
+  MotionPortRequest request;
+  request.segment = MotionSegmentKind::PICK_DESCENT;
+  request.target_pose.header.frame_id = "base_link";
+  request.target_pose.pose.orientation.w = 1.0;
+  request.constraints.has_material_grasp_transform = true;
+  request.constraints.material_grasp_transform.translation.z = 0.0075;
+  request.constraints.material_grasp_transform.rotation.x = 1.0;
+  auto normalized = support.normalized_request(request);
+  EXPECT_DOUBLE_EQ(normalized.object_to_grasp_tcp.translation.z, 0.0075);
+  EXPECT_DOUBLE_EQ(normalized.target_pose.pose.position.z, 0.0075);
+  request.constraints.material_grasp_transform.translation.z = 0.0125;
+  normalized = support.normalized_request(request);
+  EXPECT_DOUBLE_EQ(normalized.object_to_grasp_tcp.translation.z, 0.0125);
+  EXPECT_DOUBLE_EQ(support.geometry().object_to_grasp_tcp.translation.z, 0.0);
 }
 
 ExecuteTask::Goal pick_goal()

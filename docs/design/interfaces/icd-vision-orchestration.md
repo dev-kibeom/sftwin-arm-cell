@@ -79,7 +79,7 @@ Snapshot Message의 Payload·Metadata와 소비자가 해석하는 보장·비�
 | `cuboid_stage_images` / `cuboid_pipeline_stage_images` | 선택적 Stage Image Manifest다. 현재 Sidecar Key는 `height_patches`·`geometry_candidates`·`final_candidates`; 개별 Stage는 `height_patch_extraction`·`contour_line_extraction`·`rectangle_hypothesis_generation`·`geometry_validation_resolution`·`candidate_eligibility_enumeration`으로 구분한다. Entry는 Status·Observation-local ID·저장에 성공한 경우만 Relative Path를 가진다 |
 | Stage Image 근거 | 동일 Acquisition·Source Depth Observation 및 사용 가능한 호환 RGB Header에 연관된다. Stage Image 누락은 Empty Success가 아닌 Unavailable이다. 중간/거부 Hypothesis는 Detection Result로 간주하지 않으며 완전한 Reject Evidence는 Diagnostic Record가 보존한다 |
 | Candidate Identity | `PickCandidate.candidate_id`는 해당 `acquisition_id` 안에서만 고유하다. 목록은 Vision의 Stable Enumeration이며 Grasp Priority가 아니다. 정상 Mission의 단일 대표 Target은 없으며 Candidate ID·Pose·Geometry는 각 목록 항목에만 속한다 |
-| Observation Evidence | Terminal Success는 Qualified Material Candidate 전체 목록을 보존한다. Terminal Failure는 Result·마지막 실제 관측 Stage·대표 Source Identity를 전달한다. RawPart 전용 Geometry/Quality 및 Reject Detail은 선택적 Profile-owned Diagnostic Object에 속한다 |
+| Observation Evidence | Terminal Success는 Qualified Material Candidate 전체 목록을 보존한다. Terminal Failure는 Result·마지막 실제 관측 Stage·대표 Source Identity를 전달한다. TestCube 전용 Geometry/Quality 및 Reject Detail은 선택적 Profile-owned Diagnostic Object에 속한다 |
 | 선택적 Quality Detail | 측정 Side·Nominal Residual·`orientation_symmetry_order`·유효한 Observed Yaw·실제 계산한 Inlier/Coverage/Edge-support·`max_normalized_residual`·Match/Reject Reason 등을 포함할 수 있다. 미계산 값은 임의 추정하지 않는다 |
 | RGB 및 Depth | Snapshot RGB는 Detector 완료 후 독립 선택된 시각화 입력이다. 사용 여부와 미사용 Reason, 선택 RGB Source Header 및 처리 Depth Source Header를 기록한다. 두 Timestamp의 차이는 Acceptance 조건이 아니다 |
 | `snapshot_directory` | 로컬 저장을 시도한 Snapshot 이미지 디렉터리의 선택적 절대 경로. Stage Image의 Relative Path는 이 디렉터리를 기준으로 해석한다. Metadata JSON은 별도 Diagnostic Record 영역에 저장한다. 필드 부재 또는 저장 실패는 정식 DetectTarget 결과에 영향을 주지 않으며, 경로 존재가 저장 성공 또는 운영 결과를 보장하지 않는다 |
@@ -107,9 +107,9 @@ Hub의 Development Retry Detection도 기존 `/vision/detect_target`을 사용�
 
 ## 1.4 요청별 Stable Material Acquisition 공유 경계
 
-요청과 응답은 하나의 `acquisition_id`로 상관관계를 가진다. `target_id`, `algorithm`, 상대 `timeout`, 결과 코드, Source Identity 및 단일 Material Candidate List의 **공유 필드 의미**는 이 ICD에서 소유하며, 필드 유효성·해석·비보장은 후술하는 응답·관측·인계 계약을 따른다. Cuboid에서 Vision은 내부 평가한 SELECTED HIGH·MEDIUM 정상 PICK 적격 후보 전체를 하나의 안정된 `material_candidates` 목록으로 반환하고 LOW·REJECTED는 일반 PICK 응답에서 제외한다. 등급은 Action Candidate 필드가 아니며 실행 우선순위도 아니다. 반환 후보 Geometry와 관측 provenance는 인계 중 불변이다. Orchestration은 전체 후보를 변경 없이 전달한다. Task Execution은 전체 목록의 후보 우선순위·전환을 소유하고 Motion은 선택된 후보의 Grasp Pose·계획·movement를 수행한다. Confidence 의미와 진단 근거는 RawPart FDS·Algorithm 및 Vision Snapshot 진단 책임에 따른다.
+요청과 응답은 하나의 `acquisition_id`로 상관관계를 가진다. `target_id`, `algorithm`, 상대 `timeout`, 결과 코드, Source Identity 및 단일 Material Candidate List의 **공유 필드 의미**는 이 ICD에서 소유하며, 필드 유효성·해석·비보장은 후술하는 응답·관측·인계 계약을 따른다. Cuboid에서 Vision은 내부 평가한 SELECTED HIGH·MEDIUM 정상 PICK 적격 후보 전체를 하나의 안정된 `material_candidates` 목록으로 반환하고 LOW·REJECTED는 일반 PICK 응답에서 제외한다. 등급은 Action Candidate 필드가 아니며 실행 우선순위도 아니다. 반환 후보 Geometry와 관측 provenance는 인계 중 불변이다. Orchestration은 전체 후보를 변경 없이 전달한다. Task Execution은 전체 목록의 후보 우선순위·전환을 소유하고 Motion은 선택된 후보의 Grasp Pose·계획·movement를 수행한다. Confidence 의미와 진단 근거는 TestCube FDS·Algorithm 및 Vision Snapshot 진단 책임에 따른다.
 
-요청의 수락/경쟁, 단일 Monotonic Deadline, Fresh Depth 관측과 Scene Stability, Detector의 1회 실행, 부재 판단, 실패·중단 및 관측의 종료 시점은 [DetectTarget FDS](../components/vision/fds-detect-target.md), [Frame Ingress FDS](../components/vision/fds-frame-ingress.md), [RawPart FDS](../components/vision/fds-rawpart-depth-perception.md)가 소유한다. 이 ICD는 그 동작을 별도 Gate로 중복 규정하지 않는다.
+요청의 수락/경쟁, 단일 Monotonic Deadline, Fresh Depth 관측과 Scene Stability, Detector의 1회 실행, 부재 판단, 실패·중단 및 관측의 종료 시점은 [DetectTarget FDS](../components/vision/fds-detect-target.md), [Frame Ingress FDS](../components/vision/fds-frame-ingress.md), [TestCube FDS](../components/vision/fds-rawpart-depth-perception.md)가 소유한다. 이 ICD는 그 동작을 별도 Gate로 중복 규정하지 않는다.
 
 Legacy `scene_generation`, `SceneStability.msg`, `/vision/scene_stability`는 호환성과 읽기 전용 진단을 위한 공유 식별자·상태 Surface이며 Orchestration의 추가 수락 Gate가 아니다. 공유 Payload가 누락되거나 무효하면 이를 정상 부재 또는 확인된 Free Space로 해석하지 않는다.
 
@@ -141,7 +141,7 @@ Legacy `scene_generation`, `SceneStability.msg`, `/vision/scene_stability`는 �
 
 각 `PickCandidate.top_height_tolerance_m`에는 해당 Acquisition에 적용한 Vision Profile의 기존 Observed Height 비교 Tolerance가 기록되며 모든 Candidate에 같은 값이 변경 없이 반복된다. Cuboid는 설정된 `cuboid.height_tolerance_m`를 제공하고 Observed Height Tolerance 계약이 없는 Detector는 0을 제공한다. 이 필드는 Vision의 관측 메타데이터로 유지되며 Task Execution의 PICK 후보 우선순위에는 사용되지 않는다. PICK 순서는 기존 `base_link` Pose의 Tray Y, 관측 상판 Z, Candidate ID로 결정한다.
 
-Producer별 필수 출력은 RawPart FDS가 소유한다. Vision은 Stable 단일 목록 Enumeration을 구성하고 Task Execution은 전달된 Material Candidate List의 Priority와 Transition을 소유하며 Orchestration은 전체 목록을 변경하지 않고 전달한다. Motion은 선택된 Material Candidate에 대한 Grasp Pose Candidate 생성·계획·개별 movement를 소유한다. 성공 외 결과에는 일반 PICK `material_candidates`가 비어 있어야 한다. 유효 관측에서 미해결 Geometry가 생긴 경우 기존 `disturbance_candidates`는 별도 관측 근거 Payload로 보존할 수 있으며 이를 PICK Success로 해석하지 않는다. Service는 수치 Clearance Score를 노출해서는 안 된다.
+Producer별 필수 출력은 TestCube FDS가 소유한다. Vision은 Stable 단일 목록 Enumeration을 구성하고 Task Execution은 전달된 Material Candidate List의 Priority와 Transition을 소유하며 Orchestration은 전체 목록을 변경하지 않고 전달한다. Motion은 선택된 Material Candidate에 대한 Grasp Pose Candidate 생성·계획·개별 movement를 소유한다. 성공 외 결과에는 일반 PICK `material_candidates`가 비어 있어야 한다. 유효 관측에서 미해결 Geometry가 생긴 경우 기존 `disturbance_candidates`는 별도 관측 근거 Payload로 보존할 수 있으며 이를 PICK Success로 해석하지 않는다. Service는 수치 Clearance Score를 노출해서는 안 된다.
 
 Vision–Orchestration 경계는 검출된 Candidate의 관측 Pose·Geometry·Acquisition provenance를 전달한다. LOW·미해결 가설 및 `disturbance_candidates`는 별도 진단/교란 근거이며 Material Candidate Geometry로 승격되지 않는다.
 
@@ -170,7 +170,7 @@ DetectTarget Response의 `acquisition_id`, 결과·후보 목록·Source Identit
 
 ## 4. Scene Stability 공유 의미
 
-`/vision/scene_stability` 및 `SceneStability.msg`는 Acquisition에 연결된 Depth 안정화의 진단 상태·Source Identity다. 이는 DetectTarget의 정규 Terminal Result를 대체하거나 Orchestration에 추가 수락 Gate를 제공하지 않는다. `OBJECT_NOT_FOUND`는 유효한 부재이며 불충분·무효·불안정·모호한 관측과 구별된다. Stability 판정·필요 관측·Detector 실행 시점은 [DetectTarget FDS](../components/vision/fds-detect-target.md), Profile별 Geometry·Coverage는 [RawPart Depth-perception FDS](../components/vision/fds-rawpart-depth-perception.md)가 소유한다.
+`/vision/scene_stability` 및 `SceneStability.msg`는 Acquisition에 연결된 Depth 안정화의 진단 상태·Source Identity다. 이는 DetectTarget의 정규 Terminal Result를 대체하거나 Orchestration에 추가 수락 Gate를 제공하지 않는다. `OBJECT_NOT_FOUND`는 유효한 부재이며 불충분·무효·불안정·모호한 관측과 구별된다. Stability 판정·필요 관측·Detector 실행 시점은 [DetectTarget FDS](../components/vision/fds-detect-target.md), Profile별 Geometry·Coverage는 [TestCube Depth-perception FDS](../components/vision/fds-rawpart-depth-perception.md)가 소유한다.
 
 ## 5. 검증 요구사항
 
@@ -210,19 +210,19 @@ Unknown/Unconfigured `target_id`는 `DETECT_RESULT_INVALID_RESULT`를 반환해�
 설정된 유효 Profile에서 일치하는 Observation이 없으면 Unknown/Unconfigured ID와 다른 `DETECT_RESULT_OBJECT_NOT_FOUND`를 반환해야 한다.
 
 ### VR-ICD-VIS-ORCH-09 — Reference Point 의미
-성공한 `target_pose.position`은 TCP/Tool Correction 없이 `base_link`의 선택된 Detector Profile Observation Reference를 표현해야 한다. RawPart Profile의 보이는 Top Surface Centroid는 RawPart Vision FDS가 정의한다.
+성공한 `target_pose.position`은 TCP/Tool Correction 없이 `base_link`의 선택된 Detector Profile Observation Reference를 표현해야 한다. TestCube Profile의 보이는 Top Surface Centroid는 TestCube Vision FDS가 정의한다.
 
 ### VR-ICD-VIS-ORCH-10 — Observation Height 분리
 `estimated_height_m`는 반환 Target XYZ/Z를 바꾸면 안 된다. Motion은 변경되지 않은 Top Observation Pose에서 선택 RawPart의 자체 두께만 사용해 Object Pose를 도출한다.
 
 ### VR-ICD-VIS-ORCH-28 — 복원 Geometry와 관측 provenance
-부분 형상 RawPart 성공 응답은 Recipe에서 추정한 양수 Side Length와 선택한 추정 자체 두께를 기존 필드에 전달해야 한다. 이 경우 `has_observed_rectangle=false`는 외곽선 실측이 없다는 provenance를 유지하며 값이 제공되지 않았다는 의미로 해석해서는 안 된다. 일반 Cuboid의 실측 치수와 기존 외부 메시지 스키마는 변경하지 않는다.
+부분 형상 TestCube 성공 응답은 Recipe에서 추정한 양수 Side Length와 선택한 추정 자체 두께를 기존 필드에 전달해야 한다. 이 경우 `has_observed_rectangle=false`는 외곽선 실측이 없다는 provenance를 유지하며 값이 제공되지 않았다는 의미로 해석해서는 안 된다. 일반 Cuboid의 실측 치수와 기존 외부 메시지 스키마는 변경하지 않는다.
 
 ### VR-ICD-VIS-ORCH-11 — Validation Provenance 격리
 Validation-only Fixed Vision Result는 Public ROS Shape·Result/Frame/Object Reference 의미·Fixture Registration Stamp를 유지하면서 Production Operational Profile에서 선택할 수 없어야 한다. 그 Evidence를 RGB-D Perception Validation으로 나타내서는 안 된다. Fixed Registration의 `dimensions_m`은 등록 Top Surface 좌표계 기준의 알려진 양수 자재 치수이며 Z가 자체 두께다. 등록 helper는 Fixture 치수를 전달하고 Fixed Vision은 Z를 후보 자체 두께로, X/Y를 상판 치수로 전달한다. 이 경로에서도 고정 중심 오프셋을 사용하지 않는다.
 
 ### VR-ICD-VIS-ORCH-12 — Profile 격리 Target 선택
-서로 다른 Configured `target_id`는 각각 다른 Vision-owned Profile을 선택해야 한다. Unknown/Unconfigured ID는 Generic Foreground Aggregation이 아닌 `INVALID_RESULT`를 반환해야 한다. 경쟁 Foreground Geometry가 선택 Profile Pose를 이동시켜서는 안 된다. RawPart Profile은 필수 Observation이 유효할 때만 RawPart를 선택하며 부재/무효 RawPart는 Profile 계약에 따라 거부하거나 Absence로 보고한다.
+서로 다른 Configured `target_id`는 각각 다른 Vision-owned Profile을 선택해야 한다. Unknown/Unconfigured ID는 Generic Foreground Aggregation이 아닌 `INVALID_RESULT`를 반환해야 한다. 경쟁 Foreground Geometry가 선택 Profile Pose를 이동시켜서는 안 된다. TestCube Profile은 필수 Observation이 유효할 때만 RawPart를 선택하며 부재/무효 RawPart는 Profile 계약에 따라 거부하거나 Absence로 보고한다.
 
 ### VR-ICD-VIS-ORCH-13 — 일시적 Invalid Target 구분
 Configured Valid Target Profile의 일시적 Invalid Observation은 `DETECT_RESULT_TEMPORARY_INVALID_TARGET`로 보고해야 한다. Unknown/Unconfigured Profile은 `DETECT_RESULT_INVALID_RESULT`로 보고한다. 두 Outcome을 Depletion에 매핑해서는 안 된다. 이 구분은 Mission Result에 실제 Vision Failure Classification을 보존하며 자동 Retry Class를 정의하지 않는다.

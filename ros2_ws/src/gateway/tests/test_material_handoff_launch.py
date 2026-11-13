@@ -109,7 +109,7 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
         trigger.header.stamp = self.node.get_clock().now().to_msg()
         trigger.delivery_id.uuid[0] = 42
         trigger.quantity = 3
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.has_random_seed = True
         trigger.random_seed = 1234
         trigger.valid = True
@@ -191,7 +191,7 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
         second.header.stamp = self.node.get_clock().now().to_msg()
         second.delivery_id.uuid[0] = 43
         second.quantity = 1
-        second.material_type = "RawPart"
+        second.material_type = "TestCube"
         second.valid = True
         self.trigger_publisher.publish(second)
         self.spin_until(lambda: len(self.accepted) == 2)
@@ -230,7 +230,7 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
         third.header.stamp = self.node.get_clock().now().to_msg()
         third.delivery_id.uuid[0] = 44
         third.quantity = 1
-        third.material_type = "RawPart"
+        third.material_type = "TestCube"
         third.valid = True
         self.trigger_publisher.publish(third)
         self.spin_until(lambda: len(self.accepted) == 3)
@@ -258,7 +258,7 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
         fourth.header.stamp = self.node.get_clock().now().to_msg()
         fourth.delivery_id.uuid[0] = 46
         fourth.quantity = 1
-        fourth.material_type = "RawPart"
+        fourth.material_type = "TestCube"
         fourth.valid = True
         self.trigger_publisher.publish(fourth)
         self.spin_until(lambda: len(self.accepted) == 4)
@@ -340,7 +340,7 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
         trigger.header.stamp = self.node.get_clock().now().to_msg()
         trigger.delivery_id.uuid[0] = identity
         trigger.quantity = quantity
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.valid = True
         return trigger
 
@@ -354,7 +354,7 @@ class TestMaterialHandoffLaunch(unittest.TestCase):
         trigger.header.stamp = self.node.get_clock().now().to_msg()
         trigger.delivery_id.uuid[0] = 45
         trigger.quantity = 2
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.valid = True
         self.trigger_publisher.publish(trigger)
         self.spin_until(lambda: len(self.accepted) == 1)

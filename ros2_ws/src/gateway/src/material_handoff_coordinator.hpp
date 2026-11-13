@@ -49,6 +49,7 @@ public:
 
   explicit MaterialHandoffCoordinator(std::chrono::milliseconds delivery_deadline);
 
+  void set_material_types(std::vector<std::string> material_types);
   bool can_begin(const Trigger & trigger) const;
   bool can_begin(const DeliveryId & delivery_id) const;
   std::string rejection_reason(const Trigger & trigger) const;
@@ -85,6 +86,7 @@ private:
   std::optional<Readiness> ready_if_complete(
     DeliveryState & delivery, const builtin_interfaces::msg::Time & stamp);
 
+  std::vector<std::string> material_types_{"TestCube"};
   std::chrono::milliseconds delivery_deadline_;
   std::map<DeliveryKey, DeliveryState> deliveries_;
 };

@@ -54,7 +54,7 @@ sequenceDiagram
 
 Play·Pause·Stop은 Isaac Sim의 표준 Timeline UI가 소유한다. Hub는 별도 Simulation 조작 버튼이나 Timeline 상태 표시를 두지 않으며, 요청 가능 여부와 Cleanup에만 Timeline Lifecycle Event를 내부적으로 사용한다. Development Mode에서는 Publish Trigger·Retry Detection을 표시할 수 있고, 승인된 Fault Scenario를 실행하거나 [Safety Operator ICD](../../interfaces/icd-safety-operator.md)를 통해 Operator Acknowledgement/Reset을 요청할 수 있다.
 
-Trigger에는 입력원에서 지정한 `delivery_id`, 양수 `quantity`, 설정된 `material_type`(현재 `RawPart`), 선택적 Random Seed를 담는다. Demo 자극에서 Hub가 생성하는 Fresh ID는 해당 Event의 상관관계 식별자일 뿐, 작업 배정·자재 예약/요청·VDA 호출·Delivery 관리를 뜻하지 않는다. Raw Trigger는 Gateway만 수락해 VDA 및 Isaac Material Supply Adapter로 전달한다. Hub는 Trigger 발행 여부만 보고한다. Adapter의 공급 결과, Vision Scene Stability, VDA Phase, `MATERIAL_READY`, Orchestration Admission은 Hub에서 표시하지 않는다.
+Trigger에는 입력원에서 지정한 `delivery_id`, 양수 `quantity`, 설정된 `material_type`(현재 `TestCube`), 선택적 Random Seed를 담는다. Demo 자극에서 Hub가 생성하는 Fresh ID는 해당 Event의 상관관계 식별자일 뿐, 작업 배정·자재 예약/요청·VDA 호출·Delivery 관리를 뜻하지 않는다. Raw Trigger는 Gateway만 수락해 VDA 및 Isaac Material Supply Adapter로 전달한다. Hub는 Trigger 발행 여부만 보고한다. Adapter의 공급 결과, Vision Scene Stability, VDA Phase, `MATERIAL_READY`, Orchestration Admission은 Hub에서 표시하지 않는다.
 
 ### 3.1 Isaac Timeline Stop과 Simulation Reset
 
@@ -83,9 +83,9 @@ Timeline이 Running이고 Stop 소유 Simulation Reset이 끝났을 때 Publish 
 
 ### 3.3 Cuboid Demonstration
 
-Hub는 대표 Cuboid 관측을 위한 Simulation 전용 RawPart Preset을 유한 개 제공한다. 단층 패턴 여섯 가지(Single, Side by Side, Angled Adjacent, L Shape, U Shape · 3 Parts, U Shape · 5 Parts), 서로 다른 면이 위를 향한 단층 접촉, 선정된 2·3층 적층 조합, 기울어진 상부 자재가 포함된다. Preset은 설정된 RawPart Material Dimension·Mass를 사용한다. Face 선택은 자재 Local X/Y/Z축을 선택한 수평 면과 World Up축에 대응시키고 Yaw는 World Z축 기준으로 별도 합성한다. 층간 접촉 높이는 선택한 Up축에 따른 치수로 계산한다.
+Hub는 대표 Cuboid 관측을 위한 Simulation 전용 TestCube Preset을 유한 개 제공한다. 단층 패턴 여섯 가지(Single, Side by Side, Angled Adjacent, L Shape, U Shape · 3 Parts, U Shape · 5 Parts), 서로 다른 면이 위를 향한 단층 접촉, 선정된 2·3층 적층 조합, 기울어진 상부 자재가 포함된다. Preset은 설정된 TestCube Material Dimension·Mass를 사용한다. Face 선택은 자재 Local X/Y/Z축을 선택한 수평 면과 World Up축에 대응시키고 Yaw는 World Z축 기준으로 별도 합성한다. 층간 접촉 높이는 선택한 Up축에 따른 치수로 계산한다.
 
-Load는 Timeline Playing 중이고 Material Supply Adapter에 생성된 자재나 대기 공급 작업이 없으며 현재 Play Session에서 Demonstration을 아직 Load하지 않았을 때만 허용한다. Pause/Resume은 Session Latch를 초기화하지 않는다. Timeline Stop은 Material Supply Reset을 통해 Demonstration Root를 제거하고 다음 Play Session을 위해 Latch를 초기화한다. 생성은 기존 Material Supply의 RawPart Shape·Mass·Collision·Rigid Body 경로를 사용하고 Gravity를 활성화한다. 부분 생성 실패 시 Demonstration 소유 Root를 제거한다.
+Load는 Timeline Playing 중이고 Material Supply Adapter에 생성된 자재나 대기 공급 작업이 없으며 현재 Play Session에서 Demonstration을 아직 Load하지 않았을 때만 허용한다. Pause/Resume은 Session Latch를 초기화하지 않는다. Timeline Stop은 Material Supply Reset을 통해 Demonstration Root를 제거하고 다음 Play Session을 위해 Latch를 초기화한다. 생성은 기존 Material Supply의 TestCube Shape·Mass·Collision·Rigid Body 경로를 사용하고 Gravity를 활성화한다. 부분 생성 실패 시 Demonstration 소유 Root를 제거한다.
 
 Demonstration은 Vision 관측을 위한 로컬 Stimulus다. External Handoff Trigger를 발행하거나 Delivery Completion·Readiness·Orchestration Admission 사실을 만들지 않고 Production Mission을 시작하지 않는다. 기존 Retry Detection과 Snapshot Viewer가 이를 관측할 수 있다. Pose Recorder는 선택 여부와 무관하게 Live Test 진단에 사용할 수 있다.
 
@@ -142,7 +142,7 @@ Delivery ID는 주문별 공급 식별자다. ExecuteCycle은 Admission Delivery
 | 18. Stage/ActionGraph 재구성 | Stage 또는 Graph 수정. 필요 시에만 Timeline Stop, 관련 Object Cleanup 및 기존 Setup 역할 재실행 | Kit 유지, 중복 Node/Callback 없이 Stage/Graph 복구. Stop을 사용한 경우에만 Play에서 새 실험 시작 |
 | 19. PICK 중 Emergency Stop | PICK 도중 E-Stop Inject → Safety 직접 정지와 Motion STOPPED 확인 → E-Stop 입력 Clear → 기존 명시적 Safety Acknowledgement/Reset | Fresh RELEASED·Safety Permission·Readiness 충족 시 보존 Batch를 새 GO_HOME·DetectTarget·PICK으로 계속. HELD/UNKNOWN이면 추가 Motion 없이 운영자 안전 처리 및 Fresh RELEASED 대기 |
 | 20. PICK 중 Safety Signal Loss | Safety-HW 입력을 선택적으로 5초 차단 → 필요 입력 Freshness 상실·Safety StopMotion(IMMEDIATE)·Motion Stop 확인 → 즉시 Fresh Safety-HW 복귀 및 Latch/Reset 없는 Recovery 확인 | AMR·PackML은 발행 지속. Fresh RELEASED·Safety/Readiness 복구 시 새 GO_HOME·Acquisition으로 Batch 계속. HELD/UNKNOWN은 Motion 없이 대기. 5초는 Stop 완료 Deadline이 아님 |
-| 21. Vision Mislocalization | Vision 단발 Arm → Arm 후 수락된 다음 Acquisition의 성공 RawPart Detection에서 Support Normal 방향 100mm Offset 반환, 원본/변경 Pose 진단 기록 → 정상 Motion PICK Capture 시도 | Planning/Execution·실제 Gripper Capture·Fresh RELEASED·기존 Retry-safe 분류를 Live Test에서 별도 검증. 설계만으로 결과 보증하지 않음. 기존 Retry Admission만 GO_HOME→새 Detection→새 PICK 결정. 미충족이면 원래 실패로 종료. 성공 전 Detection 실패/취소에는 Arm 유지 |
+| 21. Vision Mislocalization | Vision 단발 Arm → Arm 후 수락된 다음 Acquisition의 성공 TestCube Detection에서 Support Normal 방향 100mm Offset 반환, 원본/변경 Pose 진단 기록 → 정상 Motion PICK Capture 시도 | Planning/Execution·실제 Gripper Capture·Fresh RELEASED·기존 Retry-safe 분류를 Live Test에서 별도 검증. 설계만으로 결과 보증하지 않음. 기존 Retry Admission만 GO_HOME→새 Detection→새 PICK 결정. 미충족이면 원래 실패로 종료. 성공 전 Detection 실패/취소에는 Arm 유지 |
 
 각 수신 Owner는 자신의 Authority에 따라 요청을 검증·적용한다. Hub는 버튼 조작이나 낙관적인 로컬 표시만으로 공급 완료·Readiness·Batch Admission을 확정하거나 Safety Capability·Latch·Severity를 변경하거나 Vision Target·Mission 진행·Recovery 성공을 결정할 수 없다. Reset/Acknowledgement는 Safety에 대한 요청이며 기존 결과와 상태에 따라 효력이 발생한다.
 
@@ -206,7 +206,7 @@ Hub는 Gripper Open을 세 Fault Scenario 및 Safety Reset과 구별해 표시�
 
 ### VR-INT-UI-10 — Cuboid Demonstration
 
-Hub는 RawPart Material Dimension으로 구성된 유한한 단층·2층·3층 Cuboid Preset을 제공해야 한다. Demonstration은 Timeline Play 동안 Play-to-Stop Session당 최대 한 번, Material Supply에 생성 자재나 대기 작업이 없을 때에만 Load해야 한다. Pause/Resume은 허용 횟수를 초기화하지 않는다. Timeline Stop은 Material Supply Reset으로 Demonstration 소유 RawPart를 제거하고 허용 횟수를 초기화해야 한다. 생성은 Gravity가 활성화된 기존 RawPart Rigid Body/Collision 경로를 사용하며 Handoff를 발행하거나 Completion·Readiness·Admission 사실을 만들지 않는다. Oracle은 Adapter Result, 생성 Prim Transform/Physics Attribute, 불변 Handoff/Admission 상태, Stop 후 비어 있는 Demonstration Root다. PhysX Stability는 Isaac Sim 관측으로 확인해야 하며 Preset Geometry 검사만으로 확정되지 않는다.
+Hub는 TestCube Material Dimension으로 구성된 유한한 단층·2층·3층 Cuboid Preset을 제공해야 한다. Demonstration은 Timeline Play 동안 Play-to-Stop Session당 최대 한 번, Material Supply에 생성 자재나 대기 작업이 없을 때에만 Load해야 한다. Pause/Resume은 허용 횟수를 초기화하지 않는다. Timeline Stop은 Material Supply Reset으로 Demonstration 소유 RawPart를 제거하고 허용 횟수를 초기화해야 한다. 생성은 Gravity가 활성화된 기존 TestCube Rigid Body/Collision 경로를 사용하며 Handoff를 발행하거나 Completion·Readiness·Admission 사실을 만들지 않는다. Oracle은 Adapter Result, 생성 Prim Transform/Physics Attribute, 불변 Handoff/Admission 상태, Stop 후 비어 있는 Demonstration Root다. PhysX Stability는 Isaac Sim 관측으로 확인해야 하며 Preset Geometry 검사만으로 확정되지 않는다.
 
 ## 5. References
 

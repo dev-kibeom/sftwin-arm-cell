@@ -20,7 +20,7 @@ Material Detection은 다음을 소유한다.
 - 공유 Depth Scene Stability Gate, Depth 관측, 재시도, Timeout, 취소 처리, 보존 결과 폐기를 포함한 요청별 DetectTarget 전체 생명주기
 - Acquisition 대기·처리와 센서 입력 처리의 구조적 분리 및 양쪽의 독립적인 진행
 - `DetectTarget.target_id`에 따른 Material Detection 소유 Detector Profile 선택
-- Profile 기반 RawPart 후보 전체의 추출과 기하학적 적격성 검증
+- Profile 기반 TestCube 후보 전체의 추출과 기하학적 적격성 검증
 - 반환 후보의 관측 Pose·Geometry와 Profile별 qualification 근거
 - 마지막 단일 관측에서 Detector를 한 번 실행하기 전에 유효한 Depth 관측 5회의 Scene Stability 평가
 - Source 관측에 연결된 선택 Target 및 진단용 인지 의미
@@ -118,7 +118,7 @@ flowchart TD
     G --> H[요청 결과 및 관측 근거 제공]
 ```
 
-이 그림은 Acquisition이 입력 유효성·안정성·후보 적격성 판단을 연결해 결과를 확정하는 **상위 책임 수행 흐름**이다. 시간·동시성·종료 조건을 별도로 정의하지 않는다. 정확한 관측·실행 시퀀스는 [DetectTarget FDS](fds-detect-target.md), [Frame Ingress FDS](fds-frame-ingress.md), [RawPart FDS](fds-rawpart-depth-perception.md)를 따른다.
+이 그림은 Acquisition이 입력 유효성·안정성·후보 적격성 판단을 연결해 결과를 확정하는 **상위 책임 수행 흐름**이다. 시간·동시성·종료 조건을 별도로 정의하지 않는다. 정확한 관측·실행 시퀀스는 [DetectTarget FDS](fds-detect-target.md), [Frame Ingress FDS](fds-frame-ingress.md), [TestCube FDS](fds-rawpart-depth-perception.md)를 따른다.
 
 ## 소유권과 상태
 
@@ -144,7 +144,7 @@ flowchart TD
 
 Vision은 카메라 입력 수신·요청별 Acquisition 처리·검출 Strategy·결과 및 진단 생성의 역할을 구분해 소유한다. 카메라 Topic 수신은 지속될 수 있지만 Detector 실행은 요청이 소유한다. 해당 역할의 요청 처리·5회 Depth 안정화는 [DetectTarget FDS](fds-detect-target.md), 프레임 수신은 [Frame Ingress FDS](fds-frame-ingress.md), terminal Snapshot 생성·저장·발행 시점은 [Diagnostic Snapshot FDS](fds-diagnostic-snapshot.md)가 각각 소유한다.
 
-검출 Strategy별 후보 적격성은 [RawPart FDS](fds-rawpart-depth-perception.md), 계산 절차는 각 Algorithm, Acquisition 식별자·후보·Result의 경계 의미는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)가 소유한다. UI 표시는 Vision의 책임이 아니다. Task Execution은 전달된 Material Candidate의 실행 우선순위·전환을, Motion은 선택된 후보의 Grasp Pose와 개별 movement를 평가한다.
+검출 Strategy별 후보 적격성은 [TestCube FDS](fds-rawpart-depth-perception.md), 계산 절차는 각 Algorithm, Acquisition 식별자·후보·Result의 경계 의미는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)가 소유한다. UI 표시는 Vision의 책임이 아니다. Task Execution은 전달된 Material Candidate의 실행 우선순위·전환을, Motion은 선택된 후보의 Grasp Pose와 개별 movement를 평가한다.
 
 ## 4. 출력 의미
 
@@ -160,7 +160,7 @@ Sensor 관측 가능성과 시뮬레이터 ground truth 독립성은 [Simulation
 
 매핑은 `target_id`를 키로 사용한다. Material Definition은 물리 형상과 공칭 치수를, Vision Profile은 선택한 Material을 참조하며 Algorithm 실행 설정·작업 영역/support 제약·관측 품질을, Recipe는 Detector 선택·Grasp·Approach·PLACE 정책을 소유한다. 이 책임 분리는 별도의 Material Registry 도입이나 Recipe로의 치수 소유권 이전을 뜻하지 않는다. Isaac Material Supply도 동일한 정의에서 `material_type`을 해석한다.
 
-Vision은 Orchestration이 Mission Recipe에 따라 요청한 Detector Strategy를 실행한다. Recipe가 선택을, Vision Profile이 실행 설정을 소유한다. 허용 값·기본값·검증은 [RawPart FDS](fds-rawpart-depth-perception.md)와 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)를 따른다. 하나의 Acquisition 동안 Strategy는 고정되지만 요청 간에는 Vision 재시작 없이 Algorithm을 바꿀 수 있다. 검증 전용 대체는 아래 5.1절의 제한을 따른다. 새로운 Registry Service나 동적 Plugin Loader는 도입하지 않는다.
+Vision은 Orchestration이 Mission Recipe에 따라 요청한 Detector Strategy를 실행한다. Recipe가 선택을, Vision Profile이 실행 설정을 소유한다. 허용 값·기본값·검증은 [TestCube FDS](fds-rawpart-depth-perception.md)와 [Mission Cycle FDS](../orchestration/fds-mission-cycle.md)를 따른다. 하나의 Acquisition 동안 Strategy는 고정되지만 요청 간에는 Vision 재시작 없이 Algorithm을 바꿀 수 있다. 검증 전용 대체는 아래 5.1절의 제한을 따른다. 새로운 Registry Service나 동적 Plugin Loader는 도입하지 않는다.
 
 ### 내부 Detector Strategy 경계
 
@@ -176,7 +176,7 @@ Strategy는 공통 관측 처리와 구체 Detector 사이에 놓인 최소한�
 | 공통 적격성 | Depth Scene Stability는 유효한 연속 Depth 관측으로 Detector를 Gate하며 정확히 STABLE이 된 관측에서 Detector를 한 번 실행. Strategy는 해당 관측에 기존 geometry 적격성 규칙 적용 |
 | 인계 및 수명 | 공통 Acquisition은 ID·직렬화·응답 구성 전까지 최종 관측 보존·deadline 소유. Vision은 내부 평가된 SELECTED HIGH·MEDIUM 전체를 단일 `material_candidates` 목록으로 한 번 반환하고, 적격 후보 부재 시 기존 미해결·부재 결과 계약을 적용하고 Task Execution이 PnP Action 안에서 우선순위·소비·전환을 소유하며 Motion은 선택 후보의 Grasp Pose·계획·movement를 소유. Strategy 상태가 반환 목록의 수명을 연장하거나 순서를 바꾸지 않음 |
 
-Orchestration은 Recipe의 Algorithm 이름을 전달하고 Task Execution은 Material Candidate 우선순위를, Motion은 Grasp Pose 후보 생성·계획 가능성을 소유한다. 소비자는 공통 Candidate payload 의미를 검증하고 Vision은 선택된 Profile의 Producer 의무를 지킨다. 후보 평가·등급 및 HIGH·MEDIUM 단일 목록 반환 동작은 RawPart FDS, L자 가설 생성·정규화·기하 근거 평가는 통합 [Algorithm 설계](../../algorithms/cuboid-top-face-grasp-selection.md)가 소유한다. 완전·부분 관측은 하나의 Algorithm 책임이며 별도 복원 fallback/module contract를 만들지 않는다. 별도 Strategy Registry나 공개 인터페이스는 도입하지 않는다.
+Orchestration은 Recipe의 Algorithm 이름을 전달하고 Task Execution은 Material Candidate 우선순위를, Motion은 Grasp Pose 후보 생성·계획 가능성을 소유한다. 소비자는 공통 Candidate payload 의미를 검증하고 Vision은 선택된 Profile의 Producer 의무를 지킨다. 후보 평가·등급 및 HIGH·MEDIUM 단일 목록 반환 동작은 TestCube FDS, L자 가설 생성·정규화·기하 근거 평가는 통합 [Algorithm 설계](../../algorithms/cuboid-top-face-grasp-selection.md)가 소유한다. 완전·부분 관측은 하나의 Algorithm 책임이며 별도 복원 fallback/module contract를 만들지 않는다. 별도 Strategy Registry나 공개 인터페이스는 도입하지 않는다.
 
 ## 5.1 검증 전용 Fixed Adapter
 
@@ -188,19 +188,19 @@ Production 운영 Profile은 Mode Flag·Plugin Option·Parameter를 통해 이�
 
 설치 Calibration의 측정·검증·산출물 생성·사용은 Vision이 소유하지만, 명시적 작업의 수락·실행 순서·상태·파일 전환 동작은 [Installation Calibration FDS](fds-installation-calibration.md)에서 정의한다. Deployment Profile은 선택할 Calibration 파일 경로와 설치 구성을, Calibration 산출물은 측정된 Transform과 카메라 호환성 정보를 소유한다. Orchestration은 운영 중 미션과 Calibration 요청의 조정 책임을 갖는다.
 
-## 7. 관측 시간과 RawPart 증거의 책임 경계
+## 7. 관측 시간과 TestCube 증거의 책임 경계
 
 Vision은 Acquisition 동안 Sensor 관측의 신선도와 단일 요청의 Deadline을 책임진다. 상세 수신·시각·Epoch 해석은 [Frame Ingress FDS](fds-frame-ingress.md), 요청 완료와 Result 사용 범위는 [DetectTarget FDS](fds-detect-target.md) 및 공유 ICD를 따른다. 시뮬레이션 Epoch 자체의 Authority는 Vision에 있지 않다.
 
-RawPart의 Observation Pose·자체 두께·점유 증거 생성은 Vision이 소유하며 Geometry 산출·불확실성 및 Candidate 판정은 [RawPart FDS](fds-rawpart-depth-perception.md)와 해당 Algorithm에 따른다. Motion의 Collision Policy는 Vision이 선택하지 않고, 같은 관측의 증거를 전달한다.
+RawPart의 Observation Pose·자체 두께·점유 증거 생성은 Vision이 소유하며 Geometry 산출·불확실성 및 Candidate 판정은 [TestCube FDS](fds-rawpart-depth-perception.md)와 해당 Algorithm에 따른다. Motion의 Collision Policy는 Vision이 선택하지 않고, 같은 관측의 증거를 전달한다.
 
 ## 8. 검증 요구사항
 
 ### VR-VIS-STACK-01 — Profile 동작 검증
-[RawPart FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-01` 식별자를 유지한다.
+[TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-01` 식별자를 유지한다.
 
 ### VR-VIS-STACK-02 — Profile 두께 검증
-[RawPart FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-02` 식별자를 유지한다.
+[TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-02` 식별자를 유지한다.
 
 ### VR-VIS-STACK-03 — 적층을 고려한 Target 적격성
 위에 놓인 RawPart에 가려진 아래 RawPart는 PICK Target으로 인계해서는 안 된다(SHALL NOT). 독립적으로 노출된 상판 후보는 계속 적격하다.
@@ -209,10 +209,10 @@ RawPart의 Observation Pose·자체 두께·점유 증거 생성은 Vision이 �
 Detector는 합쳐지거나 분리된 것으로 보이는 불확실한 객체 인스턴스를 거부해야 하며(SHALL), 가려지거나 무효인 Depth 영역을 확정된 형상이나 빈 공간으로 주장해서는 안 된다(SHALL NOT).
 
 ### VR-VIS-STACK-05 — 적층 작업 영역 Coverage
-Deployment가 소유하는 RawPart 검출 ROI는 설정된 최대 적층 높이를 수용해야 하며(SHALL), 기존 관측 유효성 검사를 유지한다.
+Deployment가 소유하는 TestCube 검출 ROI는 설정된 최대 적층 높이를 수용해야 하며(SHALL), 기존 관측 유효성 검사를 유지한다.
 
 ### VR-VIS-STACK-06 — Profile 동작 검증
-[RawPart FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-06` 식별자를 유지한다.
+[TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-06` 식별자를 유지한다.
 
 ### VR-VIS-STACK-07 — 관측 기준점 보존
 적층 후보는 기존 RawPart의 보이는 상판 기준점, 객체 자체 두께 범위, 자세 대칭성 의미를 유지해야 한다(SHALL). Tray 바닥 기준 높이나 근거 없는 가려진 Box 중심으로 객체 높이를 대체해서는 안 된다(SHALL NOT).
@@ -245,4 +245,9 @@ Production 센서 관측 가능성과 시뮬레이터 Ground Truth 독립성에 
 검증 전용 Fixed Vision Adapter는 Production 운영 Profile에서 선택할 수 없는 별도 실행 파일과 Profile로 유지해야 한다(SHALL).
 
 ### VR-VIS-OWN-10 — Profile 선택 검증
-구체적인 요청 선택 판정 기준은 [RawPart FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-OWN-10`을 유지한다.
+구체적인 요청 선택 판정 기준은 [TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-OWN-10`을 유지한다.
+
+
+### Depth 프로필 처리의 구현 경계
+
+`depth_profile_processor.cpp`는 요청 대상 프로필 선택, 입력 검증의 적용, Calibration 준비 상태 확인 및 `cuboid_top_face` 호출을 연결한다. `depth_profile_validation.cpp`는 자재 ID 일치·box 형상·치수·ROI·센서 입력 조건을 검사하며 특정 자재 이름을 요구하지 않는다. `support_calibration.cpp`는 Support 기준 변환의 명시적 보정과 캐시 상태를 소유하고, `depth_observation.cpp`는 Depth 읽기·변환 및 현재 Tray 관측 범위를 계산한다. 공통 내부 선언은 `depth_profile_support.hpp`에 둔다. 도달할 수 없던 과거 Rectangle 검출 경로는 제거하며 실제 후보 생성은 기존 `cuboid_top_face` 구현이 소유한다.

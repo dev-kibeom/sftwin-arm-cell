@@ -87,7 +87,7 @@ class TestRejectedMaterialTrigger(unittest.TestCase):
         trigger.header.stamp.sec = 1
         trigger.delivery_id.uuid[0] = 9
         trigger.quantity = 2
-        trigger.material_type = "RawPart"
+        trigger.material_type = "TestCube"
         trigger.valid = True
         self.publisher.publish(trigger)
         self.spin_until(lambda: len(self.status) == 1)

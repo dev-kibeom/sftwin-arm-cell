@@ -79,7 +79,7 @@ def test_empty_scene_does_not_create_recording_directory(tmp_path):
 
 def test_session_binding_changes_destination_without_mixing_records(tmp_path):
     stage = _Stage()
-    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000")
+    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/Material_0000")
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()
@@ -111,7 +111,7 @@ def test_pose_retention_preserves_other_simulation_records(tmp_path, monkeypatch
     unrelated = tmp_path / "events.jsonl"
     unrelated.write_text("unrelated\n")
     stage = _Stage()
-    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000")
+    prim = _Prim("/World/MaterialSupply/Deliveries/Delivery_a/Material_0000")
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()
@@ -126,7 +126,7 @@ def test_pose_retention_preserves_other_simulation_records(tmp_path, monkeypatch
 def test_recorder_writes_initial_pose_and_suppresses_still_pose(tmp_path):
     stage = _Stage()
     prim = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/RawPart_0000"
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/Material_0000"
     )
     stage.prims = [prim]
     physx = _PhysX()
@@ -153,7 +153,7 @@ def test_recorder_writes_initial_pose_and_suppresses_still_pose(tmp_path):
 def test_recorder_uses_one_mm_and_one_degree_thresholds(tmp_path):
     stage = _Stage()
     prim = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/RawPart_0000"
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/Material_0000"
     )
     stage.prims = [prim]
     physx = _PhysX()
@@ -190,7 +190,7 @@ def test_recorder_uses_one_mm_and_one_degree_thresholds(tmp_path):
 def test_recorder_tracks_create_remove_and_reconstructs_multi_part_layout(tmp_path):
     stage = _Stage()
     first = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/RawPart_0000"
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/Material_0000"
     )
     stage.prims = [first]
     physx = _PhysX()
@@ -199,7 +199,7 @@ def test_recorder_tracks_create_remove_and_reconstructs_multi_part_layout(tmp_pa
     recorder.sample(physx, 1.0, now=0.0)
 
     second = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_b/RawPart_0000",
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_b/Material_0000",
         "delivery-b",
     )
     stage.prims.append(second)
@@ -231,10 +231,10 @@ def test_recorder_tracks_create_remove_and_reconstructs_multi_part_layout(tmp_pa
 def test_incomplete_physx_sample_does_not_emit_false_removal(tmp_path):
     stage = _Stage()
     first = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/RawPart_0000"
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/Material_0000"
     )
     second = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_b/RawPart_0000",
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_b/Material_0000",
         "delivery-b",
     )
     stage.prims = [first]
@@ -252,7 +252,7 @@ def test_incomplete_physx_sample_does_not_emit_false_removal(tmp_path):
 def test_simulation_time_rollback_starts_a_distinct_session(tmp_path):
     stage = _Stage()
     prim = _Prim(
-        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/RawPart_0000"
+        "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_a/Material_0000"
     )
     stage.prims = [prim]
     physx = _PhysX()
@@ -316,7 +316,7 @@ def test_recorded_world_pose_conversion_uses_parent_transform():
 
 def test_sample_reports_only_actual_persistence(tmp_path):
     stage = _Stage()
-    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000')
+    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/Material_0000')
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()
@@ -364,7 +364,7 @@ def test_failed_segment_initialization_is_retried_after_storage_recovers(tmp_pat
     import pytest
 
     stage = _Stage()
-    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/RawPart_0000')
+    prim = _Prim('/World/MaterialSupply/Deliveries/Delivery_a/Material_0000')
     stage.prims = [prim]
     physx = _PhysX()
     physx.states[prim.path] = _pose()

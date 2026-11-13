@@ -265,7 +265,7 @@ def handoff():
         "schema_version": "wu14-pnp-registration/v2",
         "status": "FIXTURE_READY_FOR_REGISTRATION",
         "run_id": "run-1",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "request": {
             "pose": {
                 "frame_id": "base_link",
@@ -287,7 +287,7 @@ def confirmation():
         "schema_version": "wu14-pnp-cleanup/v1",
         "status": "AUTHORIZED",
         "run_id": "run-1",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "fixture_prim_identity": "/World/SFTwin/ValidationFixture/Cube",
         "decision_id": "decision-1",
         "cleanup_deadline_s": 13.0,
@@ -350,7 +350,7 @@ def test_mission_completion_event_waits_for_depleted_result_and_scene_absent(
     loaded = module()
     event_path = tmp_path / "mission_completion_event.json"
     producer = loaded.MissionCompletionEventProducer(
-        "run-42", "cube_profile", event_path
+        "run-42", "TestCube", event_path
     )
 
     assert not producer.observe_feedback(
@@ -1102,7 +1102,7 @@ def test_released_world_without_prior_attached_state_is_ignored():
 def test_place_phase_alone_does_not_write_success_event(tmp_path):
     loaded = module()
     event_path = tmp_path / "place_result_event.json"
-    producer = loaded.PlaceResultEventProducer("run-1", "cube_profile", event_path)
+    producer = loaded.PlaceResultEventProducer("run-1", "TestCube", event_path)
 
     assert not producer.observe_feedback("goal-1", 4, now=10.0)
     assert not event_path.exists()
@@ -1113,7 +1113,7 @@ def test_place_phase_alone_does_not_write_success_event(tmp_path):
     assert event["schema_version"] == "wu14-pnp-place-result/v1"
     assert event["status"] == "SUCCESS"
     assert event["run_id"] == "run-1"
-    assert event["target_id"] == "cube_profile"
+    assert event["target_id"] == "TestCube"
     assert event["result_identity"] == "goal-1:1"
     assert event["fresh_released"] is True
     assert event["detach_confirmed"] is True
@@ -1125,7 +1125,7 @@ def test_place_phase_alone_does_not_write_success_event(tmp_path):
 def test_detach_fact_emits_before_returning_home_feedback(tmp_path):
     loaded = module()
     event_path = tmp_path / "place_result_event.json"
-    producer = loaded.PlaceResultEventProducer("run-1", "cube_profile", event_path)
+    producer = loaded.PlaceResultEventProducer("run-1", "TestCube", event_path)
     producer.observe_feedback("goal-1", loaded.MISSION_PHASE_PLACING, now=1.0)
 
     assert producer.observe_release(
@@ -1139,7 +1139,7 @@ def test_detach_fact_emits_before_returning_home_feedback(tmp_path):
 def test_failed_cancelled_or_foreign_feedback_does_not_write_place_event(tmp_path):
     loaded = module()
     event_path = tmp_path / "place_result_event.json"
-    producer = loaded.PlaceResultEventProducer("run-1", "cube_profile", event_path)
+    producer = loaded.PlaceResultEventProducer("run-1", "TestCube", event_path)
 
     assert not producer.observe_feedback("goal-foreign", 4, now=1.0)
     assert not producer.observe_feedback("goal-foreign", 7, now=2.0)
@@ -1150,7 +1150,7 @@ def test_failed_cancelled_or_foreign_feedback_does_not_write_place_event(tmp_pat
 def test_place_release_fact_outside_placing_phase_does_not_emit(tmp_path):
     loaded = module()
     event_path = tmp_path / "place_result_event.json"
-    producer = loaded.PlaceResultEventProducer("run-1", "cube_profile", event_path)
+    producer = loaded.PlaceResultEventProducer("run-1", "TestCube", event_path)
 
     assert not producer.observe_feedback(
         "goal-1",
@@ -1168,7 +1168,7 @@ def test_place_release_fact_outside_placing_phase_does_not_emit(tmp_path):
 def test_release_requires_fresh_release_and_detach_facts(tmp_path, facts):
     loaded = module()
     event_path = tmp_path / "place_result_event.json"
-    producer = loaded.PlaceResultEventProducer("run-1", "cube_profile", event_path)
+    producer = loaded.PlaceResultEventProducer("run-1", "TestCube", event_path)
 
     assert not producer.observe_feedback(
         "goal-1", loaded.MISSION_PHASE_PLACING, now=1.0, **facts

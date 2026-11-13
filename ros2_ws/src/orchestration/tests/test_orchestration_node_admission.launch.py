@@ -28,17 +28,14 @@ from std_srvs.srv import Trigger
 @pytest.mark.launch_test
 def generate_test_description():
     recipe_directory = str(
-        Path(__file__).resolve().parents[1].parent
-        / "bringup"
-        / "config"
-        / "recipes"
+        Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "recipes"
     )
     orchestration = Node(
         package="arm_cell_orchestration",
         executable="orchestration_node",
         parameters=[
             {
-                "mission_target_id": "RawPart",
+                "mission_target_id": "TestCube",
                 "recipe_directory": recipe_directory,
             }
         ],
@@ -157,7 +154,7 @@ class TestOrchestrationNodeAdmission(unittest.TestCase):
 
         readiness = MaterialReadiness()
         readiness.delivery_id.uuid[15] = 17
-        readiness.material_type = "RawPart"
+        readiness.material_type = "TestCube"
         readiness.quantity = 1
         readiness.valid = True
         readiness.material_ready = True
@@ -180,9 +177,18 @@ class TestOrchestrationNodeAdmission(unittest.TestCase):
             and self.node.count_subscribers("/vision/calibration_status") > 0
         )
 
-        first_calibration = self.calibration_client.call_async(Trigger.Request())
-        self.spin_until(first_calibration.done)
-        self.assertTrue(first_calibration.result().success)
+        # Our local service may be visible before the Orchestration client's
+        # DDS discovery completes. Retry only that transient readiness result.
+        discovery_deadline = time.monotonic() + 5.0
+        while True:
+            first_calibration = self.calibration_client.call_async(Trigger.Request())
+            self.spin_until(first_calibration.done)
+            response = first_calibration.result()
+            if response.success:
+                break
+            self.assertEqual(response.message, "Vision Calibration service is unavailable")
+            self.assertLess(time.monotonic(), discovery_deadline)
+            time.sleep(0.02)
         self.assertEqual(
             first_calibration.result().message, "calibration artifact created"
         )

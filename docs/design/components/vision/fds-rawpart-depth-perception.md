@@ -1,17 +1,17 @@
-# [SF-Twin] ARM Cell Production RawPart Depth Perception
+# [SF-Twin] ARM Cell Production TestCube Depth Perception
 
-- **Scope:** `ARM Cell Material Detection / Production RawPart profile`
+- **Scope:** `ARM Cell Material Detection / Production TestCube profile`
 - **Owner:** `ARM Cell Material Detection`
 - **Parent behavior:** [Vision DetectTarget FDS](fds-detect-target.md)
 
-## RawPart 기능의 책임과 관측 계약
+## TestCube 기능의 책임과 관측 계약
 
-이 FDS는 선택된 RawPart Strategy의 관측 처리·후보 적격성·유효 부재와 Geometry 실패 판정·결과 확정 **동작**을 소유한다. 요청의 수락·단일 Deadline과 Depth Scene Stability에서 Detector로 인계되는 **시점**은 [DetectTarget FDS](fds-detect-target.md)를 따른다. 후보 목록·Observation Pose·Orientation Symmetry·Frame/Time의 **공유 의미**는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)가 소유한다. Heightmap·Boundary·Plane Map·Geometry Fitting의 구체 계산은 각 [Algorithm 설계](../../algorithms/cuboid-top-face-grasp-selection.md)를 따른다. Snapshot은 [Diagnostic Snapshot FDS](fds-diagnostic-snapshot.md)가 기존 계산 근거로 생성하고 Detector를 재실행하지 않는다. PICK 충돌 점유맵은 반환 후보 Geometry를 소비하는 Motion이 구성하며 해당 책임은 [Motion Execution FDS](../motion/fds-motion-execution.md)가 소유한다.
+이 FDS는 선택된 TestCube Strategy의 관측 처리·후보 적격성·유효 부재와 Geometry 실패 판정·결과 확정 **동작**을 소유한다. 요청의 수락·단일 Deadline과 Depth Scene Stability에서 Detector로 인계되는 **시점**은 [DetectTarget FDS](fds-detect-target.md)를 따른다. 후보 목록·Observation Pose·Orientation Symmetry·Frame/Time의 **공유 의미**는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)가 소유한다. Heightmap·Boundary·Plane Map·Geometry Fitting의 구체 계산은 각 [Algorithm 설계](../../algorithms/cuboid-top-face-grasp-selection.md)를 따른다. Snapshot은 [Diagnostic Snapshot FDS](fds-diagnostic-snapshot.md)가 기존 계산 근거로 생성하고 Detector를 재실행하지 않는다. PICK 충돌 점유맵은 반환 후보 Geometry를 소비하는 Motion이 구성하며 해당 책임은 [Motion Execution FDS](../motion/fds-motion-execution.md)가 소유한다.
 
 ```mermaid
 sequenceDiagram
     participant Detect as DetectTarget
-    participant Raw as RawPart Strategy
+    participant Raw as TestCube Strategy
     participant Alg as 선택 Algorithm
     participant Snap as Diagnostic Snapshot
     Detect->>Raw: STABLE 확정 Depth 관측과 선택 Profile 인계
@@ -24,13 +24,13 @@ sequenceDiagram
 
 ## 1. 목적과 책임
 
-이 FDS는 Final Demo의 설정된 RawPart Profile에 대한 정식 Production Depth/Geometry Pipeline을 정의한다. 상위 DetectTarget FDS는 요청 동작, 결과 의미, Freshness, 성공한 Object Reference 계약을 소유한다. 이 문서는 공유 RawPart Processing과 Detector Strategy 경계를 소유하며 구체적인 Geometry 계산 절차는 Algorithm 문서가 소유한다. 새로운 Service를 추가하지 않는다.
+이 FDS는 Final Demo의 설정된 TestCube Profile에 대한 정식 Production Depth/Geometry Pipeline을 정의한다. 상위 DetectTarget FDS는 요청 동작, 결과 의미, Freshness, 성공한 Object Reference 계약을 소유한다. 이 문서는 공유 TestCube Processing과 Detector Strategy 경계를 소유하며 구체적인 Geometry 계산 절차는 Algorithm 문서가 소유한다. 새로운 Service를 추가하지 않는다.
 
 Caller의 논리 `target_id`는 사전 설정된 Vision 소유 Profile을 선택한다. Profile은 Material Definition의 공칭 물리 형상과 치수를 참조하지만 Algorithm 실행 설정, Observation Quality 조건, Workspace/Support 제약, 선택적 Diagnostic 비교 규칙을 소유한다. `operational_profile.yaml`의 공유 Material Definition이 Material ID·형상·공칭 치수를 소유하고 Vision Profile은 물리적 크기를 정의하거나 제공하지 않는다. 공칭 치수 사용 방식은 2.4절의 Algorithm별 계약을 따른다. Configuration Threshold·Calibration Value·Marker ID/Pose·ROI 치수·Fiducial Geometry는 배포 설정으로 남는다.
 
 Production Pipeline은 Vision이 선택 파일에서 로드한 Calibration과 호환 CameraInfo·Depth를 관측한다. 정상 검출에서 RGB는 선택 사항이며 동기화된 RGB는 명시적 Fiducial Calibration에서만 필요하다. 검출 후 공간적으로 호환되는 최신 RGB를 Snapshot Annotation에 사용할 수 있다. Simulator Prim Identity·정확한 World Coordinate·Simulator Metadata·API를 Production Perception Input으로 사용해서는 안 된다. RGB Appearance·Learned Detector는 선택 사항으로 이 정식 Profile의 필수 조건이 아니다. Environment 선행 조건은 [Simulation Environment Semantics](../simulation-environment-semantics.md)가 소유한다.
 
-Collision Planning에서는 [Motion CDS의 정적 RawPart Domain](../motion/cds.md#정적-구조와-경계)이 취급 대상 자재 외에 별도 미식별 객체가 없다고 가정한다. 이 가정은 Vision의 관측·Qualification을 바꾸지 않는다. Vision은 관측된 후보의 Geometry와 미해결 Hypothesis를 각자의 반환·진단 경계에 보존한다. Vision은 Planning Occupancy를 생성하거나 Collision Constraint를 선택하지 않으며, Motion은 미해결 영역을 PICK 점유맵에 포함하지 않는다. Vision은 Planning 실패 뒤 Geometry/Stability Validation을 완화하거나 실시간 장애물 회피를 보장하지 않는다.
+Collision Planning에서는 [Motion CDS의 정적 TestCube Domain](../motion/cds.md#정적-구조와-경계)이 취급 대상 자재 외에 별도 미식별 객체가 없다고 가정한다. 이 가정은 Vision의 관측·Qualification을 바꾸지 않는다. Vision은 관측된 후보의 Geometry와 미해결 Hypothesis를 각자의 반환·진단 경계에 보존한다. Vision은 Planning Occupancy를 생성하거나 Collision Constraint를 선택하지 않으며, Motion은 미해결 영역을 PICK 점유맵에 포함하지 않는다. Vision은 Planning 실패 뒤 Geometry/Stability Validation을 완화하거나 실시간 장애물 회피를 보장하지 않는다.
 
 ### 1.1 Recipe Algorithm 선택과 운영 설정
 
@@ -54,7 +54,7 @@ Stacking Extension에서는 Material 치수를 변경하지 않은 채 Configure
 
 ```text
 DetectTarget(target_id, algorithm)
-→ 설정된 RawPart Profile 결정
+→ 설정된 TestCube Profile 결정
 → Fresh Depth 및 호환 CameraInfo 취득. 표시용 호환 RGB만 선택적으로 보존
 → vision.calibration_file의 Transform 및 설정된 Tray Support Geometry 적용
 → 연속 5회 유효 관측으로 Depth Scene Stability 완료
@@ -68,7 +68,7 @@ DetectTarget(target_id, algorithm)
 → HIGH·MEDIUM 단일 목록의 전체 Qualified Material Candidate Geometry 반환
 ```
 
-각 활성 DetectTarget Acquisition에서 Vision은 공유 Tray Scene Stability Gate로 연속 5개 유효 Depth Sample을 평가한 다음 Profile을 한 번 실행한다. 이 Gate는 RawPart를 Segmentation·Detection·Classification하지 않는다. Candidate Geometry 및 Valid Absence는 선택 Detector가 최종 Depth Observation 하나로 결정한다. 후보 적격성은 Temporal Tracking이 아닌 단일 Observation Geometry 판단이다. Acquisition이 없을 때 Camera Ingress는 활성화돼도 RawPart Profile Processing은 실행되지 않는다.
+각 활성 DetectTarget Acquisition에서 Vision은 공유 Tray Scene Stability Gate로 연속 5개 유효 Depth Sample을 평가한 다음 Profile을 한 번 실행한다. 이 Gate는 RawPart를 Segmentation·Detection·Classification하지 않는다. Candidate Geometry 및 Valid Absence는 선택 Detector가 최종 Depth Observation 하나로 결정한다. 후보 적격성은 Temporal Tracking이 아닌 단일 Observation Geometry 판단이다. Acquisition이 없을 때 Camera Ingress는 활성화돼도 TestCube Profile Processing은 실행되지 않는다.
 
 유효 Absence에는 최종 Detector Observation의 완전한 Projected Workspace Coverage와 충분한 Valid Depth가 필요하다. 이 조건은 Detector 실행 자체를 막거나 이미 관측된 유효 Candidate를 거부하는 조건이 아니다. Unobservable·Ambiguous·Insufficient Geometry는 Absence가 아니다. Scene Stability는 원본 Camera Depth Frame을 비교하며 Detector Heightmap이나 Support-relative Projection에 의존하지 않는다.
 
@@ -96,11 +96,11 @@ Service Steady-clock Deadline은 유효한 Set 대기를 제한한다. Timeout·
 
 ### 2.2 로드된 Calibration과 Runtime Support Geometry
 
-Vision CDS가 고정 설비 가정·Calibration 파일 생성·선택·호환성·READY를 소유한다. 이 FDS는 RawPart Runtime Processing 경계만 소유한다. Runtime Deprojection은 `vision.calibration_file`에서 로드한 Transform과 Operational Profile의 Tray/Support Geometry를 사용한다. ArUco를 검출하거나 설치 Depth 검사를 반복하지 않는다.
+Vision CDS가 고정 설비 가정·Calibration 파일 생성·선택·호환성·READY를 소유한다. 이 FDS는 등록된 cuboid 자재의 Runtime Processing 경계를 소유한다. TestCube는 기본 검증 자재이며 특정 자재 이름이 알고리즘 적격 조건은 아니다. Runtime Deprojection은 `vision.calibration_file`에서 로드한 Transform과 Operational Profile의 Tray/Support Geometry를 사용한다. ArUco를 검출하거나 설치 Depth 검사를 반복하지 않는다.
 
 설치 Observation Count와 Evidence 검사는 명시적 Calibration에 속한다. Runtime Depth Scene Stability는 `vision.scene_stability.stable_observation_count`의 공유 연속 Observation Count를 사용한다. Simulator에서 유도한 Transform Scale이나 Startup Observation Count가 Vision CDS에 따라 선택된 Measured Calibration을 대체하지 않는다.
 
-정상 Production Frame에 Marker가 없어도 실패가 아니다. 현재 Depth Validity/Freshness·Compatible CameraInfo/Calibration·Depth Scene Stability·Single Observation RawPart Geometry/Visibility는 Runtime 요구사항이다. Invalid Sensor Input 또는 검증할 수 없는 Candidate는 Observation/Geometry Failure이며 `OBJECT_NOT_FOUND`가 아니다.
+정상 Production Frame에 Marker가 없어도 실패가 아니다. 현재 Depth Validity/Freshness·Compatible CameraInfo/Calibration·Depth Scene Stability·Single Observation TestCube Geometry/Visibility는 Runtime 요구사항이다. Invalid Sensor Input 또는 검증할 수 없는 Candidate는 Observation/Geometry Failure이며 `OBJECT_NOT_FOUND`가 아니다.
 
 ### 2.3 Support-relative Depth Geometry
 
@@ -132,11 +132,11 @@ Snapshot·Diagnostic은 실제 선택 Evaluation을 재사용하고 계산한 Hy
 
 설정된 자재 대상 `workspace_roi_m`과 겹치는 관측 연결 영역은 ROI 밖으로 이어진 부분까지 Plane Map에 보존한다. 대상 ROI는 고정된 선택 기준이며 자재 Contour의 절단선이 아니다. 보정용 `tray_roi_m`과 확장 Height Grid 범위는 대상 ROI를 변경하지 않는다. Tray 바닥 기준 Support 허용오차보다 낮은 깊이는 Height Grid 생성 단계에서 제외한다.
 
-### 2.5 RawPart Observation Pose 기준
+### 2.5 TestCube Observation Pose 기준
 
 선택 Candidate 안에서 Vision은 Support-relative Height·Surface Normal·Configured Workpiece Profile의 일관성으로 관측된 상판을 식별한다. Robust Plane Fit은 Depth Noise와 Boundary Outlier를 거부할 수 있다. 완전·부분 관측 모두 선택 Algorithm이 요구하는 실제 관측 L자 Edge 지지와 기존 Profile의 Observation Quality를 평가 근거로 사용한다. 전체 상판 Coverage는 모든 후보에 적용하는 필수조건이 아니다. 모서리 위치를 안정적으로 평가할 수 없는 Insufficient·Geometrically Inconsistent Evidence는 Geometry/Temporary Observation Failure이지 Success/Depletion이 아니다. 상부 가림은 후보 존재 근거를 없애지 않으며 확실성 등급에 반영한다.
 
-RawPart Profile의 Observation Pose는 `base_link`에서 정의한 Visible Rectangle Top Surface Reference다. 관측된 Top Surface Centroid와 측정 Top Height를 사용하고 Local Z는 관측된 Outward Top Normal을 따른다. 실측 경계가 있는 경우 Local X/Y와 실측 변을 관측 형상에서 얻으며, Recipe 치수로 복원한 경계는 추정 provenance를 유지한다. L자 기반 복원에서는 관측된 직각 외부 모서리와 Recipe 면·변 가설로 전체 Top Footprint 중심을 추정할 수 있다. Z/Top Elevation은 같은 관측의 수평 Plane Map 영역에서 얻으며 추정된 변 길이는 기존 Candidate side-length 필드와 `has_observed_rectangle=false`로 전달한다. 추정 중심이 ROI 밖이라는 이유로 Candidate를 거부하지 않는다. 관측 경계 밖의 복원 영역은 UNKNOWN이다. Vision은 Robot/Tool/TCP Offset을 적용하지 않는다. Motion은 이 Surface Reference를 Grasp Geometry Anchor로 사용하고 고정 Nominal Half-height를 빼서 Object Center를 추론하지 않는다.
+TestCube Profile의 Observation Pose는 `base_link`에서 정의한 Visible Rectangle Top Surface Reference다. 관측된 Top Surface Centroid와 측정 Top Height를 사용하고 Local Z는 관측된 Outward Top Normal을 따른다. 실측 경계가 있는 경우 Local X/Y와 실측 변을 관측 형상에서 얻으며, Recipe 치수로 복원한 경계는 추정 provenance를 유지한다. L자 기반 복원에서는 관측된 직각 외부 모서리와 Recipe 면·변 가설로 전체 Top Footprint 중심을 추정할 수 있다. Z/Top Elevation은 같은 관측의 수평 Plane Map 영역에서 얻으며 추정된 변 길이는 기존 Candidate side-length 필드와 `has_observed_rectangle=false`로 전달한다. 추정 중심이 ROI 밖이라는 이유로 Candidate를 거부하지 않는다. 관측 경계 밖의 복원 영역은 UNKNOWN이다. Vision은 Robot/Tool/TCP Offset을 적용하지 않는다. Motion은 이 Surface Reference를 Grasp Geometry Anchor로 사용하고 고정 Nominal Half-height를 빼서 Object Center를 추론하지 않는다.
 
 `top elevation`은 Calibrated Support Plane 위 관측 Top의 Height다. `own thickness`는 지원되는 Upright Geometry에서 자체 Bottom부터 Top까지 Outward Normal 방향으로 측정하거나 추론한 Object의 수직 범위다. 기존 `estimated_height_m`는 유한한 양수의 Own Thickness를 전달하며 `target_pose`는 관측 Top Reference와 관측된 Top Elevation을 유지한다. 일반 관측과 L자 복원은 같은 Face/Own-height Hypothesis 평가를 사용한다. Thickness에 영향을 주는 실질적 모호성이 남으면 이를 confidence 진단에 기록하고 가설을 HIGH/MEDIUM으로 승격하지 않는다. 살아남은 복원 가설의 Own Thickness는 추정 provenance를 유지한다. 관측 Top Elevation과 자체 두께를 구분하며 새 Height Field는 추가하지 않는다.
 
@@ -148,7 +148,7 @@ Cuboid Strategy는 적층 Height와 개별 자재의 자체 두께를 구분해�
 
 Yaw는 선택 Algorithm의 관련 절차에 따라 충분한 Evidence가 있는 Candidate Geometry에서 도출한다. 공통 FDS는 출력 Symmetry·Qualification 불변조건만 정의하며 PCA·Enclosing Rectangle Direction·공유 Yaw Estimator를 강제하지 않는다.
 
-Fitted Direction은 TCP Pose가 아닌 Rectangle Long Axis를 나타낸다. 측정 또는 L자 복원으로 추정한 두 Side가 다르면 Rectangle의 회전 대칭은 180°이므로 `orientation_symmetry_order=2`와 Modulo 180° Long-axis Direction을 발행한다. Side가 같으면 Order 4와 Modulo 90° Edge Direction을 발행한다. Edge Evidence가 부족하거나 불안정하면 Order 0으로 발행하고 Pose Orientation은 사용할 수 없게 한다. Order 1은 실제 고유 Object Orientation을 관측할 수 있는 Profile용이며 RawPart Rectangle 표현에는 사용하지 않는다. 일반 Cuboid의 관측 Class는 Recipe Policy로 변경할 수 없다. Motion은 양수 Side Length(실측 또는 L자 복원 Recipe 추정)로 서로 다른 Jaw-axis Grasp 선택지 두 개를 생성하며 Order 4를 일반적인 Rectangle Candidate Count로 취급하지 않는다.
+Fitted Direction은 TCP Pose가 아닌 Rectangle Long Axis를 나타낸다. 측정 또는 L자 복원으로 추정한 두 Side가 다르면 Rectangle의 회전 대칭은 180°이므로 `orientation_symmetry_order=2`와 Modulo 180° Long-axis Direction을 발행한다. Side가 같으면 Order 4와 Modulo 90° Edge Direction을 발행한다. Edge Evidence가 부족하거나 불안정하면 Order 0으로 발행하고 Pose Orientation은 사용할 수 없게 한다. Order 1은 실제 고유 Object Orientation을 관측할 수 있는 Profile용이며 TestCube Rectangle 표현에는 사용하지 않는다. 일반 Cuboid의 관측 Class는 Recipe Policy로 변경할 수 없다. Motion은 양수 Side Length(실측 또는 L자 복원 Recipe 추정)로 서로 다른 Jaw-axis Grasp 선택지 두 개를 생성하며 Order 4를 일반적인 Rectangle Candidate Count로 취급하지 않는다.
 
 Candidate Geometry는 공유 Scene Stability Gate 이후 최종 Depth Observation 하나에서 평가한다. Vision은 Candidate Pose·Dimension·Yaw·Area·Support Normal·Fit Quality를 시간적으로 추적하거나 Qualification하지 않는다.
 
@@ -173,7 +173,7 @@ Vision은 관측 시각에 유효한 TF를 사용해 수락된 Optical-frame Obj
 | Valid Position·Stable Square Edge Angle Class | `SUCCESS`, `orientation_symmetry_order=4` |
 | Valid Position·Yaw Unobservable/Unstable | `SUCCESS`, `orientation_symmetry_order=0` |
 
-Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md), 실행 가능한 [DetectTarget Result Code IDL](../../../../ros2_ws/src/interfaces/msg/DetectTargetResultCode.msg)을 따른다. 일시적인 Observation Validity 거부는 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET=7`, 유효한 관측에서 해결되지 않은 필수 Geometry는 기존 `DETECT_RESULT_GEOMETRY_ERROR`를 사용한다. 이 RawPart FDS는 현행 Result Code를 소비하며 코드를 추가·변경하지 않는다.
+Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md), 실행 가능한 [DetectTarget Result Code IDL](../../../../ros2_ws/src/interfaces/msg/DetectTargetResultCode.msg)을 따른다. 일시적인 Observation Validity 거부는 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET=7`, 유효한 관측에서 해결되지 않은 필수 Geometry는 기존 `DETECT_RESULT_GEOMETRY_ERROR`를 사용한다. 이 TestCube FDS는 현행 Result Code를 소비하며 코드를 추가·변경하지 않는다.
 
 ## 4. 책임과 교체 가능 경계
 
@@ -182,7 +182,7 @@ Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), 
 | Request·Result Contract·Depletion·Freshness | 상위 DetectTarget FDS 및 ICD |
 | Support/Work Surface 불변조건 | Simulation Environment Semantics |
 | 설치 Calibration 및 생성 파일 Lifecycle | Vision CDS |
-| Runtime Support Transform·Depth Geometry·RawPart Candidate 격리·Top Surface Reference·Optional Yaw | 공유 동작은 이 FDS, 구체 Geometry 계산은 Cuboid Algorithm |
+| Runtime Support Transform·Depth Geometry·TestCube Candidate 격리·Top Surface Reference·Optional Yaw | 공유 동작은 이 FDS, 구체 Geometry 계산은 Cuboid Algorithm |
 | Material ID·Shape·Nominal Dimension | Isaac Material Supply와 공유하는 `operational_profile.yaml` Material Definition |
 | Detector Strategy·Threshold·Fiducial ID/Pose/Geometry·ROI·Quality Limit | Deployment Configuration의 Vision Detector Profile |
 | Optical → `base_link` Transform | Vision이 TF를 소비하고 TF 계약 Owner가 발행 |
@@ -203,15 +203,15 @@ Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), 
 
 ### VR-VIS-RAWPART-03 — Depth-only Target 격리
 
-설정된 RawPart Profile과 유효하게 로드된 Support Reference에서 Candidate 격리 및 Profile Matching은 RGB Appearance 또는 Learned Detector 없이 Depth와 알려진 Geometry만으로 성공해야 한다(SHALL).
+설정된 TestCube Profile과 유효하게 로드된 Support Reference에서 Candidate 격리 및 Profile Matching은 RGB Appearance 또는 Learned Detector 없이 Depth와 알려진 Geometry만으로 성공해야 한다(SHALL).
 
 ### VR-VIS-RAWPART-04 — 경쟁 Foreground 거부
 
-요청 RawPart 및 하나 이상의 무관한 Foreground Object가 있을 때 Vision은 요청 Profile Match만 선택해야 한다. 경쟁 Foreground가 선택 Geometry/Reference Pose를 이동·병합·재정의해서는 안 된다. Algorithm별 Generation·Stable Enumeration은 선택 Algorithm 문서를 따르고 Cuboid 직교 외곽선 복원·Candidate Isolation의 Oracle은 그 문서가 소유한다.
+요청 TestCube 및 하나 이상의 무관한 Foreground Object가 있을 때 Vision은 요청 Profile Match만 선택해야 한다. 경쟁 Foreground가 선택 Geometry/Reference Pose를 이동·병합·재정의해서는 안 된다. Algorithm별 Generation·Stable Enumeration은 선택 Algorithm 문서를 따르고 Cuboid 직교 외곽선 복원·Candidate Isolation의 Oracle은 그 문서가 소유한다.
 
 ### VR-VIS-RAWPART-05 — Known Workpiece Geometry 검증
 
-선택 Algorithm의 Shape/Geometry Gate 또는 Support/Workspace Constraint에 맞지 않는 Candidate는 거부해야 하며(SHALL), 선택 RawPart Geometry를 오염시켜서는 안 된다(SHALL NOT). Unknown/Unconfigured Profile 결과는 `VR-VIS-DETECT-07`이 소유한다.
+선택 Algorithm의 Shape/Geometry Gate 또는 Support/Workspace Constraint에 맞지 않는 Candidate는 거부해야 하며(SHALL), 선택 TestCube Geometry를 오염시켜서는 안 된다(SHALL NOT). Unknown/Unconfigured Profile 결과는 `VR-VIS-DETECT-07`이 소유한다.
 
 ### VR-VIS-RAWPART-06 — Observation Reference 정확도
 

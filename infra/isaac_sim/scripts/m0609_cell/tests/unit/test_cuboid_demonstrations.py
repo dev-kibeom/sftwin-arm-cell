@@ -75,7 +75,7 @@ def test_single_layer_pattern_sizes_are_composed_from_rawparts(
 def test_layer_heights_follow_the_named_support_and_stop_at_three_levels():
     dimensions = (0.08, 0.05, 0.03)
     two = build_layout("two_mixed", dimensions, (0, 0, 0.2))
-    # The b×c upper is supported by the taller a×c RawPart (height b).
+    # The b×c upper is supported by the taller a×c TestCube (height b).
     assert two[-1]["position_xyz"][2] == pytest.approx(0.2 + 0.05 + 0.08 / 2)
     three = build_layout("three_single", dimensions, (0, 0, 0.2))
     assert [part["position_xyz"][2] for part in three] == pytest.approx(

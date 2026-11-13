@@ -49,7 +49,8 @@ class CanonicalCaptureReference:
 class EligibleObjectRegistry:
     """Fixture-owned registry of candidate prim identities."""
 
-    def __init__(self):
+    def __init__(self, material_types=None):
+        self._material_types = frozenset(material_types or ["TestCube"])
         self._paths = set()
         self._subtrees = set()
 
@@ -77,7 +78,7 @@ class EligibleObjectRegistry:
                 if not path.startswith(root_path + "/"):
                     continue
                 material = prim.GetAttribute("sf_twin:material_type")
-                if material and material.Get() == "RawPart":
+                if material and material.Get() in self._material_types:
                     paths.add(path)
         return tuple(sorted(paths))
 

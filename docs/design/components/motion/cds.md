@@ -179,8 +179,8 @@ Motion은 Task Execution이 MotionPort로 제출한 교란 요청의 후보 우�
 | `VR-MOT-OWN-04` | Backend insulation | Mission/Vision 계약은 simulator-specific gripper articulation topology에 의존하지 않는다. |
 | `VR-MOT-GEO-01` | Object-reference conversion | observed reference에서 candidate TCP/tool rigid transform으로의 변환은 Motion만 소유한다. |
 | `VR-MOT-GEO-02` | Distinct PICK geometry | Motion은 Recipe 소유 PICK Approach 방향/거리를 실현하고 Approach, Grasp, Retract pose를 구별한다. |
-| `VR-MOT-GEO-03` | Approach/retract direction | TCP insertion-axis 모드에서 Approach/default Retract는 설정된 TCP insertion axis의 반대 방향으로 각각의 거리만큼 이동하고, Descent는 Grasp 쪽을 따른다. 선택 orientation은 동일하며 RawPart Recipe는 해당 모드를 선택한다. 실행 완료 oracle은 FDS가 소유한다. |
-| `VR-MOT-GEO-04` | Height and transform authority | measured-height 기반 Object Pose와 Motion 소유 object-to-TCP transform을 보존하며 nominal RawPart 높이로 measured extent를 대체하지 않는다. |
+| `VR-MOT-GEO-03` | Approach/retract direction | TCP insertion-axis 모드에서 Approach/default Retract는 설정된 TCP insertion axis의 반대 방향으로 각각의 거리만큼 이동하고, Descent는 Grasp 쪽을 따른다. 선택 orientation은 동일하며 TestCube Recipe는 해당 모드를 선택한다. 실행 완료 oracle은 FDS가 소유한다. |
+| `VR-MOT-GEO-04` | Height and transform authority | measured-height 기반 Object Pose와 Motion 소유 object-to-TCP transform을 보존하며 nominal TestCube 높이로 measured extent를 대체하지 않는다. |
 | `VR-MOT-STATIC-01` | Canonical projection | 선택된 canonical static geometry가 생성 planning artifact로 projection된다. |
 | `VR-MOT-STATIC-02` | Bounded mutation | static scene 재적용이 무관한 Planning Scene state를 보존한다. |
 | `VR-MOT-STATIC-03` | Readback | 실패한 static-scene load/readback이 감지 가능하다. |
@@ -196,5 +196,5 @@ Motion은 Task Execution이 MotionPort로 제출한 교란 요청의 후보 우�
 
 - Motion이 쓰는 정적 환경 의미: [Simulation Environment Semantics](../simulation-environment-semantics.md)
 - 관측·진단: [Observability Records ICD](../../interfaces/icd-observability-records.md)
-- 독립 계산 절차: [Motion PICK 후보 생성·탐색](../../algorithms/motion-pick-candidate-search.md), [Motion PLACE 자세 후보 탐색](../../algorithms/motion-place-pose-search.md), [RawPart L자 기반 후보 생성·신뢰도 판정](../../algorithms/cuboid-top-face-grasp-selection.md) (Vision 소유 후보 Geometry 절차)
+- 독립 계산 절차: [Motion PICK 후보 생성·탐색](../../algorithms/motion-pick-candidate-search.md), [Motion PLACE 자세 후보 탐색](../../algorithms/motion-place-pose-search.md), [TestCube L자 기반 후보 생성·신뢰도 판정](../../algorithms/cuboid-top-face-grasp-selection.md) (Vision 소유 후보 Geometry 절차)
 - 실행 가능한 인터페이스 SSOT: [`arm_cell_interfaces`](../../../../ros2_ws/src/interfaces)

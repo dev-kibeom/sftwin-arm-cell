@@ -8,6 +8,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 #include <arm_cell_interfaces/msg/material_readiness.hpp>
 #include "arm_cell_orchestration/safety_observation.hpp"
@@ -36,6 +37,8 @@ public:
     DUPLICATE,
     ACCOUNTING_INCONSISTENT
   };
+
+  void set_material_types(std::vector<std::string> types) {material_types_ = std::move(types);}
 
   bool observe(const Readiness & state)
   {
@@ -72,7 +75,8 @@ public:
   }
 
   // Commit a monotonic cycle-local count only after Motion confirms PLACE/RELEASED.
-  PlaceCommitResult record_successful_place(const std::string & cycle_key, uint64_t count)
+  PlaceCommitResult record_successful_place(
+    const std::string & cycle_key, uint64_t count, const std::string & material_type = {})
   {
     if (cycle_key.empty() || count == 0U) {
       accounting_consistent_ = false;
@@ -80,6 +84,10 @@ public:
     }
     const auto previous = cycle_processed_counts_.find(cycle_key);
     const auto prior_count = previous == cycle_processed_counts_.end() ? 0U : previous->second;
+    if (prior_count != 0U && cycle_material_types_.at(cycle_key) != material_type) {
+      accounting_consistent_ = false;
+      return PlaceCommitResult::ACCOUNTING_INCONSISTENT;
+    }
     if (count == prior_count && prior_count != 0U) {
       return PlaceCommitResult::DUPLICATE;
     }
@@ -88,7 +96,7 @@ public:
       return PlaceCommitResult::ACCOUNTING_INCONSISTENT;
     }
     const auto delta = count - prior_count;
-    if (delta > total_supplied_ - total_placed_) {
+    if (delta > outstanding_material(material_type)) {
       accounting_consistent_ = false;
       return PlaceCommitResult::ACCOUNTING_INCONSISTENT;
     }
@@ -96,7 +104,9 @@ public:
     auto remaining = delta;
     for (const auto & key : delivery_order_) {
       auto & record = records_.at(key);
-      const auto available = static_cast<uint64_t>(record.supplied_quantity - record.placed_quantity);
+      if (!material_type.empty() && record.state.material_type != material_type) {continue;}
+      const auto available =
+        static_cast<uint64_t>(record.supplied_quantity - record.placed_quantity);
       const auto assigned = std::min(remaining, available);
       record.placed_quantity += static_cast<uint32_t>(assigned);
       remaining -= assigned;
@@ -113,6 +123,7 @@ public:
     }
     total_placed_ += delta;
     cycle_processed_counts_[cycle_key] = count;
+    cycle_material_types_[cycle_key] = material_type;
     return PlaceCommitResult::COMMITTED;
   }
 
@@ -158,7 +169,7 @@ public:
       const auto & current = records_.at(current_delivery_key_);
       if (current.admitted || is_completion(current.state)) {
         if (is_completion(current.state) && !current.admitted &&
-          current.state.material_type != supported_material_type)
+          !supports_material(current.state.material_type, supported_material_type))
         {
           return block("readiness_material_type_unsupported");
         }
@@ -173,7 +184,7 @@ public:
       return block("readiness_fields_invalid");
     }
     auto & record = records_.at(key);
-    const auto outstanding = total_supplied_ - total_placed_;
+    const auto outstanding = outstanding_material(record.state.material_type);
     if (outstanding == 0U || outstanding > std::numeric_limits<uint32_t>::max()) {
       return block("readiness_fields_invalid");
     }
@@ -201,12 +212,36 @@ private:
            state.quantity > 0U;
   }
 
+  uint64_t outstanding_material(const std::string & material_type) const
+  {
+    uint64_t count = 0U;
+    for (const auto & entry : records_) {
+      const auto & record = entry.second;
+      if (material_type.empty() || record.state.material_type == material_type) {
+        count += record.supplied_quantity - record.placed_quantity;
+      }
+    }
+    return count;
+  }
+
+  std::unordered_map<std::string, std::string> cycle_material_types_;
+  std::vector<std::string> material_types_;
+
+  bool supports_material(const std::string & identity, const std::string & filter) const
+  {
+    return filter.empty() ?
+           std::find(
+      material_types_.begin(), material_types_.end(),
+      identity) != material_types_.end() :
+           identity == filter;
+  }
+
   std::string pending_delivery_key(const std::string & supported_material_type) const
   {
     for (const auto & key : delivery_order_) {
       const auto & record = records_.at(key);
       if (is_completion(record.state) && !record.admitted &&
-        record.state.material_type == supported_material_type)
+        supports_material(record.state.material_type, supported_material_type))
       {
         return key;
       }

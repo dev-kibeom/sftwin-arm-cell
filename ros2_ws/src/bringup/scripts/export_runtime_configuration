@@ -8,8 +8,11 @@ from arm_cell_bringup.runtime import export_runtime_configuration
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--profile', type=Path)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--material', dest='material_id')
+parser.add_argument('--grasp-width-mm', type=float)
+parser.add_argument('--pick-offset-z-m', type=float)
 args = parser.parse_args()
 if args.profile is None:
     from ament_index_python.packages import get_package_share_directory
     args.profile = Path(get_package_share_directory('arm_cell_bringup')) / 'config/operational_profile.yaml'
-print(export_runtime_configuration(args.profile, args.output))
+print(export_runtime_configuration(args.profile, args.output, material_id=args.material_id, grasp_width_mm=args.grasp_width_mm, pick_offset_z_m=args.pick_offset_z_m))

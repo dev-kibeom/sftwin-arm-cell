@@ -68,7 +68,7 @@ vision:
 
 기존 bringup 경로 해석 규칙을 따른다. 선택 파일이 아직 없더라도 경로는 필요하며, Vision은 시작할 때 그 경로의 파일을 읽는다. 측정된 Transform이 읽기 가능하고 구조적으로 유효하며 camera identity·frame·CameraInfo·해상도·sensor 구성과 호환되면 `READY`다. 누락·파손·무효·비호환이면 사유와 함께 `NEEDS_CALIBRATION`이며 다른 파일로 fallback하거나 자동 보정하지 않는다. Process나 simulator 수명 자체는 파일 유효성을 바꾸지 않는다.
 
-선택 YAML에는 측정된 `tray_T_camera`, 기준 및 optical frame, CameraInfo topic, 호환성을 검사하는 image dimensions·distortion model·intrinsic/rectification 값만 저장한다. ArUco 치수·pose, Tray ROI, Detector profile, RawPart 설정은 Deployment Profile의 책임이므로 중복 저장하지 않는다. Calibration YAML은 일반 설정 스키마가 아닌 측정 산출물이며 Snapshot은 재현 근거일 뿐 Calibration 저장소가 아니다.
+선택 YAML에는 측정된 `tray_T_camera`, 기준 및 optical frame, CameraInfo topic, 호환성을 검사하는 image dimensions·distortion model·intrinsic/rectification 값만 저장한다. ArUco 치수·pose, Tray ROI, Detector profile, TestCube 설정은 Deployment Profile의 책임이므로 중복 저장하지 않는다. Calibration YAML은 일반 설정 스키마가 아닌 측정 산출물이며 Snapshot은 재현 근거일 뿐 Calibration 저장소가 아니다.
 
 `/vision/calibration_status`는 `READY`, `NEEDS_CALIBRATION`, `CALIBRATING`을 보고한다. `CALIBRATING`은 동기식 명시 요청의 처리 중에만 발행하며 종료 후에는 **여전히 선택되어 있는 파일**의 상태로 돌아간다. `READY`는 선택 파일의 로딩과 센서 구성 호환성을 의미하고 현재 Depth freshness까지 보증하지 않는다. 필요한 센서 입력의 missing/stale은 요청 수준의 sensor error이며 파일 자체를 무효화하지 않는다. 실제 CameraInfo와 선택 파일의 충돌은 설정 비호환이므로 Detection을 차단한다. 물리 설비 이동은 이 비교로 검출할 수 없으며, 실제 설치와 다른 파일을 선택할 위험은 운영자에게 있다.
 
@@ -76,7 +76,7 @@ vision:
 
 **성공은 새 YAML 파일 생성**을 의미한다. 선택 파일의 존재 여부와 무관하게 구성된 경로에서 유도한 timestamp 형제 파일을 만들며 기존 파일을 덮어쓰지 않고 응답으로 새 경로를 알려준다. 실패하면 성공 산출물을 만들지 않고 기존 파일도 변경하지 않는다. 새 파일을 만들더라도 active Transform과 `calibration_file`은 변경되지 않는다. 운영자가 `operational_profile.yaml`에서 새 파일을 선택하고 Vision을 재시작해야 적용된다. 별도 승인 단계·active-record flag·registry·자동 파일 선택은 없다.
 
-반복 관측·depth residual·pose 일관성 검증은 실제 근거가 설치 수락 주장에 기여할 때만 사용하며 무조건적인 임계값으로 강제하지 않는다. 평상시 DetectTarget은 로드된 Transform과 설정된 Tray support geometry를 사용한다. ArUco 검출·설치 depth 교차 검증·Calibration 관측 횟수는 운영 Detection의 Gate가 아니다. Runtime Depth freshness, CameraInfo/Calibration 호환성, Depth Scene Stability, 단일 관측 RawPart geometry·visibility는 요청별 조건으로 유지한다. 선택적 RGB 연관은 Detection Gate가 아니다. Cached CameraInfo는 관련 frame·해상도·intrinsic identity가 변했으면 거부한다.
+반복 관측·depth residual·pose 일관성 검증은 실제 근거가 설치 수락 주장에 기여할 때만 사용하며 무조건적인 임계값으로 강제하지 않는다. 평상시 DetectTarget은 로드된 Transform과 설정된 Tray support geometry를 사용한다. ArUco 검출·설치 depth 교차 검증·Calibration 관측 횟수는 운영 Detection의 Gate가 아니다. Runtime Depth freshness, CameraInfo/Calibration 호환성, Depth Scene Stability, 단일 관측 TestCube geometry·visibility는 요청별 조건으로 유지한다. 선택적 RGB 연관은 Detection Gate가 아니다. Cached CameraInfo는 관련 frame·해상도·intrinsic identity가 변했으면 거부한다.
 
 
 

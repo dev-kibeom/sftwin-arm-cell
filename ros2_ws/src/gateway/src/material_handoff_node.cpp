@@ -44,6 +44,9 @@ public:
     if (source_freshness_timeout_.count() <= 0) {
       throw std::invalid_argument("material source freshness bound must be positive");
     }
+    coordinator_.set_material_types(
+      declare_parameter<std::vector<std::string>>(
+        "material_types", std::vector<std::string>{"TestCube"}));
     readiness_publisher_ = create_publisher<Readiness>(
       "/integration/material_readiness",
       rclcpp::QoS(64).reliable().transient_local());
@@ -205,7 +208,8 @@ private:
       case Disposition::kCompleted:
         RCLCPP_DEBUG(
           get_logger(), "Material supply completed: %s %u/%u",
-          completion.material_type.c_str(), completion.supplied_quantity, completion.requested_quantity);
+          completion.material_type.c_str(), completion.supplied_quantity,
+          completion.requested_quantity);
         break;
       case Disposition::kDeliveryMismatch:
         RCLCPP_DEBUG(get_logger(), "transfer completion ignored reason=delivery_mismatch");

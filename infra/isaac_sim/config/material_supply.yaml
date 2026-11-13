@@ -1,7 +1,7 @@
 # Environment-specific spawn and orientation distributions for the Isaac
 # Material Supply Adapter. Coordinates are relative to the Tray center.
 material_supply:
-  material_type: RawPart
+  material_type: TestCube
   mass_kg: 0.4
   spawn_height_above_shelf_m: 0.35
   spawn_interval_s: 0.5

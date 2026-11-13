@@ -30,7 +30,7 @@ from pnp_validation.run_validation import (
 
 def profile(**overrides):
     values = dict(
-        target_id="cube_profile",
+        target_id="TestCube",
         fixture_dimensions=(0.14, 0.14, 0.08),
         spawn_bounds=Aabb((0.15, -0.35, 0.72), (0.55, 0.25, 0.95)),
         excluded_volumes=(Aabb((0.25, -0.05, 0.70), (0.40, 0.10, 0.90)),),
@@ -59,7 +59,7 @@ def test_validation_fixture_uses_selected_json_recipe_from_profile_registry(tmp_
     assert config["_mission_recipe"]["pick"]["approach_distance_m"] == pytest.approx(
         0.05
     )
-    assert loaded.target_id == "cube_profile"
+    assert loaded.target_id == "TestCube"
     assert loaded.expected_fixture_release_position_base == pytest.approx(
         (0.5, 0.25, 0.4075)
     )
@@ -85,7 +85,7 @@ def test_fixture_profile_rejects_unknown_orientation_symmetry_order():
 def test_fixture_profile_loader_is_shared_by_live_entrypoints():
     config = {
         "validation": {
-            "target_id": "cube_profile",
+            "target_id": "TestCube",
             "registration_ttl_s": 30.0,
             "registration_ttl_max_s": 60.0,
         },
@@ -105,10 +105,10 @@ def test_fixture_profile_loader_is_shared_by_live_entrypoints():
             "deletion_delay_s": 3.0,
         },
         "orchestration": {
-            "mission_target_id": "cube_profile",
+            "mission_target_id": "TestCube",
         },
         "_mission_recipe": {
-            "target_id": "cube_profile",
+            "target_id": "TestCube",
             "place": {
                 "desired_object_pose": {
                     "position": [0.5, 0.25, 0.37],
@@ -125,7 +125,7 @@ def test_fixture_profile_loader_is_shared_by_live_entrypoints():
 
     loaded = fixture_profile_from_validation_config(config)
 
-    assert loaded.target_id == "cube_profile"
+    assert loaded.target_id == "TestCube"
     assert loaded.fixture_dimensions == (0.07, 0.07, 0.08)
     assert loaded.support_surface_id == "/World/SF_Twin_Cell/AMR/Mockup/Tray"
     assert loaded.expected_fixture_release_position_base == pytest.approx(
@@ -388,7 +388,7 @@ def test_manifest_contains_registered_top_surface_and_run_context():
 
     data = manifest.to_dict()
     assert data["run_id"] == "run-1"
-    assert data["target_id"] == "cube_profile"
+    assert data["target_id"] == "TestCube"
     assert data["fixture_prim_identity"] == "/World/Validation/Cube"
     assert data["spawn_pose_world"]["frame_id"] == "world"
     assert data["registered_top_surface_pose_base_link"]["frame_id"] == "base_link"
@@ -455,7 +455,7 @@ def test_validation_run_propagates_target_and_run_context():
 
     assert runtime.eligible == (manifest.fixture_prim_identity, "run-42")
     assert manifest.run_id == "run-42"
-    assert manifest.target_id == "cube_profile"
+    assert manifest.target_id == "TestCube"
     assert manifest.ttl_s == 30.0
     assert manifest.registered_top_surface_pose.frame_id == "base_link"
 
@@ -568,7 +568,7 @@ def test_gravity_activation_failure_preserves_place_acceptance_and_cleanup(tmp_p
                 "schema_version": "wu14-pnp-cleanup/v1",
                 "status": "DELETE_REQUESTED",
                 "run_id": "run-42",
-                "target_id": "cube_profile",
+                "target_id": "TestCube",
                 "fixture_prim_identity": run.prim_path,
                 "decision_id": run.cleanup_decision_id,
                 "fresh_released": True,
@@ -634,7 +634,7 @@ def test_cleanup_request_defers_physical_delete_until_mission_completion(tmp_pat
         "schema_version": "wu14-pnp-cleanup/v1",
         "status": "DELETE_REQUESTED",
         "run_id": "run-42",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "fixture_prim_identity": run.prim_path,
         "decision_id": run.cleanup_decision_id,
         "fresh_released": True,
@@ -662,7 +662,7 @@ def test_cleanup_request_defers_physical_delete_until_mission_completion(tmp_pat
         "schema_version": "wu14-pnp-mission-completion/v1",
         "status": "DEPLETED",
         "run_id": "run-42",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "goal_id": "goal-42",
         "go_home_complete": True,
         "scene_absent": True,
@@ -699,7 +699,7 @@ def test_successful_place_writes_validated_cleanup_confirmation_atomically(tmp_p
     payload = json.loads(confirmation_path.read_text())
     assert decision.eligible
     assert payload["run_id"] == "run-42"
-    assert payload["target_id"] == "cube_profile"
+    assert payload["target_id"] == "TestCube"
     assert payload["fixture_prim_identity"] == run.prim_path
     assert payload["decision_id"]
     assert payload["status"] == "AUTHORIZED"
@@ -856,7 +856,7 @@ def test_mission_completion_worker_deletes_pending_fixture_once(tmp_path):
         "schema_version": "wu14-pnp-cleanup/v1",
         "status": "DELETE_REQUESTED",
         "run_id": "run-42",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "fixture_prim_identity": run.prim_path,
         "decision_id": run.cleanup_decision_id,
         "fresh_released": True,
@@ -870,7 +870,7 @@ def test_mission_completion_worker_deletes_pending_fixture_once(tmp_path):
         "schema_version": "wu14-pnp-mission-completion/v1",
         "status": "DEPLETED",
         "run_id": "run-42",
-        "target_id": "cube_profile",
+        "target_id": "TestCube",
         "goal_id": "goal-42",
         "go_home_complete": False,
         "scene_absent": True,
@@ -900,7 +900,7 @@ def test_place_result_event_worker_calls_record_once_and_persists_consumption(
                 "schema_version": "wu14-pnp-place-result/v1",
                 "status": "SUCCESS",
                 "run_id": "run-42",
-                "target_id": "cube_profile",
+                "target_id": "TestCube",
                 "result_identity": "goal-1:1",
                 "sequence": 1,
             }
@@ -909,7 +909,7 @@ def test_place_result_event_worker_calls_record_once_and_persists_consumption(
     calls = []
     worker = PlaceResultEventWorker(
         "run-42",
-        "cube_profile",
+        "TestCube",
         event_path,
         consumed_path,
         lambda event: calls.append(event) or True,
@@ -919,7 +919,7 @@ def test_place_result_event_worker_calls_record_once_and_persists_consumption(
     assert not worker.poll()
     restarted = PlaceResultEventWorker(
         "run-42",
-        "cube_profile",
+        "TestCube",
         event_path,
         consumed_path,
         lambda event: calls.append(event) or True,
@@ -1387,3 +1387,42 @@ def test_fixture_stability_rejects_foreign_capture_transition():
         is False
     )
     assert runtime.pre_capture_stability.is_active is True
+
+
+def test_validation_cube_has_capture_metadata_and_catalog_mass(monkeypatch):
+    from types import SimpleNamespace
+    from gripper_runtime.grasp_stage import StageCaptureQuery
+    import scene_builder.primitives as primitives
+    attributes = {}
+    authored = {}
+
+    class Attribute:
+        def __init__(self, name):
+            self.name = name
+        def Set(self, value):
+            attributes[self.name] = value
+        def Get(self):
+            return attributes[self.name]
+        def IsValid(self):
+            return self.name in attributes
+
+    prim = SimpleNamespace(
+        CreateAttribute=lambda name, *_args, **_kwargs: Attribute(name),
+        GetAttribute=lambda name: Attribute(name),
+    )
+    stage = SimpleNamespace(GetPrimAtPath=lambda _path: prim)
+    material = dict(material_id='AL_PLATE_080_060_020', mass_kg=0.2592,
+                    display_color_rgb=[0.65, 0.68, 0.72])
+    runtime = IsaacFixtureRuntime(stage, material_properties=material)
+    monkeypatch.setattr(primitives, 'dynamic_box', lambda *args, **kwargs: authored.update(kwargs))
+    monkeypatch.setattr(runtime, '_pxr_modules', lambda: (
+        SimpleNamespace(Vec3d=lambda *values: values),
+        SimpleNamespace(ValueTypeNames=SimpleNamespace(String='string', Double3='double3')),
+        None, None, None,
+    ))
+    monkeypatch.setattr(runtime, '_xformable', lambda _prim: None)
+    runtime._default_cube('/World/Fixture', Pose(0, 0, 1), (0.08, 0.06, 0.02))
+    assert authored['mass'] == material['mass_kg']
+    assert attributes['sf_twin:shape'] == 'box'
+    assert attributes['sf_twin:material_type'] == material['material_id']
+    assert StageCaptureQuery._authored_dimensions(prim) == (0.08, 0.06, 0.02)

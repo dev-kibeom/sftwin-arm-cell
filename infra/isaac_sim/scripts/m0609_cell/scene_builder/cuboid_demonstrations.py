@@ -1,4 +1,4 @@
-"""Finite profile-sized RawPart layouts for the Simulation UI Hub."""
+"""Finite profile-sized TestCube layouts for the Simulation UI Hub."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ _ONE_LAYER = {
 
 def scenarios() -> tuple[tuple[str, str, str], ...]:
     return (
-        ("single", "Single", "One RawPart, a×b face up."),
+        ("single", "Single", "One TestCube, a×b face up."),
         ("side_by_side", "Side by Side", "Two matching faces in contact."),
         ("angled_adjacent", "Angled Adjacent", "Adjacent parts with different yaw."),
         ("l_shape", "L Shape", "Three parts forming an L outline."),
@@ -197,10 +197,10 @@ def build_layout(
 ) -> list[dict[str, Any]]:
     """Compose single-layer patterns and derive each layer's contact height."""
     if len(dimensions) != 3 or len(origin) != 3:
-        raise ValueError("RawPart dimensions and origin must be XYZ triples")
+        raise ValueError("TestCube dimensions and origin must be XYZ triples")
     a, b, c = dimensions
     if any(not math.isfinite(value) or value <= 0 for value in dimensions):
-        raise ValueError("RawPart dimensions must be finite and positive")
+        raise ValueError("TestCube dimensions must be finite and positive")
     if any(not math.isfinite(value) for value in origin):
         raise ValueError("Tray origin must be finite")
 
@@ -244,9 +244,9 @@ def build_layout(
                 or placements[item.support].layer != item.layer - 1
             ):
                 raise ValueError(
-                    "each stacked RawPart must reference the preceding layer"
+                    "each stacked TestCube must reference the preceding layer"
                 )
-            # The supporting RawPart's upper extent uses its own real pose.
+            # The supporting TestCube's upper extent uses its own real pose.
             support_orientation = output[item.support]["orientation_xyzw"]
             sx, sy, sz, sw = support_orientation
             support_up = (

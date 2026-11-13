@@ -265,8 +265,8 @@ def test_standalone_cli_remains_strict_about_unknown_arguments():
 def test_script_editor_reference_prims_default_to_empty_for_dynamic_material_scene():
     assert camera.script_editor_reference_prims({}) == []
     assert camera.script_editor_reference_prims(
-        {"SFTWIN_CAMERA_REFERENCE_PRIMS": "/World/Delivered/RawPart_0000"}
-    ) == ["/World/Delivered/RawPart_0000"]
+        {"SFTWIN_CAMERA_REFERENCE_PRIMS": "/World/Delivered/Material_0000"}
+    ) == ["/World/Delivered/Material_0000"]
 
 
 def test_empty_reference_prim_list_does_not_fall_back_to_removed_mockup_prim():

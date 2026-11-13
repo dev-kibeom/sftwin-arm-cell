@@ -27,7 +27,7 @@ import sys
 sys.path.insert(0, sys.argv[1])
 from runtime_configuration import load_runtime_configuration
 config = load_runtime_configuration(sys.argv[2])
-assert config['material_definitions']['RawPart']['shape'] == 'box'
+assert config['material_definitions']['TestCube']['shape'] == 'box'
 assert not any(name.startswith(('arm_cell_bringup', 'arm_cell_configuration', 'ament_index')) for name in sys.modules)
 '''
     result = subprocess.run([sys.executable, '-I', '-c', code, str(CELL), str(path)], capture_output=True, text=True)
@@ -49,7 +49,7 @@ def test_export_validation_embeds_selected_recipe(tmp_path):
     validation = PROFILE.parent / 'pnp_validation_profile.yaml'
     path = export_runtime_configuration(validation, tmp_path / 'validation.json')
     config = json.loads(path.read_text())['configuration']
-    assert config['_mission_recipe']['target_id'] == 'cube_profile'
+    assert config['_mission_recipe']['target_id'] == 'TestCube'
     assert config['_mission_recipe']['pick']['approach_distance_m'] == 0.05
 
 

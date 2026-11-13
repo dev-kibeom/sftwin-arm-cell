@@ -25,7 +25,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import xacro
 import yaml
-from arm_cell_bringup.runtime import resolve, mission_directory
+from arm_cell_bringup.runtime import resolve, mission_directory, load_profile
 
 
 def _load_console_output_format():
@@ -77,7 +77,7 @@ def validate_motion_completion_tolerances(config):
 
 def compose(context):
     profile_path = Path(LaunchConfiguration("profile").perform(context))
-    config = yaml.safe_load(profile_path.read_text()) or {}
+    config = load_profile(profile_path)
     validate_motion_completion_tolerances(config)
     share = Path(get_package_share_directory("arm_cell_bringup"))
     home_config = (
@@ -181,7 +181,7 @@ def compose(context):
                     **profile_parameters(config, "orchestration"),
                     "mission_target_id": target_id,
                     "recipe_directory": str(
-                        mission_directory(resolve(config["orchestration"]["recipe_directory"], profile_path.parent))
+                        resolve(config["orchestration"]["recipe_directory"], profile_path.parent)
                     ),
                 }
             ],

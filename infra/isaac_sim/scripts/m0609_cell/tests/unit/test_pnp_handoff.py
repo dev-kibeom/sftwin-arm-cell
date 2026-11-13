@@ -37,7 +37,7 @@ def _manifest():
     return ValidationManifest(
         run_id="run-1",
         seed=17,
-        target_id="cube_profile",
+        target_id="TestCube",
         fixture_prim_identity="/World/SFTwin/ValidationFixture/Cube",
         dimensions=(0.07, 0.07, 0.08),
         spawn_pose=Pose(0.2, -0.1, 0.8, 0.25),
@@ -58,7 +58,7 @@ def test_registration_handoff_has_versioned_manifest_schema():
     assert data["status"] == "FIXTURE_READY_FOR_REGISTRATION"
     assert data["request"]["pose"]["frame_id"] == "base_link"
     assert data["request"]["run_id"] == "run-1"
-    assert data["request"]["target_id"] == "cube_profile"
+    assert data["request"]["target_id"] == "TestCube"
     assert data["request"]["ttl_s"] == 30.0
     assert data["request"]["orientation_symmetry_order"] == 1
     assert "has_target_yaw" not in data["request"]

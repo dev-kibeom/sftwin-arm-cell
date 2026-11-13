@@ -13,8 +13,8 @@ REPOSITORY = Path(__file__).resolve().parents[6]
 def test_rawpart_profile_exposes_reviewed_production_geometry_and_support_relation():
     profile = load_rawpart_profile(REPOSITORY)
 
-    assert profile["target_id"] == "RawPart"
-    assert profile["material_id"] == "RawPart"
+    assert profile["target_id"] == "TestCube"
+    assert profile["material_id"] == "TestCube"
     assert profile["dimension_tolerance_m"] == [0.01, 0.01, 0.01]
     assert profile["support_contact_tolerance_m"] == 0.01
     assert profile["top_surface_geometry_tolerance_m"] == 0.01
@@ -70,15 +70,15 @@ def test_rawpart_profile_fails_closed_when_marker_relation_is_incomplete(tmp_pat
     config_path.parent.mkdir(parents=True)
     config_path.write_text(
         "material_definitions:\n"
-        "  RawPart:\n"
-        "    material_id: RawPart\n"
+        "  TestCube:\n"
+        "    material_id: TestCube\n"
         "    shape: box\n"
         "    nominal_dimensions_m: [0.07, 0.07, 0.08]\n"
         "vision:\n"
         "  detector_profiles:\n"
-        "    RawPart:\n"
-        "      target_id: RawPart\n"
-        "      material_id: RawPart\n"
+        "    TestCube:\n"
+        "      target_id: TestCube\n"
+        "      material_id: TestCube\n"
         "      dimension_tolerance_m: [0.01, 0.01, 0.01]\n"
         "      workspace_roi_m:\n"
         "        x: [-0.12, 0.12]\n"
@@ -108,7 +108,7 @@ def _write_deployment(tmp_path, *, marker_y=None):
     )
     from arm_cell_bringup.runtime import load_profile
     config = load_profile(REPOSITORY / profile_path)
-    rawpart = config["vision"]["detector_profiles"]["RawPart"]
+    rawpart = config["vision"]["detector_profiles"]["TestCube"]
     rawpart["workspace_roi_m"]["x"] = [-0.3168, 0.3168]
     rawpart["workspace_roi_m"]["y"] = [-0.2208, 0.2208]
     if marker_y is not None:
@@ -122,7 +122,7 @@ def _write_deployment(tmp_path, *, marker_y=None):
 @pytest.mark.parametrize("marker_y", [-0.249, 0.0])
 def test_tray_sized_detection_roi_loads_without_supply_config(tmp_path, marker_y):
     config = _write_deployment(tmp_path, marker_y=marker_y)
-    assert validate_rawpart_profile(config)["target_id"] == "RawPart"
+    assert validate_rawpart_profile(config)["target_id"] == "TestCube"
 
 
 def test_deployed_detection_roi_stays_inside_canonical_tray_plate():

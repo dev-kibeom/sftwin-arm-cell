@@ -313,6 +313,18 @@ def _start_material_supply_adapter(context):
         operational_profile.get("vision", {}),
         operational_profile.get("material_definitions", {}),
     )
+    from copy import deepcopy
+    from dataclasses import replace
+    material_profiles = {}
+    for identity, material in operational_profile["material_catalog"].items():
+        selected_supply = deepcopy(supply_config)
+        selected_supply["material_supply"]["material_type"] = identity
+        selected_supply["material_supply"]["mass_kg"] = material.get("mass_kg", profile.mass_kg)
+        selected_profile = MaterialSupplyProfile.from_mapping(
+            selected_supply, operational_profile["vision"],
+            operational_profile["material_definitions"],
+        )
+        material_profiles[identity] = replace(selected_profile, display_color_rgb=tuple(material["display_color_rgb"]))
     sidecar = MaterialSupplySidecarClient.launch(project_root)
     try:
         import omni.timeline
@@ -321,6 +333,7 @@ def _start_material_supply_adapter(context):
             stage=World.instance().stage,
             sidecar=sidecar,
             profile=profile,
+            material_profiles=material_profiles,
             delivery_deadline_ms=material_handoff.get("delivery_deadline_ms"),
             shelf_origin_m=(
                 context.tray_x,

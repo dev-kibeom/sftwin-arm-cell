@@ -147,7 +147,7 @@ def _install_fake_usd(monkeypatch, stage):
 
 def _adapter(sidecar, stage=None, timeline=None):
     profile = MaterialSupplyProfile(
-        material_type="RawPart",
+        material_type="TestCube",
         shape="box",
         dimensions_m=(0.04, 0.04, 0.04),
         mass_kg=0.1,
@@ -301,7 +301,7 @@ def test_stop_cleanup_detaches_before_removal_and_cancels_incomplete_delivery(
     delivery_path = (
         "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_" + delivery_id
     )
-    part_path = delivery_path + "/RawPart_0"
+    part_path = delivery_path + "/Material_0"
     stage = OrderedStage()
     stage.paths.update({delivery_path, part_path})
     sidecar = _FakeSidecar()
@@ -311,7 +311,7 @@ def test_stop_cleanup_detaches_before_removal_and_cancels_incomplete_delivery(
     adapter._deliveries.add(delivery_id)
     adapter._runs[delivery_id] = MaterialSupplyRun(
         delivery_id=delivery_id,
-        material_type="RawPart",
+        material_type="TestCube",
         requested_quantity=1,
         deadline_ns=100,
     )
@@ -326,7 +326,7 @@ def test_stop_cleanup_detaches_before_removal_and_cancels_incomplete_delivery(
     assert sidecar.sent == [
         {
             "delivery_id": delivery_id,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "requested_quantity": 1,
             "supplied_quantity": 1,
             "completed": False,
@@ -342,7 +342,7 @@ def test_stop_cleanup_detaches_before_removal_and_cancels_incomplete_delivery(
     adapter._on_accepted_trigger(
         {
             "delivery_id": delivery_id,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 1,
             "valid": True,
             "has_random_seed": False,
@@ -365,7 +365,7 @@ def test_stop_cleanup_failure_keeps_material_and_work_for_lifecycle_retry():
     adapter._deliveries.add(delivery_id)
     adapter._runs[delivery_id] = MaterialSupplyRun(
         delivery_id=delivery_id,
-        material_type="RawPart",
+        material_type="TestCube",
         requested_quantity=1,
         deadline_ns=100,
     )
@@ -435,7 +435,7 @@ def test_duplicate_accepted_delivery_does_not_schedule_a_second_quantity(
     trigger = {
         "delivery_id": "01" * 16,
         "stamp_ns": 100,
-        "material_type": "RawPart",
+        "material_type": "TestCube",
         "quantity": 2,
         "valid": True,
         "has_random_seed": True,
@@ -456,7 +456,7 @@ def test_deadline_terminal_cancels_remaining_spawns_before_they_can_create_parts
     part_path = (
         "/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_"
         + delivery_id
-        + "/RawPart_0000"
+        + "/Material_0000"
     )
     stage = _ObservedStage()
     stage.paths.add(part_path)
@@ -467,7 +467,7 @@ def test_deadline_terminal_cancels_remaining_spawns_before_they_can_create_parts
     _install_fake_usd(monkeypatch, stage)
     observation = MaterialSupplyRun(
         delivery_id=delivery_id,
-        material_type="RawPart",
+        material_type="TestCube",
         requested_quantity=2,
         deadline_ns=100,
     )
@@ -502,13 +502,13 @@ def test_spawn_discards_orphaned_or_already_terminal_delivery_work(monkeypatch):
         if active_observation:
             observation = MaterialSupplyRun(
                 delivery_id=delivery_id,
-                material_type="RawPart",
+                material_type="TestCube",
                 requested_quantity=2,
                 deadline_ns=100,
             )
             observation.terminal_result = {
                 "delivery_id": delivery_id,
-                "material_type": "RawPart",
+                "material_type": "TestCube",
                 "requested_quantity": 2,
                 "supplied_quantity": 1,
                 "completed": False,
@@ -548,7 +548,7 @@ def test_first_part_leaving_handoff_does_not_cancel_second_spawn(monkeypatch):
     adapter._on_accepted_trigger(
         {
             "delivery_id": delivery_id,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 2,
             "valid": True,
             "has_random_seed": False,
@@ -557,7 +557,7 @@ def test_first_part_leaving_handoff_does_not_cancel_second_spawn(monkeypatch):
     created = []
 
     def create_part(identity, index, _pose):
-        path = f"/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_{identity}/RawPart_{index:04d}"
+        path = f"/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_{identity}/Material_{index:04d}"
         created.append(path)
         stage.positions[path] = (0.0, 0.0, 0.05)
         stage.paths.add(path)
@@ -588,7 +588,7 @@ def test_spawn_failure_terminates_delivery_and_clears_its_remaining_work(
     _install_fake_usd(monkeypatch, stage)
     adapter._runs[delivery_id] = MaterialSupplyRun(
         delivery_id=delivery_id,
-        material_type="RawPart",
+        material_type="TestCube",
         requested_quantity=2,
         deadline_ns=100,
     )
@@ -633,13 +633,13 @@ def test_quantity_one_normal_generation_completes_once(monkeypatch):
     adapter._on_accepted_trigger(
         {
             "delivery_id": delivery_id,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 1,
             "valid": True,
             "has_random_seed": False,
         }
     )
-    path = f"/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_{delivery_id}/RawPart_0000"
+    path = f"/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_{delivery_id}/Material_0000"
     monkeypatch.setattr(
         adapter,
         "_create_part",
@@ -679,7 +679,7 @@ def test_quantity_two_normal_generation_remains_active_until_both_parts_arrive(
     adapter._on_accepted_trigger(
         {
             "delivery_id": delivery_id,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 2,
             "valid": True,
             "has_random_seed": False,
@@ -689,7 +689,7 @@ def test_quantity_two_normal_generation_remains_active_until_both_parts_arrive(
     paths = []
 
     def create_part(identity, index, _pose):
-        path = f"/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_{identity}/RawPart_{index:04d}"
+        path = f"/World/SF_Twin_Cell/MaterialSupply/Deliveries/Delivery_{identity}/Material_{index:04d}"
         paths.append(path)
         stage.paths.add(path)
         stage.positions[path] = (0.0, 0.0, 0.05)
@@ -742,7 +742,7 @@ def test_distinct_deliveries_add_material_and_stop_removes_only_delivery_prims(
         adapter._on_accepted_trigger(
             {
                 "delivery_id": delivery_id,
-                "material_type": "RawPart",
+                "material_type": "TestCube",
                 "quantity": quantity,
                 "valid": True,
                 "has_random_seed": False,
@@ -787,7 +787,7 @@ def test_delivery_already_in_stage_remains_duplicate_after_adapter_restart(
     trigger = {
         "delivery_id": "02" * 16,
         "stamp_ns": 100,
-        "material_type": "RawPart",
+        "material_type": "TestCube",
         "quantity": 1,
         "valid": True,
         "has_random_seed": False,
@@ -819,7 +819,7 @@ def test_adapter_does_not_revalidate_integration_accepted_source_timestamp(
         {
             "delivery_id": "01" * 16,
             "stamp_ns": 10_000,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 1,
             "valid": True,
             "has_random_seed": False,
@@ -867,7 +867,7 @@ def test_trigger_wire_payload_preserves_seed_and_ros_source_stamp():
     payload = trigger_payload(
         delivery_id=bytes(range(1, 17)),
         stamp_ns=1_234_000_005,
-        material_type="RawPart",
+        material_type="TestCube",
         quantity=3,
         valid=True,
         has_random_seed=True,
@@ -878,7 +878,7 @@ def test_trigger_wire_payload_preserves_seed_and_ros_source_stamp():
         "op": "accepted_handoff",
         "delivery_id": bytes(range(1, 17)).hex(),
         "stamp_ns": 1_234_000_005,
-        "material_type": "RawPart",
+        "material_type": "TestCube",
         "quantity": 3,
         "valid": True,
         "has_random_seed": True,
@@ -902,7 +902,7 @@ def test_adapter_forwards_integration_accepted_event_without_timestamp_gate(
         {
             "delivery_id": "04" * 16,
             "stamp_ns": 12_150_000_633,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "quantity": 1,
             "valid": True,
             "has_random_seed": False,
@@ -917,7 +917,7 @@ def test_completion_wire_payload_preserves_delivery_counts_and_failure():
     payload = completion_payload(
         {
             "delivery_id": "010203",
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "requested_quantity": 4,
             "supplied_quantity": 4,
             "completed": False,
@@ -953,7 +953,7 @@ def test_canceled_completion_maps_to_the_additive_transfer_result_code():
     result = _transfer_completion_message(
         {
             "delivery_id": "05" * 16,
-            "material_type": "RawPart",
+            "material_type": "TestCube",
             "requested_quantity": 2,
             "supplied_quantity": 0,
             "completed": False,
@@ -1017,7 +1017,7 @@ def test_client_sends_completion_without_blocking():
     client = MaterialSupplySidecarClient.from_socket(parent, process=None)
     result = {
         "delivery_id": "delivery-a",
-        "material_type": "RawPart",
+        "material_type": "TestCube",
         "requested_quantity": 1,
         "supplied_quantity": 1,
         "completed": True,
@@ -1078,7 +1078,7 @@ def test_scene_supply_startup_resolves_diagnostic_directory(tmp_path, monkeypatc
     namespace = {
         "Path": Path, "os": os, "yaml": yaml,
         "_close_material_supply_adapter": lambda: None,
-        "_load_operational_profile": lambda: {},
+        "_load_operational_profile": lambda: {"material_catalog": {}},
         "MaterialSupplyProfile": types.SimpleNamespace(from_mapping=lambda *args: object()),
         "MaterialSupplySidecarClient": types.SimpleNamespace(launch=lambda root: sidecar),
         "IsaacMaterialSupplyAdapter": construct_adapter,
@@ -1095,3 +1095,29 @@ def test_scene_supply_startup_resolves_diagnostic_directory(tmp_path, monkeypatc
     assert directory.parent.name == "diagnostic"
     assert (directory.parent / "session.json").is_file()
     assert sidecar.closed
+
+
+def test_queued_deliveries_freeze_their_own_material_profiles(monkeypatch):
+    from dataclasses import replace
+    adapter = _adapter(_FakeSidecar())
+    first = replace(adapter.profile, material_type="AL_PLATE_080_060_020",
+                    dimensions_m=(0.08, 0.06, 0.02), mass_kg=0.2592)
+    second = replace(adapter.profile, material_type="STEEL_BLANK_070_050_040",
+                     dimensions_m=(0.07, 0.05, 0.04), mass_kg=1.099)
+    adapter.material_profiles = {first.material_type: first, second.material_type: second}
+    metadata = []
+    monkeypatch.setattr(adapter, '_now_ns', lambda: 0)
+    monkeypatch.setattr(adapter, '_author_delivery_metadata', lambda delivery_id, *args: metadata.append(adapter._delivery_profiles[delivery_id]))
+    for index, profile in enumerate((first, second), 1):
+        adapter._on_accepted_trigger(dict(delivery_id=f'{index:032x}',
+            material_type=profile.material_type, quantity=2, valid=True,
+            has_random_seed=True, random_seed=42))
+    # A subsequent UI/default selection cannot change already accepted requests.
+    adapter.profile = second
+    adapter.material_profiles[first.material_type] = second
+    assert metadata == [first, second]
+    assert adapter._delivery_profiles[f'{1:032x}'] == first
+    assert adapter._delivery_profiles[f'{2:032x}'] == second
+    assert adapter._runs[f'{1:032x}'].material_type == first.material_type
+    assert adapter._runs[f'{2:032x}'].material_type == second.material_type
+    assert len(adapter._pending_parts) == 4

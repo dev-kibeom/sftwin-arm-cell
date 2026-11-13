@@ -11,6 +11,9 @@ float64 pick_approach_distance_m
 float64 pick_grasp_backoff_m
 float64 pick_grasp_position_tolerance_m
 float64 pick_grasp_orientation_tolerance_rad
+# Optional material-specific grasp transform, already composed with Motion tool axes.
+bool has_material_grasp_transform
+geometry_msgs/Transform material_grasp_transform
 float32 grasp_width_min_mm
 float32 grasp_width_max_mm
 bool has_unobserved_yaw_fallback

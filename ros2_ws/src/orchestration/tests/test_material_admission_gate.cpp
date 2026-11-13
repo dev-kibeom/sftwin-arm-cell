@@ -23,7 +23,7 @@ Readiness readiness(uint8_t identity, bool valid = true, bool ready = true)
 {
   Readiness state;
   state.delivery_id.uuid[15] = identity;
-  state.material_type = "RawPart";
+  state.material_type = "TestCube";
   state.quantity = 2;
   state.valid = valid;
   state.material_ready = ready;
@@ -46,7 +46,7 @@ Safety safe_state(
 std::optional<Gate::Admission> try_admit(
   Gate & gate, const Safety & safety, std::string * block_reason = nullptr)
 {
-  return gate.try_admit(safety, "RawPart", block_reason);
+  return gate.try_admit(safety, "TestCube", block_reason);
 }
 
 TEST(MaterialAdmissionGate, KeepsValidDeliveryPendingUntilSafetyPermits)
@@ -162,7 +162,7 @@ TEST(MaterialAdmissionGate, UnsupportedMaterialTypeCannotBeAdmitted)
   gate.observe(unsupported);
 
   std::string reason;
-  EXPECT_FALSE(gate.try_admit(safe_state(now), "RawPart", &reason));
+  EXPECT_FALSE(gate.try_admit(safe_state(now), "TestCube", &reason));
   EXPECT_EQ(reason, "readiness_material_type_unsupported");
   EXPECT_TRUE(gate.try_admit(safe_state(now), "OtherPart"));
 }
@@ -339,3 +339,47 @@ TEST(MaterialAdmissionGate, ValidCompletionAdmits)
 }
 
 }  // namespace
+
+TEST(MaterialAdmissionGate, AdmitsRegisteredMaterialSelectedByReadiness)
+{
+  Gate gate;
+  gate.set_material_types({"TestCube", "AL_PLATE_080_060_020"});
+  auto plate = readiness(71);
+  plate.material_type = "AL_PLATE_080_060_020";
+  gate.observe(plate);
+  const auto now = Clock::now();
+  const auto admission = gate.try_admit(safe_state(now, now), "");
+  ASSERT_TRUE(admission);
+  EXPECT_EQ(admission->material_type, plate.material_type);
+  auto unknown = readiness(72);
+  unknown.material_type = "Unregistered";
+  gate.observe(unknown);
+  std::string reason;
+  EXPECT_FALSE(gate.try_admit(safe_state(now, now), "", &reason));
+  EXPECT_EQ(reason, "readiness_material_type_unsupported");
+}
+
+TEST(MaterialAdmissionGate, DoesNotMixOutstandingQuantitiesAcrossMaterials)
+{
+  Gate gate;
+  gate.set_material_types({"TestCube", "AL_PLATE_080_060_020"});
+  auto cube = readiness(81);
+  cube.quantity = 3;
+  auto plate = readiness(82);
+  plate.quantity = 5;
+  plate.material_type = "AL_PLATE_080_060_020";
+  gate.observe(cube);
+  gate.observe(plate);
+  const auto now = Clock::now();
+  auto first = gate.try_admit(safe_state(now, now), "");
+  ASSERT_TRUE(first);
+  EXPECT_EQ(first->quantity, 3U);
+  EXPECT_EQ(gate.record_successful_place("cube-cycle", 1U, "TestCube"),
+    Gate::PlaceCommitResult::COMMITTED);
+  auto second = gate.try_admit(safe_state(now, now), "");
+  ASSERT_TRUE(second);
+  EXPECT_EQ(second->material_type, plate.material_type);
+  EXPECT_EQ(second->quantity, 5U);
+  EXPECT_EQ(gate.record_successful_place("plate-cycle", 5U, plate.material_type),
+    Gate::PlaceCommitResult::COMMITTED);
+}

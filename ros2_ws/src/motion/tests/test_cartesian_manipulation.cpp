@@ -630,7 +630,7 @@ TEST(CartesianManipulationTest, RejectsPostTimingCollisionInvalidState)
     [](std::size_t index, const auto &, auto & reason, auto & contacts) {
       if (index == 4U) {
         reason = "collision/contact";
-        contacts = {"link_4", "cube_profile"};
+        contacts = {"link_4", "TestCube"};
         return false;
       }
       reason.clear();
@@ -643,7 +643,7 @@ TEST(CartesianManipulationTest, RejectsPostTimingCollisionInvalidState)
   EXPECT_EQ(validation.failure.reason, "collision/contact");
   EXPECT_EQ(
     validation.failure.contact_bodies,
-    std::vector<std::string>({"link_4", "cube_profile"}));
+    std::vector<std::string>({"link_4", "TestCube"}));
 }
 
 }  // namespace arm_cell_motion

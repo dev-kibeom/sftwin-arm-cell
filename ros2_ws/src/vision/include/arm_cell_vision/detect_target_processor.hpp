@@ -318,7 +318,7 @@ struct TrayDepthCoverage
   bool fully_visible = false;
 };
 
-std::optional<TrayDepthCoverage> rawpart_tray_depth_coverage(
+std::optional<TrayDepthCoverage> tray_depth_coverage(
   const sensor_msgs::msg::Image & depth, const sensor_msgs::msg::CameraInfo & camera_info,
   const DetectorProfile & profile, const tf2::Transform & support_T_camera);
 
@@ -361,6 +361,9 @@ private:
   DetectionResult process_profile(
     const DetectionInput & input, const std::string & target_id,
     const std::vector<DetectorProfile> & profiles, bool calibration_only) const;
+  std::optional<DetectionResult> resolve_support_calibration(
+    const DetectionInput & input, const DetectorProfile & profile,
+    tf2::Transform & support_T_camera) const;
   struct SelectionState
   {
     std::mutex mutex;

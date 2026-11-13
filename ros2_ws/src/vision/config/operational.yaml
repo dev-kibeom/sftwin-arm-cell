@@ -35,9 +35,9 @@ snapshot_style:
     primary_color_rgb: '#FFDC00'
     detail_color_rgb: '#FFFFFF'
 detector_profiles:
-  RawPart:
-    target_id: RawPart
-    material_id: RawPart
+  TestCube:
+    target_id: TestCube
+    material_id: TestCube
     cuboid:
       grid_resolution_m: 0.0025
       height_tolerance_m: 0.003

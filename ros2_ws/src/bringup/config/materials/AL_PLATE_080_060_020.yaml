@@ -1,0 +1,30 @@
+material_id: AL_PLATE_080_060_020
+display_name: Aluminium plate
+mass_kg: 0.2592
+grasp:
+  min_expected_contact_width_mm: 59.0
+  max_expected_contact_width_mm: 61.0
+pick_offset:
+  translation_m:
+  - 0.0
+  - 0.0
+  - 0.0075
+  quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+geometry:
+  material_id: AL_PLATE_080_060_020
+  shape: box
+  nominal_dimensions_m:
+  - 0.08
+  - 0.06
+  - 0.02
+calibration:
+  status: pending_live_validation
+  reference: initial top contact depth 2.5 mm; verify with material-specific PnP trials
+display_color_rgb:
+- 0.65
+- 0.68
+- 0.72

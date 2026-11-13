@@ -21,6 +21,8 @@ class MaterialSupplyProfile:
     spawn_interval_s: float
     orientation_rpy_rad: tuple[tuple[float, float], ...]
 
+    display_color_rgb: tuple[float, float, float] = (0.42, 0.30, 0.18)
+
     @classmethod
     def from_mapping(
         cls,
@@ -31,25 +33,26 @@ class MaterialSupplyProfile:
         supply = simulation.get("material_supply")
         if not isinstance(supply, dict):
             raise ValueError("simulation.material_supply profile is required")
-        if supply.get("material_type") != "RawPart":
-            raise ValueError("simulation.material_supply.material_type must be RawPart")
-        target = vision.get("detector_profiles", {}).get("RawPart")
+        material_type = supply.get("material_type")
+        if not isinstance(material_type, str) or not material_type:
+            raise ValueError("Material supply must select a registered material")
+        target = vision.get("detector_profiles", {}).get(material_type)
         if not isinstance(target, dict):
-            raise ValueError("Vision RawPart profile is required for material supply")
-        material = material_definitions.get("RawPart")
-        if not isinstance(material, dict) or material.get("material_id") != "RawPart":
-            raise ValueError("material_definitions.RawPart must define RawPart")
+            raise ValueError(f"Vision profile is required for {material_type}")
+        material = material_definitions.get(material_type)
+        if not isinstance(material, dict) or material.get("material_id") != material_type:
+            raise ValueError(f"Material definition must match {material_type}")
         if material.get("shape") != "box":
-            raise ValueError("RawPart material shape must be box")
+            raise ValueError("Supplied material shape must be box")
         if target.get("material_id") != material["material_id"]:
             raise ValueError(
-                "Vision RawPart profile must reference its material definition"
+                "Vision profile must reference its material definition"
             )
         dimensions = _finite_tuple(
-            material.get("nominal_dimensions_m"), 3, "RawPart nominal dimensions"
+            material.get("nominal_dimensions_m"), 3, f"{material_type} nominal dimensions"
         )
         if any(value <= 0 for value in dimensions):
-            raise ValueError("RawPart dimensions must be positive")
+            raise ValueError("Material dimensions must be positive")
         mass = _finite_positive(supply.get("mass_kg"), "mass_kg")
         support = _finite_tuple(
             target.get("support_region_dimensions_m"), 2, "support region dimensions"
@@ -87,7 +90,7 @@ class MaterialSupplyProfile:
         ):
             raise ValueError("receiving region must be inside the Tray support")
         return cls(
-            material_type="RawPart",
+            material_type=material_type,
             shape=material["shape"],
             dimensions_m=dimensions,
             mass_kg=mass,

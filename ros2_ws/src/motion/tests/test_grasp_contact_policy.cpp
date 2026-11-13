@@ -103,19 +103,19 @@ TEST(GraspContactPolicyTest, PlanningSceneRequestIncludesWorldObjectNames)
 TEST(GraspContactPolicyTest, CurrentTargetAcceptedWithUnrelatedFixture)
 {
   const auto result = resolve_current_target(
-    {object("wu14_fixture_run_cube_profile"), object("wu14_fixture_run_other_fixture")},
-    "wu14_fixture_", "wu14_fixture_run_cube_profile", kLinks);
+    {object("wu14_fixture_run_TestCube"), object("wu14_fixture_run_other_fixture")},
+    "wu14_fixture_", "wu14_fixture_run_TestCube", kLinks);
 
   EXPECT_EQ(result.reason, GraspContactPolicyReason::ACCEPTED);
-  EXPECT_EQ(result.resolved_collision_object_id, "wu14_fixture_run_cube_profile");
+  EXPECT_EQ(result.resolved_collision_object_id, "wu14_fixture_run_TestCube");
   EXPECT_EQ(result.prefix_matches.size(), 2U);
 }
 
 TEST(GraspContactPolicyTest, MultipleFixturesDoNotRejectValidCurrentTarget)
 {
   const auto result = resolve_current_target(
-    {object("wu14_fixture_a_cube_profile"), object("wu14_fixture_b_other")},
-    "wu14_fixture_", "wu14_fixture_a_cube_profile", kLinks);
+    {object("wu14_fixture_a_TestCube"), object("wu14_fixture_b_other")},
+    "wu14_fixture_", "wu14_fixture_a_TestCube", kLinks);
 
   EXPECT_EQ(result.reason, GraspContactPolicyReason::ACCEPTED);
 }
@@ -124,7 +124,7 @@ TEST(GraspContactPolicyTest, MissingTargetRejectsClosed)
 {
   const auto result = resolve_current_target(
     {object("wu14_fixture_run_other_fixture")}, "wu14_fixture_",
-    "wu14_fixture_run_cube_profile", kLinks);
+    "wu14_fixture_run_TestCube", kLinks);
 
   EXPECT_EQ(result.reason, GraspContactPolicyReason::TARGET_NOT_FOUND);
 }
@@ -132,8 +132,8 @@ TEST(GraspContactPolicyTest, MissingTargetRejectsClosed)
 TEST(GraspContactPolicyTest, AmbiguousTargetRejectsClosed)
 {
   const auto result = resolve_current_target(
-    {object("wu14_fixture_a_cube_profile"), object("wu14_fixture_a_cube_profile")},
-    "wu14_fixture_", "wu14_fixture_a_cube_profile", kLinks);
+    {object("wu14_fixture_a_TestCube"), object("wu14_fixture_a_TestCube")},
+    "wu14_fixture_", "wu14_fixture_a_TestCube", kLinks);
 
   EXPECT_EQ(result.reason, GraspContactPolicyReason::TARGET_AMBIGUOUS);
 }
@@ -141,8 +141,8 @@ TEST(GraspContactPolicyTest, AmbiguousTargetRejectsClosed)
 TEST(GraspContactPolicyTest, InvalidConfigurationRejectsClosed)
 {
   const auto result = resolve_current_target(
-    {object("wu14_fixture_run_cube_profile")}, "",
-    "wu14_fixture_run_cube_profile", kLinks);
+    {object("wu14_fixture_run_TestCube")}, "",
+    "wu14_fixture_run_TestCube", kLinks);
 
   EXPECT_EQ(result.reason, GraspContactPolicyReason::INVALID_CONFIG);
 }
@@ -150,11 +150,11 @@ TEST(GraspContactPolicyTest, InvalidConfigurationRejectsClosed)
 TEST(GraspContactPolicyTest, ExactIdentityDoesNotUseTargetIdSuffix)
 {
   const auto result = resolve_current_target(
-    {object("wu14_fixture_run_cube_profile"), object("wu14_fixture_new_cube_profile")},
-    "wu14_fixture_", "wu14_fixture_new_cube_profile", kLinks);
+    {object("wu14_fixture_run_TestCube"), object("wu14_fixture_new_TestCube")},
+    "wu14_fixture_", "wu14_fixture_new_TestCube", kLinks);
 
   EXPECT_EQ(result.reason, GraspContactPolicyReason::ACCEPTED);
-  EXPECT_EQ(result.resolved_collision_object_id, "wu14_fixture_new_cube_profile");
+  EXPECT_EQ(result.resolved_collision_object_id, "wu14_fixture_new_TestCube");
 }
 
 TEST(GraspContactPolicyTest, PlanningSceneServiceFailureRejectsClosed)
@@ -187,7 +187,7 @@ TEST(GraspContactPolicyTest, ACMAllowsOnlyCurrentTargetAndAuthorizedLinks)
   original.entry_values = {row, row};
 
   const auto result = allow_current_target_contacts(
-    original, "wu14_fixture_run_cube_profile", kLinks);
+    original, "wu14_fixture_run_TestCube", kLinks);
 
   ASSERT_TRUE(result.has_value());
   const auto & names = result->entry_names;
@@ -195,7 +195,7 @@ TEST(GraspContactPolicyTest, ACMAllowsOnlyCurrentTargetAndAuthorizedLinks)
     std::distance(
       names.begin(), std::find(
         names.begin(), names.end(),
-        "wu14_fixture_run_cube_profile")));
+        "wu14_fixture_run_TestCube")));
   for (const auto & link : kLinks) {
     const auto index = static_cast<std::size_t>(
       std::distance(names.begin(), std::find(names.begin(), names.end(), link)));
@@ -323,28 +323,28 @@ TEST(GraspContactPolicyTest, ContactClassificationSeparatesObservationFromPolicy
 {
   EXPECT_EQ(
     classify_grasp_contact(
-      "wu14_fixture_run_cube_profile", 2,
-      kLinks.front(), 1, "wu14_fixture_run_cube_profile", kLinks),
+      "wu14_fixture_run_TestCube", 2,
+      kLinks.front(), 1, "wu14_fixture_run_TestCube", kLinks),
     GraspContactClass::EXPECTED_TARGET_FINGERTIP);
   EXPECT_EQ(
     classify_grasp_contact(
-      "wu14_fixture_run_cube_profile", 2,
-      "forearm_link", 1, "wu14_fixture_run_cube_profile", kLinks),
+      "wu14_fixture_run_TestCube", 2,
+      "forearm_link", 1, "wu14_fixture_run_TestCube", kLinks),
     GraspContactClass::TARGET_UNAUTHORIZED_ROBOT_LINK);
   EXPECT_EQ(
     classify_grasp_contact(
       "forearm_link", 1, "wrist_link", 1,
-      "wu14_fixture_run_cube_profile", kLinks),
+      "wu14_fixture_run_TestCube", kLinks),
     GraspContactClass::ROBOT_SELF_CONTACT);
   EXPECT_EQ(
     classify_grasp_contact(
       "table", 2, "forearm_link", 1,
-      "wu14_fixture_run_cube_profile", kLinks),
+      "wu14_fixture_run_TestCube", kLinks),
     GraspContactClass::UNRELATED_WORLD_OBJECT);
   EXPECT_EQ(
     classify_grasp_contact(
       "wu14_fixture_run_other", 2, "forearm_link", 1,
-      "wu14_fixture_run_cube_profile", kLinks),
+      "wu14_fixture_run_TestCube", kLinks),
     GraspContactClass::UNRELATED_FIXTURE);
 }
 }  // namespace

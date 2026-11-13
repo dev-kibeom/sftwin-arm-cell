@@ -13,12 +13,12 @@ def collector(**kwargs):
 
 
 def start_request(observed, start_s=10.0):
-    observed.observe_diagnostic(1, "RawPart", "", "", start_s)
+    observed.observe_diagnostic(1, "TestCube", "", "", start_s)
 
 
 def finish_request(observed, *, result_code, detail, receipt_s):
     observed.observe_diagnostic(
-        0, "RawPart", "", detail, receipt_s, result_code=result_code
+        0, "TestCube", "", detail, receipt_s, result_code=result_code
     )
 
 
@@ -91,7 +91,7 @@ def test_timeout_reports_when_no_request_pair_met_sync_slop():
 def test_diagnostic_progress_records_first_usable_observation_time():
     observed = collector()
     start_request(observed, start_s=2.0)
-    observed.observe_diagnostic(1, "RawPart", "camera", "observation_ready", 2.125)
+    observed.observe_diagnostic(1, "TestCube", "camera", "observation_ready", 2.125)
     finish_request(observed, result_code=0, detail="ok", receipt_s=2.2)
 
     summary = observed.summary(0.3)

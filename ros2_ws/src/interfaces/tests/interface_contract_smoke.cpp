@@ -30,12 +30,12 @@ int main()
   handoff.valid = true;
   msg::MaterialReadiness readiness;
   readiness.delivery_id = handoff.delivery_id;
-  readiness.material_type = "RawPart";
+  readiness.material_type = "TestCube";
   readiness.quantity = 3;
   readiness.material_ready = true;
   readiness.valid = true;
   const bool delivery_round_trip = readiness.delivery_id == handoff.delivery_id &&
-    readiness.material_type == "RawPart" && readiness.quantity == 3;
+    readiness.material_type == "TestCube" && readiness.quantity == 3;
 
   msg::HandoffTrigger trigger;
   trigger.header.stamp.sec = 1;

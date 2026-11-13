@@ -59,7 +59,7 @@ def test_validation_profile_selects_fixed_vision_and_its_recipe():
     assert vision.node_executable == "fixed_detect_target_node"
     assert all(node.node_executable != "detect_target_node" for node in nodes)
     mission = profile["orchestration"]
-    recipe_path = Path(mission_directory(resolve(mission['recipe_directory'], PROFILE_PATH.parent))) / f"{mission['mission_target_id']}.json"
+    recipe_path = Path(resolve(mission['recipe_directory'], PROFILE_PATH.parent)) / f"{mission['mission_target_id']}.json"
     recipe = json.loads(recipe_path.read_text())
     assert recipe["target_id"] == mission["mission_target_id"]
     orchestration = next(
@@ -82,7 +82,7 @@ def test_validation_profile_selects_fixed_vision_and_its_recipe():
     )
     grasp_dimension_mm = profile["fixture"]["dimensions_m"][0] * 1000.0
     assert grasp_dimension_mm <= 85.0
-    assert recipe["grasp"]["min_expected_contact_width_mm"] == grasp_dimension_mm
+    assert recipe["grasp"]["min_expected_contact_width_mm"] <= grasp_dimension_mm <= recipe["grasp"]["max_expected_contact_width_mm"]
 
 
 def test_validation_profile_owns_moveit_planning_scaling():
@@ -109,7 +109,7 @@ def test_validation_profile_owns_moveit_planning_scaling():
 def test_validation_place_target_is_above_the_cnc_workarea():
     planning = yaml.safe_load((PACKAGE_ROOT / "config/isaac_planning.yaml").read_text())
 
-    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/cube_profile.yaml")[0]
+    recipe = load_profile(PROFILE_PATH)["_mission_recipe"]
     assert recipe["place"]["desired_object_pose"]["frame"] == "base_link"
     assert recipe["place"]["desired_object_pose"]["position"] == pytest.approx(
         [0.50, 0.25, 0.37]
@@ -184,7 +184,7 @@ def test_validation_profile_keeps_recipe_and_geometry_contracts_aligned():
         [1.0, 0.0, 0.0, 0.0]
     )
     assert profile["motion"]["insertion_axis_tcp"] == pytest.approx([0.0, 0.0, 1.0])
-    recipe = compile_mission(PACKAGE_ROOT.parent / "bringup/config/missions/cube_profile.yaml")[0]
+    recipe = load_profile(PROFILE_PATH)["_mission_recipe"]
     assert recipe["pick"]["approach_distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["distance_m"] == pytest.approx(0.05)
     assert recipe["place"]["approach"]["direction_object"] == [

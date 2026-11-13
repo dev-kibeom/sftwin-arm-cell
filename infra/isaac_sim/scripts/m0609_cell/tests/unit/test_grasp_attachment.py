@@ -219,7 +219,7 @@ def test_capture_query_compares_transformed_reference_position_and_orientation(
 
     class _Registry:
         def candidate_paths(self, _stage):
-            return ["/robot/RawPart"]
+            return ["/robot/TestCube"]
 
     world_tcp = _RigidWorldTransform(
         (0.7, -1.8, 0.9), _Quaternion(half, (0.0, 0.0, half))

@@ -91,27 +91,24 @@ class SimulationUIHubExtension(_ExtensionBase):
             DEFAULT_OBSERVATION_FRESHNESS_SECONDS,
         )
 
-        handoff_material_type = "RawPart"
+        handoff_material_type = "TestCube"
+        handoff_material_types = [handoff_material_type]
         handoff_default_quantity = 1
-        retry_detection_target_id = "RawPart"
+        retry_detection_target_id = "TestCube"
         project_root = os.environ.get("SFTWIN_PROJECT_ROOT")
         if project_root:
-            import yaml
-
-            profile_path = (
-                Path(project_root).expanduser().resolve()
-                / "ros2_ws/src/bringup/config/operational_profile.yaml"
-            )
-            profile = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
+            from runtime_configuration import load_runtime_configuration, selected_configuration
+            profile = load_runtime_configuration(selected_configuration(project_root))
+            handoff_material_types = sorted(profile["material_catalog"])
             simulation_profile = profile.get("simulation", {})
             handoff_material_type = str(
-                simulation_profile.get("external_handoff_material_type", "RawPart")
+                simulation_profile.get("external_handoff_material_type", "TestCube")
             )
             handoff_default_quantity = int(
                 simulation_profile.get("external_handoff_default_quantity", 1)
             )
             retry_detection_target_id = str(
-                profile.get("orchestration", {}).get("mission_target_id", "RawPart")
+                profile.get("orchestration", {}).get("mission_target_id", "TestCube")
             )
 
         try:
@@ -142,6 +139,7 @@ class SimulationUIHubExtension(_ExtensionBase):
                 else DEFAULT_ANNOTATION_SOURCE_TOLERANCE_SECONDS
             ),
         )
+        self._handoff_material_types = handoff_material_types
         self._handoff_default_material_type = handoff_material_type
         self._handoff_default_quantity = handoff_default_quantity
         self._retry_detection_target_id = retry_detection_target_id
@@ -420,9 +418,9 @@ class SimulationUIHubExtension(_ExtensionBase):
                     word_wrap=True,
                 )
                 ui.Label("Material type")
-                self._handoff_material_type_field = ui.StringField()
-                self._handoff_material_type_field.model.set_value(
-                    self._handoff_default_material_type
+                self._handoff_material_type_field = ui.ComboBox(
+                    self._handoff_material_types.index(self._handoff_default_material_type),
+                    *self._handoff_material_types,
                 )
                 ui.Label("Quantity")
                 self._handoff_quantity_field = ui.IntField()
@@ -646,7 +644,7 @@ class SimulationUIHubExtension(_ExtensionBase):
     def _request_vision_calibration(self) -> None:
         try:
             self.runtime.request_vision_calibration()
-        except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as error:
+        except (OSError, RuntimeError, ValueError, KeyError, AttributeError, IndexError) as error:
             if self._vision_calibration_status is not None:
                 self._vision_calibration_status.text = (
                     f"Vision calibration request failed: {error}"
@@ -887,7 +885,7 @@ class SimulationUIHubExtension(_ExtensionBase):
             return
         try:
             self.runtime.request_retry_detection(self._retry_detection_target_id)
-        except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as error:
+        except (OSError, RuntimeError, ValueError, KeyError, AttributeError, IndexError) as error:
             if self._retry_detection_status is not None:
                 self._retry_detection_status.text = (
                     f"Retry Detection request failed: {error}"
@@ -910,7 +908,9 @@ class SimulationUIHubExtension(_ExtensionBase):
         label = self._handoff_trigger_status
         try:
             material_type = (
-                self._handoff_material_type_field.model.get_value_as_string().strip()
+                self._handoff_material_types[
+                    self._handoff_material_type_field.model.get_item_value_model().get_value_as_int()
+                ]
             )
             quantity = self._handoff_quantity_field.model.get_value_as_int()
             delivery_id = self.runtime.publish_handoff_trigger(material_type, quantity)
@@ -919,7 +919,7 @@ class SimulationUIHubExtension(_ExtensionBase):
                 f"type={material_type} · quantity={quantity}. "
                 "Owner acceptance, supply, and readiness are not displayed in this Hub."
             )
-        except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as error:
+        except (OSError, RuntimeError, ValueError, KeyError, AttributeError, IndexError) as error:
             if label is not None:
                 label.text = f"Trigger stimulus failed: {error}"
 

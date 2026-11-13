@@ -8,7 +8,7 @@ D455_ROOT_PATH = "/World/SF_Twin_Cell/CameraRig/RealSense_D455"
 D455_COLOR_CAMERA_NAME = "Camera_OmniVision_OV9782_Color"
 ACTION_GRAPH_PATH = "/World/SF_Twin_Cell/ROS2/ActionGraph"
 DEPTH_HELPER_PATH = ACTION_GRAPH_PATH + "/CameraHelperDepth"
-DEFAULT_REFERENCE_PRIM = "/World/SF_Twin_Cell/AMR/Mockup/RawPart"
+DEFAULT_REFERENCE_PRIM = "/World/SF_Twin_Cell/AMR/Mockup/TestCube"
 CAMERA_LINK_TO_OPTICAL_BASIS = (
     (0.0, -1.0, 0.0),
     (0.0, 0.0, -1.0),

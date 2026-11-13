@@ -1,7 +1,7 @@
-# RawPart 직교 외곽선 기반 직육면체 복원 알고리즘
+# TestCube 직교 외곽선 기반 직육면체 복원 알고리즘
 
 - **Owner:** ARM Cell Vision — 관측 형상 해석, 후보 열거
-- **범위:** Heightmap의 경계 보존, Plane Map과 사각형 분할, 수평 및 경사 RawPart 직육면체 가설 복원·선택·신뢰도 분류.
+- **범위:** Heightmap의 경계 보존, Plane Map과 사각형 분할, 수평 및 경사 TestCube 직육면체 가설 복원·선택·신뢰도 분류.
 - **비책임:** 파지 가능성·작업 우선순위 및 Motion 경로 판단
 
 **실험 자료:** Cuboid Notebook, 실라이브 세션 L자 신뢰도·경사 복원 PoC, 과거 구현 감사·검증 자료. PoC는 비규범 비교 자료이며 현재 계약은 이 문서가 소유한다.
@@ -12,7 +12,7 @@
 
 보정된 Heightmap에서 **경계 → 평면 → 객체 가설** 순서로 해석을 구체화한다. 연결 영역의 수평성이나 완전한 외곽선 폐합을 경계 추출의 선행조건으로 삼지 않는다. Contour·Line·직각 Anchor·L/U자 복원은 재사용하되 Plane Map의 평면 영역을 물리 객체로 확정하지 않는다. Rectangle Partition은 Recipe와 독립적인 기하 해석이며, 관측된 모든 객체를 완전 분할해야 개별 후보를 인정하는 방식은 사용하지 않는다.
 
-[RawPart FDS](../components/vision/fds-rawpart-depth-perception.md)는 후보 적격성의 외부 동작과 Strategy별 필수 출력을, ICD는 목록 인계와 실행 경계를 소유한다. 이 알고리즘은 검증된 기하 후보 집합과 파지 우선순위 의미가 없는 안정적 열거 순서를 소유한다. Motion은 단일 PICK Action 내부의 후보 우선순위·탐색·전환을 소유한다.
+[TestCube FDS](../components/vision/fds-rawpart-depth-perception.md)는 후보 적격성의 외부 동작과 Strategy별 필수 출력을, ICD는 목록 인계와 실행 경계를 소유한다. 이 알고리즘은 검증된 기하 후보 집합과 파지 우선순위 의미가 없는 안정적 열거 순서를 소유한다. Motion은 단일 PICK Action 내부의 후보 우선순위·탐색·전환을 소유한다.
 
 후보 생성 뒤 실제 관측 면적, Profile 치수, 경계 지지, 수평 높이 일관성 및 주변 관측값을 가설 평가 근거로 사용한다. 면적 관측률이나 ROI 전체 포함을 모든 후보에 적용하는 공통 Gate로 두지 않는다. 실패·불확실 후보는 무관한 후보를 탈락시키지 않는다. 동일 객체의 L자·대칭 방향·사실상 같은 Footprint와 Pose 가설은 정규화해 하나의 후보로 취급한다. 중복 proposal 수는 모호성이나 등급 저하 근거가 아니다. 정규화 후에도 관측으로 구별할 수 없는 실질적으로 다른 형상·자세 해석이 남을 때만 모호하게 분류한다.
 
@@ -82,7 +82,7 @@ Heightmap에서 직접 경계를 추출하고 기존 Contour·Line 적합 기법
 
 **입력:** 원본 Heightmap과 Boundary Extraction의 관측 경계·직선·모서리.
 
-**출력:** 아래의 평면·경계·분할 관계. Plane Map은 객체 목록이 아니며 개별 RawPart ID·최종 Pose·파지 적격성을 확정하지 않는다.
+**출력:** 아래의 평면·경계·분할 관계. Plane Map은 객체 목록이 아니며 개별 TestCube ID·최종 Pose·파지 적격성을 확정하지 않는다.
 
 | Plane Map 항목 | 의미와 후속 전달 근거 |
 |---|---|
@@ -138,7 +138,7 @@ IoU는 적합도 비교 근거이며 `IoU=1`을 요구하지 않는다. 기존 G
 | 직접 모순 | 관측된 기하·높이·Tray/고정 구조와 모순되는 개별 가설만 REJECTED; 다른 가설과의 경쟁 자체는 직접 관측 모순이 아님 |
 | 해석을 구별할 근거 부족 | 해당 경쟁 해석은 UNRESOLVED로 보존하고 독립적으로 확정된 다른 객체는 유지 |
 
-수평 Cuboid의 상판 `z_top`, 자체 두께 `t`에 대해 체적은 `R × [z_top-t,z_top]`다. XY 내부가 겹쳐도 수직 내부 구간이 분리되거나 층의 경계만 접촉하면 양립 가능하다. 기존 Grid/Geometry 허용오차를 넘는 3D 내부 관통은 양립 불가다. 직접 지지·상부 가림은 실제 높이와 공간 관계로 확인한다. 미해결 작업 공간을 설명하기 위해 별도 미식별 객체나 숨겨진 RawPart를 추가하지 않는다. 기존 Tray·고정 구조와 실제 관측된 복수 RawPart 관계는 유지한다.
+수평 Cuboid의 상판 `z_top`, 자체 두께 `t`에 대해 체적은 `R × [z_top-t,z_top]`다. XY 내부가 겹쳐도 수직 내부 구간이 분리되거나 층의 경계만 접촉하면 양립 가능하다. 기존 Grid/Geometry 허용오차를 넘는 3D 내부 관통은 양립 불가다. 직접 지지·상부 가림은 실제 높이와 공간 관계로 확인한다. 미해결 작업 공간을 설명하기 위해 별도 미식별 객체나 숨겨진 RawPart를 추가하지 않는다. 기존 Tray·고정 구조와 실제 관측된 복수 TestCube 관계는 유지한다.
 
 **경쟁 해석의 비교 기준:** 같은 미해결 관측을 설명하는 대안에 한해서 다음 기존 관측 적합도를 순서대로 비교한다. 전체 장면의 관측량을 합산해 객체 조합을 최적화하지 않는다. 각 셀·선분은 원본 ID로 중복 제거하며 추론 경계·복원된 미관측 면적은 실제 관측 근거로 가산하지 않는다. 가설의 Footprint 안에서 실제 높이가 예측 상판과 기존 높이 허용오차 안에 있는 셀만 상판 지지로 센다.
 
@@ -168,7 +168,7 @@ IoU는 적합도 비교 근거이며 `IoU=1`을 요구하지 않는다. 기존 G
 
 관측 면적 비율은 복원 상면 내부에서 동일 평면·높이로 관측된 셀 수를 전체 복원 상면 셀 수로 나눈 값이다. 운영 프로파일의 `high_confidence_observed_area_ratio` (기본 0.80), `medium_confidence_observed_area_ratio` (기본 0.55)로 설정하며 `0 < medium <= high <= 1`을 요구한다. MEDIUM 최소값 미만은 LOW다. ROI/Grid 및 이미지 경계의 미관측 면적도 분모에 포함한다. 상부 가림·접촉·지지 여부는 이 등급을 강등하지 않으며 관측 근거와 스택 판단에 보존한다. 기하 모순과 경쟁 가설 판정은 면적 분류에 앞서 적용한다.
 
-반환은 SELECTED인 HIGH·MEDIUM 전체를 단일 목록으로 안정되게 열거한다. 후보 ID는 Acquisition-local하게 고유하고 목록 순서는 파지 우선순위가 아니다. ALTERNATIVE·UNRESOLVED·REJECTED와 LOW는 진단 전용으로 남기며 일반 PICK 목록에 넣지 않는다. 내부의 경쟁 해석 선택은 Motion의 자재 실행 순서·Grasp Pose 선택과 다르다. Finger Clearance·IK·접근성·경로 계획을 Vision Gate로 추가하지 않으며 Action Payload에 Confidence나 Ranking Score를 추가하지 않는다. Result 의미는 RawPart FDS·ICD를 따른다.
+반환은 SELECTED인 HIGH·MEDIUM 전체를 단일 목록으로 안정되게 열거한다. 후보 ID는 Acquisition-local하게 고유하고 목록 순서는 파지 우선순위가 아니다. ALTERNATIVE·UNRESOLVED·REJECTED와 LOW는 진단 전용으로 남기며 일반 PICK 목록에 넣지 않는다. 내부의 경쟁 해석 선택은 Motion의 자재 실행 순서·Grasp Pose 선택과 다르다. Finger Clearance·IK·접근성·경로 계획을 Vision Gate로 추가하지 않으며 Action Payload에 Confidence나 Ranking Score를 추가하지 않는다. Result 의미는 TestCube FDS·ICD를 따른다.
 
 ### 교란용 미확정 영역 산출
 
@@ -217,7 +217,7 @@ IoU는 적합도 비교 근거이며 `IoU=1`을 요구하지 않는다. 기존 G
 | ID | 계산·판단 규칙 | 검증 가능한 기대 결과·금지 결과 |
 |---|---|---|
 | `VR-VIS-CUBOID-01` | 공통 L자 후보 생성 | 완전 상판과 부분 상판을 같은 후보 생성 규칙으로 평가하며 일반 후보 부재를 fallback 선행조건으로 사용하지 않는다. |
-| `VR-VIS-CUBOID-02` | 연결 외곽선의 객체 분리 | 하나의 Contour/평면에서 지지된 복수 L자 가설을 평가할 수 있고 Contour 하나를 RawPart 하나로 단정하지 않는다. |
+| `VR-VIS-CUBOID-02` | 연결 외곽선의 객체 분리 | 하나의 Contour/평면에서 지지된 복수 L자 가설을 평가할 수 있고 Contour 하나를 TestCube 하나로 단정하지 않는다. |
 | `VR-VIS-CUBOID-03` | 가설 정규화와 형상 모호성 | 동일 객체의 L자·대칭·동등 Footprint/Pose는 하나로 정규화한다. 중복 proposal 수만으로 등급을 낮추지 않으며 실질적으로 다른 미해결 형상·자세만 ambiguity로 남긴다. |
 | `VR-VIS-CUBOID-04` | ROI 및 이미지 경계 | ROI/Grid 접촉 자체는 거부·감점 근거가 아니다. 등급은 복원 상면 대비 실제 관측 면적 비율과 운영 프로파일 임계값으로 판정한다. |
 | `VR-VIS-CUBOID-05` | 상부 가림·confidence | 상부 가림은 관측 높이와 3D 공간 관계로 판정하며 XY 중첩만으로 확정하지 않는다. 형상·자세가 확정된 후보에 관측 면적 비율 임계값을 적용한다. 상부 가림 자체로 LOW로 낮추거나 SELECTED 후보를 제외하지 않는다. 상부 관측 근거는 Vision 진단에 보존한다. |

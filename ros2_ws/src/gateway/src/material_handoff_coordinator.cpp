@@ -15,6 +15,17 @@ MaterialHandoffCoordinator::MaterialHandoffCoordinator(
   }
 }
 
+void MaterialHandoffCoordinator::set_material_types(std::vector<std::string> material_types)
+{
+  if (material_types.empty() || std::any_of(
+      material_types.begin(), material_types.end(),
+      [](const auto & value) {return value.empty();}))
+  {
+    throw std::invalid_argument("material types must be nonempty registered identities");
+  }
+  material_types_ = std::move(material_types);
+}
+
 bool MaterialHandoffCoordinator::valid_id(const DeliveryId & delivery_id)
 {
   return std::any_of(
@@ -30,7 +41,9 @@ MaterialHandoffCoordinator::DeliveryKey MaterialHandoffCoordinator::key(
 bool MaterialHandoffCoordinator::can_begin(const Trigger & trigger) const
 {
   return trigger.valid && valid_id(trigger.delivery_id) && trigger.quantity > 0 &&
-         trigger.material_type == "RawPart" && can_begin(trigger.delivery_id);
+         std::find(
+    material_types_.begin(), material_types_.end(),
+    trigger.material_type) != material_types_.end() && can_begin(trigger.delivery_id);
 }
 
 bool MaterialHandoffCoordinator::can_begin(const DeliveryId & delivery_id) const
@@ -49,7 +62,10 @@ std::string MaterialHandoffCoordinator::rejection_reason(const Trigger & trigger
   if (trigger.quantity == 0) {
     return "invalid_quantity";
   }
-  if (trigger.material_type != "RawPart") {
+  if (std::find(
+      material_types_.begin(), material_types_.end(),
+      trigger.material_type) == material_types_.end())
+  {
     return "unsupported_material_type";
   }
   if (deliveries_.count(key(trigger.delivery_id)) != 0) {
@@ -195,8 +211,7 @@ MaterialHandoffCoordinator::observe_completion(
     observation.readiness = fail(delivery, true, publication_time);
     return observation;
   }
-  if (completion.supplied_quantity != delivery.trigger.quantity)
-  {
+  if (completion.supplied_quantity != delivery.trigger.quantity) {
     observation.disposition = CompletionDisposition::kQuantityMismatch;
     observation.readiness = fail(delivery, true, publication_time);
     return observation;

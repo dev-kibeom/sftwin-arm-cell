@@ -211,12 +211,12 @@ void validate_cuboid_config(const CuboidTopFaceConfig & c)
   for (double v : {c.grid_resolution_m, c.height_tolerance_m, c.line_residual_limit_px})
   {
     if (!std::isfinite(v) || v <= 0) {
-      throw std::invalid_argument("RawPart.cuboid geometry parameters must be positive finite");
+      throw std::invalid_argument("TestCube.cuboid geometry parameters must be positive finite");
     }
   }
   if (!std::isfinite(c.minimum_line_support) || c.minimum_line_support <= 0 ||
     c.minimum_line_support > 1)
-  {throw std::invalid_argument("RawPart.cuboid overlap/contact fraction is invalid");}
+  {throw std::invalid_argument("TestCube.cuboid overlap/contact fraction is invalid");}
 }
 
 DetectionResult detect_cuboid_top_face(
@@ -889,7 +889,7 @@ DetectionResult process_cuboid_top_face(
   const int cols = static_cast<int>(std::ceil((hi[0] - lo[0]) / spacing)) + 1;
   const int rows = static_cast<int>(std::ceil((hi[1] - lo[1]) / spacing)) + 1;
   if (rows <= 0 || cols <= 0 || static_cast<int64_t>(rows) * cols > 4000000) {
-    throw std::invalid_argument("RawPart.cuboid grid exceeds bounded observation size");
+    throw std::invalid_argument("TestCube.cuboid grid exceeds bounded observation size");
   }
   CuboidHeightObservation obs{cv::Mat(
       rows, cols, CV_64F,

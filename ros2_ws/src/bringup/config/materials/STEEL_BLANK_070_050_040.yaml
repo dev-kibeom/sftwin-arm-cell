@@ -1,0 +1,30 @@
+material_id: STEEL_BLANK_070_050_040
+display_name: Steel blank
+mass_kg: 1.099
+grasp:
+  min_expected_contact_width_mm: 49.0
+  max_expected_contact_width_mm: 51.0
+pick_offset:
+  translation_m:
+  - 0.0
+  - 0.0
+  - 0.0175
+  quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+geometry:
+  material_id: STEEL_BLANK_070_050_040
+  shape: box
+  nominal_dimensions_m:
+  - 0.07
+  - 0.05
+  - 0.04
+calibration:
+  status: pending_live_validation
+  reference: initial top contact depth 2.5 mm; verify with material-specific PnP trials
+display_color_rgb:
+- 0.3
+- 0.33
+- 0.36

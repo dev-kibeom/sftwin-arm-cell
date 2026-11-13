@@ -39,7 +39,7 @@ protected:
 constexpr char kValidRecipe[] = R"({
   "schema_version": 1,
   "recipe_id": "rawpart-placement-v1",
-  "target_id": "RawPart",
+  "target_id": "TestCube",
   "grasp": {"min_expected_contact_width_mm": 60.0, "max_expected_contact_width_mm": 85.0, "yaw_rad": 0.0, "unobserved_yaw_policy": "forbidden"},
   "pick": {"grasp_backoff_m": 0.017, "approach_distance_m": 0.15, "grasp_position_tolerance_m": 0.01, "grasp_orientation_tolerance_rad": 0.08726646259971647},
   "place": {
@@ -56,15 +56,33 @@ constexpr char kValidRecipe[] = R"({
   }
 })";
 
+TEST_F(RecipeRepositoryTest, LoadsMaterialGraspTransformAndRejectsInvalidQuaternion)
+{
+  std::string recipe = kValidRecipe;
+  const auto insert_transform = [](std::string value, const std::string & quaternion) {
+      value.insert(1, "\"object_to_grasp_tcp\":{\"translation_m\":[0,0,0.0075],"
+        "\"quaternion_xyzw\":" + quaternion + "},");
+      return value;
+    };
+  write("TestCube.json", insert_transform(recipe, "[1,0,0,0]"));
+  auto result = RecipeRepository(directory_).load("TestCube");
+  ASSERT_TRUE(result.recipe);
+  EXPECT_TRUE(result.recipe->has_material_grasp_transform);
+  EXPECT_DOUBLE_EQ(result.recipe->material_grasp_transform.translation.z, 0.0075);
+  EXPECT_DOUBLE_EQ(result.recipe->material_grasp_transform.rotation.x, 1.0);
+  write("TestCube.json", insert_transform(recipe, "[0,0,0,0]"));
+  EXPECT_FALSE(RecipeRepository(directory_).load("TestCube").recipe);
+}
+
 TEST_F(RecipeRepositoryTest, ParsesAValidRecipeIntoMissionSemantics)
 {
-  write("RawPart.json", kValidRecipe);
+  write("TestCube.json", kValidRecipe);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   ASSERT_TRUE(result.recipe);
   EXPECT_EQ(result.recipe->recipe_id, "rawpart-placement-v1");
-  EXPECT_EQ(result.recipe->target_id, "RawPart");
+  EXPECT_EQ(result.recipe->target_id, "TestCube");
   EXPECT_FLOAT_EQ(result.recipe->grasp_width_min_mm, 60.0F);
   EXPECT_FLOAT_EQ(result.recipe->grasp_width_max_mm, 85.0F);
   EXPECT_DOUBLE_EQ(result.recipe->pick_approach_distance_m, 0.15);
@@ -91,20 +109,20 @@ TEST_F(RecipeRepositoryTest, RequiresFiniteNonnegativeRecipeBackoff)
     const auto offset = contents.find(field);
     ASSERT_NE(offset, std::string::npos);
     contents.replace(offset, field.size(), std::string("\"grasp_backoff_m\": ") + value + ", ");
-    write("RawPart.json", contents);
-    const auto result = RecipeRepository(directory_).load("RawPart");
+    write("TestCube.json", contents);
+    const auto result = RecipeRepository(directory_).load("TestCube");
     EXPECT_EQ(result.recipe.has_value(), std::string(value) == "0.0" || std::string(value) == "0.043");
   }
   auto missing = std::string(kValidRecipe);
   missing.erase(missing.find(field), field.size());
-  write("RawPart.json", missing);
-  EXPECT_FALSE(RecipeRepository(directory_).load("RawPart").recipe);
+  write("TestCube.json", missing);
+  EXPECT_FALSE(RecipeRepository(directory_).load("TestCube").recipe);
 }
 
 TEST_F(RecipeRepositoryTest, DefaultsOmittedVisionAlgorithmToCuboid)
 {
-  write("RawPart.json", kValidRecipe);
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  write("TestCube.json", kValidRecipe);
+  const auto result = RecipeRepository(directory_).load("TestCube");
   ASSERT_TRUE(result.recipe);
   EXPECT_EQ(result.recipe->vision_algorithm, "cuboid_top_face");
 }
@@ -114,8 +132,8 @@ TEST_F(RecipeRepositoryTest, SelectsVisionAlgorithmAndRejectsInvalidConfiguratio
   for (const auto & algorithm : {"cuboid_top_face"}) {
     std::string json = kValidRecipe;
     json.insert(1, std::string("\"vision\":{\"algorithm\":\"") + algorithm + "\"},");
-    write("RawPart.json", json);
-    const auto result = RecipeRepository(directory_).load("RawPart");
+    write("TestCube.json", json);
+    const auto result = RecipeRepository(directory_).load("TestCube");
     ASSERT_TRUE(result.recipe);
     EXPECT_EQ(result.recipe->vision_algorithm, algorithm);
   }
@@ -125,8 +143,8 @@ TEST_F(RecipeRepositoryTest, SelectsVisionAlgorithmAndRejectsInvalidConfiguratio
   {
     std::string json = kValidRecipe;
     json.insert(1, std::string("\"vision\":{\"algorithm\":") + value + "},");
-    write("RawPart.json", json);
-    const auto result = RecipeRepository(directory_).load("RawPart");
+    write("TestCube.json", json);
+    const auto result = RecipeRepository(directory_).load("TestCube");
     EXPECT_FALSE(result.recipe) << value;
     EXPECT_EQ(result.reason, RecipeDiagnosticReason::INVALID_VISION_ALGORITHM);
   }
@@ -138,9 +156,9 @@ TEST_F(RecipeRepositoryTest, ParsesPickApproachAxisAndSingleMaximumTilt)
   contents.insert(
     contents.find("\"pick\": {") + std::string("\"pick\": {").size(),
     "\"approach_axis\": \"planning_frame_vertical\", ");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   ASSERT_TRUE(result.recipe);
   EXPECT_EQ(
@@ -155,9 +173,9 @@ TEST_F(RecipeRepositoryTest, ParsesPreferredToolOrientationIndependentlyOfObject
     contents.find("\"position_tolerance_m\""),
     "\"tool_orientation\": {\"mode\": \"preferred\", "
     "\"orientation_xyzw\": [1.0, 0.0, 0.0, 0.0]},\n    ");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   ASSERT_TRUE(result.recipe);
   EXPECT_DOUBLE_EQ(result.recipe->place_pose.pose.orientation.w, 1.0);
@@ -170,9 +188,9 @@ TEST_F(RecipeRepositoryTest, ParsesFreeOrientationWithoutToolPreference)
 {
   auto contents = std::string(kValidRecipe);
   contents.replace(contents.find("bounded"), std::string("bounded").size(), "free");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   ASSERT_TRUE(result.recipe);
   EXPECT_EQ(result.recipe->place_orientation_constraint, PlaceOrientationConstraint::FREE);
@@ -183,9 +201,9 @@ TEST_F(RecipeRepositoryTest, RejectsUnknownOrientationConstraintAtJsonBoundary)
 {
   auto contents = std::string(kValidRecipe);
   contents.replace(contents.find("bounded"), std::string("bounded").size(), "unbounded");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::INVALID_ORIENTATION_CONSTRAINT);
@@ -199,9 +217,9 @@ TEST_F(RecipeRepositoryTest, RejectsToolPreferenceForFreeOrientation)
     contents.find("\"position_tolerance_m\""),
     "\"tool_orientation\": {\"mode\": \"preferred\", "
     "\"orientation_xyzw\": [0.0, 0.0, 0.0, 1.0]},\n    ");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::INVALID_TOOL_ORIENTATION);
@@ -219,9 +237,9 @@ TEST_F(RecipeRepositoryTest, RejectsInvalidPreferredToolOrientationFailClosed)
   for (const auto & orientation : invalid_values) {
     auto contents = std::string(kValidRecipe);
     contents.insert(contents.find("\"position_tolerance_m\""), orientation + ",\n    ");
-    write("RawPart.json", contents);
+    write("TestCube.json", contents);
 
-    const auto result = RecipeRepository(directory_).load("RawPart");
+    const auto result = RecipeRepository(directory_).load("TestCube");
 
     EXPECT_FALSE(result.recipe);
     EXPECT_EQ(result.reason, RecipeDiagnosticReason::INVALID_TOOL_ORIENTATION);
@@ -235,18 +253,18 @@ TEST_F(RecipeRepositoryTest, RejectsNonFinitePreferredToolOrientation)
     contents.find("\"position_tolerance_m\""),
     "\"tool_orientation\": {\"mode\": \"preferred\", "
     "\"orientation_xyzw\": [0.0, 0.0, 0.0, 1e309]},\n    ");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
 }
 
 TEST_F(RecipeRepositoryTest, SelectsRecipeByRequestedTargetId)
 {
-  write("RawPart.json", kValidRecipe);
+  write("TestCube.json", kValidRecipe);
   write("Other.json", std::string(kValidRecipe).replace(
-    std::string(kValidRecipe).find("RawPart"), 7, "Other"));
+    std::string(kValidRecipe).find("TestCube"), std::string("TestCube").size(), "Other"));
 
   const auto result = RecipeRepository(directory_).load("Other");
 
@@ -256,9 +274,9 @@ TEST_F(RecipeRepositoryTest, SelectsRecipeByRequestedTargetId)
 
 TEST_F(RecipeRepositoryTest, RejectsMalformedJsonWithStructuredReason)
 {
-  write("RawPart.json", "{ malformed");
+  write("TestCube.json", "{ malformed");
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::JSON_MALFORMED);
@@ -266,9 +284,9 @@ TEST_F(RecipeRepositoryTest, RejectsMalformedJsonWithStructuredReason)
 
 TEST_F(RecipeRepositoryTest, RejectsMissingRequiredField)
 {
-  write("RawPart.json", R"({"schema_version":1})");
+  write("TestCube.json", R"({"schema_version":1})");
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::REQUIRED_FIELD_MISSING);
@@ -279,9 +297,9 @@ TEST_F(RecipeRepositoryTest, RequiresExplicitUnobservedYawPolicy)
   auto contents = std::string(kValidRecipe);
   contents.erase(contents.find(", \"unobserved_yaw_policy\": \"forbidden\""),
     std::string(", \"unobserved_yaw_policy\": \"forbidden\"").size());
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::REQUIRED_FIELD_MISSING);
@@ -291,9 +309,9 @@ TEST_F(RecipeRepositoryTest, RejectsInvalidUnobservedYawPolicy)
 {
   auto contents = std::string(kValidRecipe);
   contents.replace(contents.find("forbidden"), std::string("forbidden").size(), "sometimes");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::INVALID_UNOBSERVED_YAW_POLICY);
@@ -303,9 +321,9 @@ TEST_F(RecipeRepositoryTest, DistinguishesRequiredFieldTypeErrorsByReasonToken)
 {
   auto contents = std::string(kValidRecipe);
   contents.replace(contents.find("60.0"), 4, "\"wide\"");
-  write("RawPart.json", contents);
+  write("TestCube.json", contents);
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::TYPE_MISMATCH);
@@ -314,11 +332,11 @@ TEST_F(RecipeRepositoryTest, DistinguishesRequiredFieldTypeErrorsByReasonToken)
 
 TEST_F(RecipeRepositoryTest, RejectsUnsupportedSchemaVersion)
 {
-  write("RawPart.json", std::string(kValidRecipe).replace(
+  write("TestCube.json", std::string(kValidRecipe).replace(
     std::string(kValidRecipe).find("\"schema_version\": 1"), 18,
     "\"schema_version\": 2"));
 
-  const auto result = RecipeRepository(directory_).load("RawPart");
+  const auto result = RecipeRepository(directory_).load("TestCube");
 
   EXPECT_FALSE(result.recipe);
   EXPECT_EQ(result.reason, RecipeDiagnosticReason::SCHEMA_UNSUPPORTED);
@@ -344,8 +362,8 @@ TEST_F(RecipeRepositoryTest, RejectsSemanticViolationsWithDistinctReasons)
   for (const auto & invalid : cases) {
     auto contents = std::string(kValidRecipe);
     contents.replace(contents.find(invalid.from), invalid.from.size(), invalid.to);
-    write("RawPart.json", contents);
-    const auto result = RecipeRepository(directory_).load("RawPart");
+    write("TestCube.json", contents);
+    const auto result = RecipeRepository(directory_).load("TestCube");
     EXPECT_FALSE(result.recipe);
     EXPECT_EQ(result.reason, invalid.expected);
   }
@@ -354,10 +372,10 @@ TEST_F(RecipeRepositoryTest, RejectsSemanticViolationsWithDistinctReasons)
 TEST_F(RecipeRepositoryTest, DistinguishesTargetMismatchAndMissingFile)
 {
   auto mismatch = std::string(kValidRecipe);
-  mismatch.replace(mismatch.find("RawPart"), 7, "Other");
-  write("RawPart.json", mismatch);
+  mismatch.replace(mismatch.find("TestCube"), std::string("TestCube").size(), "Other");
+  write("TestCube.json", mismatch);
   EXPECT_EQ(
-    RecipeRepository(directory_).load("RawPart").reason,
+    RecipeRepository(directory_).load("TestCube").reason,
     RecipeDiagnosticReason::TARGET_MISMATCH);
   EXPECT_EQ(
     RecipeRepository(directory_).load("Missing").reason,

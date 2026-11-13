@@ -656,7 +656,7 @@ Action 최초 OPEN과 새 `RELEASED` 확인은 후보 탐색 전에 한 번 수�
 
 ### 2.1 탐색 경계
 
-Recipe는 PICK에서 허용되는 접촉면·Closing Axis, 접촉 폭 범위, Grasp 목표와 실행 허용 오차, Approach 방향과 거리를 정의한다. Vision은 RawPart Observation Pose·Rectangle Geometry 변 길이(실측 또는 L자 기반 복원 추정)·선택 객체 자체 두께(측정 또는 추정)를 기존 필드로 전달한다. `has_observed_rectangle`는 실측 provenance이며 추정 Side Length의 유효성 Flag가 아니다. Motion은 유효한 양수 Side Length와 `has_estimated_object_height`가 있는 두께를 Geometry 입력으로 소비하고 Object Pose와 공칭 Object-to-TCP 관계를 계산한다. Recipe가 허용하는 면 축을 갖는 중앙 위치 후보는
+Recipe는 PICK에서 허용되는 접촉면·Closing Axis, 접촉 폭 범위, Grasp 목표와 실행 허용 오차, Approach 방향과 거리를 정의한다. Vision은 TestCube Observation Pose·Rectangle Geometry 변 길이(실측 또는 L자 기반 복원 추정)·선택 객체 자체 두께(측정 또는 추정)를 기존 필드로 전달한다. `has_observed_rectangle`는 실측 provenance이며 추정 Side Length의 유효성 Flag가 아니다. Motion은 유효한 양수 Side Length와 `has_estimated_object_height`가 있는 두께를 Geometry 입력으로 소비하고 Object Pose와 공칭 Object-to-TCP 관계를 계산한다. Recipe가 허용하는 면 축을 갖는 중앙 위치 후보는
 같은 Grasp 폭 규칙 아래 후보 순서에 남아야 한다. FK로 얻은 적격 Orientation은 먼저 Position-only IK를 수행하지 않아도 허용 영역에 속한다.
 
 후보 생성·IK 내부 탐색 순서는 Motion PICK Algorithm을 따른다. Position-only IK는 Seed 제공 수단이지 선행조건이나 Grasp 유효성 검사가 아니다. Solver별 FK 직접 채택 또는 보정 경로가
@@ -715,12 +715,12 @@ Object Pose를 구한다. 적층 높이를 두께 대신 사용해서는 안 되
 Axis 후보를 생성한다. 후보별 예상 접촉 폭은 Closing Axis와 평행한 제공 길이다. 긴 변 평행 Axis는 긴 변 길이를, 짧은 변 평행 Axis는 짧은 변 길이를 사용하고 Axis 부호 반전은 폭에
 영향을 주지 않는다. Recipe 접촉 폭 범위 또는 물리 Gripper 범위 밖의 후보는 Planning 전에 거부한다. 관측 길이는 Close 목표가 아니다. 남은 후보는 IK·충돌·Path Planning/Ranking을
 공유하며 가능한 후보가 없으면 Gripper Close 없이 해당 Planning 실패를 반환한다. 선택된 후보의 Target Pose만 실행한다. 해당 예상 접촉 폭은 Capture/Attach 확인과 Retract까지
-연계되며 기기별 Closing 동작은 Gripper Adapter가 소유한다. Recipe는 RawPart 고정 폭이 아니라 접촉 폭 정책 범위를 제공한다.
+연계되며 기기별 Closing 동작은 Gripper Adapter가 소유한다. Recipe는 TestCube 고정 폭이 아니라 접촉 폭 정책 범위를 제공한다.
 
 Symmetry Order 2는 측정 Rectangle 긴 축의 180도 동치류를, Order 4는 정사각형 변 축의 90도 동치류를 뜻한다. 이러한 분류는 Object Pose 동등 Orientation Sample에
 적용한다. Order 2는 180도 동등 자세를, Order 4는 90도 단위 동등 자세를 허용한다. 두 Jaw Axis 선택은 Rectangle 변에서 파생한 별도의 후보 차원이다. 이 선택과 Pose 동등성을
 결합해도 직사각형이 아닌 정사각형에만 Order 4를 적용하며, Symmetry Order가 Grasp 폭 후보 수와 같아지지 않는다. Order 1은 다른 Profile의 고유 Yaw를 유지한다. Order 0은
-Vision Quaternion을 무시하고 명시적 Fallback이 있을 때만 사용한다. 정사각형과 직사각형 RawPart Top Face는 같은 Rectangle 후보 방식을 사용하며 Order 4가 항상 네 종류
+Vision Quaternion을 무시하고 명시적 Fallback이 있을 때만 사용한다. 정사각형과 직사각형 TestCube Top Face는 같은 Rectangle 후보 방식을 사용하며 Order 4가 항상 네 종류
 폭이나 Grasp 선택을 뜻하지 않는다.
 
 Production과 Validation에서 Isaac Release의 `RELEASED`는 Actuator 완료 상태와 측정 Opening Width 허용 오차로 확인된 OPEN 완료 및 Adapter 소유 Joint의
@@ -930,7 +930,7 @@ Isaac Capture에서 적용된 CLOSE 요청은 Capture Transaction 하나를 활�
 증명이 아니다. PhysX Contact Report나 별도의 Fingertip Gap 계산을 요구하지 않으며 접촉 직전 정밀 정지를 보장하지 않는다.
 
 ### VR-MOT-TASK-08 — Rectangle 기하와 Orientation 대칭 분류
-Order 1은 유효한 고유 Orientation 하나를 사용해야 한다. Order 2는 비정사각형 Rectangle 긴 축의 180도 동치류, Order 4는 정사각형 변 축의 90도 동치류를 검증한다. Geometry가 `has_observed_rectangle=true`인 실측 또는 false인 L자 기반 RawPart 복원 추정으로 제공되면 Motion은 이를 사용해 서로 다른 두 Jaw Closing Axis를 생성한다. 긴 변과 평행한 Axis는 긴 변 길이를, 짧은 변 평행 Axis는 짧은 변 길이를 예상 접촉 폭으로 사용하며 부호를 뒤집어도 폭은 유지된다. 추정 Side Length는 `has_observed_rectangle`와 독립적으로 유한·양수·형상 일관성을 검증한다. 이 길이는 Close Target이 아니다. Recipe 정책이나 Gripper 설정 범위를 벗어난 폭은 거부하고 남은 후보의 Jaw/접촉 기하·충돌·IK·경로 실현 가능성을 평가해야 한다. 실행 가능한 선택 후보 하나만 실행한다. Order 0은 Vision Quaternion을 무시하고 명시적 Fallback 입력이 있을 때만 사용한다. 관측된 Symmetry Class를 대체·확장하는 데 Fallback을 사용해서는 안 된다. Approach·Grasp·Retract는 선택된 일관된 TCP Frame을 사용해야 한다. `has_estimated_object_height`가 참인 자체 두께는 실측 provenance와 독립적으로 Object Pose 중심 Offset에 사용한다. 선택한 예상 접촉 폭은 Capture로 전달하지만 `GripperPort`에는 논리 Close만 전달한다. Adapter 명령 완료는 Grasp 확인이 아니다. 실행 가능한 후보가 없으면 Gripper Close·`HELD`·Retract가 없어야 한다.
+Order 1은 유효한 고유 Orientation 하나를 사용해야 한다. Order 2는 비정사각형 Rectangle 긴 축의 180도 동치류, Order 4는 정사각형 변 축의 90도 동치류를 검증한다. Geometry가 `has_observed_rectangle=true`인 실측 또는 false인 L자 기반 TestCube 복원 추정으로 제공되면 Motion은 이를 사용해 서로 다른 두 Jaw Closing Axis를 생성한다. 긴 변과 평행한 Axis는 긴 변 길이를, 짧은 변 평행 Axis는 짧은 변 길이를 예상 접촉 폭으로 사용하며 부호를 뒤집어도 폭은 유지된다. 추정 Side Length는 `has_observed_rectangle`와 독립적으로 유한·양수·형상 일관성을 검증한다. 이 길이는 Close Target이 아니다. Recipe 정책이나 Gripper 설정 범위를 벗어난 폭은 거부하고 남은 후보의 Jaw/접촉 기하·충돌·IK·경로 실현 가능성을 평가해야 한다. 실행 가능한 선택 후보 하나만 실행한다. Order 0은 Vision Quaternion을 무시하고 명시적 Fallback 입력이 있을 때만 사용한다. 관측된 Symmetry Class를 대체·확장하는 데 Fallback을 사용해서는 안 된다. Approach·Grasp·Retract는 선택된 일관된 TCP Frame을 사용해야 한다. `has_estimated_object_height`가 참인 자체 두께는 실측 provenance와 독립적으로 Object Pose 중심 Offset에 사용한다. 선택한 예상 접촉 폭은 Capture로 전달하지만 `GripperPort`에는 논리 Close만 전달한다. Adapter 명령 완료는 Grasp 확인이 아니다. 실행 가능한 후보가 없으면 Gripper Close·`HELD`·Retract가 없어야 한다.
 
 RawPart의 공칭 중앙 위치 후보는 접촉·폭·IK·Planning 검사 아래 계속 적격해야 한다. 추가 후보는 Closing Axis·측정 예상 폭·Recipe 범위·실제 Gripper 범위를 유지하면서 제한된
 Object 상대 위치·Orientation을 탐색한다. Motion은 IK·FK·관절 한계·Planning Scene 상태 유효성·Approach Planning을 차례로 평가하고 현 Approach 단계를 처음

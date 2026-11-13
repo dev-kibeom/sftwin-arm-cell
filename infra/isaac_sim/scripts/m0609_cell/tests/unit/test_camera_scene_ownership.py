@@ -444,7 +444,7 @@ def test_logical_camera_owns_intrinsics_metadata_and_extrinsic_invocation():
     assert extrinsic_calls == [(extrinsic_calls[0][0], camera_prim, "/D455")]
 
 
-def test_overhead_camera_calibration_covers_tray_and_rawpart_tops():
+def test_overhead_camera_calibration_covers_tray_and_rawpart_tops(exported_configuration):
     """Project the configured tray corners with the shipped Isaac calibration."""
     import itertools
     from pathlib import Path
@@ -453,10 +453,11 @@ def test_overhead_camera_calibration_covers_tray_and_rawpart_tops():
 
     repo = next(parent for parent in Path(__file__).resolve().parents if (parent / "ros2_ws").is_dir())
     config = repo / "ros2_ws/src/bringup/config"
-    profile = yaml.safe_load((config / "operational_profile.yaml").read_text())
+    from runtime_configuration import load_runtime_configuration
+    profile = load_runtime_configuration(exported_configuration)
     calibration_text = (config.parent / profile["vision"]["calibration_file"]).read_text()
     calibration = yaml.safe_load(calibration_text.split("\n", 1)[1])
-    tray = profile["vision"]["detector_profiles"]["RawPart"]["tray_roi_m"]
+    tray = profile["vision"]["detector_profiles"]["TestCube"]["tray_roi_m"]
     transform = calibration["tray_T_camera"]
     x, y, z, w = transform["quaternion_xyzw"]
     rotation = np.array([

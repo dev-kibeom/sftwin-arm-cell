@@ -3,6 +3,7 @@
 import time
 import unittest
 from pathlib import Path
+from arm_cell_bringup.runtime import mission_directory
 
 import launch
 import launch_testing
@@ -25,11 +26,11 @@ from rclpy.action import ActionClient
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 
-MISSION_TARGET = "RawPart"
+MISSION_TARGET = "TestCube"
 
 
 def generate_test_description():
-    recipe_directory = Path(__file__).resolve().parents[1] / "config" / "recipes"
+    recipe_directory = Path(mission_directory(Path(__file__).resolve().parents[1] / "config" / "missions"))
     return (
         launch.LaunchDescription(
             [
