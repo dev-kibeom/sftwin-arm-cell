@@ -19,6 +19,6 @@ struct PlaceApproachTrajectoryTimingResult
 PlaceApproachTrajectoryTimingResult time_parameterize_place_approach_trajectory(
   const moveit::core::RobotModelConstPtr & robot_model,
   const moveit::core::RobotState & start_state,
-  moveit_msgs::msg::RobotTrajectory & trajectory);
+  moveit_msgs::msg::RobotTrajectory & trajectory, const std::string & planning_group);
 
 }  // namespace arm_cell_motion

@@ -91,8 +91,8 @@ def compose(context):
     robot_description_semantic = Path(model['semantic']).read_text()
     kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())
     kinematics_parameters = {
-        f"robot_description_kinematics.arm.{key}": value
-        for key, value in kinematics["arm"].items()
+        f"robot_description_kinematics.{model['planning_group']}.{key}": value
+        for key, value in kinematics[model['planning_group']].items()
     }
     validation = config["validation"]
     target_id = config["orchestration"]["mission_target_id"]

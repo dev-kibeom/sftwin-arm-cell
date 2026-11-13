@@ -48,5 +48,5 @@ GraspCollisionValidationResult validate_grasp_collision(
   const Eigen::Quaterniond & object_orientation, const std::optional<BoxGraspContact> & contact,
   const Eigen::Vector3d & insertion_axis_tcp,
   const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy,
-  const FingerClearanceParameters & parameters);
+  const FingerClearanceParameters & parameters, const std::string & planning_group);
 }  // namespace arm_cell_motion

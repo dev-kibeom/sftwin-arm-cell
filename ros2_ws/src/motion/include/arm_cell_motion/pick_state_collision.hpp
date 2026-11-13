@@ -17,7 +17,7 @@ struct PickCollisionValidationResult
 // Checks one state against the caller's existing request-scoped scene.
 PickCollisionValidationResult validate_pick_state_collision(
   const planning_scene::PlanningScene & scene,
-  const moveit::core::RobotState & state);
+  const moveit::core::RobotState & state, const std::string & planning_group);
 // Reject only finger/rail intersections invariant under the arm IK solution.
 PickCollisionValidationResult validate_pick_grasp_pose_rail_collision(
   const planning_scene::PlanningScene & scene,

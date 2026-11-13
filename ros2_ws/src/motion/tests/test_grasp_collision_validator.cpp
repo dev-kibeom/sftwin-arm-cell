@@ -37,6 +37,7 @@ protected:
     ASSERT_NE(model, nullptr);
     context = std::make_shared<PlanningContext>();
     context->robot_model = model;
+    context->joint_group = model->getJointModelGroup("arm");
     context->approach_axis = PickApproachAxis::TCP_INSERTION_AXIS;
     context->insertion_axis_tcp.z = 1.0;
     context->object_pose.header.frame_id = "base_link";
@@ -111,7 +112,7 @@ TEST_F(GraspCollisionValidatorTest, ProductionLeafSelectsAllThreeStrategies)
     EXPECT_FALSE(result.common.collision);
     if (mode == GraspOccupancyMode::FULL_COLLISION) {
       const auto old = validate_pick_state_collision(
-        *context->grasp_scene, context->attempt.grasp_validation_result->state);
+        *context->grasp_scene, context->attempt.grasp_validation_result->state, "arm");
       EXPECT_EQ(result.occupancy.collision, old.collision);
       EXPECT_EQ(result.occupancy.contacts, old.contacts);
     }
@@ -138,7 +139,7 @@ TEST_F(GraspCollisionValidatorTest, FullCollisionPreservesLegacyFeedbackWithComm
   scenes({box(0.0, 0.0, 0.0, 0.01)}, true);
   EXPECT_EQ(validate(), BT::NodeStatus::FAILURE);
   const auto legacy = validate_pick_state_collision(
-    *context->grasp_scene, context->attempt.grasp_validation_result->state);
+    *context->grasp_scene, context->attempt.grasp_validation_result->state, "arm");
   EXPECT_EQ(context->attempt.grasp_collision_result.contacts, legacy.contacts);
   EXPECT_TRUE(context->attempt.grasp_occupancy_result.common.collision);
   EXPECT_TRUE(context->attempt.grasp_occupancy_result.occupancy_evaluated);
@@ -233,7 +234,7 @@ TEST_F(GraspCollisionValidatorTest, ClearSceneMatchesLegacyAndBothFingerIdsAreRe
     EXPECT_FALSE(
       validate_pick_state_collision(
         *context->grasp_scene,
-        context->attempt.grasp_validation_result->state).collision);
+        context->attempt.grasp_validation_result->state, "arm").collision);
   }
   scenes({box(-0.035), box(0.035)});
   context->grasp_occupancy_mode = GraspOccupancyMode::FINGER_CLEARANCE;

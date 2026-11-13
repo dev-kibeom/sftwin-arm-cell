@@ -178,8 +178,9 @@ std::vector<PlaceApproachIkSeed> generate_place_approach_ik_seeds(
           {seed_index, source_prefix + variation.second, std::move(seed_joints)});
       }
     };
-  append_variations("joint_1", "joint_1", 1U);
-  append_variations("joint_3", "joint_3", 3U);
+  for (std::size_t index = 0; index < policy.seed_joints.size(); ++index) {
+    append_variations(policy.seed_joints[index], policy.seed_joints[index], 1U + 2U * index);
+  }
   return seeds;
 }
 
