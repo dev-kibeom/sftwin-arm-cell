@@ -147,6 +147,24 @@ protected:
       rclcpp::Parameter("detector_profiles.TestCube.fiducial.marker_in_support.rpy_rad",
         std::vector<double>{0.0, 0.0, 0.0})});
 
+    // Keep TestCube second so all successful request scenarios exercise profile lookup.
+    auto parameters = options.parameter_overrides();
+    const std::string prefix = "detector_profiles.TestCube.";
+    for (const auto & parameter : options.parameter_overrides()) {
+      if (parameter.get_name().rfind(prefix, 0) == 0) {
+        const auto suffix = parameter.get_name().substr(prefix.size());
+        parameters.emplace_back("detector_profiles.FirstMaterial." + suffix,
+          suffix == "target_id" || suffix == "material_id" ?
+          rclcpp::ParameterValue(std::string("FirstMaterial")) : parameter.get_parameter_value());
+      } else if (parameter.get_name().rfind("material_definitions.TestCube.", 0) == 0) {
+        parameters.emplace_back("material_definitions.FirstMaterial." +
+          parameter.get_name().substr(std::string("material_definitions.TestCube.").size()),
+          parameter.get_parameter_value());
+      }
+    }
+    parameters.emplace_back("material_ids", std::vector<std::string>{"FirstMaterial", "TestCube"});
+    options.parameter_overrides(parameters);
+
     vision_ = arm_cell_vision::make_detect_target_node(options);
     driver_ = std::make_shared<rclcpp::Node>("vision_node_ros_boundary_test_driver");
     auto transient_qos = rclcpp::QoS(1).reliable().transient_local();
@@ -339,6 +357,21 @@ TEST_F(DetectTargetNodeRosBoundaryTest, CameraInfoValidationPublishesCalibration
   ASSERT_TRUE(publish_until_calibration_state(
       CalibrationState::STATE_READY, 200, camera_info(), 2));
   EXPECT_TRUE(wait_for_state(CalibrationState::STATE_READY, 2));
+}
+
+TEST_F(DetectTargetNodeRosBoundaryTest, UnknownTargetIsRejectedBeforeAcquisition)
+{
+  ASSERT_TRUE(detect_client_->wait_for_service(2s));
+  auto request = std::make_shared<arm_cell_interfaces::srv::DetectTarget::Request>();
+  request->target_id = "UnknownMaterial";
+  request->algorithm = "cuboid_top_face";
+  request->timeout.sec = 1;
+  auto response = detect_client_->async_send_request(request);
+  ASSERT_EQ(response.wait_for(2s), std::future_status::ready);
+  const auto result = response.get();
+  EXPECT_EQ(result->result_code.value,
+    arm_cell_interfaces::msg::DetectTargetResultCode::DETECT_RESULT_INVALID_RESULT);
+  EXPECT_TRUE(result->acquisition_id.empty());
 }
 
 TEST_F(DetectTargetNodeRosBoundaryTest, OverlappingRequestsReturnBusyWithoutReplacingTheActiveRequest)
