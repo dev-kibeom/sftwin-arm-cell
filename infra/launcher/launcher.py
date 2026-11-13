@@ -1,7 +1,8 @@
 """Profile selection and host process control; Bringup owns configuration semantics."""
-import codecs
 import os
 from pathlib import Path
+import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -9,8 +10,8 @@ import tempfile
 import time
 
 from PySide6.QtCore import QLockFile, QTimer
-from PySide6.QtWidgets import (QApplication, QComboBox, QFormLayout, QHBoxLayout,
-                              QLabel, QMainWindow, QPlainTextEdit, QPushButton,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
+                              QLabel, QMainWindow, QPushButton,
                               QVBoxLayout, QWidget)
 
 
@@ -70,14 +71,41 @@ def export_selection(entry, destination):
     return export_runtime_configuration(entry['profile'], destination)
 
 
+def terminal_command(name, slave, master):
+    terminal = shutil.which('xterm')
+    if terminal is None:
+        raise FileNotFoundError('별도 실행 터미널을 위해 xterm을 설치하세요: sudo apt-get install xterm')
+    return [terminal, '-T', f'ARM Cell — {name}', f'-S{os.ttyname(slave)}/{master}']
+
+
+def signal_processes(processes, sig):
+    for process in processes:
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def groups_alive(processes):
+    alive = False
+    for process in processes:
+        process.poll()
+        try:
+            os.killpg(process.pid, 0)
+            alive = True
+        except ProcessLookupError:
+            pass
+    return alive
+
+
 class Launcher(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('ARM Cell Launcher')
-        self.resize(760, 520)
+        self.resize(760, 240)
         self.processes = {}
-        self.streams = {}
-        self.decoders = {}
+        self.terminals = {}
+        self.terminal_stop = False
         self.stopping = False
         self.closing = False
         self.phase = 0
@@ -100,6 +128,8 @@ class Launcher(QMainWindow):
             self.selectors[key] = combo
             combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
+        self.debug = QCheckBox('ROS 2 디버그 모드')
+        layout.addWidget(self.debug)
         buttons = QHBoxLayout()
         layout.addLayout(buttons)
         self.isaac = QPushButton('Isaac 시작')
@@ -113,10 +143,8 @@ class Launcher(QMainWindow):
         self.status = QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.output = QPlainTextEdit()
-        self.output.setReadOnly(True)
-        self.output.setMaximumBlockCount(2000)
-        layout.addWidget(self.output)
+        hint = QLabel('Isaac 초기화 완료 후 ROS 2를 시작하세요. 출력은 각 터미널에서 확인합니다.')
+        layout.addWidget(hint)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(100)
@@ -132,36 +160,40 @@ class Launcher(QMainWindow):
             message = f"Profile: {entry['profile'].name}"
         except ValueError as exc:
             valid, message = False, str(exc)
-        active = bool(self.processes) or self.stopping
+        active = bool(self.processes or self.terminals) or self.stopping
         for combo in self.selectors.values():
             combo.setEnabled(not active)
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
         self.stop.setEnabled(active and not self.stopping)
+        self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
         self.status.setText(self.error or ('종료 중…' if self.stopping else states or message))
 
     def spawn(self, name, command, environment):
-        process = subprocess.Popen(command, cwd=ROOT, env=environment,
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   start_new_session=True)
-        self.processes[name] = process
-        self.streams[name] = process.stdout
-        os.set_blocking(process.stdout.fileno(), False)
-        self.decoders[name] = codecs.getincrementaldecoder('utf-8')(errors='replace')
-
-    def read_output(self, name):
+        # The GUI owns the runtime directly; xterm only displays its PTY.
+        # A terminal server process is never used as a proxy for runtime lifetime.
+        master, slave = os.openpty()
         try:
-            chunk = os.read(self.streams[name].fileno(), 65536)
-        except BlockingIOError:
-            return False
-        text = self.decoders[name].decode(chunk, final=not chunk)
-        if text:
-            self.output.appendPlainText(f'[{name}] ' + text.rstrip())
-        return bool(chunk)
+            self.terminals[name] = subprocess.Popen(
+                terminal_command(name, slave, master), cwd=ROOT, env=environment,
+                pass_fds=(master,), start_new_session=True)
+            # xterm -S writes its window ID before user input. Consume it before
+            # attaching the runtime so it cannot become shell/program input.
+            if not select.select([slave], [], [], 5)[0]:
+                raise RuntimeError(f'{name} 터미널 시작 응답이 없습니다.')
+            if not os.read(slave, 1024).endswith(b'\n'):
+                raise RuntimeError(f'{name} 터미널 시작 응답이 올바르지 않습니다.')
+            self.processes[name] = subprocess.Popen(
+                [sys.executable, str(Path(__file__).with_name('terminal_exec.py')), *command],
+                cwd=ROOT, env=environment, stdin=slave, stdout=slave, stderr=slave,
+                start_new_session=True)
+        finally:
+            os.close(master)
+            os.close(slave)
 
     def start_isaac(self):
-        if self.processes or self.stopping:
+        if self.processes or self.terminals or self.stopping:
             return
         self.error = ''
         if not self.lock.tryLock(0):
@@ -178,7 +210,6 @@ class Launcher(QMainWindow):
             self.runtime = runtime
             self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
                                  '--runtime-config', str(runtime)], self.environment)
-            self.output.appendPlainText(f'임시 구성: {runtime}\nIsaac 초기화 후 ROS 2를 시작하세요. 프로세스 실행은 시스템 준비 완료를 뜻하지 않습니다.')
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
@@ -188,71 +219,70 @@ class Launcher(QMainWindow):
         if 'isaac' not in self.processes or 'ros' in self.processes or self.stopping:
             return
         try:
-            self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), str(self.runtime)], self.environment)
+            self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), str(self.runtime),
+                               'debug' if self.debug.isChecked() else 'info'], self.environment)
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
         self.validate()
 
     def signal_groups(self, sig):
-        for process in self.processes.values():
-            try:
-                os.killpg(process.pid, sig)
-            except ProcessLookupError:
-                pass
+        signal_processes(self.processes.values(), sig)
 
     def begin_stop(self):
         if not self.stopping:
             self.stopping = True
             self.phase = 0
+            self.terminal_stop = False
             self.signal_groups(signal.SIGINT)
             self.deadline = time.monotonic() + 15
         self.validate()
 
     def poll(self):
-        for name in self.streams:
-            self.read_output(name)
         if not self.stopping:
             for name, process in self.processes.items():
                 code = process.poll()
                 if code is not None:
-                    self.error = f'{name} 프로세스 종료 (코드 {code}). GUI 출력을 확인하세요.'
+                    self.error = f'{name} 프로세스 종료 (코드 {code}).'
+                    self.begin_stop()
+                    break
+            for name, terminal in self.terminals.items():
+                code = terminal.poll()
+                if code is not None and not self.stopping:
+                    self.error = f'{name} 터미널 종료 (코드 {code}). 실행 환경을 정리합니다.'
                     self.begin_stop()
                     break
         if self.stopping:
-            # Keep group IDs even after leaders exit: grandchildren may still
-            # need TERM/KILL. Never release the lock while a group remains.
-            alive = False
-            for process in self.processes.values():
-                process.poll()
-                try:
-                    os.killpg(process.pid, 0)
-                    alive = True
-                except ProcessLookupError:
-                    pass
-            if not alive:
-                for name, stream in self.streams.items():
-                    while self.read_output(name):
-                        pass
-                    stream.close()
-                self.processes.clear()
-                self.streams.clear()
-                self.decoders.clear()
-                if self.run is not None:
-                    self.run.cleanup()
-                    self.run = None
-                self.lock.unlock()
-                self.stopping = False
-                if self.closing:
-                    self.close()
-            elif time.monotonic() >= self.deadline:
-                self.signal_groups(signal.SIGTERM if self.phase == 0 else signal.SIGKILL)
-                self.phase += 1
-                self.deadline = time.monotonic() + 5
+            # Keep runtime group IDs after leader exit, including when a user
+            # closes its terminal. The snapshot outlives every consumer group.
+            if groups_alive(self.processes.values()):
+                if time.monotonic() >= self.deadline:
+                    self.signal_groups(signal.SIGTERM if self.phase == 0 else signal.SIGKILL)
+                    self.phase += 1
+                    self.deadline = time.monotonic() + 5
+            else:
+                # Preserve terminals while runtimes handle graceful shutdown.
+                if not self.terminal_stop:
+                    signal_processes(self.terminals.values(), signal.SIGTERM)
+                    self.terminal_stop = True
+                    self.deadline = time.monotonic() + 5
+                if groups_alive(self.terminals.values()):
+                    if time.monotonic() >= self.deadline:
+                        signal_processes(self.terminals.values(), signal.SIGKILL)
+                else:
+                    self.processes.clear()
+                    self.terminals.clear()
+                    if self.run is not None:
+                        self.run.cleanup()
+                        self.run = None
+                    self.lock.unlock()
+                    self.stopping = False
+                    if self.closing:
+                        self.close()
         self.validate()
 
     def closeEvent(self, event):
-        if self.processes or self.stopping:
+        if self.processes or self.terminals or self.stopping:
             self.closing = True
             self.begin_stop()
             event.ignore()

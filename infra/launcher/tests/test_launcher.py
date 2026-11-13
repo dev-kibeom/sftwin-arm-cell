@@ -71,3 +71,23 @@ def test_isaac_preexport_option_rejects_missing_snapshot(tmp_path, arguments):
     assert result.returncode == 2
     assert 'Readable runtime configuration required' in result.stderr
     assert 'UNEXPECTED_START' not in result.stdout
+
+
+@pytest.mark.parametrize('level', [None, 'debug'])
+def test_ros_terminal_script_forwards_existing_launch_options(tmp_path, level):
+    import subprocess
+    import json
+    # Isolate installed ROS setup while exercising the real entry script argv.
+    setup = tmp_path / 'shell_setup.bash'
+    setup.write_text('source() { :; }\n')
+    ros = tmp_path / 'ros2'
+    ros.write_text('#!/usr/bin/env python3\nimport json,sys\nprint(json.dumps(sys.argv[1:]))\n')
+    ros.chmod(0o755)
+    profile = str(tmp_path / 'snapshot with spaces.json')
+    result = subprocess.run(['bash', str(ROOT / 'infra/launcher/start_ros.bash'), profile,
+                             *([level] if level else [])],
+                            env=dict(os.environ, BASH_ENV=str(setup),
+                                     PATH=str(tmp_path) + os.pathsep + os.environ['PATH']),
+                            capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == ['launch', 'arm_cell_bringup', 'arm_cell.launch.py',
+                                       f'profile:={profile}', f'log_level:={level or "info"}']
