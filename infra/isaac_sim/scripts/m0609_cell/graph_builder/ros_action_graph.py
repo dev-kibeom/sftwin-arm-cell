@@ -1,7 +1,6 @@
-"""M0609 ROS 2 Action Graph declaration and Isaac graph construction."""
+"""ROS 2 Action Graph declaration using selected robot articulation bindings."""
 
 from graph_builder.graph_contract import (
-    ARTICULATION_ROOT_PATH,
     CAMERA_FRAME_ID,
     CAMERA_HEIGHT,
     CAMERA_INFO_TOPIC,
@@ -19,14 +18,15 @@ from graph_builder.graph_contract import (
     JOINT_COMMAND_TOPIC,
     JOINT_STATE_TOPIC,
     RGB_TOPIC,
-    ROBOT_PATH,
     ROS2_ROOT,
 )
+from robot_binding import load_robot_binding
 from graph_builder.graph_lifecycle import release_graph_controller_node
 
 
-def graph_declaration(sdf_path, *, enable_arm_command_subscriber=None):
+def graph_declaration(sdf_path, *, binding=None, enable_arm_command_subscriber=None):
     """Return the complete graph declaration without importing Isaac runtime APIs."""
+    binding = binding or load_robot_binding()
     if enable_arm_command_subscriber is None:
         enable_arm_command_subscriber = ENABLE_ARM_COMMAND_SUBSCRIBER
     create_nodes = [
@@ -42,7 +42,7 @@ def graph_declaration(sdf_path, *, enable_arm_command_subscriber=None):
         ("ReadSimTime.inputs:resetOnStop", True),
         ("PublishClock.inputs:topicName", "/clock"),
         ("PublishJointState.inputs:topicName", JOINT_STATE_TOPIC),
-        ("PublishJointState.inputs:targetPrim", [sdf_path(ARTICULATION_ROOT_PATH)]),
+        ("PublishJointState.inputs:targetPrim", [sdf_path(binding.articulation_root_path)]),
         ("PublishGripperStatus.inputs:topicName", GRIPPER_STATUS_TOPIC),
         ("PublishGripperStatus.inputs:messagePackage", "std_msgs"),
         ("PublishGripperStatus.inputs:messageSubfolder", "msg"),
@@ -76,7 +76,7 @@ def graph_declaration(sdf_path, *, enable_arm_command_subscriber=None):
                 ("SubscribeJointState.inputs:topicName", JOINT_COMMAND_TOPIC),
                 (
                     "ArticulationController.inputs:targetPrim",
-                    [sdf_path(ARTICULATION_ROOT_PATH)],
+                    [sdf_path(binding.articulation_root_path)],
                 ),
             ]
         )
@@ -303,22 +303,24 @@ def build_ros_action_graph(
     usd_physics,
     report=print,
     enable_arm_command_subscriber=None,
+    binding=None,
 ):
     """Validate stage prims, replace the graph, and author the declared graph."""
+    binding = binding or load_robot_binding()
     if stage is None:
         raise RuntimeError("No USD stage is currently open.")
     if not stage.GetPrimAtPath(ROS2_ROOT).IsValid():
         usd_geom.Scope.Define(stage, ROS2_ROOT)
         report(f">>> [INFO] Created ROS2 scope: {ROS2_ROOT}")
 
-    robot_prim = stage.GetPrimAtPath(ROBOT_PATH)
+    robot_prim = stage.GetPrimAtPath(binding.robot_path)
     if not robot_prim.IsValid():
-        raise RuntimeError(f"Robot prim not found: {ROBOT_PATH}")
-    articulation_root_prim = stage.GetPrimAtPath(ARTICULATION_ROOT_PATH)
+        raise RuntimeError(f"Robot prim not found: {binding.robot_path}")
+    articulation_root_prim = stage.GetPrimAtPath(binding.articulation_root_path)
     if not articulation_root_prim.IsValid():
-        raise RuntimeError(f"Articulation root not found: {ARTICULATION_ROOT_PATH}")
+        raise RuntimeError(f"Articulation root not found: {binding.articulation_root_path}")
     if not articulation_root_prim.HasAPI(usd_physics.ArticulationRootAPI):
-        raise RuntimeError(f"ArticulationRootAPI missing: {ARTICULATION_ROOT_PATH}")
+        raise RuntimeError(f"ArticulationRootAPI missing: {binding.articulation_root_path}")
 
     existing_graph = stage.GetPrimAtPath(GRAPH_PATH)
     if existing_graph.IsValid():
@@ -328,6 +330,7 @@ def build_ros_action_graph(
 
     create_nodes, set_values, connect, create_attributes = graph_declaration(
         sdf_path,
+        binding=binding,
         enable_arm_command_subscriber=enable_arm_command_subscriber,
     )
     keys = controller.Keys
@@ -343,16 +346,17 @@ def build_ros_action_graph(
     graph_prim = stage.GetPrimAtPath(GRAPH_PATH)
     if not graph_prim.IsValid():
         raise RuntimeError(f"Action Graph was not created: {GRAPH_PATH}")
-    _report_summary(report, enable_arm_command_subscriber)
+    _report_summary(report, enable_arm_command_subscriber, binding=binding)
 
 
-def _report_summary(report, enable_arm_command_subscriber=None):
+def _report_summary(report, enable_arm_command_subscriber=None, *, binding=None):
+    binding = binding or load_robot_binding()
     report()
     report("============================================================")
     report(" SF-Twin ROS 2 Action Graph")
     report("============================================================")
     report(f">>> [SUCCESS] Graph       : {GRAPH_PATH}")
-    report(f">>> [SUCCESS] Robot       : {ROBOT_PATH}")
+    report(f">>> [SUCCESS] Robot       : {binding.robot_path}")
     report(f">>> [SUCCESS] Joint state : {JOINT_STATE_TOPIC}")
     arm_command_subscriber_enabled = (
         ENABLE_ARM_COMMAND_SUBSCRIBER

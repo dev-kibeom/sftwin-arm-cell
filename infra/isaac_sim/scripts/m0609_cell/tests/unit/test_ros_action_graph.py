@@ -1,5 +1,4 @@
 from graph_builder.graph_contract import (
-    ARTICULATION_ROOT_PATH,
     CAMERA_INFO_TOPIC,
     CAMERA_PATH,
     DEPTH_TOPIC,
@@ -46,10 +45,10 @@ def test_graph_declaration_preserves_required_nodes_and_ros_contracts():
         "GripperCommandGeneration.inputs:execIn",
     ) in connect
     assert values["PublishJointState.inputs:targetPrim"] == [
-        f"SdfPath({ARTICULATION_ROOT_PATH})"
+        "SdfPath(/World/SF_Twin_Cell/m0609/root_joint)"
     ]
     assert values["ArticulationController.inputs:targetPrim"] == [
-        f"SdfPath({ARTICULATION_ROOT_PATH})"
+        "SdfPath(/World/SF_Twin_Cell/m0609/root_joint)"
     ]
     assert ("ReadSimTime.inputs:resetOnStop", True) in set_values
     assert ("PublishClock.inputs:topicName", "/clock") in set_values

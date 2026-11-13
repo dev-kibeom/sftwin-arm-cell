@@ -4,7 +4,6 @@ import atexit
 import logging
 import os
 import sys
-import math
 from pathlib import Path
 
 import yaml
@@ -59,35 +58,6 @@ from scene_builder.material_supply_sidecar import MaterialSupplySidecarClient
 LOGGER = logging.getLogger(__name__)
 
 
-ARM_JOINT_NAMES = (
-    "joint_1",
-    "joint_2",
-    "joint_3",
-    "joint_4",
-    "joint_5",
-    "joint_6",
-)
-
-
-def _load_home_joint_positions():
-    configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
-    if not configured_root:
-        raise RuntimeError(
-            "SFTWIN_PROJECT_ROOT is not configured. Run 1_before_play.py from "
-            "the intended checkout."
-        )
-    from runtime_configuration import load_runtime_configuration
-    config = load_runtime_configuration()
-    positions = tuple(float(value) for value in config.get("home_joint_positions", ()))
-    if len(positions) != len(ARM_JOINT_NAMES) or not all(
-        math.isfinite(value) for value in positions
-    ):
-        raise RuntimeError(
-            "canonical HOME pose must contain six finite joint positions"
-        )
-    return positions
-
-
 def _load_operational_profile():
     configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
     if not configured_root:
@@ -100,66 +70,14 @@ def _load_operational_profile():
 
 
 
+# Keep one selected binding for initial setup and the Stop callback.
+from robot_binding import load_robot_binding, author_home_targets, apply_joint_drive_profile
+
+_robot_binding = load_robot_binding()
+
+
 def _author_initial_home_targets(stage):
-    """Set Play-time angular drive targets from the canonical HOME pose.
-
-    USD angular drive target positions are authored in degrees.  The canonical
-    repository HOME contract remains radians, so conversion is kept explicit
-    at this Isaac scene boundary.
-    """
-    home_positions = _load_home_joint_positions()
-    joints = {
-        prim.GetName(): prim
-        for prim in stage.Traverse()
-        if prim.IsValid() and prim.GetName() in ARM_JOINT_NAMES
-    }
-    missing = [name for name in ARM_JOINT_NAMES if name not in joints]
-    if missing:
-        raise RuntimeError(f"HOME joints not found in robot stage: {missing}")
-
-    for name, position_rad in zip(ARM_JOINT_NAMES, home_positions):
-        drive = UsdPhysics.DriveAPI.Get(joints[name], "angular")
-        if not drive:
-            raise RuntimeError(f"angular drive not found for HOME joint: {name}")
-        target = drive.GetTargetPositionAttr()
-        if not target.IsValid():
-            raise RuntimeError(
-                f"angular drive target unavailable for HOME joint: {name}"
-            )
-        target.Set(math.degrees(position_rad))
-        joints[name].SetCustomDataByKey(
-            "sf_twin:initial_home_position_rad", position_rad
-        )
-
-
-def _apply_joint_2_stiffness_profile(stage):
-    """Apply the external W06 production scale to the imported joint_2 drive."""
-    simulation = _load_operational_profile().get("simulation", {})
-    scale = float(simulation.get("joint_2_stiffness_scale", 1.0))
-    if not math.isfinite(scale) or scale <= 0.0:
-        raise RuntimeError(
-            "simulation.joint_2_stiffness_scale must be a finite positive value"
-        )
-
-    joints = [
-        prim
-        for prim in stage.Traverse()
-        if prim.IsValid() and prim.GetName() == "joint_2"
-    ]
-    if len(joints) != 1:
-        raise RuntimeError(
-            f"expected exactly one joint_2 in robot stage, found {len(joints)}"
-        )
-    drive = UsdPhysics.DriveAPI.Get(joints[0], "angular")
-    if not drive:
-        raise RuntimeError("angular drive not found for joint_2")
-    stiffness = drive.GetStiffnessAttr()
-    if not stiffness.IsValid():
-        raise RuntimeError("angular drive stiffness unavailable for joint_2")
-    base_stiffness = float(stiffness.Get())
-    if not math.isfinite(base_stiffness) or base_stiffness <= 0.0:
-        raise RuntimeError("joint_2 imported angular stiffness must be positive")
-    stiffness.Set(base_stiffness * scale)
+    author_home_targets(stage, _robot_binding, UsdPhysics)
 
 
 _material_supply_adapter = None
@@ -393,5 +311,5 @@ context = run_scene_build(
 )
 
 _author_initial_home_targets(World.instance().stage)
-_apply_joint_2_stiffness_profile(World.instance().stage)
+apply_joint_drive_profile(World.instance().stage, _robot_binding, UsdPhysics)
 _start_material_supply_adapter(context)

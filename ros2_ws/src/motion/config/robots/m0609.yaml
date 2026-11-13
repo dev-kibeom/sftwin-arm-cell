@@ -27,3 +27,7 @@ robot_id: m0609
 joint_policy:
   wrap_equivalent_joints: [joint_1, joint_2, joint_4, joint_5, joint_6]
   place_ik_seed_joints: [joint_1, joint_3]
+# Isaac-only correction applied to the imported angular drive before Play.
+isaac:
+  joint_drive_stiffness_scales:
+    joint_2: 2.75

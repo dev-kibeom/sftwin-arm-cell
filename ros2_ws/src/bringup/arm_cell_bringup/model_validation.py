@@ -129,6 +129,10 @@ def validate_model_configuration(config):
             bounds = [float(limit.get(key, 'nan')) for key in ('lower', 'upper')]
             if not all(finite_number(value) for value in bounds) or bounds[0] > bounds[1]:
                 raise ValueError(f'Robot joint_limits has invalid URDF bounds for {name}')
+    scales = robot.get('isaac', {}).get('joint_drive_stiffness_scales', {})
+    if (not isinstance(scales, dict) or not set(scales) <= set(arm)
+            or any(not finite_number(value) or value <= 0 for value in scales.values())):
+        raise ValueError('Robot Isaac joint drive stiffness scales require arm joint names and finite positive values')
     overrides = planning_limits(robot['joint_limits'], arm, joints)
     joint_pose(config['home_joint_positions'], 'Robot HOME', arm, joints, overrides)
     for key in ('retract_joint_positions', 'place_tray_return_joint_positions'):

@@ -1,11 +1,8 @@
-"""String, path, topic, and profile constants for the M0609 ROS Action Graph."""
+"""ROS contracts and existing Cell camera/graph placement constants."""
 
 CELL_ROOT = "/World/SF_Twin_Cell"
 ROS2_ROOT = f"{CELL_ROOT}/ROS2"
 
-ROBOT_PATH = f"{CELL_ROOT}/m0609"
-ROBOT_BASE_PATH = f"{ROBOT_PATH}/base_link"
-ARTICULATION_ROOT_PATH = f"{ROBOT_PATH}/root_joint"
 CAMERA_PATH = f"{CELL_ROOT}/Vision/Camera_Sensor"
 GRAPH_PATH = f"{CELL_ROOT}/ROS2/ActionGraph"
 

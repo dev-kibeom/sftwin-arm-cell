@@ -10,9 +10,9 @@ import omni.timeline
 
 
 PROJECT_ROOT = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
-# These are the existing runtime lifecycle steps (Graph, HOME/drive, gripper,
-# UI and diagnostics), not the Cell Scene selection. Before Play delegates
-# Scene construction to scripts/scene_entrypoint.py using the selected Cell.
+# Keep the existing lifecycle steps. Before Play selects the Cell Scene via
+# scripts/scene_entrypoint.py and binds arm control from Runtime Configuration.
+# Tool, Camera, UI and diagnostics still live in the established Cell modules.
 ENTRYPOINTS = PROJECT_ROOT / "infra/isaac_sim/scripts/m0609_cell"
 BEFORE_PLAY = ENTRYPOINTS / "1_before_play.py"
 HEADLESS = os.environ.get("SFTWIN_HEADLESS") == "1"
