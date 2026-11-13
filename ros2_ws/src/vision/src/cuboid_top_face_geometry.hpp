@@ -24,8 +24,8 @@ struct Segment
 {
   cv::Point2d first;
   cv::Point2d last;
-  double support;
-  double residual_px;
+  double support = 0.0;
+  double residual_px = 0.0;
   bool observed = true;
   uint64_t source_line_id = 0;
 };
