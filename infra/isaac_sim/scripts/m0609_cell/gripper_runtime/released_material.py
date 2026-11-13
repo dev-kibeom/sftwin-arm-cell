@@ -9,12 +9,19 @@ LOGGER = logging.getLogger(__name__)
 
 def enable_material_gravity(stage, prim_path):
     """Use the canonical PhysX schema on exactly the detached rigid body."""
-    from pxr import PhysxSchema, UsdPhysics
+    from pxr import PhysicsSchemaTools, PhysxSchema, UsdPhysics, UsdUtils
+    from omni.physx import get_physx_simulation_interface
 
     prim = stage.GetPrimAtPath(prim_path)
     if not prim.IsValid() or not prim.HasAPI(UsdPhysics.RigidBodyAPI):
         raise RuntimeError(f"detached rigid body is unavailable: {prim_path}")
     PhysxSchema.PhysxRigidBodyAPI.Apply(prim).CreateDisableGravityAttr().Set(False)
+    # Removing a fixed joint does not wake a sleeping body when gravity was
+    # already enabled. Wake exactly the released body so it resumes falling.
+    stage_id = UsdUtils.StageCache.Get().GetId(stage).ToLongInt()
+    get_physx_simulation_interface().wake_up(
+        stage_id, PhysicsSchemaTools.sdfPathToInt(prim_path)
+    )
 
 
 class ReleasedMaterialHandler:

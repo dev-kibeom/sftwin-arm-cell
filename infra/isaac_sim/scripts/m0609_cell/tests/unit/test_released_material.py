@@ -94,6 +94,13 @@ def test_common_gravity_activation_requires_target_rigid_body_and_canonical_sche
     import sys
 
     values = []
+    import types
+    physx = types.ModuleType("omni.physx")
+    physx.get_physx_simulation_interface = lambda: SimpleNamespace(
+        wake_up=lambda stage_id, path: values.append((stage_id, path))
+    )
+    monkeypatch.setitem(sys.modules, "omni", types.ModuleType("omni"))
+    monkeypatch.setitem(sys.modules, "omni.physx", physx)
     prim = SimpleNamespace(IsValid=lambda: valid, HasAPI=lambda api: rigid_body)
     stage = SimpleNamespace(
         GetPrimAtPath=lambda path: prim if path == "/World/Plate" else None
@@ -103,6 +110,12 @@ def test_common_gravity_activation_requires_target_rigid_body_and_canonical_sche
         "pxr",
         SimpleNamespace(
             UsdPhysics=SimpleNamespace(RigidBodyAPI=object()),
+            PhysicsSchemaTools=SimpleNamespace(sdfPathToInt=lambda path: 123),
+            UsdUtils=SimpleNamespace(StageCache=SimpleNamespace(
+                Get=lambda: SimpleNamespace(GetId=lambda stage: SimpleNamespace(
+                    ToLongInt=lambda: 42
+                ))
+            )),
             PhysxSchema=SimpleNamespace(
                 PhysxRigidBodyAPI=SimpleNamespace(
                     Apply=lambda target: SimpleNamespace(
@@ -116,7 +129,7 @@ def test_common_gravity_activation_requires_target_rigid_body_and_canonical_sche
     )
     if valid and rigid_body:
         released_material.enable_material_gravity(stage, "/World/Plate")
-        assert values == [False]
+        assert values == [False, (42, 123)]
     else:
         with pytest.raises(RuntimeError, match="detached rigid body is unavailable"):
             released_material.enable_material_gravity(stage, "/World/Plate")
