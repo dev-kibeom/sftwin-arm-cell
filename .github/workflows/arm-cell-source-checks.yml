@@ -40,4 +40,4 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libegl1
           python3 -m pip install pytest -r infra/launcher/requirements.txt
-          python3 -m pytest -q infra/launcher/tests ros2_ws/src/bringup/tests/test_runtime_export.py ros2_ws/src/bringup/tests/test_configuration_composition.py
+          python3 -m pytest -q infra/launcher/tests ros2_ws/src/bringup/tests/test_runtime_export.py ros2_ws/src/bringup/tests/test_configuration_composition.py ros2_ws/src/bringup/tests/test_model_composition.py

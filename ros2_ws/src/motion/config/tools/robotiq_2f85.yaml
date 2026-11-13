@@ -26,3 +26,12 @@ validation_planning_scene:
   touch_links:
   - gripper_robotiq_85_left_finger_link
   - gripper_robotiq_85_right_finger_link
+# Physical Tool links only. Motion adds the canonical TCP attachment link.
+contact_links:
+  payload_touch_links:
+  - gripper_robotiq_85_left_finger_link
+  - gripper_robotiq_85_right_finger_link
+  - gripper_robotiq_85_left_finger_tip_link
+  - gripper_robotiq_85_right_finger_tip_link
+  - gripper_robotiq_85_left_inner_knuckle_link
+  - gripper_robotiq_85_right_inner_knuckle_link
