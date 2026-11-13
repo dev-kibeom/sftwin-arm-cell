@@ -442,17 +442,6 @@ private:
   std::string original_frame_;
 };
 
-bool wrap_equivalent_joint_policy(const std::string & joint_name)
-{
-  // Explicit manipulation policy: joints with the hardware range [-2pi, 2pi]
-  // may use an equivalent representation. joint_3 is intentionally excluded.
-  static constexpr std::array<const char *, 5> kWrapEquivalentJoints = {
-    "joint_1", "joint_2", "joint_4", "joint_5", "joint_6"};
-  return std::find(
-    kWrapEquivalentJoints.begin(), kWrapEquivalentJoints.end(), joint_name) !=
-         kWrapEquivalentJoints.end();
-}
-
 nlohmann::json merge_pick_candidate_history(const nlohmann::json & snapshot)
 {
   auto merged = snapshot;
@@ -1451,6 +1440,12 @@ std::string MotionPlanningDiagnosticCapture::safe_goal_id(std::string value)
   return value.empty() ? "unknown-goal" : value;
 }
 
+bool IsaacRosMotionTransport::wrap_equivalent_joint_policy(const std::string & joint_name) const
+{
+  return std::find(wrap_equivalent_joints_.begin(), wrap_equivalent_joints_.end(), joint_name) !=
+         wrap_equivalent_joints_.end();
+}
+
 void IsaacRosMotionTransport::load_place_waypoint_trajectory()
 {
   if (place_waypoint_trajectory_load_attempted_) {return;}
@@ -1461,8 +1456,8 @@ void IsaacRosMotionTransport::load_place_waypoint_trajectory()
       if (!input) {throw std::runtime_error("trajectory file is missing");}
       const auto artifact = nlohmann::json::parse(input);
       if (artifact.at("schema_version") != 1 ||
-        artifact.at("robot_model") != "m0609_robotiq_2f85" ||
-        artifact.at("planning_group") != "arm" ||
+        artifact.at("robot_model") != model_id_ ||
+        artifact.at("planning_group") != planning_group_ ||
         artifact.at("planning_config").at("planner_id") != planning_planner_id_ ||
         artifact.at("planning_config").at("velocity_scaling") !=
         planning_velocity_scaling_factor_ ||
@@ -1590,6 +1585,18 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   place_waypoint_trajectory_file_(std::move(place_waypoint_trajectory_file)),
   trajectory_watchdog_(trajectory_clock_liveness_timeout_s)
 {
+  for (const auto * name : {"planning_group", "model_id"}) {
+    if (!node_->has_parameter(name)) {node_->declare_parameter<std::string>(name, "");}
+  }
+  planning_group_ = node_->get_parameter("planning_group").as_string();
+  model_id_ = node_->get_parameter("model_id").as_string();
+  for (const auto * name : {"wrap_equivalent_joints", "place_ik_seed_joints"}) {
+    if (!node_->has_parameter(name)) {
+      node_->declare_parameter<std::vector<std::string>>(name, std::vector<std::string>{});
+    }
+  }
+  wrap_equivalent_joints_ = node_->get_parameter("wrap_equivalent_joints").as_string_array();
+  place_ik_seed_joints_ = node_->get_parameter("place_ik_seed_joints").as_string_array();
   if (!node_->has_parameter("pick_ik_solver")) {
     node_->declare_parameter<std::string>(
       "pick_ik_solver", "kdl_kinematics_plugin/KDLKinematicsPlugin");
@@ -2039,6 +2046,7 @@ void IsaacRosMotionTransport::initialize_move_group()
   }
 
   const auto node = node_;
+  const auto planning_group = planning_group_;
   const auto velocity_scaling_factor = planning_velocity_scaling_factor_;
   const auto acceleration_scaling_factor = planning_acceleration_scaling_factor_;
   const auto planning_time_s = planning_time_s_;
@@ -2047,7 +2055,8 @@ void IsaacRosMotionTransport::initialize_move_group()
   const auto pick_ik_solve_type = pick_ik_solve_type_;
   const auto pick_ik_timeout_s = pick_ik_timeout_s_;
   move_group_worker_ = std::thread(
-    [state, node, velocity_scaling_factor, acceleration_scaling_factor, planning_time_s,
+    [state, node, planning_group, velocity_scaling_factor, acceleration_scaling_factor,
+    planning_time_s,
     planning_planner_id, pick_ik_solver_name, pick_ik_solve_type,
     pick_ik_timeout_s]() {
       try {
@@ -2065,7 +2074,7 @@ void IsaacRosMotionTransport::initialize_move_group()
         }
 
         auto move_group = std::make_unique<moveit::planning_interface::MoveGroupInterface>(
-          node, "arm", std::shared_ptr<tf2_ros::Buffer>(),
+          node, planning_group, std::shared_ptr<tf2_ros::Buffer>(),
           rclcpp::Duration::from_seconds(kMoveGroupServerWait.count()));
 
         if (!move_group->getRobotModel()) {
@@ -2080,10 +2089,12 @@ void IsaacRosMotionTransport::initialize_move_group()
         move_group->setWorkspace(-1.0, -1.0, -0.2, 1.0, 1.0, 1.5);
 
         std::vector<rclcpp::Parameter> pick_parameters{
-          rclcpp::Parameter("robot_description_kinematics.arm.position_only_ik", false)};
+          rclcpp::Parameter(
+            "robot_description_kinematics." + planning_group + ".position_only_ik",
+            false)};
         if (!pick_ik_solve_type.empty()) {
           pick_parameters.emplace_back(
-            "robot_description_kinematics.arm.solve_type", pick_ik_solve_type);
+            "robot_description_kinematics." + planning_group + ".solve_type", pick_ik_solve_type);
         }
         rclcpp::NodeOptions pick_options;
         pick_options.use_global_arguments(false);
@@ -2097,7 +2108,8 @@ void IsaacRosMotionTransport::initialize_move_group()
           "moveit_core", "kinematics::KinematicsBase");
         auto pick_solver = pick_loader->createSharedInstance(pick_ik_solver_name);
         if (!pick_solver || !pick_solver->initialize(
-          pick_node, *move_group->getRobotModel(), "arm", "base_link", {"sf_grasp_tcp"}, 0.005))
+          pick_node, *move_group->getRobotModel(), planning_group, "base_link", {"sf_grasp_tcp"},
+          0.005))
         {
           throw std::runtime_error(
             "PICK IK plugin initialization failed: " +
@@ -3386,7 +3398,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   // This current state is the actual start state used by the plan below.
   const auto current_state = move_group_state_->move_group->getCurrentState(1.0);
   const auto * joint_group = move_group_state_->move_group->getRobotModel()->getJointModelGroup(
-    "arm");
+    planning_group_);
   if (!current_state || !joint_group) {
     record_place_preplanning_failure(
       "preconditions_not_met", "planning_start_state_or_arm_group_unavailable");
@@ -3762,7 +3774,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         trajectory, arm_joint_names_, trajectory_velocity_limits,
         trajectory_acceleration_limit,
         [&](moveit_msgs::msg::RobotTrajectory & raw_trajectory) {
-          robot_trajectory::RobotTrajectory timed_trajectory(robot_model, "arm");
+          robot_trajectory::RobotTrajectory timed_trajectory(robot_model, planning_group_);
           timed_trajectory.setRobotTrajectoryMsg(planning_start_state, raw_trajectory);
           trajectory_processing::TimeOptimalTrajectoryGeneration time_parameterization;
           if (!time_parameterization.computeTimeStamps(timed_trajectory, 1.0, 1.0)) {
@@ -3928,7 +3940,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       {
         planning_succeeded = false;
         place_recovery_waypoint_reason_ = "scene_context_invalid";
-      } else if (!validation_scene.isPathValid(start_message, plan.trajectory_, "arm")) {
+      } else if (!validation_scene.isPathValid(start_message, plan.trajectory_, planning_group_)) {
         planning_succeeded = false;
         place_recovery_candidate_fatal_ = false;
         place_recovery_waypoint_reason_ = "waypoint_path_invalid";
@@ -4057,7 +4069,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             return false;
           }
           collision_detection::CollisionRequest collision_request;
-          collision_request.group_name = "arm";
+          collision_request.group_name = planning_group_;
           collision_request.contacts = true;
           collision_request.max_contacts = 32;
           collision_request.max_contacts_per_pair = 4;
@@ -4086,7 +4098,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         }
         auto validity_request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
         moveit::core::robotStateToRobotStateMsg(sample_state, validity_request->robot_state, true);
-        validity_request->group_name = "arm";
+        validity_request->group_name = planning_group_;
         auto validity_future = state_validity_client_->async_send_request(validity_request);
         if (validity_future.wait_for(std::chrono::milliseconds(500)) != std::future_status::ready) {
           reason = "state validity request timed out";
@@ -4597,6 +4609,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE;
     if (place_global_approach) {
       PlaceApproachIkPolicy ik_policy;
+      ik_policy.seed_joints = place_ik_seed_joints_;
       ik_policy.count_bounded_search = !qualify_place_target && budget_s <= 0.0;
       ik_policy.max_candidates = place_ik_seed_attempts_;
       ik_policy.ik_timeout_s = place_ik_timeout_s_;
@@ -5122,7 +5135,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           auto validity_request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
           moveit::core::robotStateToRobotStateMsg(
             endpoint_state, validity_request->robot_state, true);
-          validity_request->group_name = "arm";
+          validity_request->group_name = planning_group_;
           auto validity_future = state_validity_client_->async_send_request(validity_request);
           const auto validity_start = std::chrono::steady_clock::now();
           while (validity_future.wait_for(std::chrono::milliseconds(50)) !=
@@ -5188,7 +5201,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           const auto & group_variable_names = joint_group->getVariableNames();
           const bool group_contract_matches =
             move_group_state_->move_group->getName() == joint_group->getName() &&
-            joint_group->getName() == "arm" && group_variable_names == arm_joint_names_ &&
+            joint_group->getName() == planning_group_ && group_variable_names == arm_joint_names_ &&
             evaluated.normalized_goal.size() == group_variable_names.size();
           if (diagnostics_capture_enabled_) {
             target_state_diagnostic.group_name = joint_group->getName();
@@ -5487,7 +5500,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             grasp_validation_scene : request_validation_scene;
           if (validation_scene) {
             const auto collision = validate_pick_state_collision(
-              *validation_scene, goal_state);
+              *validation_scene, goal_state, planning_group_);
             if (collision.collision) {
               std::vector<PickCollisionContact> observed_contacts;
               for (const auto & contact_pair : collision.contacts) {
@@ -5520,7 +5533,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           }
           auto validity_request = std::make_shared<moveit_msgs::srv::GetStateValidity::Request>();
           moveit::core::robotStateToRobotStateMsg(goal_state, validity_request->robot_state, true);
-          validity_request->group_name = "arm";
+          validity_request->group_name = planning_group_;
           auto validity_future = state_validity_client_->async_send_request(validity_request);
           if (validity_future.wait_for(std::chrono::milliseconds(500)) !=
             std::future_status::ready)
@@ -6081,7 +6094,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
           std::ostringstream record;
           record << std::setprecision(17)
                  << "{\"motion_goal_uuid\":\"" << json_escape(request.motion_goal_uuid)
-                 << "\",\"planning_group\":\"arm\",\"ik_solver\":\""
+                 << "\",\"planning_group\":\"" << json_escape(planning_group_)
+                 << "\",\"ik_solver\":\""
                  << json_escape(pick_ik_solver_name_)
                  << "\",\"planner_id\":\"" << json_escape(
             move_group_state_->move_group->getPlannerId())

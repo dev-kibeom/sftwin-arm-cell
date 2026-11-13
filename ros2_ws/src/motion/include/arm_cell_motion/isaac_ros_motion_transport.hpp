@@ -266,6 +266,11 @@ private:
   bool pick_action_trajectory_execution_started_{false};
   bool pick_grasp_insertion_started_{false};
   rclcpp::Client<moveit_msgs::srv::GetStateValidity>::SharedPtr state_validity_client_;
+  std::string planning_group_;
+  std::string model_id_;
+  std::vector<std::string> wrap_equivalent_joints_;
+  std::vector<std::string> place_ik_seed_joints_;
+  bool wrap_equivalent_joint_policy(const std::string & joint_name) const;
   std::vector<std::string> arm_joint_names_;
   std::vector<double> home_joint_positions_;
   std::vector<double> retract_joint_positions_;

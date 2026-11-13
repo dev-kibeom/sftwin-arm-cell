@@ -273,7 +273,8 @@ TEST(PlaceApproachIkPolicy, NearbyMeasuredStatesShareCanonicalSeed)
 
 TEST(PlaceApproachIkPolicy, GeneratesStableBoundedM0609SeedOrder)
 {
-  const PlaceApproachIkPolicy policy;
+  PlaceApproachIkPolicy policy;
+  policy.seed_joints = {"joint_1", "joint_3"};
   const std::vector<std::string> names{"joint_1", "joint_2", "joint_3"};
   const std::vector<JointContinuityLimit> limits{
     {-6.2832, 6.2832, true}, {-6.2832, 6.2832, true}, {-2.618, 2.618, false}};
@@ -304,7 +305,8 @@ TEST(PlaceApproachIkPolicy, GeneratesStableBoundedM0609SeedOrder)
 
 TEST(PlaceApproachIkPolicy, SkipsSeedVariationsOutsideJointBounds)
 {
-  const PlaceApproachIkPolicy policy;
+  PlaceApproachIkPolicy policy;
+  policy.seed_joints = {"joint_1", "joint_3"};
   const auto seeds = generate_place_approach_ik_seeds(
     {6.20, 0.0, 2.50}, {"joint_1", "joint_2", "joint_3"},
     {{-6.2832, 6.2832, true}, {-6.2832, 6.2832, true}, {-2.618, 2.618, false}}, policy);
@@ -313,6 +315,24 @@ TEST(PlaceApproachIkPolicy, SkipsSeedVariationsOutsideJointBounds)
   EXPECT_EQ(seeds[0].source, "canonical_current");
   EXPECT_EQ(seeds[1].source, "joint_1_minus");
   EXPECT_EQ(seeds[2].source, "joint_3_minus");
+}
+
+TEST(PlaceApproachIkPolicy, SelectedSeedJointsControlVariationsAndOrder)
+{
+  PlaceApproachIkPolicy policy;
+  policy.seed_joints = {"elbow", "base"};
+  const auto seeds = generate_place_approach_ik_seeds(
+    {0.0, 0.5}, {"base", "elbow"}, wide_limits(2), policy);
+  ASSERT_EQ(seeds.size(), 5U);
+  EXPECT_EQ(seeds[1].source, "elbow_plus");
+  EXPECT_EQ(seeds[1].joints, (std::vector<double>{0.0, 0.75}));
+  EXPECT_EQ(seeds[2].joints, (std::vector<double>{0.0, 0.25}));
+  EXPECT_EQ(seeds[3].source, "base_plus");
+  EXPECT_EQ(seeds[3].joints, (std::vector<double>{0.25, 0.5}));
+  policy.seed_joints.clear();
+  EXPECT_EQ(
+    generate_place_approach_ik_seeds(
+      {0.0, 0.5}, {"base", "elbow"}, wide_limits(2), policy).size(), 1U);
 }
 
 TEST(PlaceApproachIkPolicy, RejectsFailedIkAndInvalidEndpointCandidates)

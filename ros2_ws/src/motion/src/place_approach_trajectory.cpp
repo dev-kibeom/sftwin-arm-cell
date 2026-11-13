@@ -17,9 +17,9 @@ namespace arm_cell_motion
 PlaceApproachTrajectoryTimingResult time_parameterize_place_approach_trajectory(
   const moveit::core::RobotModelConstPtr & robot_model,
   const moveit::core::RobotState & start_state,
-  moveit_msgs::msg::RobotTrajectory & trajectory)
+  moveit_msgs::msg::RobotTrajectory & trajectory, const std::string & planning_group)
 {
-  if (!robot_model || !robot_model->getJointModelGroup("arm") ||
+  if (!robot_model || !robot_model->getJointModelGroup(planning_group) ||
     trajectory.joint_trajectory.joint_names.empty() ||
     trajectory.joint_trajectory.points.empty())
   {
@@ -43,7 +43,7 @@ PlaceApproachTrajectoryTimingResult time_parameterize_place_approach_trajectory(
     trajectory, trajectory.joint_trajectory.joint_names, velocity_limits,
     std::numeric_limits<double>::max(),
     [&](moveit_msgs::msg::RobotTrajectory & raw_trajectory) {
-      robot_trajectory::RobotTrajectory timed_trajectory(robot_model, "arm");
+      robot_trajectory::RobotTrajectory timed_trajectory(robot_model, planning_group);
       timed_trajectory.setRobotTrajectoryMsg(start_state, raw_trajectory);
       trajectory_processing::TimeOptimalTrajectoryGeneration time_parameterization;
       if (!time_parameterization.computeTimeStamps(timed_trajectory, 1.0, 1.0)) {

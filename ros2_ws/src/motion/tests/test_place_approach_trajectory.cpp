@@ -83,7 +83,7 @@ TEST_F(PlaceApproachTrajectoryTest, TimeParameterizesRawCandidateForDownstreamVa
   EXPECT_TRUE(trajectory.joint_trajectory.points.front().accelerations.empty());
 
   const auto timing = time_parameterize_place_approach_trajectory(
-    robot_model_, *start_state_, trajectory);
+    robot_model_, *start_state_, trajectory, "arm");
 
   ASSERT_TRUE(timing.success) << timing.reason;
   EXPECT_GT(timing.duration_s, 0.0);
@@ -163,7 +163,7 @@ TEST_F(PlaceApproachTrajectoryTest, ZeroDurationTotgCandidateIsSkippedForNextTim
     [this](const PlaceApproachIkCandidate & candidate_value, double) {
       auto trajectory = raw_trajectory(candidate_value.seed_index == 0U ? 1U : 2U);
       const auto timing = time_parameterize_place_approach_trajectory(
-        robot_model_, *start_state_, trajectory);
+        robot_model_, *start_state_, trajectory, "arm");
       const auto & points = trajectory.joint_trajectory.points;
       const auto point_count = points.size();
       return PlaceApproachPlanObservation{

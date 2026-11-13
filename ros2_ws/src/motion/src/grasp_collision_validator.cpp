@@ -28,15 +28,15 @@ GraspCollisionValidationResult validate_grasp_collision(
   const Eigen::Quaterniond & object_orientation, const std::optional<BoxGraspContact> & contact,
   const Eigen::Vector3d & insertion_axis_tcp,
   const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy,
-  const FingerClearanceParameters & parameters)
+  const FingerClearanceParameters & parameters, const std::string & planning_group)
 {
   GraspCollisionValidationResult result;
   result.mode = mode;
   result.evaluated = true;
-  result.common = validate_pick_state_collision(common_scene, state);
+  result.common = validate_pick_state_collision(common_scene, state, planning_group);
   if (mode == GraspOccupancyMode::FULL_COLLISION) {
     result.occupancy_evaluated = true;
-    result.occupancy = validate_pick_state_collision(full_scene, state);
+    result.occupancy = validate_pick_state_collision(full_scene, state, planning_group);
     result.allowed = !result.common.collision && !result.occupancy.collision;
     result.reason = result.common.collision ? "COMMON_COLLISION" :
       result.allowed ? "NONE" : "OCCUPANCY_COLLISION";

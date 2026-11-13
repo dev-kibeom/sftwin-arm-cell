@@ -8,10 +8,10 @@ namespace arm_cell_motion
 {
 PickCollisionValidationResult validate_pick_state_collision(
   const planning_scene::PlanningScene & scene,
-  const moveit::core::RobotState & state)
+  const moveit::core::RobotState & state, const std::string & planning_group)
 {
   collision_detection::CollisionRequest request;
-  request.group_name = "arm";
+  request.group_name = planning_group;
   request.contacts = true;
   request.max_contacts = 32;
   collision_detection::CollisionResult collision;

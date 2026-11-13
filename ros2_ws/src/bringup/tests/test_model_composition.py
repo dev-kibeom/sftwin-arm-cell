@@ -31,6 +31,11 @@ def selection(tmp_path):
     for key in ('urdf', 'semantic'):
         documents['model'][key] = str(resolve(documents['model'][key], model_path.parent))
     deployment['model_configuration'] = str(tmp_path / 'model.yaml')
+    policy_path = resolve(deployment['motion_configuration'], PROFILE.parent)
+    documents['motion_configuration'] = {
+        key: str(resolve(value, policy_path.parent))
+        for key, value in yaml.safe_load(policy_path.read_text()).items()}
+    deployment['motion_configuration'] = str(tmp_path / 'motion_configuration.yaml')
     deployment['components']['simulation'] = str(resolve(deployment['components']['simulation'], PROFILE.parent))
 
     def compose(change=None):
@@ -46,7 +51,7 @@ def selection(tmp_path):
     return compose
 
 
-def test_owner_metadata_is_exported_without_becoming_motion_parameters():
+def test_motion_consumes_selected_model_and_joint_policy():
     config = load_profile(PROFILE)
     assert config['model_configuration']['model_id']
     assert config['model_configuration']['planning_group']
@@ -57,7 +62,10 @@ def test_owner_metadata_is_exported_without_becoming_motion_parameters():
     assert config['model_configuration']['isaac']['articulation_root']
     assert config['cell']['isaac']['robot_prim_path'].startswith('/')
     assert 'joint_policy' not in config['motion']
-    assert 'planning_group' not in config['motion']
+    assert config['motion']['planning_group'] == config['model_configuration']['planning_group']
+    assert config['motion']['model_id'] == config['model_configuration']['model_id']
+    for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
+        assert config['motion'][key] == config['robot']['joint_policy'][key]
 
 
 @pytest.mark.parametrize('change,message', [
@@ -191,3 +199,34 @@ def test_planning_group_cannot_hide_extra_movable_members(selection, tmp_path):
 def test_binding_paths_require_prim_identifiers(selection, owner, key, value):
     with pytest.raises(ValueError, match=key):
         selection(lambda d: d[owner]['isaac'].__setitem__(key, value))
+
+
+def test_selected_joint_policy_reaches_motion(selection):
+    def change(d):
+        d['robot']['joint_policy']['wrap_equivalent_joints'] = []
+        d['robot']['joint_policy']['place_ik_seed_joints'] = ['joint_2']
+    config = selection(change)
+    assert config['motion']['wrap_equivalent_joints'] == []
+    assert config['motion']['place_ik_seed_joints'] == ['joint_2']
+
+
+def test_selected_assembly_identity_and_group_reach_motion(selection, tmp_path):
+    import xacro
+    def change(d):
+        model = d['model']
+        urdf = xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml()
+        semantic = Path(model['semantic']).read_text()
+        (tmp_path / 'selected.urdf').write_text(urdf.replace(model['model_id'], 'selected_assembly'))
+        (tmp_path / 'selected.srdf').write_text(
+            semantic.replace(model['model_id'], 'selected_assembly').replace('"arm"', '"selected_group"'))
+        model.update(model_id='selected_assembly', planning_group='selected_group',
+                     urdf=str(tmp_path / 'selected.urdf'), semantic=str(tmp_path / 'selected.srdf'))
+        for key in ('kinematics', 'planning_pipeline'):
+            data = yaml.safe_load(Path(d['motion_configuration'][key]).read_text())
+            data['selected_group'] = data.pop('arm')
+            target = tmp_path / (key + '.yaml')
+            target.write_text(yaml.safe_dump(data))
+            d['motion_configuration'][key] = str(target)
+    config = selection(change)
+    assert config['motion']['model_id'] == 'selected_assembly'
+    assert config['motion']['planning_group'] == 'selected_group'

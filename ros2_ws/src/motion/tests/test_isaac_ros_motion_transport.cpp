@@ -52,10 +52,10 @@ using MoveGroupAction = moveit_msgs::action::MoveGroup;
 class CartesianSlideIK : public kinematics::KinematicsBase
 {
 public:
-  CartesianSlideIK()
+  explicit CartesianSlideIK(const std::string & group = "arm")
   {
     setValues(
-      "robot_description", "arm", "base_link", std::vector<std::string>{"sf_grasp_tcp"},
+      "robot_description", group, "base_link", std::vector<std::string>{"sf_grasp_tcp"},
       0.01);
   }
   bool getPositionIK(
@@ -203,6 +203,12 @@ protected:
   {
     node_ = std::make_shared<rclcpp::Node>(
       "isaac_ros_motion_transport_test", rclcpp::NodeOptions().use_global_arguments(false));
+    node_->declare_parameter<std::string>("planning_group", "arm");
+    node_->declare_parameter<std::string>("model_id", "m0609_robotiq_2f85");
+    node_->declare_parameter<std::vector<std::string>>(
+      "wrap_equivalent_joints", {"joint_1", "joint_2", "joint_4", "joint_5", "joint_6"});
+    node_->declare_parameter<std::vector<std::string>>(
+      "place_ik_seed_joints", {"joint_1", "joint_3"});
     observer_ = std::make_shared<rclcpp::Node>(
       "isaac_ros_motion_transport_observer", rclcpp::NodeOptions().use_global_arguments(false));
     feedback_publisher_ = node_->create_publisher<JointState>(
@@ -506,7 +512,46 @@ TEST_F(IsaacRosMotionTransportTest, StoredPlaceWaypointTrajectoryLoadsOnceAndPla
   EXPECT_EQ(
     invalid->plan_normalized(request, rejected),
     arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED);
+  node_->set_parameter(rclcpp::Parameter("model_id", "selected_assembly"));
+  node_->set_parameter(rclcpp::Parameter("planning_group", "selected_group"));
+  auto make_selected = [&]() {
+      return std::make_unique<IsaacRosMotionTransport>(
+        node_, joints, home, std::vector<double>(6, -0.1), false, false, "",
+        std::vector<std::string>{}, 0.0, "linear", 2.0, 0.08726646259971647, 60.0,
+        0.03, 0.1, 0.1, 5.0, 1.0, 5.0, false, "", "", "RRTConnect", path.string());
+    };
+  std::ofstream(path) << artifact.dump();
+  auto wrong_model = make_selected();
+  wrong_model->configure_waypoint_mode(false, true);
+  EXPECT_FALSE(wrong_model->cached_place_waypoint_approach_.has_value());
+  artifact["robot_model"] = "selected_assembly";
+  std::ofstream(path) << artifact.dump();
+  auto wrong_group = make_selected();
+  wrong_group->configure_waypoint_mode(false, true);
+  EXPECT_FALSE(wrong_group->cached_place_waypoint_approach_.has_value());
+  artifact["planning_group"] = "selected_group";
+  std::ofstream(path) << artifact.dump();
+  auto selected = make_selected();
+  selected->configure_waypoint_mode(false, true);
+  EXPECT_TRUE(selected->cached_place_waypoint_approach_.has_value());
   std::filesystem::remove_all(directory);
+}
+
+TEST_F(IsaacRosMotionTransportTest, WrapPolicyUsesOnlySelectedProfileJoints)
+{
+  EXPECT_TRUE(transport_->wrap_equivalent_joint_policy("joint_1"));
+  EXPECT_TRUE(transport_->wrap_equivalent_joint_policy("joint_2"));
+  EXPECT_FALSE(transport_->wrap_equivalent_joint_policy("joint_3"));
+  EXPECT_TRUE(transport_->wrap_equivalent_joint_policy("joint_4"));
+  EXPECT_TRUE(transport_->wrap_equivalent_joint_policy("joint_5"));
+  EXPECT_TRUE(transport_->wrap_equivalent_joint_policy("joint_6"));
+  node_->set_parameter(
+    rclcpp::Parameter(
+      "wrap_equivalent_joints", std::vector<std::string>{"elbow"}));
+  auto selected = std::make_unique<IsaacRosMotionTransport>(
+    node_, arm_joint_names(), std::vector<double>(6, 0.1), std::vector<double>(6, -0.1), false);
+  EXPECT_TRUE(selected->wrap_equivalent_joint_policy("elbow"));
+  EXPECT_FALSE(selected->wrap_equivalent_joint_policy("joint_1"));
 }
 
 TEST_F(IsaacRosMotionTransportTest, InterruptedRequestIsDiscardedBeforePlanning)
@@ -860,6 +905,9 @@ TEST_F(
   IsaacRosMotionTransportTest,
   PickApproachOccupancyIsSentOnlyInItsMoveGroupPlanningRequest)
 {
+  node_->set_parameter(rclcpp::Parameter("planning_group", "selected_group"));
+  transport_ = std::make_unique<IsaacRosMotionTransport>(
+    node_, arm_joint_names(), std::vector<double>(6, 0.1), std::vector<double>(6, -0.1), false);
   const auto diagnostic_id = std::chrono::steady_clock::now().time_since_epoch().count();
   const std::filesystem::path diagnostic_directory = "/tmp/arm_cell_motion_occupancy_snapshot_" +
     std::to_string(diagnostic_id);
@@ -881,7 +929,7 @@ TEST_F(
   node_->declare_parameter<std::string>("robot_description", urdf);
   node_->declare_parameter<std::string>(
     "robot_description_semantic",
-    "<robot name='slide'><group name='arm'><chain base_link='base_link' "
+    "<robot name='slide'><group name='selected_group'><chain base_link='base_link' "
     "tip_link='sf_grasp_tcp'/></group></robot>");
 
   std::vector<MoveGroupAction::Goal> planning_requests;
@@ -922,7 +970,8 @@ TEST_F(
   auto group_future = std::async(
     std::launch::async, [&]() {
       return std::make_unique<moveit::planning_interface::MoveGroupInterface>(
-        node_, "arm", std::shared_ptr<tf2_ros::Buffer>(), rclcpp::Duration::from_seconds(3.0));
+        node_, "selected_group", std::shared_ptr<tf2_ros::Buffer>(),
+        rclcpp::Duration::from_seconds(3.0));
     });
   const auto initialization_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
   while (group_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
@@ -934,8 +983,8 @@ TEST_F(
   ASSERT_EQ(group_future.wait_for(std::chrono::milliseconds(0)), std::future_status::ready);
   auto group = group_future.get();
   auto model = std::const_pointer_cast<moveit::core::RobotModel>(group->getRobotModel());
-  const auto solver = std::make_shared<CartesianSlideIK>();
-  model->setKinematicsAllocators({{"arm", [solver](const auto *) {return solver;}}});
+  const auto solver = std::make_shared<CartesianSlideIK>("selected_group");
+  model->setKinematicsAllocators({{"selected_group", [solver](const auto *) {return solver;}}});
   transport_->move_group_state_->pick_ik_solver = solver;
   transport_->move_group_state_->move_group = std::move(group);
   transport_->move_group_state_->ready = true;
@@ -982,7 +1031,7 @@ TEST_F(
       moveit::core::RobotState state(model);
       moveit::core::robotStateMsgToRobotState(request->robot_state, state);
       state.update();
-      response->valid = !scene.isStateColliding(state, "arm");
+      response->valid = !scene.isStateColliding(state, "selected_group");
       if (!response->valid) {
         moveit_msgs::msg::ContactInformation contact;
         contact.contact_body_1 = "sf_grasp_tcp";
@@ -1054,6 +1103,7 @@ TEST_F(
   const bool submitted = submit();
   ASSERT_FALSE(planning_requests.empty()) << transport_->last_pick_candidate_evaluation();
   EXPECT_TRUE(submitted);
+  EXPECT_EQ(planning_requests.back().request.group_name, "selected_group");
   pump_until([this]() {return !capture_reference_payloads().empty();});
   const auto reference = nlohmann::json::parse(capture_reference_payloads().front());
   ASSERT_TRUE(reference.contains("object_position"));

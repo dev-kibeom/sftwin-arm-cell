@@ -1150,3 +1150,25 @@ def test_place_search_retains_count_limits_with_independent_planning_budget():
     assert motion["place_planning_num_attempts"] == motion["planning_num_attempts"]
     assert 0 < motion["place_candidate_planning_time_s"] < motion["planning_time_s"]
     assert motion["place_home_retry_count"] == 1
+
+
+def test_motion_receives_selected_assembly_kinematics_and_joint_policy(tmp_path, monkeypatch):
+    module = _load_launch_module()
+    config = module.load_profile(PROFILE_PATH)
+    config['model_configuration']['planning_group'] = 'selected_group'
+    config['model_configuration']['model_id'] = 'selected_assembly'
+    config['motion'].update(planning_group='selected_group', model_id='selected_assembly',
+                            wrap_equivalent_joints=['joint_2'], place_ik_seed_joints=['joint_4'])
+    kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())
+    kinematics['selected_group'] = kinematics.pop('arm')
+    selected = tmp_path / 'kinematics.yaml'
+    selected.write_text(yaml.safe_dump(kinematics))
+    config['motion_configuration']['kinematics'] = str(selected)
+    monkeypatch.setattr(module, 'load_profile', lambda *args, **kwargs: config)
+    parameters = _node_parameters(_project_nodes(_composed_nodes(module=module))['motion_node'])
+    assert parameters['planning_group'] == 'selected_group'
+    assert parameters['model_id'] == 'selected_assembly'
+    assert list(parameters['wrap_equivalent_joints']) == ['joint_2']
+    assert list(parameters['place_ik_seed_joints']) == ['joint_4']
+    for key, value in kinematics['selected_group'].items():
+        assert parameters[f'robot_description_kinematics.selected_group.{key}'] == value

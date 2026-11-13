@@ -222,12 +222,19 @@ MotionNode::MotionNode(
   const auto robot_description = declare_parameter<std::string>("robot_description", "");
   const auto robot_description_semantic = declare_parameter<std::string>(
     "robot_description_semantic", "");
+  const auto planning_group = declare_parameter<std::string>("planning_group", "");
+  const auto model_id = declare_parameter<std::string>("model_id", "");
+  const auto wrap_equivalent_joints = declare_parameter<std::vector<std::string>>(
+    "wrap_equivalent_joints", std::vector<std::string>{});
+  const auto place_ik_seed_joints = declare_parameter<std::vector<std::string>>(
+    "place_ik_seed_joints", std::vector<std::string>{});
+  const auto kinematics_prefix = "robot_description_kinematics." + planning_group + ".";
   const auto kinematics_solver = declare_parameter<std::string>(
-    "robot_description_kinematics.arm.kinematics_solver", "");
+    kinematics_prefix + "kinematics_solver", "");
   const auto kinematics_search_resolution = declare_parameter<double>(
-    "robot_description_kinematics.arm.kinematics_solver_search_resolution", 0.0);
+    kinematics_prefix + "kinematics_solver_search_resolution", 0.0);
   const auto kinematics_timeout = declare_parameter<double>(
-    "robot_description_kinematics.arm.kinematics_solver_timeout", 0.0);
+    kinematics_prefix + "kinematics_solver_timeout", 0.0);
   const auto pick_ik_solver = declare_parameter<std::string>(
     "pick_ik_solver", "kdl_kinematics_plugin/KDLKinematicsPlugin");
   const auto pick_ik_solve_type = declare_parameter<std::string>("pick_ik_solve_type", "");
@@ -429,7 +436,11 @@ MotionNode::MotionNode(
         "trajectory_clock_liveness_timeout_s", 2.0);
 
       rclcpp::NodeOptions backend_options;
-      std::vector<rclcpp::Parameter> backend_parameters;
+      std::vector<rclcpp::Parameter> backend_parameters{
+        rclcpp::Parameter("planning_group", planning_group),
+        rclcpp::Parameter("model_id", model_id),
+        rclcpp::Parameter("wrap_equivalent_joints", wrap_equivalent_joints),
+        rclcpp::Parameter("place_ik_seed_joints", place_ik_seed_joints)};
       if (has_parameter("use_sim_time")) {
         backend_parameters.emplace_back(
           "use_sim_time", get_parameter("use_sim_time").as_bool());
@@ -442,12 +453,12 @@ MotionNode::MotionNode(
       }
       if (!kinematics_solver.empty()) {
         backend_parameters.emplace_back(
-          "robot_description_kinematics.arm.kinematics_solver", kinematics_solver);
+          kinematics_prefix + "kinematics_solver", kinematics_solver);
         backend_parameters.emplace_back(
-          "robot_description_kinematics.arm.kinematics_solver_search_resolution",
+          kinematics_prefix + "kinematics_solver_search_resolution",
           kinematics_search_resolution);
         backend_parameters.emplace_back(
-          "robot_description_kinematics.arm.kinematics_solver_timeout", kinematics_timeout);
+          kinematics_prefix + "kinematics_solver_timeout", kinematics_timeout);
       }
       backend_parameters.emplace_back("pick_ik_solver", pick_ik_solver);
       backend_parameters.emplace_back("pick_ik_solve_type", pick_ik_solve_type);

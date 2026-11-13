@@ -481,7 +481,7 @@ BT::NodeStatus ValidateGraspCollision::execute(PlanningContext & context)
     context.attempt.grasp_validation_result->state, tcp,
     Eigen::Vector3d(center.x, center.y, center.z), context.object_orientation,
     context.attempt.grasp_contact_result.contact, insertion,
-    context.non_target_occupancy, context.finger_clearance);
+    context.non_target_occupancy, context.finger_clearance, context.joint_group->getName());
   if (!validation.valid) {
     context.attempt.failure_stage = "GRASP_COLLISION";
     context.attempt.failure_reason = validation.reason;
@@ -593,7 +593,8 @@ BT::NodeStatus ValidateApproachState::execute(PlanningContext & context)
       moveit::core::RobotState state(*context.robot_state);
       state.setJointGroupPositions(context.joint_group, positions);
       state.update();
-      const auto collision = validate_pick_state_collision(*context.approach_scene, state);
+      const auto collision = validate_pick_state_collision(
+        *context.approach_scene, state, context.joint_group->getName());
       if (collision.collision) {
         context.latest_collision_contacts.clear();
         for (const auto & contact : collision.contacts) {

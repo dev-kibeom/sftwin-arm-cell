@@ -127,6 +127,10 @@ def compose_owner_profiles(config, path):
     config['motion_configuration'] = {key: str(resolve(value, owner_path.parent))
                                       for key, value in read(owner_path).items()}
     validate_model_configuration(config)
+    for key in ('planning_group', 'model_id'):
+        merge_owned(motion, {key: model[key]}, 'motion')
+    for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
+        merge_owned(motion, {key: owners['robot']['joint_policy'][key]}, 'motion')
     return owners
 
 

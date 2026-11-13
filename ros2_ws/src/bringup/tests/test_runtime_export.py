@@ -77,3 +77,33 @@ print('ISAAC_DATA_ONLY')
     result = subprocess.run(['bash', str(ROOT / 'infra/isaac_sim/scripts/isaac_arm_cell.sh')], env=environment, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert 'ISAAC_DATA_ONLY' in result.stdout
+
+
+def test_launcher_consumes_exported_motion_selection_without_ros_python(tmp_path):
+    import os
+    import shlex
+
+    snapshot = export_runtime_configuration(PROFILE, tmp_path / 'runtime.json')
+    launcher_root = tmp_path / 'isaac'
+    launcher_root.mkdir()
+    launcher = launcher_root / 'isaac-sim.sh'
+    code = """import json, os
+from pathlib import Path
+config = json.loads(Path(os.environ['ARM_CELL_RUNTIME_CONFIG']).read_text())['configuration']
+assert config['motion']['planning_group'] == config['model_configuration']['planning_group']
+assert config['motion']['model_id'] == config['model_configuration']['model_id']
+for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
+    assert config['motion'][key] == config['robot']['joint_policy'][key]
+print('SELECTED_MOTION_CONFIGURATION')
+"""
+    launcher.write_text('#!/bin/sh\nexec python3 -I -c ' + shlex.quote(code) + '\n')
+    launcher.chmod(0o755)
+    environment = dict(os.environ)
+    environment.pop('PYTHONPATH', None)
+    environment['ISAAC_SIM_ROOT'] = str(launcher_root)
+    result = subprocess.run(
+        ['bash', str(ROOT / 'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
+         '--runtime-config', str(snapshot)],
+        env=environment, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert 'SELECTED_MOTION_CONFIGURATION' in result.stdout

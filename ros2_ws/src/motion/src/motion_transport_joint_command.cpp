@@ -126,7 +126,9 @@ uint8_t IsaacRosMotionTransport::plan_normalized(
       start.joint_state = cached->start_state;
       moveit_msgs::msg::RobotTrajectory trajectory;
       trajectory.joint_trajectory = cached->trajectory;
-      if (!scene.isPathValid(start, trajectory, "arm")) {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
+      if (!scene.isPathValid(start, trajectory, planning_group_)) {
+        return Code::TASK_RESULT_PATH_OBSTRUCTED;
+      }
     }
     plan = std::move(*cached);
     plan.request = request;
@@ -240,8 +242,8 @@ uint8_t IsaacRosMotionTransport::generate_place_waypoint_approach(
   }
   nlohmann::json artifact;
   artifact["schema_version"] = 1;
-  artifact["robot_model"] = "m0609_robotiq_2f85";
-  artifact["planning_group"] = "arm";
+  artifact["robot_model"] = model_id_;
+  artifact["planning_group"] = planning_group_;
   artifact["planning_config"] = {
     {"planner_id", planning_planner_id_},
     {"velocity_scaling", planning_velocity_scaling_factor_},
