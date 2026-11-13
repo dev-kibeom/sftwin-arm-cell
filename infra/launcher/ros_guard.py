@@ -14,12 +14,12 @@ class Process:
     parent: int
     start: int
     argv: tuple
-    cwd: Path
+    cwd: Path | None
 
 
-def snapshot():
+def snapshot(proc_root=Path('/proc')):
     processes = {}
-    for entry in Path('/proc').iterdir():
+    for entry in proc_root.iterdir():
         if not entry.name.isdigit():
             continue
         try:
@@ -30,9 +30,15 @@ def snapshot():
                 continue
             argv = tuple(part.decode(errors='replace') for part in
                          (entry / 'cmdline').read_bytes().split(b'\0') if part)
+            try:
+                cwd = (entry / 'cwd').resolve(strict=True)
+            except PermissionError:
+                # Same-UID protected processes can expose cmdline/stat but deny
+                # cwd. Retain their identity; classification decides relevance.
+                cwd = None
             processes[int(entry.name)] = Process(
                 int(entry.name), int(fields[1]), int(fields[19]), argv,
-                (entry / 'cwd').resolve(strict=True))
+                cwd)
         except (FileNotFoundError, ProcessLookupError):
             continue
         except PermissionError as exc:
@@ -71,7 +77,7 @@ def classify(processes, root, current_pid):
     foreign = [pid for pid, p in processes.items() if pid not in owned and
                pid != current_pid and (is_bringup(p) or
                installed_component(p) or
-               (p.cwd == root and p.argv and Path(p.argv[0]).name in ros_names))]
+               (p.cwd in (root, None) and p.argv and Path(p.argv[0]).name in ros_names))]
     if foreign:
         raise RuntimeError(f'소유 관계를 확인할 수 없는 ARM Cell 프로세스: {foreign}; '
                            '해당 실행을 종료한 뒤 다시 시작하세요.')

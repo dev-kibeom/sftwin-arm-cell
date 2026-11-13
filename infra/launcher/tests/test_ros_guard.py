@@ -86,3 +86,31 @@ def test_orphaned_generic_and_python_ros_nodes_block(tmp_path, argv):
 def test_editor_of_installed_file_is_unrelated(tmp_path):
     editor = Process(31, 1, 301, ('vim', '/other/ros2_ws/install/arm_cell_motion/config.yaml'), tmp_path)
     assert classify({31: editor}, tmp_path, 99) == {}
+
+
+@pytest.mark.parametrize('argv,blocked', [
+    (('unrelated-worker',), False),
+    (('/opt/ros/humble/bin/ros2', 'launch', 'arm_cell_bringup', 'arm_cell.launch.py'), True),
+    (('/opt/ros/humble/lib/moveit_ros_move_group/move_group',), True),
+])
+def test_unreadable_cwd_preserves_process_and_only_blocks_ros(tmp_path, monkeypatch, argv, blocked):
+    entry = tmp_path / '123'
+    entry.mkdir()
+    (entry / 'stat').write_text(Path(f'/proc/{os.getpid()}/stat').read_text())
+    (entry / 'cmdline').write_bytes(b'\0'.join(arg.encode() for arg in argv))
+    original_resolve = Path.resolve
+
+    def resolve(path, *args, **kwargs):
+        if path == entry / 'cwd':
+            raise PermissionError('protected cwd')
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'resolve', resolve)
+    processes = snapshot(tmp_path)
+    assert processes[123].argv == argv
+    assert processes[123].cwd is None
+    if blocked:
+        with pytest.raises(RuntimeError, match='123'):
+            classify(processes, tmp_path, 99)
+    else:
+        assert classify(processes, tmp_path, 99) == {}
