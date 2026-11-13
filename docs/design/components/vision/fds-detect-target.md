@@ -258,16 +258,8 @@ Robot/Tool Geometry가 바뀌거나 제거되어도 Vision Object Reference 결�
 
 Depth Scene Stability는 RGB Pixel·Candidate Output·Simulator Ground Truth 없이 Depth 값만으로 판정한다. 샘플은 RGB Pairing과 독립적인, 호환 CameraInfo·Calibration을 가진 신선한 Depth 관측이다. Detection 전에 연속 유효 샘플 5개가 필요하며 Detector는 정확히 STABLE로 평가된 Depth 관측을 받아야 한다. TF Preflight로 호출할 수 없으면 동일 Acquisition Deadline 내 대기할 수 있고 이후 관측을 쓰려면 그 관측도 STABLE이어야 한다. Stable 판정만으로 유효한 부재·후보 인계를 생성할 수 없다. 무효 Time·비호환 CameraInfo/Calibration·유효 Depth Pixel 부재·두 시간 비교 중 하나라도 Comparable Pixel 부재·설정 Tolerance를 초과한 Changed-Pixel Ratio는 STABLE을 만들 수 없다. Tray Visibility·Coverage Ratio는 Detector 진입 조건이 아니다. Scene Stability는 원래 Camera Depth(m 단위)를 Filter·Projection·Segmentation·Candidate Data 없이 비교하며 Detector Geometry 적격성·후보 결과·유효 부재 Coverage 규칙을 변경하지 않는다.
 
-### Tray stability observation scope and duration
+### 트레이 안정화 관측 범위와 유지 시간
 
-Scene Stability compares original camera Depth pixels only inside the fixed image
-footprint of the configured Tray workspace on the calibrated support plane (Tray Z=0).
-The footprint is independent of current measured object depth. Changed-pixel ratios
-use comparable pixels inside that footprint; pixels outside it do not contribute.
-Both the baseline and previous-frame comparisons must meet the configured tolerance.
-At least `scene_stability.stable_observation_count` observations and
-`scene_stability.minimum_stable_duration_s` (deployment default 0.5 seconds) of
-Depth source time must qualify before the latest observation is sent to the detector.
-Motion or invalid input resets the consecutive stable interval. The request's existing
-steady deadline still bounds the entire acquisition; elapsed wall time alone does not
-satisfy the stable duration.
+Scene Stability는 보정된 지지 평면(Tray Z=0)에서 설정된 트레이 작업 영역을 영상에 투영한 고정 영역 안의 원본 Camera Depth 픽셀만 비교한다. 이 영역은 현재 측정된 자재 깊이와 독립적이다. Changed-pixel Ratio의 분모는 해당 영역 안에서 비교 가능한 픽셀이며, 영역 밖 픽셀은 계산에 포함하지 않는다. 기준 프레임 및 직전 프레임과의 비교가 모두 설정된 허용치를 만족해야 한다.
+
+최신 관측을 Detector에 전달하려면 최소 `scene_stability.stable_observation_count`회의 관측과 Depth 촬영 시각 기준 `scene_stability.minimum_stable_duration_s`(배포 기본값 0.5초)의 안정 유지 시간을 모두 충족해야 한다. 움직임이나 무효 입력은 연속 안정 구간을 초기화한다. 요청의 기존 steady deadline은 전체 Acquisition을 계속 제한하며, 실제 시간의 경과만으로 안정 유지 시간을 충족하지 않는다.

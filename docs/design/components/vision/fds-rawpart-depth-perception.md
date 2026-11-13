@@ -293,16 +293,8 @@ Vision은 객체 해석의 HIGH/MEDIUM/LOW Confidence와 SELECTED/ALTERNATIVE/UN
 
 Vision은 한 Acquisition의 모든 가설을 내부 평가하고 SELECTED인 적격 HIGH와 MEDIUM 전체를 단일 `material_candidates` Stable Enumeration 목록으로 반환해야 한다(SHALL). 미선택 대안·미해결·거부 상태는 Confidence와 분리하여 진단에 남기고 반환하지 않는다. LOW·REJECTED와 미해결 관측은 일반 PICK 목록에서 제외하고 진단·Snapshot에 보존해야 한다(SHALL). 단일 목록이 비었을 때 유효한 최종 관측의 Geometry 미해결은 기존 Geometry Failure, 일시적인 관측 Evidence 부족은 Temporary Invalid 결과로 구분하며, 유효 부재가 기존 Coverage·Support 조건으로 확인된 경우에만 `OBJECT_NOT_FOUND`를 반환한다(SHALL). 단일 목록 안에서 단일 후보 선택이나 PICK 작업 우선순위를 부여해서는 안 된다(SHALL NOT). Motion Action Payload에는 confidence field를 추가하지 않는다(SHALL NOT). Orchestration은 전체 후보를 변경 없이 전달하고 PICK 실행 우선순위는 Task Execution이 소유한다. Confidence는 PICK 우선순위 근거가 아니다.
 
-### Tray stability observation scope and duration
+### 트레이 안정화 관측 범위와 유지 시간
 
-Scene Stability compares original camera Depth pixels only inside the fixed image
-footprint of the configured Tray workspace on the calibrated support plane (Tray Z=0).
-The footprint is independent of current measured object depth. Changed-pixel ratios
-use comparable pixels inside that footprint; pixels outside it do not contribute.
-Both the baseline and previous-frame comparisons must meet the configured tolerance.
-At least `scene_stability.stable_observation_count` observations and
-`scene_stability.minimum_stable_duration_s` (deployment default 0.5 seconds) of
-Depth source time must qualify before the latest observation is sent to the detector.
-Motion or invalid input resets the consecutive stable interval. The request's existing
-steady deadline still bounds the entire acquisition; elapsed wall time alone does not
-satisfy the stable duration.
+Scene Stability는 보정된 지지 평면(Tray Z=0)에서 설정된 트레이 작업 영역을 영상에 투영한 고정 영역 안의 원본 Camera Depth 픽셀만 비교한다. 이 영역은 현재 측정된 자재 깊이와 독립적이다. Changed-pixel Ratio의 분모는 해당 영역 안에서 비교 가능한 픽셀이며, 영역 밖 픽셀은 계산에 포함하지 않는다. 기준 프레임 및 직전 프레임과의 비교가 모두 설정된 허용치를 만족해야 한다.
+
+최신 관측을 Detector에 전달하려면 최소 `scene_stability.stable_observation_count`회의 관측과 Depth 촬영 시각 기준 `scene_stability.minimum_stable_duration_s`(배포 기본값 0.5초)의 안정 유지 시간을 모두 충족해야 한다. 움직임이나 무효 입력은 연속 안정 구간을 초기화한다. 요청의 기존 steady deadline은 전체 Acquisition을 계속 제한하며, 실제 시간의 경과만으로 안정 유지 시간을 충족하지 않는다.
