@@ -51,7 +51,10 @@ target_sources(detect_target_processor PRIVATE
   src/cuboid_unresolved.cpp
   src/cuboid_top_face_geometry.cpp
   src/cuboid_top_face_selection.cpp
-  src/rawpart_depth_profile.cpp
+  src/depth_profile_processor.cpp
+  src/depth_profile_validation.cpp
+  src/depth_observation.cpp
+  src/support_calibration.cpp
   src/depth_scene_stability.cpp)
 target_compile_features(detect_target_processor PUBLIC cxx_std_17)
 target_include_directories(detect_target_processor PUBLIC include)

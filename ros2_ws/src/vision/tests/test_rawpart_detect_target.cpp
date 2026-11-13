@@ -205,6 +205,70 @@ void set_rotated_rectangle(
   }
 }
 
+TEST(CuboidMaterialProfiles, DetectsEachConfiguredCncMaterialThroughTheProcessor)
+{
+  struct Material
+  {
+    std::string id;
+    std::array<double, 3> dimensions;
+  };
+  for (const auto & material : std::vector<Material>{
+      {"TestCube", {0.07, 0.07, 0.08}},
+      {"AL_BILLET_060_040_030", {0.06, 0.04, 0.03}},
+      {"STEEL_BLANK_070_050_040", {0.07, 0.05, 0.04}},
+      {"AL_PLATE_080_060_020", {0.08, 0.06, 0.02}},
+      {"FutureCuboid", {0.06, 0.04, 0.03}}})
+  {
+    SCOPED_TRACE(material.id);
+    auto profile = rawpart_profile();
+    profile.target_id = material.id;
+    profile.material_id = material.id;
+    profile.dimensions_m = material.dimensions;
+    auto input = rgbd_input(false);
+    clear_candidate(input, 72, 168, 16, 16);
+    const float depth = static_cast<float>(1.0 - material.dimensions[2]);
+    set_rotated_rectangle(input, 0.0,
+      static_cast<int>(std::lround(material.dimensions[0] * kFocalLength / depth)),
+      static_cast<int>(std::lround(material.dimensions[1] * kFocalLength / depth)), depth);
+    const auto result = process_with_fixture_calibration(input, material.id, {profile});
+    ASSERT_EQ(result.result_code, ResultCode::DETECT_RESULT_SUCCESS) << result.diagnostic_detail;
+    ASSERT_FALSE(result.ordered_candidates.empty());
+    EXPECT_NEAR(result.ordered_candidates.front().estimated_height_m, material.dimensions[2], 0.005);
+    ASSERT_TRUE(result.applied_profile);
+    EXPECT_EQ(result.applied_profile->material_id, material.id);
+  }
+}
+
+TEST(CuboidMaterialProfiles, CalibratesSupportWithoutDependingOnMaterialIdentity)
+{
+  for (const auto & id : {"AL_BILLET_060_040_030", "STEEL_BLANK_070_050_040", "AL_PLATE_080_060_020"}) {
+    SCOPED_TRACE(id);
+    auto profile = rawpart_profile();
+    profile.target_id = id;
+    profile.material_id = id;
+    arm_cell_vision::DetectTargetProcessor processor;
+    const auto result = processor.process(rgbd_input(true), id, {profile}, true);
+    EXPECT_EQ(result.processing_stage, "calibration_only") << result.diagnostic_detail;
+    EXPECT_TRUE(processor.support_calibration_snapshot().ready);
+  }
+}
+
+TEST(CuboidMaterialProfiles, StillRejectsMismatchedIdentityAndInvalidGeometry)
+{
+  auto profile = rawpart_profile();
+  profile.target_id = "AL_PLATE_080_060_020";
+  const auto mismatched = process_with_fixture_calibration(rgbd_input(false), profile.target_id, {profile});
+  EXPECT_EQ(mismatched.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
+  profile.material_id = profile.target_id;
+  profile.shape = "sphere";
+  const auto wrong_shape = process_with_fixture_calibration(rgbd_input(false), profile.target_id, {profile});
+  EXPECT_EQ(wrong_shape.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
+  profile.shape = "box";
+  profile.dimensions_m[0] = 0.0;
+  const auto invalid_size = process_with_fixture_calibration(rgbd_input(false), profile.target_id, {profile});
+  EXPECT_EQ(invalid_size.result_code, ResultCode::DETECT_RESULT_INVALID_RESULT);
+}
+
 TEST(RawPartDetectTarget, CuboidAlgorithmRemainsSelectableAcrossAcquisitions)
 {
   auto input = rgbd_input(true);

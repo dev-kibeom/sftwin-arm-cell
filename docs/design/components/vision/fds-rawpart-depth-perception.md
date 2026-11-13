@@ -96,7 +96,7 @@ Service Steady-clock Deadline은 유효한 Set 대기를 제한한다. Timeout·
 
 ### 2.2 로드된 Calibration과 Runtime Support Geometry
 
-Vision CDS가 고정 설비 가정·Calibration 파일 생성·선택·호환성·READY를 소유한다. 이 FDS는 TestCube Runtime Processing 경계만 소유한다. Runtime Deprojection은 `vision.calibration_file`에서 로드한 Transform과 Operational Profile의 Tray/Support Geometry를 사용한다. ArUco를 검출하거나 설치 Depth 검사를 반복하지 않는다.
+Vision CDS가 고정 설비 가정·Calibration 파일 생성·선택·호환성·READY를 소유한다. 이 FDS는 등록된 cuboid 자재의 Runtime Processing 경계를 소유한다. TestCube는 기본 검증 자재이며 특정 자재 이름이 알고리즘 적격 조건은 아니다. Runtime Deprojection은 `vision.calibration_file`에서 로드한 Transform과 Operational Profile의 Tray/Support Geometry를 사용한다. ArUco를 검출하거나 설치 Depth 검사를 반복하지 않는다.
 
 설치 Observation Count와 Evidence 검사는 명시적 Calibration에 속한다. Runtime Depth Scene Stability는 `vision.scene_stability.stable_observation_count`의 공유 연속 Observation Count를 사용한다. Simulator에서 유도한 Transform Scale이나 Startup Observation Count가 Vision CDS에 따라 선택된 Measured Calibration을 대체하지 않는다.
 

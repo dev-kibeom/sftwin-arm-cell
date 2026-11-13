@@ -246,3 +246,8 @@ Production 센서 관측 가능성과 시뮬레이터 Ground Truth 독립성에 
 
 ### VR-VIS-OWN-10 — Profile 선택 검증
 구체적인 요청 선택 판정 기준은 [TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-OWN-10`을 유지한다.
+
+
+### Depth 프로필 처리의 구현 경계
+
+`depth_profile_processor.cpp`는 요청 대상 프로필 선택, 입력 검증의 적용, Calibration 준비 상태 확인 및 `cuboid_top_face` 호출을 연결한다. `depth_profile_validation.cpp`는 자재 ID 일치·box 형상·치수·ROI·센서 입력 조건을 검사하며 특정 자재 이름을 요구하지 않는다. `support_calibration.cpp`는 Support 기준 변환의 명시적 보정과 캐시 상태를 소유하고, `depth_observation.cpp`는 Depth 읽기·변환 및 현재 Tray 관측 범위를 계산한다. 공통 내부 선언은 `depth_profile_support.hpp`에 둔다. 도달할 수 없던 과거 Rectangle 검출 경로는 제거하며 실제 후보 생성은 기존 `cuboid_top_face` 구현이 소유한다.
