@@ -67,7 +67,7 @@ def planning_limits(path, joint_names, joints):
 def prim_path(value, label, absolute):
     if (not isinstance(value, str) or not value or
             value.startswith('/') != absolute or
-            any(not part.isidentifier() for part in value.lstrip('/').split('/'))):
+            any(not part.isidentifier() for part in (value[1:] if absolute else value).split('/'))):
         raise ValueError(f'{label} requires a {"stage-absolute" if absolute else "model-relative"} prim path')
     return value
 

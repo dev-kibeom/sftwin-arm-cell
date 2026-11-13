@@ -185,6 +185,7 @@ def test_planning_group_cannot_hide_extra_movable_members(selection, tmp_path):
 
 @pytest.mark.parametrize('owner,key,value', [
     ('cell', 'robot_prim_path', '/World/robot-name'),
+    ('cell', 'robot_prim_path', '//World/Robot'),
     ('model', 'articulation_root', 'root-joint'),
 ])
 def test_binding_paths_require_prim_identifiers(selection, owner, key, value):
