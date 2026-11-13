@@ -119,16 +119,6 @@ inline GraspContactPolicyReason planning_scene_failure_reason(
   return GraspContactPolicyReason::ACCEPTED;
 }
 
-enum class GraspContactClass
-{
-  EXPECTED_TARGET_FINGERTIP,
-  TARGET_UNAUTHORIZED_ROBOT_LINK,
-  ROBOT_SELF_CONTACT,
-  UNRELATED_WORLD_OBJECT,
-  UNRELATED_FIXTURE,
-  STALE_OR_DUPLICATE_COLLISION_OBJECT
-};
-
 inline bool valid_grasp_contact_config(
   const std::string & prefix, const std::string & target_identity,
   const std::vector<std::string> & authorized_links)
@@ -229,37 +219,6 @@ inline std::optional<moveit_msgs::msg::AllowedCollisionMatrix> allow_current_tar
     result.entry_values.push_back(entry);
   }
   return result;
-}
-
-inline GraspContactClass classify_grasp_contact(
-  const std::string & body1, uint8_t type1, const std::string & body2, uint8_t type2,
-  const std::string & target_object_id, const std::vector<std::string> & authorized_links)
-{
-  const auto is_target = [&target_object_id](const std::string & body) {
-      return body == target_object_id;
-    };
-  const auto is_link = [&authorized_links](const std::string & body) {
-      return std::find(authorized_links.begin(), authorized_links.end(), body) !=
-             authorized_links.end();
-    };
-  if (type1 == 1U && type2 == 1U) {
-    return GraspContactClass::ROBOT_SELF_CONTACT;
-  }
-  if ((is_target(body1) && is_link(body2)) || (is_target(body2) && is_link(body1))) {
-    return GraspContactClass::EXPECTED_TARGET_FINGERTIP;
-  }
-  if ((is_target(body1) && type2 == 1U) || (is_target(body2) && type1 == 1U)) {
-    return GraspContactClass::TARGET_UNAUTHORIZED_ROBOT_LINK;
-  }
-  if ((type1 == 2U && body1.rfind("wu14_fixture_", 0) == 0 && !is_target(body1)) ||
-    (type2 == 2U && body2.rfind("wu14_fixture_", 0) == 0 && !is_target(body2)))
-  {
-    return GraspContactClass::UNRELATED_FIXTURE;
-  }
-  if (type1 == 2U || type2 == 2U) {
-    return GraspContactClass::UNRELATED_WORLD_OBJECT;
-  }
-  return GraspContactClass::STALE_OR_DUPLICATE_COLLISION_OBJECT;
 }
 
 }  // namespace arm_cell_motion

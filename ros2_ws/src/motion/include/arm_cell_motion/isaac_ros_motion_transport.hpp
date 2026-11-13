@@ -311,6 +311,7 @@ private:
   mutable std::mutex current_fixture_object_id_mutex_;
   std::string current_fixture_object_id_;
   std::vector<std::string> validation_grasp_contact_links_;
+  std::vector<std::string> pick_clearance_objects_;
   std::vector<std::string> payload_touch_links_;
   std::string pick_retract_contact_object_;
   std::vector<std::string> pick_retract_contact_links_;

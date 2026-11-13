@@ -1172,3 +1172,10 @@ def test_motion_receives_selected_assembly_kinematics_and_joint_policy(tmp_path,
     assert list(parameters['place_ik_seed_joints']) == ['joint_4']
     for key, value in kinematics['selected_group'].items():
         assert parameters[f'robot_description_kinematics.selected_group.{key}'] == value
+
+
+def test_motion_receives_cell_clearance_objects():
+    profile = load_profile(PROFILE_PATH)
+    parameters = _node_parameters(_project_nodes(_composed_nodes())['motion_node'])
+    assert (list(parameters['pick_clearance_objects']) ==
+            profile['cell']['collision_objects']['pick_clearance'])

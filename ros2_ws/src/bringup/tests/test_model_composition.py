@@ -265,3 +265,26 @@ def test_export_preserves_production_contact_owners(tmp_path, profile):
         ('pick_retract_contact_object', config['cell']['contact_objects']['pick_retract']),
     ):
         assert config['motion'][parameter] == owner
+
+
+@pytest.mark.parametrize('profile', ['operational_profile.yaml', 'pnp_validation_profile.yaml'])
+def test_pick_clearance_objects_preserve_existing_rail_selection(tmp_path, profile):
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    path = export_runtime_configuration(PROFILE.parent / profile, tmp_path / 'runtime.json')
+    config = load_profile(path)
+    selected = config['motion']['pick_clearance_objects']
+    assert selected == config['cell']['collision_objects']['pick_clearance']
+    assert selected == ['amr_tray_rail_left', 'amr_tray_rail_right',
+                        'amr_tray_rail_front', 'amr_tray_rail_rear']
+    # The precheck previously selected all present objects with this prefix.
+    scene_path = (config['cell']['static_scene'] if profile == 'operational_profile.yaml'
+                  else config['cell']['validation_planning_scene']['static_scene_file'])
+    ids = {obj['id'] for obj in yaml.safe_load(Path(scene_path).read_text())['objects']}
+    assert ids & set(selected) == {name for name in ids if name.startswith('amr_tray_rail_')}
+
+
+def test_pick_clearance_objects_follow_selected_cell(selection):
+    def change(d):
+        d['cell']['collision_objects']['pick_clearance'] = ['amr_tray']
+    config = selection(change)
+    assert config['motion']['pick_clearance_objects'] == ['amr_tray']

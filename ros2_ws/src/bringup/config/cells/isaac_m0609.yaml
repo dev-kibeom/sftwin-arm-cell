@@ -32,6 +32,14 @@ work_locations:
   validation: package://arm_cell_bringup/config/cells/isaac_m0609/validation_location.yaml
 validation_planning_scene:
   static_scene_file: package://arm_cell_motion/config/moveit/m0609_pnp_static_scene.json
+# Existing scene objects used by TCP-rigid collision and finger-space ranking.
+# Geometry remains owned by the canonical environment/static scene.
+collision_objects:
+  pick_clearance:
+  - amr_tray_rail_left
+  - amr_tray_rail_right
+  - amr_tray_rail_front
+  - amr_tray_rail_rear
 contact_objects:
   pick_retract: amr_tray
 isaac:

@@ -228,6 +228,8 @@ MotionNode::MotionNode(
     "wrap_equivalent_joints", std::vector<std::string>{});
   const auto place_ik_seed_joints = declare_parameter<std::vector<std::string>>(
     "place_ik_seed_joints", std::vector<std::string>{});
+  const auto pick_clearance_objects = declare_parameter<std::vector<std::string>>(
+    "pick_clearance_objects", std::vector<std::string>{});
   const auto payload_touch_links = declare_parameter<std::vector<std::string>>(
     "payload_touch_links", std::vector<std::string>{});
   const auto pick_retract_contact_links = declare_parameter<std::vector<std::string>>(
@@ -445,6 +447,7 @@ MotionNode::MotionNode(
       std::vector<rclcpp::Parameter> backend_parameters{
         rclcpp::Parameter("planning_group", planning_group),
         rclcpp::Parameter("model_id", model_id),
+        rclcpp::Parameter("pick_clearance_objects", pick_clearance_objects),
         rclcpp::Parameter("payload_touch_links", payload_touch_links),
         rclcpp::Parameter("pick_retract_contact_links", pick_retract_contact_links),
         rclcpp::Parameter("pick_retract_contact_object", pick_retract_contact_object),

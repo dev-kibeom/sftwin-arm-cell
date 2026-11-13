@@ -267,3 +267,20 @@ TEST(MotionNodeParameters, GraspOccupancyProfileModesAndDimensionsAreValidatedAt
     }
   }
 }
+
+TEST(MotionNodeParameters, LoadsCellClearanceObjectSelectionAsStaticInput)
+{
+  if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
+  rclcpp::NodeOptions options;
+  const std::vector<std::string> selected{"fixture_guard", "work_surface"};
+  options.parameter_overrides({rclcpp::Parameter("pick_clearance_objects", selected)});
+  auto node = std::make_shared<arm_cell_motion::MotionNode>(
+    std::make_shared<arm_cell_motion::FakeMotionBackend>(), options);
+  EXPECT_EQ(node->get_parameter("pick_clearance_objects").as_string_array(), selected);
+  EXPECT_FALSE(
+    node->set_parameter(
+      rclcpp::Parameter(
+        "pick_clearance_objects", std::vector<std::string>{"other_guard"})).successful);
+  node.reset();
+  rclcpp::shutdown();
+}
