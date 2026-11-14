@@ -181,9 +181,10 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 1. Robot·Tool·Cell·Backend를 선택합니다. 기본 조합은 기존 M0609 + Robotiq 2F-85 +
    `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
-   Actuator와 Grasp에서 구동·파지 방식을 선택합니다. 기본은 `Logical + Fixed Attach`이며,
-   물리 파지는 `Physics + Physical`을 선택합니다. Tool Profile이 지원하는 조합만 표시하고,
-   실행 중에는 선택을 잠급니다. Physics 표시는 실제 파지의 라이브 검증 완료를 뜻하지 않습니다.
+   Tool에 연동된 `Tool Mode`를 선택합니다. 병렬 그리퍼의 기본은 `Logical Snap`이며,
+   물리 구동과 논리 고정은 `Physics Snap`, 접촉·마찰 기반 시뮬레이션 파지는 `Physics Real`입니다.
+   Tool Profile이 지원하는 모드만 표시하고 실행 중에는 선택을 잠급니다.
+   `Physics Real`은 실물 장비 연결이나 실제 파지의 라이브 검증 완료를 뜻하지 않습니다.
 2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
 3. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
 4. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.

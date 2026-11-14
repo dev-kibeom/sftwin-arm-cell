@@ -323,18 +323,42 @@ def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
     assert runtime.returncode == -signal.SIGINT
 
 
-def test_tool_modes_show_supported_pairs_and_export_one_shared_selection(window, monkeypatch):
-    assert window.tool_modes['actuator'].currentData() == 'logical'
-    assert window.tool_modes['grasp'].currentData() == 'fixed_attach'
-    assert window.tool_modes['grasp'].findData('physical') == -1
-    actuator, grasp = window.tool_modes['actuator'], window.tool_modes['grasp']
-    actuator.setCurrentIndex(actuator.findData('physics'))
-    grasp.setCurrentIndex(grasp.findData('physical'))
+@pytest.mark.parametrize('label,pair', [
+    ('Logical Snap', ['logical', 'fixed_attach']),
+    ('Physics Snap', ['physics', 'fixed_attach']),
+    ('Physics Real', ['physics', 'physical']),
+])
+def test_tool_mode_presets_export_one_shared_selection(window, monkeypatch, label, pair):
+    combo = window.tool_mode
+    assert combo.currentText() == 'Logical Snap'
+    combo.setCurrentIndex(combo.findText(label))
+    assert combo.currentData() == pair
     assert window.isaac.isEnabled()
     calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
     window.start_isaac()
-    assert not actuator.isEnabled() and not grasp.isEnabled()
+    assert not combo.isEnabled()
     selected = json.loads(window.runtime.read_text())['configuration']['tool']['runtime']
-    assert (selected['actuator'], selected['grasp']) == ('physics', 'physical')
+    assert [selected['actuator'], selected['grasp']] == pair
     window.start_ros()
     assert calls[0][2]['ARM_CELL_RUNTIME_CONFIG'] == calls[1][2]['ARM_CELL_RUNTIME_CONFIG']
+
+
+def test_mode_choices_follow_selected_tool_profile(window, tmp_path):
+    import yaml
+    profile = {
+        'runtime': {
+            'actuator': 'logical', 'grasp': 'fixed_attach',
+            'supported_combinations': [['logical', 'fixed_attach']],
+            'launcher_modes': [dict(label='Selected Tool Snap',
+                combination=['logical', 'fixed_attach'], description='Selected Tool description')],
+        }
+    }
+    path = tmp_path/'selected-tool.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    tool = window.selectors['tool']
+    tool.addItem('Selected Tool', str(path))
+    tool.setCurrentIndex(tool.findData(str(path)))
+    assert window.tool_mode.currentText() == 'Selected Tool Snap'
+    assert window.tool_mode.count() == 1
+    assert window.tool_mode.toolTip() == 'Selected Tool description'
+    assert not window.isaac.isEnabled()  # No registered deployment claims this test Tool.

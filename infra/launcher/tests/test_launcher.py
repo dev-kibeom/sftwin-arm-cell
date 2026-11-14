@@ -135,3 +135,14 @@ def test_exported_configuration_cannot_change_tool_selection_at_load(tmp_path):
     path = export_selection(deployments(ROOT)[0], tmp_path/'runtime.json')
     with pytest.raises(ValueError, match='Re-export'):
         load_profile(path, tool_actuator='physics', tool_grasp='physical')
+
+
+def test_tool_display_metadata_cannot_add_unsupported_runtime_combination():
+    from launcher import tool_mode_choices
+    profile = {'runtime': {
+        'supported_combinations': [['logical', 'fixed_attach']],
+        'launcher_modes': [dict(label='Unsupported mode', combination=['logical', 'physical'])],
+    }}
+    choices = tool_mode_choices(profile)
+    assert [choice['combination'] for choice in choices] == [['logical', 'fixed_attach']]
+    assert all(choice['label'] != 'Unsupported mode' for choice in choices)
