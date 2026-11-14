@@ -4,7 +4,7 @@
 
 A simulator-backed ROS 2 workcell for developing and evaluating a Doosan M0609 robot with a Robotiq 2F-85 gripper. The project brings perception, motion planning, task orchestration, software safety supervision, material handoff, and an operator UI together around shared ROS interfaces.
 
-The current official release is v0.3.4. It improves Vision/PICK candidate selection, PLACE recovery, per-run diagnostic records, local D455 assets, and runtime logging. This is an engineering and simulation project, not a validated production or safety-rated robot cell.
+The current official release is v1.0.0, an engineering and simulation baseline with Robot/Tool/Cell composition, a GUI launcher, RB5-850E support and Vision/PnP improvements. It is not a validated production or safety-rated robot cell.
 
 ## Project Overview
 
@@ -277,7 +277,7 @@ for record interpretation.
 
 ## Documentation
 
-- [v0.3.4 release notes](docs/releases/v0.3.4.en.md) / [한국어](docs/releases/v0.3.4.ko.md): changes, upgrades, and verification scope
+- [v1.0.0 release notes](docs/releases/v1.0.0.en.md) / [한국어](docs/releases/v1.0.0.ko.md): changes, upgrades, and verification scope
 - [Project definition](docs/product/definition.md) and [live acceptance contract](docs/product/acceptance.md)
 - [System architecture](docs/design/architecture/), [component designs](docs/design/components/), and [interfaces](docs/design/interfaces/)
 - [Algorithm designs](docs/design/algorithms/)
