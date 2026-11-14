@@ -33,3 +33,11 @@ isaac:
     wrist1: 1000.0
     wrist2: 1000.0
     wrist3: 1000.0
+  # Simulation damping trial; imported acceleration-drive stiffness is 625.
+  joint_drive_damping:
+    base: 50.0
+    shoulder: 50.0
+    elbow: 50.0
+    wrist1: 50.0
+    wrist2: 50.0
+    wrist3: 50.0
