@@ -154,10 +154,20 @@ ROS 2 Humble과 Isaac Sim 5.1을 설치하고, 아래 [호스트 빌드 절차](
 Ubuntu 22.04 X11 기준 예시입니다.
 
 ```bash
-sudo apt-get install python3-venv libegl1 libxcb-cursor0 xterm
-python3 -m venv ~/.venvs/arm-cell-launcher
-~/.venvs/arm-cell-launcher/bin/python -m pip install -r infra/launcher/requirements.txt
-~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
+sudo apt-get install python3-pip libegl1 libxcb-cursor0 xterm
+python3 -m pip install -r infra/launcher/requirements.txt
+python3 launcher.py
+```
+
+Python 의존성은 PySide6, PyYAML, xacro이며 버전 범위는
+`infra/launcher/requirements.txt`에서 관리합니다. 설치와 실행에는 같은 Python 환경을
+사용합니다. 가상환경 사용 여부와 위치는 사용자가 선택합니다. 예를 들어 저장소 루트에
+가상환경을 만들려면 위 Python 명령을 실행하기 전에 다음을 수행합니다.
+
+```bash
+sudo apt-get install python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
 기존 설치도 위 requirements 설치 명령을 다시 실행해 의존성 제한을 적용합니다.
@@ -169,7 +179,7 @@ Isaac 설치 경로가 기본값 `~/isaac_sim`과 다르면 실행 전에 `ISAAC
 
 ```bash
 ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 \
-  ~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
+  python3 launcher.py
 ```
 
 1. Robot·Tool·Cell·Backend를 선택합니다. 첫 버전은 M0609 + Robotiq 2F85 + 기존
@@ -206,8 +216,8 @@ production 배포 Profile이 필요하며, Isaac 지원을 확장할 때 Launche
 Isaac 없이 GUI 회귀 테스트를 실행하려면 같은 Python 환경에 `pytest`를 설치합니다.
 
 ```bash
-~/.venvs/arm-cell-launcher/bin/python -m pip install pytest
-QT_QPA_PLATFORM=offscreen ~/.venvs/arm-cell-launcher/bin/python -m pytest -q infra/launcher/tests
+python3 -m pip install pytest
+QT_QPA_PLATFORM=offscreen python3 -m pytest -q infra/launcher/tests
 ```
 
 ### 설정 export와 Script Editor 실행
