@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import tempfile
 from pathlib import Path
 
 from camera_tooling.inspection_math import *  # compatibility re-export for inspect_camera
@@ -585,15 +586,36 @@ def inspect_stage(output_path, reference_prim_paths=None, *, camera_configuratio
             transform, reference_geometry
         ),
     }
-    output = Path(output_path).expanduser()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(snapshot, indent=2, default=list) + "\n")
-    print(f"Camera snapshot written: {output.resolve()}")
+    changed = write_camera_runtime_config(output_path, snapshot)
+    print(f"Camera runtime config {'written' if changed else 'unchanged'}: {Path(output_path).expanduser().resolve()}")
     return snapshot
 
 
+def write_camera_runtime_config(output_path, configuration):
+    """Preserve existing bytes for equal JSON values; publish changed inputs atomically."""
+    output = Path(output_path).expanduser()
+    content = json.dumps(configuration, indent=2, default=list) + "\n"
+    normalized = json.loads(content)
+    try:
+        if json.loads(output.read_text(encoding='utf-8')) == normalized:
+            return False
+    except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError):
+        pass
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=output.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(content)
+        os.replace(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return True
+
+
 def script_editor_output_path(
-    environ, script_path=None, default_filename="isaac_camera_stage_snapshot.json"
+    environ, script_path=None, default_filename="isaac_camera_runtime_config.json"
 ):
     """Use the selected runtime output; retain overrides for standalone tooling."""
     output = (selected_camera(environ['ARM_CELL_RUNTIME_CONFIG'])['snapshot'] if environ.get('ARM_CELL_RUNTIME_CONFIG')
@@ -628,7 +650,7 @@ def run_entrypoint(
     script_path=None,
     environ=None,
     inspector=inspect_stage,
-    output_filename="isaac_camera_stage_snapshot.json",
+    output_filename="isaac_camera_runtime_config.json",
 ):
     """Choose strict CLI parsing or the Script Editor-safe environment entrypoint."""
     effective_path = script_path if script_path is not None else __file__

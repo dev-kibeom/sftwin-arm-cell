@@ -321,3 +321,20 @@ def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
     window.terminals['isaac'].send_signal(signal.SIGUSR1)
     until(app, window, lambda: not window.stopping and not window.processes)
     assert runtime.returncode == -signal.SIGINT
+
+
+def test_tool_modes_show_supported_pairs_and_export_one_shared_selection(window, monkeypatch):
+    assert window.tool_modes['actuator'].currentData() == 'logical'
+    assert window.tool_modes['grasp'].currentData() == 'fixed_attach'
+    assert window.tool_modes['grasp'].findData('physical') == -1
+    actuator, grasp = window.tool_modes['actuator'], window.tool_modes['grasp']
+    actuator.setCurrentIndex(actuator.findData('physics'))
+    grasp.setCurrentIndex(grasp.findData('physical'))
+    assert window.isaac.isEnabled()
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    assert not actuator.isEnabled() and not grasp.isEnabled()
+    selected = json.loads(window.runtime.read_text())['configuration']['tool']['runtime']
+    assert (selected['actuator'], selected['grasp']) == ('physics', 'physical')
+    window.start_ros()
+    assert calls[0][2]['ARM_CELL_RUNTIME_CONFIG'] == calls[1][2]['ARM_CELL_RUNTIME_CONFIG']

@@ -181,6 +181,9 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 1. Robot·Tool·Cell·Backend를 선택합니다. 기본 조합은 기존 M0609 + Robotiq 2F-85 +
    `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
+   Actuator와 Grasp에서 구동·파지 방식을 선택합니다. 기본은 `Logical + Fixed Attach`이며,
+   물리 파지는 `Physics + Physical`을 선택합니다. Tool Profile이 지원하는 조합만 표시하고,
+   실행 중에는 선택을 잠급니다. Physics 표시는 실제 파지의 라이브 검증 완료를 뜻하지 않습니다.
 2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
 3. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
 4. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.
@@ -316,3 +319,9 @@ Stage의 `ARM`은 독립 고정형 로봇팔의 설치 역할이며 모델명은
 이 변경 코드의 라이브 PnP·Stop/Reset·E-Stop 회귀는 사용자가 별도로 확인해야 합니다.
 
 Tool의 Logical/Physics 구동 및 Fixed Attach/Physical Grasp 선택·한계·라이브 검증 항목은 [Tool Runtime 안내](infra/isaac_sim/TOOL_RUNTIME.md)를 참조한다.
+
+카메라 실행 입력은 `ros2_ws/src/sim_adapter/config/isaac_camera_runtime_config.json`입니다.
+Isaac Before Play에서 Stage의 카메라 상태를 추출하고 같은 설정을 선택한 ROS가 카메라 정적 TF 입력으로 읽습니다.
+진단 기록이나 사람이 유지하는 원본 Calibration 파일과 구분합니다. 경로의 디렉터리는 유지하며,
+JSON 값이 같으면 파일 내용·수정 시각을 보존하고 실제 값이 달라질 때만 저장합니다.
+기존 `isaac_camera_stage_snapshot.json`을 직접 지정한 외부 명령은 새 파일명으로 갱신하세요.

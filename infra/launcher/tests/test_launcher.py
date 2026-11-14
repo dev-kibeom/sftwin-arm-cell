@@ -107,3 +107,31 @@ def test_registered_rb5_export_is_isolated_from_default(tmp_path):
     assert selected['tool'] == first['configuration']['tool']
     assert selected['motion']['arm_joint_names'] == selected['robot']['motion']['arm_joint_names']
     assert selected['cell'] == first['configuration']['cell']
+
+
+@pytest.mark.parametrize('robot_profile', ['operational_profile.yaml', 'rb5_850_profile.yaml'])
+@pytest.mark.parametrize('actuator,grasp', [('logical','fixed_attach'), ('physics','fixed_attach'), ('physics','physical')])
+def test_selected_tool_modes_export_without_changing_robot_or_sources(tmp_path, robot_profile, actuator, grasp):
+    entry = next(item for item in deployments(ROOT) if item['profile'].name == robot_profile)
+    baseline = json.loads(export_selection(entry, tmp_path/'baseline.json').read_text())['configuration']
+    selected = dict(entry, tool_actuator=actuator, tool_grasp=grasp)
+    actual = json.loads(export_selection(selected, tmp_path/'selected.json').read_text())['configuration']
+    assert actual['tool']['runtime']['actuator'] == actuator
+    assert actual['tool']['runtime']['grasp'] == grasp
+    assert actual['robot'] == baseline['robot']
+    assert actual['home_joint_positions'] == baseline['home_joint_positions']
+    assert actual['cell'] == baseline['cell']
+    assert json.loads(export_selection(entry, tmp_path/'again.json').read_text())['configuration'] == baseline
+
+
+def test_unsupported_tool_modes_rejected_by_configuration_producer(tmp_path):
+    entry = dict(deployments(ROOT)[0], tool_actuator='logical', tool_grasp='physical')
+    with pytest.raises(ValueError, match='combination'):
+        export_selection(entry, tmp_path/'invalid.json')
+
+
+def test_exported_configuration_cannot_change_tool_selection_at_load(tmp_path):
+    from arm_cell_bringup.runtime import load_profile
+    path = export_selection(deployments(ROOT)[0], tmp_path/'runtime.json')
+    with pytest.raises(ValueError, match='Re-export'):
+        load_profile(path, tool_actuator='physics', tool_grasp='physical')
