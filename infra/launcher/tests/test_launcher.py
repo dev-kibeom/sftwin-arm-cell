@@ -15,7 +15,8 @@ from launcher import deployments, profile_choices, selected_deployment, export_s
 def test_default_matches_cli_and_preserves_sources(tmp_path):
     before = {p: p.read_bytes() for p in (ROOT / 'ros2_ws/src').rglob('*.yaml')}
     entries = deployments(ROOT)
-    assert len(entries) == 1
+    assert len(entries) == 2
+    assert entries[0]["profile"].name == "operational_profile.yaml"
     entry = entries[0]
     choices = profile_choices(ROOT)
     assert all(entry[key] in choices[key] for key in ('robot', 'tool', 'cell', 'backend'))
@@ -91,3 +92,18 @@ def test_ros_terminal_script_forwards_existing_launch_options(tmp_path, level):
                             capture_output=True, text=True, check=True)
     assert json.loads(result.stdout) == ['launch', 'arm_cell_bringup', 'arm_cell.launch.py',
                                        f'profile:={profile}', f'log_level:={level or "info"}']
+
+
+def test_registered_rb5_export_is_isolated_from_default(tmp_path):
+    entries = deployments(ROOT)
+    rb = next(entry for entry in entries if entry['profile'].name == 'rb5_850_profile.yaml')
+    assert rb['validation_status'] == 'live-pending'
+    first = json.loads(export_selection(entries[0], tmp_path / 'before.json').read_text())
+    selected = json.loads(export_selection(rb, tmp_path / 'rb.json').read_text())['configuration']
+    again = json.loads(export_selection(entries[0], tmp_path / 'after.json').read_text())
+    assert first == again
+    assert selected['robot']['robot_id'] == 'rb5_850'
+    assert selected['model_configuration']['robot_id'] == selected['robot']['robot_id']
+    assert selected['tool'] == first['configuration']['tool']
+    assert selected['motion']['arm_joint_names'] == selected['robot']['motion']['arm_joint_names']
+    assert selected['cell'] == first['configuration']['cell']

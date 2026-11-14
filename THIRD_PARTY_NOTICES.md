@@ -65,3 +65,16 @@ replace these third-party declarations or terms.
   materials still use the OmniPBR implementation supplied by Isaac Sim.
 - All files are checked into Git directly. No asset download or preparation step
   is required after a complete checkout.
+
+## Rainbow Robotics RB5-850E model material
+
+- Upstream: [RainbowRobotics/rbpodo_ros2](https://github.com/RainbowRobotics/rbpodo_ros2),
+  revision `5e8294a985e7ce5e20e70564c2681130afc5f502`, `rbpodo_description` 0.0.1.
+- License: Apache-2.0; upstream package license and metadata are preserved in
+  `assets/robots/rb5_850/third_party/rbpodo_description/`.
+- Original URDF, joint/link data and meshes are retained; the local Xacro is an
+  adapted derivative. Generated RB5 USD layers are derived compositions with
+  the existing Robotiq material (its BSD-3-Clause terms remain applicable).
+- Local modifications, variant limitations and redistribution review are recorded
+  in that directory's `UPSTREAM.md`; `SHA256SUMS.json` identifies original inputs.
+  The separately restricted manufacturer kinematics PDF is not redistributed.

@@ -114,3 +114,27 @@ def test_duplicate_joint_inside_selected_robot_is_ambiguous(exported_configurati
                    Joint('/World/Other/Arm/b/elbow')])
     with pytest.raises(RuntimeError, match='ambiguous.*elbow'):
         author_home_targets(stage, binding, Physics)
+
+
+def test_registered_rb5_assembly_reaches_graph_and_common_tool(tmp_path, monkeypatch):
+    from pathlib import Path
+    from arm_cell_bringup.runtime import export_runtime_configuration
+    root = Path(__file__).resolve().parents[6]
+    snapshot = export_runtime_configuration(
+        root / 'ros2_ws/src/bringup/config/rb5_850_profile.yaml', tmp_path / 'rb5.json')
+    monkeypatch.setenv('ARM_CELL_RUNTIME_CONFIG', str(snapshot))
+    config = load_runtime_configuration(snapshot)
+    binding = RobotBinding.from_runtime(config)
+    assert binding.joint_names == tuple(config['robot']['motion']['arm_joint_names'])
+    assert binding.home_positions == tuple(config['home_joint_positions'])
+    _, values, connections, _ = graph_declaration(str, binding=binding, camera=config['cell']['camera'])
+    values = dict(values)
+    for node in ('PublishJointState', 'ArticulationController'):
+        assert values[f'{node}.inputs:targetPrim'] == [binding.articulation_root_path]
+    assert ('SubscribeJointState.outputs:jointNames', 'ArticulationController.inputs:jointNames') in connections
+    from isaac_runtime.runtime_workflow import call_selected
+    import m0609_cell.runtime_entrypoints as entries
+    observed = []
+    monkeypatch.setattr(entries, '_run', lambda step, configuration, namespace: observed.append((step, configuration)))
+    call_selected(config['tool']['runtime']['isaac_bootstrap'], configuration=config, namespace={})
+    assert observed == [('bootstrap_gripper.py', config)]

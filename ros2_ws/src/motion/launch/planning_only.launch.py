@@ -11,7 +11,6 @@ from launch.actions import OpaqueFunction, SetEnvironmentVariable
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-import xacro
 import yaml
 
 
@@ -106,6 +105,10 @@ def compose(context):
     def config(name):
         return yaml.safe_load((share / 'config/moveit' / name).read_text())
 
+    helper = importlib.util.spec_from_file_location(
+        'motion_robot_description', share / 'launch/robot_description.py')
+    description_module = importlib.util.module_from_spec(helper)
+    helper.loader.exec_module(description_module)
     description = selected_path('robot_description_file', model['urdf'], model_path.parent)
     semantic = selected_path('robot_semantic_file', model['semantic'], model_path.parent)
     mesh_root = LaunchConfiguration('mesh_root', default=model['mesh_root']).perform(context)
@@ -133,9 +136,8 @@ def compose(context):
     parameters = [
         {
             "use_sim_time": True,
-            "robot_description": xacro.process_file(
-                str(description), mappings={"mesh_root": mesh_root},
-            ).toxml(),
+            "robot_description": description_module.load_robot_description(
+                description, resource(mesh_root, model_path.parent)),
             "robot_description_semantic": semantic.read_text(),
             "robot_description_kinematics": yaml.safe_load(selected_path('kinematics_file', policy['kinematics'], share / 'config').read_text()),
             "robot_description_planning": planning_limits,

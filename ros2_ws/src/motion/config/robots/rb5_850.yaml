@@ -1,0 +1,27 @@
+# RB5-850E pinned vendor model; simulation HOME/return, not controller teaching data.
+robot_id: rb5_850
+home: package://arm_cell_motion/config/robots/rb5_850/home.yaml
+joint_limits: package://arm_cell_motion/config/robots/rb5_850/joint_limits.yaml
+motion:
+  arm_joint_names:
+  - base
+  - shoulder
+  - elbow
+  - wrist1
+  - wrist2
+  - wrist3
+  retract_joint_positions: &id001
+  - 0
+  - -0.7853981633974483
+  - 1.5707963267948966
+  - -0.7853981633974483
+  - 0
+  - 0
+  place_tray_return_joint_positions: *id001
+joint_policy:
+  wrap_equivalent_joints: []
+  place_ik_seed_joints:
+  - base
+  - elbow
+isaac:
+  joint_drive_stiffness_scales: {}

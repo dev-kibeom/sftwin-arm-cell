@@ -57,3 +57,26 @@ def test_isaac_entry_point_preserves_model():
         )
         mesh.set("filename", key)
     assert canonical(model) == expected["model"]
+
+
+def test_installed_rb5_assembly_relocates_with_shared_tool():
+    import xacro
+    repository = Path(__file__).resolve().parents[4]
+    installed = Path(get_package_share_directory('arm_cell_motion')) / 'assets'
+    source = repository / 'assets'
+
+    def expanded(assets):
+        model = ET.fromstring(xacro.process_file(str(
+            assets / 'robots/rb5_850/urdf/rb5_850_robotiq_2f85.urdf.xacro')).toxml())
+        digests = {}
+        for mesh in model.findall('.//mesh'):
+            resource = Path(mesh.get('filename')).resolve()
+            # URI spelling may differ between source and installed trees.
+            root = source.resolve() if source.resolve() in resource.parents else assets.resolve()
+            key = resource.relative_to(root).as_posix()
+            assert resource.is_file()
+            digests[key] = hashlib.sha256(resource.read_bytes()).hexdigest()
+            mesh.set('filename', key)
+        return canonical(model), digests
+
+    assert expanded(installed) == expanded(source)

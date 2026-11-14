@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="rb5_850_robotiq_2f85">
+  <xacro:arg name="mesh_root" default="${xacro.abs_filename('../meshes')}"/>
+  <xacro:include filename="rb5_850_macro.xacro"/>
+  <xacro:include filename="../../../tools/robotiq_2f85/urdf/assembly.xacro"/>
+  <xacro:rb5_850_robot mesh_dir="$(arg mesh_root)"/>
+  <!-- Canonical base is coincident with the vendor's physical link0. -->
+  <link name="base_link"/>
+  <joint name="base_link_to_link0" type="fixed">
+    <parent link="base_link"/><child link="link0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  <!-- Vendor tcp is the flange centre at link6 (0,-0.0967,0).
+       Align Tool +Z outwards along flange -Y; +X stays vendor +X.
+       This is an ideal rigid simulation mount, not a manufactured adapter. -->
+  <link name="tool_mount"/>
+  <joint name="tcp_to_tool_mount" type="fixed">
+    <parent link="tcp"/><child link="tool_mount"/>
+    <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+  </joint>
+  <xacro:robotiq_2f85_assembly mesh_dir="${xacro.abs_filename('../../m0609_robotiq_2f85/meshes/robotiq')}"/>
+</robot>

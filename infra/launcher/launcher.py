@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
-from arm_cell_bringup.runtime import DEFAULT_PROFILES, export_runtime_configuration, read, resolve
+from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 
 
 OWNERS = {
@@ -43,12 +43,17 @@ def deployments(root=ROOT):
         if simulation.get('planning_profile') != 'isaac_planning.yaml':
             continue
         owners = {key: str(resolve(data['profiles'][key], path.parent)) for key in OWNERS}
-        # isaac_arm_cell_startup.py currently builds only the established M0609
-        # Cell. A new deployment alone cannot add simulator implementation.
-        if any(owners[key] != str(resolve(reference, path.parent))
-               for key, reference in DEFAULT_PROFILES.items()):
+        # A deployment registers one concrete Assembly and its owner profiles.
+        # Discovery checks identity; export performs full model validation.
+        model = read(resolve(data['model_configuration'], path.parent))
+        try:
+            if any(model[f'{key}_id'] != read(owners[key])[f'{key}_id']
+                   for key in ('robot', 'tool')):
+                continue
+        except (OSError, KeyError):
             continue
-        entries.append(dict(profile=path, backend=str(backend), **owners))
+        status = data.get('launcher', {}).get('validation_status', 'baseline')
+        entries.append(dict(profile=path, backend=str(backend), validation_status=status, **owners))
     return entries
 
 
@@ -158,6 +163,8 @@ class Launcher(QMainWindow):
         try:
             entry = self.selection()
             message = f"Profile: {entry['profile'].name}"
+            if entry['validation_status'] == 'live-pending':
+                message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
         except ValueError as exc:
             valid, message = False, str(exc)
         active = bool(self.processes or self.terminals) or self.stopping
@@ -168,7 +175,9 @@ class Launcher(QMainWindow):
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
-        self.status.setText(self.error or ('종료 중…' if self.stopping else states or message))
+        if states:
+            message = states + ' | ' + message
+        self.status.setText(self.error or ('종료 중…' if self.stopping else message))
 
     def spawn(self, name, command, environment):
         # The GUI owns the runtime directly; xterm only displays its PTY.
