@@ -66,7 +66,7 @@ class SimulationUIHubExtension(_ExtensionBase):
         from omni.kit.menu.utils import MenuHelperExtensionFull
 
         scripts_path = str(Path(__file__).resolve().parents[4] / "scripts")
-        cell_scripts_path = str(Path(scripts_path) / "m0609_cell")
+        cell_scripts_path = str(Path(scripts_path) / "pnp_cnc_cell")
         for path in (scripts_path, cell_scripts_path):
             if path not in sys.path:
                 sys.path.insert(0, path)

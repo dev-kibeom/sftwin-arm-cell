@@ -179,7 +179,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 **4. 셀을 시작합니다.**
 
 1. Robot·Tool·Cell·Backend를 선택합니다. 기본 조합은 기존 M0609 + Robotiq 2F-85 +
-   `isaac_m0609` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
+   `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
 2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
 3. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
@@ -299,3 +299,18 @@ ARM_CELL_LOG_LEVEL=info ARM_CELL_DIAGNOSTICS=vision,motion docker compose up --b
 프로젝트 자체 코드는 [MIT License](LICENSE)를 따릅니다. 로봇 모델과 제3자 에셋에는
 각각의 upstream 조건이 적용됩니다. 재배포 전 [Third-Party Notices](THIRD_PARTY_NOTICES.md)와
 함께 배포된 라이선스 및 출처 정보를 확인하세요.
+
+### Plugin과 Stage 명명
+
+Robot Plugin은 모델과 Robot 고유 관절·HOME·Drive 설정, Tool Plugin은 말단 장치의 구동·Capture,
+Cell Plugin은 작업 환경·Camera·Material Supply·장치 배치를 소유합니다.
+Model Assembly는 Robot·Tool의 물리적 결합과 모델 내부 Binding을 정의합니다.
+현재 공통 Cell은 `PnP_CNC`이며 `config/cells/isaac_pnp_cnc.yaml`과
+`infra/isaac_sim/scripts/pnp_cnc_cell/`에서 선택합니다. 공통 실행은 `isaac_runtime/`을 사용합니다.
+환경 원본은 `config/pnp_cnc_static_environment.json`입니다.
+
+두 Robot 모두 `/World/SF_Twin_Cell/ARM` 아래 선택한 Assembly를 로드합니다.
+Stage의 `ARM`은 독립 고정형 로봇팔의 설치 역할이며 모델명은 `robot_id`·`model_id`로 구분합니다.
+설치 경로는 Cell의 `isaac.robot_prim_path`에서만 설정하고 Graph·Tool·Capture는 같은 Robot Binding을 소비합니다.
+기존 URDF/SRDF·USD·Mesh와 모델별 HOME·Drive 설정은 유지합니다.
+이 변경 코드의 라이브 PnP·Stop/Reset·E-Stop 회귀는 사용자가 별도로 확인해야 합니다.

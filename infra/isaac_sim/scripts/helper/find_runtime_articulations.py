@@ -1,4 +1,4 @@
-"""Compatibility entrypoint for the M0609 runtime articulation probe."""
+"""Compatibility entrypoint for the selected Robot runtime articulation probe."""
 
 import os
 from pathlib import Path
@@ -9,13 +9,13 @@ def _add_cell_module_root():
     """Load the shared resolver before delegating all root validation to it."""
     configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
     bootstrap_root = (
-        Path(configured_root).expanduser() / "infra/isaac_sim/scripts/m0609_cell"
+        Path(configured_root).expanduser() / "infra/isaac_sim/scripts/pnp_cnc_cell"
         if configured_root
-        else Path(__file__).resolve().parents[1] / "m0609_cell"
+        else Path(__file__).resolve().parents[1] / "pnp_cnc_cell"
     )
     if not (bootstrap_root / "shared").is_dir():
         raise RuntimeError(
-            "Cannot locate M0609 Script Editor support. When running from Isaac "
+            "Cannot locate selected Robot Script Editor support. When running from Isaac "
             "Script Editor, set SFTWIN_PROJECT_ROOT to the repository root."
         )
     if str(bootstrap_root) not in sys.path:

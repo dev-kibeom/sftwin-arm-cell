@@ -1,0 +1,72 @@
+display_name: PnP_CNC
+geometry: project://config/pnp_cnc_static_environment.json
+static_scene: package://arm_cell_motion/config/moveit/pnp_cnc_static_scene.json
+world_to_base:
+  x: 0.15
+  y: -0.15
+  z: 0.68
+  roll: 0.0
+  pitch: 0.0
+  yaw: 0.0
+calibration_file: package://arm_cell_vision/config/calibration/isaac_overhead_wide.yaml
+tray_fiducial:
+  dictionary: DICT_4X4_50
+  marker_id: 0
+  size_m: 0.08
+  pose_translation_scale: 1.0011
+  support_frame: Tray
+  marker_in_support:
+    position_m:
+    - 0.0
+    - -0.249
+    - 0.1101
+    rpy_rad:
+    - 0.0
+    - 0.0
+    - 0.0
+motion:
+  place_waypoint_clearance_y_boundary_m: -0.926
+  place_waypoint_clearance_direction: POSITIVE_Y
+  place_waypoint_clearance_y_margin_m: 0.05
+work_locations:
+  cnc_loading: package://arm_cell_bringup/config/cells/isaac_pnp_cnc/cnc_loading_location.yaml
+  validation: package://arm_cell_bringup/config/cells/isaac_pnp_cnc/validation_location.yaml
+validation_planning_scene:
+  static_scene_file: package://arm_cell_motion/config/moveit/pnp_cnc_validation_static_scene.json
+# Existing scene objects used by TCP-rigid collision and finger-space ranking.
+# Geometry remains owned by the canonical environment/static scene.
+collision_objects:
+  pick_clearance:
+  - amr_tray_rail_left
+  - amr_tray_rail_right
+  - amr_tray_rail_front
+  - amr_tray_rail_rear
+contact_objects:
+  pick_retract: amr_tray
+isaac:
+  material_supply_factory: pnp_cnc_cell.cell_runtime:start_material_supply
+  camera_snapshot: pnp_cnc_cell.runtime_entrypoints:snapshot_camera
+  action_graph_builder: pnp_cnc_cell.runtime_entrypoints:build_action_graph
+  scene_builder: pnp_cnc_cell.scene_builder.composition:run_scene_build
+  robot_prim_path: /World/SF_Twin_Cell/ARM
+# Sensor placement remains relative to the existing Cell geometry.
+camera:
+  prim_path: /World/SF_Twin_Cell/Vision/Camera_Sensor
+  mount_prim_path: /World/SF_Twin_Cell/CameraRig/RealSense_D455
+  mount:
+    geometry_object: amr_base
+    translation_offset_m: [0.0, 0.02, 1.5650000000000002]
+    rotation_xyz_deg: [0.0, 90.0, 0.0]
+  frame_id: camera_color_optical_frame
+  link_frame_id: camera_link
+  rgb_topic: /camera/color/image_raw
+  depth_topic: /camera/aligned_depth_to_color/image_raw
+  camera_info_topic: /camera/color/camera_info
+  resolution: [1280, 720]
+  focal_length: 17.0
+  clipping_range_m: [0.10, 10.0]
+  snapshot: package://arm_cell_sim_adapter/config/isaac_camera_stage_snapshot.json
+material_supply:
+  profile: project://infra/isaac_sim/config/material_supply.yaml
+  delivery_root: /World/SF_Twin_Cell/MaterialSupply/Deliveries
+  support_geometry_object: amr_tray

@@ -15,7 +15,7 @@ def _load_protocol():
     root = os.environ.get("SFTWIN_PROJECT_ROOT")
     if not root:
         raise RuntimeError("SFTWIN_PROJECT_ROOT is required")
-    module_root = Path(root) / "infra/isaac_sim/scripts/m0609_cell"
+    module_root = Path(root) / "infra/isaac_sim/scripts/pnp_cnc_cell"
     sys.path.insert(0, str(module_root))
     from pnp_validation.live_fixture import FixtureCommandWriter, FixtureResponseReader
 

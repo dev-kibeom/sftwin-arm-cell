@@ -1,6 +1,6 @@
 raw_joint_states: /isaac/joint_states
 joint_states: /joint_states
-cell_profile: package://arm_cell_bringup/config/cells/isaac_m0609.yaml
+cell_profile: package://arm_cell_bringup/config/cells/isaac_pnp_cnc.yaml
 robot_profile: package://arm_cell_motion/config/robots/m0609.yaml
 motion_configuration: package://arm_cell_motion/config/planning.yaml
 model_configuration: package://arm_cell_motion/config/models/m0609_robotiq_2f85.yaml

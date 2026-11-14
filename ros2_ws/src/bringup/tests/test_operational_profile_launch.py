@@ -26,7 +26,7 @@ HOME_PATH = PACKAGE_ROOT.parent / "motion/config/home_joint_positions.yaml"
 def _isolate_recording_outputs(tmp_path, monkeypatch):
     root = tmp_path / "project"
     (root / "ros2_ws/src").mkdir(parents=True)
-    (root / "infra/isaac_sim/scripts/m0609_cell").mkdir(parents=True)
+    (root / "infra/isaac_sim/scripts/pnp_cnc_cell").mkdir(parents=True)
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(root))
 
 
@@ -459,7 +459,7 @@ def test_installed_launch_resolves_checkout_artifacts_from_any_working_directory
     module = _load_launch_module()
     checkout = tmp_path / "checkout"
     (checkout / "ros2_ws/src").mkdir(parents=True)
-    (checkout / "infra/isaac_sim/scripts/m0609_cell").mkdir(parents=True)
+    (checkout / "infra/isaac_sim/scripts/pnp_cnc_cell").mkdir(parents=True)
     installed_launch = (
         checkout
         / "ros2_ws/install/arm_cell_bringup/share/arm_cell_bringup/launch"
@@ -643,7 +643,7 @@ def test_operational_profile_selects_static_collision_geometry_for_isaac_motion(
         Path(__file__).resolve().parents[2]
         / "motion"
         / "config/moveit"
-        / "m0609_static_scene.json"
+        / "pnp_cnc_static_scene.json"
     )
     scene = json.loads(scene_path.read_text())
     objects = {item["id"]: item for item in scene["objects"]}

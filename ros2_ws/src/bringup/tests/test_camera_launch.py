@@ -146,7 +146,7 @@ def test_runtime_selection_precedes_standalone_profile_and_snapshot(tmp_path):
     # Re-export an owner profile so the runtime checksum remains authoritative.
     profile = yaml.safe_load(source.read_text())
     cell_path = tmp_path / 'cell.yaml'
-    cell = yaml.safe_load((source.parent / 'cells/isaac_m0609.yaml').read_text())
+    cell = yaml.safe_load((source.parent / 'cells/isaac_pnp_cnc.yaml').read_text())
     cell['camera'] = camera
     cell_path.write_text(yaml.safe_dump(cell))
     profile['profiles']['cell'] = str(cell_path)

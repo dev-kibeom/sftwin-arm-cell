@@ -42,7 +42,7 @@ contact_links:
 
 # Isaac implementation and optional capabilities are Tool-owned.
 runtime:
-  isaac_bootstrap: m0609_cell.runtime_entrypoints:bootstrap_robotiq
+  isaac_bootstrap: pnp_cnc_cell.runtime_entrypoints:bootstrap_robotiq
   implementation: robotiq_2f85
   capabilities: [width, parallel_grasp]
   max_width_mm: 85.0
