@@ -1,3 +1,4 @@
+#include <geometric_shapes/shapes.h>
 #include <gtest/gtest.h>
 #include <moveit/utils/robot_model_test_utils.h>
 #include <nlohmann/json.hpp>
@@ -537,3 +538,44 @@ TEST_F(ClosedGraspCollisionTest, OtherFloorObjectsAndBodyFloorContactsStayForbid
 }
 }  // namespace
 }  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST(GraspMountContact, AllowsOnlyFixedBaseRiserPair)
+{
+  moveit::core::RobotModelBuilder builder("mount", "base_link");
+  builder.addChain("base_link->tool", "prismatic");
+  builder.addGroupChain("base_link", "tool", "arm");
+  geometry_msgs::msg::Pose origin;
+  origin.orientation.w = 1.0;
+  builder.addCollisionBox("base_link", {0.02, 0.02, 0.02}, origin);
+  builder.addCollisionBox("tool", {0.02, 0.02, 0.02}, origin);
+  auto model = builder.build();
+  moveit::core::RobotState state(model);
+  state.setToDefaultValues();
+  state.setVariablePosition("base_link-tool-joint", 0.5);
+  state.update();
+  planning_scene::PlanningScene scene(model);
+  scene.getAllowedCollisionMatrixNonConst().setEntry("base_link", "tool", true);
+  scene.getWorldNonConst()->addToObject(
+    "robot_riser", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
+    Eigen::Isometry3d::Identity());
+  for (auto mode : {GraspOccupancyMode::NONE, GraspOccupancyMode::FULL_COLLISION}) {
+    auto result = validate_grasp_collision(
+      mode, scene, scene, state, Eigen::Isometry3d::Identity(),
+      Eigen::Vector3d::Zero(), Eigen::Quaterniond::Identity(), std::nullopt,
+      Eigen::Vector3d::UnitZ(), {}, {}, "");
+    EXPECT_TRUE(result.allowed);
+    EXPECT_TRUE(validate_pick_state_collision(scene, state, "").collision);
+    state.setVariablePosition("base_link-tool-joint", 0.0);
+    state.update();
+    result = validate_grasp_collision(
+      mode, scene, scene, state, Eigen::Isometry3d::Identity(),
+      Eigen::Vector3d::Zero(), Eigen::Quaterniond::Identity(), std::nullopt,
+      Eigen::Vector3d::UnitZ(), {}, {}, "");
+    EXPECT_FALSE(result.allowed);
+    state.setVariablePosition("base_link-tool-joint", 0.5);
+    state.update();
+  }
+}
+}
