@@ -29,9 +29,22 @@ class ToolRuntime:
     capture: object
     max_width_mm: float | None = None
     move_duration: float = 0.40
+    grasp_factory: object = None
+    control: object = None
 
-    def command(self, intent, duration=None):
-        self.execute(ToolIntent(intent), self.move_duration if duration is None else duration)
+    def command(self, intent, duration=None, parameters=None):
+        intent = ToolIntent(intent)
+        duration = self.move_duration if duration is None else duration
+        if parameters:
+            if self.control is None:
+                raise ValueError('Selected Tool has no parameter control capability')
+            self.control(intent, parameters)
+        else:
+            self.execute(intent, duration)
+
+    def observation(self):
+        observe = getattr(self.actuator, 'observation', None)
+        return observe() if callable(observe) else None
 
     def cancel_motion(self):
         cancel = getattr(self.actuator, 'cancel_motion', None)
@@ -112,6 +125,34 @@ def parallel_tool_runtime(actuator, profile):
 
 def _robotiq_runtime(profile, binding):
     from gripper_runtime.robotiq_actuator import Robotiq2F85Actuator
+    settings = profile['runtime']
+    combination = (settings.get('actuator', 'logical'), settings.get('grasp', 'fixed_attach'))
+    if combination not in {('logical', 'fixed_attach'), ('physics', 'fixed_attach'), ('physics', 'physical')}:
+        raise ValueError(f'Unsupported Robotiq actuator/grasp combination: {combination}')
+    if combination[0] == 'physics':
+        from gripper_runtime.physics_actuator import Robotiq2F85PhysicsActuator
+        actuator = Robotiq2F85PhysicsActuator(settings=settings['physics'],
+                    joint_model=settings['joint_model'], binding=binding)
+        tool = parallel_tool_runtime(actuator, profile)
+        tool.capabilities = tool.capabilities | frozenset({'position', 'speed_setting', 'force_setting', 'actuator_observation'})
+        def control(intent, parameters):
+            if intent is ToolIntent.STOP or set(parameters) - {'target_position', 'speed_fraction', 'force_setting'}:
+                raise ValueError('Unsupported Tool command parameters')
+            values = dict(parameters)
+            values.setdefault('target_position', 0.0 if intent is ToolIntent.RELEASE else 1.0)
+            actuator.configure_command(**values)
+        tool.control = control
+        if combination[1] == 'physical':
+            from gripper_runtime.physical_grasp import PhysicalGraspManager
+            import omni.usd
+            stage = omni.usd.get_context().get_stage()
+            paths = [str(prim.GetPath()) for prim in stage.Traverse()
+                     if prim.GetName() == 'sf_grasp_tcp' and str(prim.GetPath()).startswith(binding.robot_path + '/')]
+            if len(paths) != 1:
+                raise ValueError('Physical Grasp requires one Tool TCP in selected Assembly')
+            tool.grasp_factory = lambda **services: PhysicalGraspManager(
+                stage=stage, tcp_path=paths[0], **services)
+        return tool
     actuator = Robotiq2F85Actuator(
         robot_root_path=binding.robot_path,
         articulation_root_path=binding.articulation_root_path,

@@ -160,6 +160,7 @@ def validate_model_configuration(config):
     if scene['attachment_link'] not in links:
         raise ValueError('Tool attachment_link is absent from assembly')
     names(scene['touch_links'], 'Tool validation touch_links', links)
+    tool_runtime_model(tool, joints, arm)
     geometry = yaml.safe_load(Path(cell['geometry']).read_text())
     static_scene = yaml.safe_load(Path(cell['static_scene']).read_text())
     contact = cell['contact_objects']['pick_retract']
@@ -179,3 +180,57 @@ def validate_model_configuration(config):
     base = prim_path(model['isaac']['articulation_base'], 'Assembly articulation_base', False)
     if str(base) not in links:
         raise ValueError('Assembly articulation_base must name a URDF link')
+
+
+def tool_runtime_model(tool, joints, arm):
+    """Export Tool control selection and URDF-owned linkage without a second model."""
+    runtime = tool['runtime']
+    combination = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
+    if combination not in runtime.get('supported_combinations', [['logical', 'fixed_attach']]):
+        raise ValueError(f'Unsupported Tool actuator/grasp combination: {combination}')
+    if combination[0] != 'physics':
+        return
+    settings = runtime['physics']
+    primary = settings['primary_joint']
+    if primary not in joints or primary in arm or joints[primary].find('mimic') is not None:
+        raise ValueError('Tool primary joint must be an independent non-Arm joint')
+    selected = {primary: joints[primary]}
+    selected.update({name: joint for name, joint in joints.items()
+                     if joint.find('mimic') is not None and joint.find('mimic').get('joint') == primary})
+    model = {}
+    for name, joint in selected.items():
+        if name in arm or joint.get('type') != 'revolute':
+            raise ValueError('Physics Tool requires revolute joints outside Robot Arm')
+        limit = joint.find('limit')
+        values = {key: float(limit.get(key)) for key in ('lower', 'upper', 'velocity', 'effort')}
+        if not all(math.isfinite(value) for value in values.values()) or not (
+                values['upper'] > values['lower'] and values['velocity'] > 0 and values['effort'] > 0):
+            raise ValueError('Invalid Tool URDF joint limits')
+        mimic = joint.find('mimic')
+        if mimic is not None:
+            values['mimic'] = dict(joint=primary, multiplier=float(mimic.get('multiplier', '1')),
+                                   offset=float(mimic.get('offset', '0')))
+        model[name] = values
+    runtime['joint_model'] = model
+    for key in ('drive_stiffness', 'drive_damping', 'position_tolerance_rad',
+                'stopped_velocity_rad_s', 'blocked_dwell_s'):
+        if not finite_number(settings[key]) or settings[key] <= 0:
+            raise ValueError(f'Tool physics {key} must be finite and positive')
+    for key in ('speed_fraction', 'force_setting'):
+        value = settings[key]
+        if (not finite_number(value) or not 0 <= value <= 1
+                or (key == 'speed_fraction' and value == 0)):
+            raise ValueError(f'Tool physics {key} must be normalized; speed must be positive')
+    torques = settings['drive_torque_range_nm']
+    if (not isinstance(torques, list) or len(torques) != 2 or
+            not all(finite_number(v) for v in torques) or not 0 < torques[0] <= torques[1] <= model[primary]['effort']):
+        raise ValueError('Tool drive torque range must be positive and inside URDF limit')
+
+    material = settings['contact_material']
+    for key in ('static_friction', 'dynamic_friction', 'restitution'):
+        if not finite_number(material[key]) or material[key] < 0:
+            raise ValueError(f'Tool contact material {key} must be finite and non-negative')
+    if material['restitution'] > 1 or material['dynamic_friction'] > material['static_friction']:
+        raise ValueError('Invalid Tool contact material coefficients')
+    runtime['capabilities'] = sorted(set(runtime['capabilities']) | {
+        'position', 'speed_setting', 'force_setting', 'actuator_observation'})

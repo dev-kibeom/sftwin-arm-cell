@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 
 from graph_builder.graph_contract import GRAPH_PATH
-from shared.run_records import diagnostic_component_directory, run_records_root
-from shared.environment_setup import resolve_diagnostics_selection
+from isaac_runtime.run_records import diagnostic_component_directory, run_records_root
+from isaac_runtime.environment_setup import resolve_diagnostics_selection
 
 from gripper_runtime.action_graph_command_adapter import SimGripperAdapter
 from gripper_runtime.capture_diagnostics import (
@@ -52,8 +52,8 @@ class GripperRuntimeSession:
         self.grasp_config = capture_config
         self.registry = registry or EligibleObjectRegistry()
         if tool is None and actuator_cls is None:
-            from runtime_configuration import load_runtime_configuration
-            from robot_binding import RobotBinding
+            from isaac_runtime.runtime_configuration import load_runtime_configuration
+            from isaac_runtime.robot_binding import RobotBinding
             configuration = configuration if configuration is not None else load_runtime_configuration()
             tool = select_tool_runtime(
                 configuration['tool'], RobotBinding.from_runtime(configuration)
@@ -70,7 +70,8 @@ class GripperRuntimeSession:
         prime_generation = getattr(self.sim_adapter, "prime_command_generation", None)
         if callable(prime_generation):
             prime_generation()
-        self.grasp_manager = grasp_manager_cls(
+        manager_factory = (tool.grasp_factory if tool is not None else None) or grasp_manager_cls
+        self.grasp_manager = manager_factory(
             gripper=self.gripper,
             registry=self.registry,
             config=self.grasp_config,
@@ -85,7 +86,7 @@ class GripperRuntimeSession:
         self.capture_diagnostic_writer = diagnostic_writer
         self.physx_observer = physx_observer
         output_directory = diagnostic_output_directory or (
-            diagnostic_component_directory(Path(__file__).resolve().parents[5], "gripper")
+            diagnostic_component_directory(Path(__file__).resolve().parents[4], "gripper")
         )
         if self.capture_diagnostic_writer is None:
             try:
@@ -355,7 +356,7 @@ class GripperRuntimeSession:
             raise RuntimeError("gripper status sequence must be non-zero")
         held = runtime_ready and observation.state is HoldingState.HELD
         released = runtime_ready and observation.state is HoldingState.RELEASED
-        attached = runtime_ready and held
+        attached = runtime_ready and held and bool(self._safe_attachment_owned())
         if runtime_ready != self._last_runtime_ready:
             LOGGER.info(
                 "gripper runtime state=%s",
@@ -463,7 +464,8 @@ class GripperRuntimeSession:
 
     def _safe_attachment_owned(self):
         try:
-            return bool(self.grasp_manager.joint_owner.has_owned_joint())
+            owner = getattr(self.grasp_manager, 'joint_owner', None)
+            return False if owner is None else bool(owner.has_owned_joint())
         except Exception as error:
             LOGGER.warning(
                 "Isaac gripper release diagnostic attachment observation failed; gripper operation is unchanged: %s",

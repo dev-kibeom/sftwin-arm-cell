@@ -356,7 +356,13 @@ class SimGripperAdapter:
             # In particular, STOP must not be followed by replay of an older CLOSE.
             self._last_width_generation = self._read_command_generation()
             self._last_close_generation = self._read_close_generation()
-            self.tool.command(intent, self.move_duration)
+            try:
+                parameters = packet.get('parameters')
+                if parameters is not None and not isinstance(parameters, dict):
+                    return False
+                self.tool.command(intent, self.move_duration, parameters=parameters)
+            except (ValueError, TypeError):
+                return False
             self.last_intent = intent
             self._intent_execution_id = execution_id
             self._last_command_width_mm = self.MAX_WIDTH_MM if intent is ToolIntent.RELEASE else None

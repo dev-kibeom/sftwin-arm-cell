@@ -72,7 +72,7 @@ elif previous_session is not None:
 for package_name in ("gripper_runtime", "pnp_validation", "graph_builder"):
     clear_imported_package(package_name)
 
-removed_gripper_bytecode = clear_package_bytecode(Path(SCRIPT_DIR) / "gripper_runtime")
+removed_gripper_bytecode = clear_package_bytecode(Path(scripts_root) / "gripper_runtime")
 importlib.invalidate_caches()
 
 import gripper_runtime.action_graph_command_adapter as adapter_module

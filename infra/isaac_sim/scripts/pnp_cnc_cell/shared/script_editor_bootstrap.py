@@ -62,6 +62,9 @@ def discover_module_root(script_path, environ=None):
 def add_module_root(script_path, environ=None):
     """Add the validated PnP_CNC module root to ``sys.path`` and return it."""
     module_root = discover_module_root(script_path, environ)
+    scripts_root = str(module_root.parent)
+    if scripts_root not in sys.path:
+        sys.path.insert(0, scripts_root)
     as_string = str(module_root)
     if as_string not in sys.path:
         sys.path.insert(0, as_string)
