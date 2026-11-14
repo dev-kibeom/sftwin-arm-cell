@@ -62,11 +62,7 @@ def test_validation_profile_loader_rejects_missing_or_invalid_recipe_approach(
 
 
 def test_validation_profile_declares_world_geometry_and_place_tolerance():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
+    profile_data = _center_profile()
 
     assert profile_data["fixture"]["geometry_frame"] == "world"
     assert profile_data["place"]["position_tolerance_m"] == pytest.approx(0.05)
@@ -78,11 +74,7 @@ def test_validation_profile_declares_world_geometry_and_place_tolerance():
 
 
 def test_validation_profile_rejects_missing_geometry_frame():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
+    profile_data = _center_profile()
     del profile_data["fixture"]["geometry_frame"]
 
     with pytest.raises(ValueError, match="geometry_frame"):
@@ -90,45 +82,33 @@ def test_validation_profile_rejects_missing_geometry_frame():
 
 
 def test_validation_profile_rejects_missing_or_invalid_place_tolerance():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
+    profile_data = _center_profile()
     del profile_data["place"]["position_tolerance_m"]
 
     with pytest.raises(ValueError, match="position_tolerance_m"):
         validate_validation_profile(profile_data)
 
-    profile_data = yaml.safe_load(path.read_text())
+    profile_data = _center_profile()
     profile_data["place"]["position_tolerance_m"] = 0.0
     with pytest.raises(ValueError, match="position_tolerance_m"):
         validate_validation_profile(profile_data)
 
-    profile_data = yaml.safe_load(path.read_text())
+    profile_data = _center_profile()
     profile_data["fixture"]["geometry_frame"] = "map"
     with pytest.raises(ValueError, match="geometry_frame"):
         validate_validation_profile(profile_data)
 
 
 def test_validation_profile_rejects_grasp_offset_drift_between_motion_and_recipe():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
-    profile_data["motion"]["object_to_grasp_tcp_translation"][2] = 0.0
+    profile_data = _center_profile()
+    profile_data["motion"]["object_to_grasp_tcp_translation"][2] = 0.005
 
     with pytest.raises(ValueError, match="offset"):
         validate_validation_profile(profile_data)
 
 
 def test_validation_profile_rejects_nonzero_grasp_translation_xy():
-    path = (
-        Path(__file__).parents[6]
-        / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
-    )
-    profile_data = yaml.safe_load(path.read_text())
+    profile_data = _center_profile()
     profile_data["motion"]["object_to_grasp_tcp_translation"][0] = 0.001
 
     with pytest.raises(ValueError, match="x must be zero"):
@@ -166,3 +146,32 @@ def test_capture_reference_profile_maps_fixture_geometry_and_motion_semantics():
     assert config.fixture_dimensions_m == (0.07, 0.07, 0.08)
     assert config.observation_to_grasp_tcp_m == pytest.approx(-0.0025)
     assert config.insertion_axis_tcp == (0.0, 0.0, 1.0)
+
+
+def _center_profile():
+    from arm_cell_bringup.runtime import load_profile
+    path = Path(__file__).parents[6] / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
+    return load_profile(path, pick_offset_z_m=0.0)
+
+
+def test_center_grasp_does_not_claim_historical_contact_band_eligibility():
+    profile = _center_profile()
+    recipe = profile["fixture"]["grasp_recipe"]
+    assert recipe["object_top_to_grasp_tcp_z_m"] < recipe["measured_contact_band_m"][0]
+    assert validate_validation_profile(profile) is profile
+    assert capture_reference_config_from_profile(profile).observation_to_grasp_tcp_m == pytest.approx(-0.04)
+
+
+@pytest.mark.parametrize('band', [None, [], [0.0], [0.1, -0.1], [float('nan'), 0.1]])
+def test_center_grasp_rejects_malformed_historical_contact_band(band):
+    profile = _center_profile()
+    profile["fixture"]["grasp_recipe"]["measured_contact_band_m"] = band
+    with pytest.raises(ValueError, match="contact band"):
+        validate_validation_profile(profile)
+
+
+def test_center_grasp_rejects_inconsistent_recipe_offset():
+    profile = _center_profile()
+    profile["fixture"]["grasp_recipe"]["object_top_to_grasp_tcp_z_m"] = -0.03
+    with pytest.raises(ValueError, match="offset"):
+        validate_validation_profile(profile)

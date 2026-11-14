@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
+#include "arm_cell_motion/grasp_collision_validator.hpp"
+#include "arm_cell_motion/pick_grasp_pose_candidates.hpp"
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/robot_model_loader/robot_model_loader.h>
 
+#include <algorithm>
 #include <fstream>
 #include <moveit_msgs/msg/collision_object.hpp>
 #include <nlohmann/json.hpp>
@@ -81,6 +84,73 @@ TEST(SelectedModel, LoadsSolverAndValidatesConfiguredPoses)
     // Exercise the configured solver on a pose produced by this model's FK.
     const auto target = state.getGlobalLinkTransform("sf_grasp_tcp");
     EXPECT_TRUE(state.setFromIK(group, target, "sf_grasp_tcp", 0.1));
+    // Real meshes expose inner-knuckle interference at the TestCube center.
+    // Keep that rejection; a shallower offset may provide clearance.
+    const Eigen::Quaterniond object_orientation(
+      target.linear() * Eigen::AngleAxisd(
+        3.14159265358979323846,
+        Eigen::Vector3d::UnitX()).toRotationMatrix());
+    const auto grasp = arm_cell_motion::validate_grasp_collision(
+      arm_cell_motion::GraspOccupancyMode::NONE, scene, scene, state, target,
+      target.translation(), object_orientation,
+      arm_cell_motion::BoxGraspContact{0U, 70.0}, Eigen::Vector3d::UnitZ(), {},
+      arm_cell_motion::FingerClearanceParameters{}, group_name,
+      Eigen::Vector3d(0.07, 0.07, 0.08));
+    for (const auto & contact : grasp.common.contacts) {
+      std::cerr << "center grasp collision: " << contact.first << " / " << contact.second << '\n';
+    }
+    EXPECT_TRUE(grasp.valid);
+    EXPECT_FALSE(grasp.allowed);
+    EXPECT_TRUE(
+      std::any_of(
+        grasp.common.contacts.begin(), grasp.common.contacts.end(),
+        [](const auto & contact) {
+          return (contact.first == "pick_selected_target" &&
+          contact.second.find("inner_knuckle_link") != std::string::npos) ||
+          (contact.second == "pick_selected_target" &&
+          contact.first.find("inner_knuckle_link") != std::string::npos);
+        }));
+    bool shallow_offset_allowed = false;
+    arm_cell_motion::PickGraspSearchSampling sampling;
+    const auto & motion = config["motion"];
+    sampling.maximum_withdrawal_tilt_deg = motion["pick_max_withdrawal_tilt_deg"];
+    sampling.position_range_half_length_fraction =
+      motion["pick_position_range_half_length_fraction"];
+    sampling.position_offset_samples_per_tangent_axis =
+      motion["pick_position_offset_samples_per_tangent_axis"];
+    sampling.orientation_samples_per_closing_axis =
+      motion["pick_orientation_samples_per_closing_axis"];
+    sampling.candidate_limit = motion["pick_grasp_pose_candidate_limit"];
+    sampling.maximum_downward_position_offset_m = motion["pick_max_downward_position_offset_m"];
+    const auto candidates = arm_cell_motion::generate_pick_grasp_search_candidates(
+      Eigen::Quaterniond::Identity(), Eigen::Quaterniond(
+        Eigen::AngleAxisd(
+          3.14159265358979323846, Eigen::Vector3d::UnitX())),
+      Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero(), Eigen::Vector3d::UnitZ(),
+      0.07, 0.07, 0.08, 85.0, sampling);
+    for (const auto & candidate : candidates) {
+      if (candidate.grasp_position_offset_object.z() <= 0.0) {continue;}
+      // Relocate the target by the inverse selected Object-to-TCP pose.
+      // This checks exact sampled tool/object geometry without claiming that
+      // the arm can reach every sample from these configured joint poses.
+      Eigen::Isometry3d relative = Eigen::Isometry3d::Identity();
+      relative.linear() = candidate.tcp_orientation.toRotationMatrix();
+      relative.translation() = candidate.grasp_position_offset_object;
+      const Eigen::Isometry3d shifted_object = target * relative.inverse();
+      const auto shifted = arm_cell_motion::validate_grasp_collision(
+        arm_cell_motion::GraspOccupancyMode::NONE, scene, scene, state, target,
+        shifted_object.translation(), Eigen::Quaterniond(shifted_object.linear()),
+        candidate.contact, Eigen::Vector3d::UnitZ(), {},
+        arm_cell_motion::FingerClearanceParameters{}, group_name,
+        Eigen::Vector3d(0.07, 0.07, 0.08));
+      if (shifted.allowed) {
+        std::cerr << "clear sampled offset: " << candidate.grasp_position_offset_object.transpose()
+                  << " width_mm=" << candidate.contact->width_mm << '\n';
+        shallow_offset_allowed = true;
+        break;
+      }
+    }
+    EXPECT_TRUE(shallow_offset_allowed);
   }
   // Load the selected Cell's actual static geometry in the canonical base
   // frame.

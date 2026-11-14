@@ -194,11 +194,11 @@ PLACE 성공 후 기존 Mission 흐름은 GO_HOME을 실행해야 한다. 성공
 
 WU-14가 설정할 수 있는 것은 Simulator Validation Profile의 Object Reference→Grasp TCP Transform, Approach/Retract 값, Home Tolerance, Capture Volume 및 Snap Tolerance뿐이다. 모든 값은 명시적으로 Run Manifest에 추적되어야 하며 0/Default Fallback은 수락하지 않는다. 이 Fixture의 증거를 Production Camera·Robot·Tool·AMR·Physical Gripper Calibration으로 승격해서는 안 된다.
 
-검증 전용 **70mm Recipe**의 정규 `sf_grasp_tcp` Reference는 공칭 Grasp 구성에서 손가락 안쪽 Contact Surface의 중점으로부터 도출한다. Cube 상판 중심은 여전히 Object Reference다. 정규 Robotiq Model에서 Mimic `q=0.176470588`은 실제 Collision Surface 중점 기준 Gripper Base 대비 검증용 TCP Origin `[0, -0.0003749994, 0.1357482403] m`를 만든다. 이는 Geometry Provenance이지 Production Calibration이 아니다. 자세를 보정한 Contact Band Scan으로 이 Fixture의 Object Top→Grasp TCP Recipe Point **-0.0025m**를 선택했다. 이 결과는 Production Tool Frame Authority를 변경하지 않는다.
+검증 전용 **70mm Recipe**의 정규 `sf_grasp_tcp` Reference는 공칭 Grasp 구성에서 손가락 안쪽 Contact Surface의 중점으로부터 도출한다. Cube 상판 중심은 여전히 Object Reference다. 정규 Robotiq Model에서 Mimic `q=0.176470588`은 실제 Collision Surface 중점 기준 Gripper Base 대비 검증용 TCP Origin `[0, -0.0003749994, 0.1357482403] m`를 만든다. 이는 Geometry Provenance이지 Production Calibration이 아니다. 공칭 파지 위치는 자재 체적 중심 위 10 mm이며 이 Fixture의 Object Top→Grasp TCP Offset은 **-0.03m**다. 기존 Contact Band Scan의 -0.0025m 선택 근거는 과거 Geometry 측정이며 현재 공칭 파지의 적격성 또는 재보정 근거로 사용하지 않는다. TCP Frame 자체는 변경하지 않는다.
 
 보정된 검증 Tool Convention에서 물리 Robotiq Body→Contact 방향은 TCP Local `+Z`다. Top-down Validation Orientation은 TCP `X`축 기준 **180° 회전**이므로 TCP `+Z`는 World `-Z`, TCP `+X`는 양측 Closing Axis에 대응한다. 따라서 `insertion_axis_tcp=[0, 0, +1]`, Approach Retreat은 World `+Z`, Fixture Grasp Yaw는 Fixture Yaw modulo `pi`다. 이는 검증 Scenario의 Tool Geometry와 설정이지 일반 Capture 적격 조건이 아니다. 다른 유효한 Motion 선택 Grasp도 5절의 선택 Pose/Closing Axis 계약으로 평가한다.
 
-MoveIt Dry-run에서는 보정된 Orientation에서 검증 Fixture의 Fingertip-only Contact Band가 `[-0.024, +0.019] m`로 측정되었다. 선택 Recipe Point는 Object Top 대비 **-0.0025m**이며 각 경계까지 **21.5mm** 여유가 있다. 이는 Validation Geometry와 PlanningScene 관측이지 일반 Robotiq 사양이나 Live Acceptance 증거가 아니다.
+MoveIt Dry-run에서는 보정된 Orientation에서 검증 Fixture의 Fingertip-only Contact Band가 `[-0.024, +0.019] m`로 측정되었다. 이 Band는 과거 -0.0025m 선택점에 대한 Validation Geometry·PlanningScene 관측으로 보존한다. 현재 공칭 파지점의 적격 범위로 적용하지 않으며 공칭 파지의 충돌·경로 실현 가능성은 Motion이 별도 평가한다. 이 측정은 일반 Robotiq 사양이나 공칭 파지의 Live Acceptance 증거가 아니다.
 
 Validation Grasp Planning 동안에만 PlanningScene이 현재 검증 Fixture Object와 왼쪽·오른쪽 **Fingertip Link만** 접촉하도록 일시적으로 허용할 수 있다. Inner/Outer Knuckle·Gripper Base·Arm Link·Pedestal·Self Collision은 금지 상태로 남는다. 해당 정책은 Grasp Planning 종료 후 원상복구하며 Production Launch에서 사용할 수 없다.
 

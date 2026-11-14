@@ -76,6 +76,8 @@ Motion은 선택된 후보에 대한 계산상 Planning 근거를 반환한다. 
 
 ### 객체 상대 TCP 후보 위치
 
+운영 자재의 공칭 Reference Grasp TCP 위치는 자재 체적 중심으로 두되(`q_0 = 0`), TestCube는 객체 +Z 방향 10 mm Offset을 적용한다. 공칭 위치 주변의 기존 위치·방향 샘플링, 후보 상한 및 거리 우선 평가를 유지하므로 공칭 위치에 유효한 해가 없으면 허용 영역의 다른 후보를 평가한다. 임시 Calibration Trial의 명시적 Offset은 해당 Trial에만 적용한다.
+
 허용된 Rectangle 대향면의 Closing Axis를 객체 축 `e_i`로 두고 다른 두 직교 축을 `e_j,e_k`, 그 측정 길이를 `L_j,L_k`, Object Frame 공칭 TCP Translation을 `q_0`로 둔다.
 
 ```text
@@ -166,7 +168,7 @@ LOW·미선택 대안·UNRESOLVED 영역은 일반 `material_candidates`에 없�
 
 구성한 점유맵은 해당 target attempt의 Pose·IK Seed 평가에 동일하게 사용하며 다른 Candidate attempt와 공유하지 않는다. Planning 적용, attempt별 map 재사용 및 Snapshot 수명은 [Motion Execution FDS](../components/motion/fds-motion-execution.md)가 소유한다.
 
-Grasp 해의 끝점 검증은 Motion FDS의 Occupancy 전략을 적용하고 PICK 접근 경로 계획에서는 현재 target의 관측 Occupancy가 포함된 요청 범위 Scene을 사용하며, PICK 삽입·후퇴 및 PLACE에서는 제외한다. 고정 설비·Tray·Robot Self Collision·Attached Object 검사는 유지한다.
+Grasp 해의 끝점 검증은 Motion FDS의 Occupancy 전략을 적용하고 PICK 접근 경로 계획에서는 현재 target의 관측 Occupancy가 포함된 요청 범위 Scene을 사용하며, PICK 삽입·후퇴 및 PLACE에서는 제외한다. 고정 설비·Tray·Robot Self Collision·Attached Object 검사는 유지하며, Grasp 끝점의 자재 폭 기반 그리퍼 형상·선택 target 접촉·손끝–Tray 접촉 허용 범위는 [Motion Execution FDS](../components/motion/fds-motion-execution.md)의 Grasp Occupancy 전략을 따른다.
 
 `FINGER_CLEARANCE` 모드에서는 명목 손가락 보호영역을 통과한 선정 후보를 먼저 평가한다.
 이 후보들 사이에서는 양쪽 보호영역의 반경을 함께 확장하여 먼저 점유와 교차하는

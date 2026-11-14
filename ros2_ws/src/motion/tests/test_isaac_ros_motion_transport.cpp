@@ -923,9 +923,16 @@ TEST_F(
       "<parent link='" + parent + "'/><child link='" + child + "'/><axis xyz='" +
       axes[index % 3] + "'/><limit lower='-2' upper='2' effort='1' velocity='1'/></joint>";
   }
-  urdf += "<link name='sf_grasp_tcp'><collision><geometry><sphere radius='0.01'/>";
-  urdf += "</geometry></collision></link><joint name='tcp_fixed' type='fixed'>";
-  urdf += "<parent link='link_6'/><child link='sf_grasp_tcp'/></joint></robot>";
+  // The target check needs a real driving joint and intended contact link.
+  // Keep the synthetic sphere as finger geometry rather than a solid TCP.
+  urdf += "<link name='sf_grasp_tcp'/><joint name='tcp_fixed' type='fixed'>";
+  urdf += "<parent link='link_6'/><child link='sf_grasp_tcp'/></joint>";
+  urdf += "<link name='gripper_robotiq_85_left_finger_tip_link'><collision>";
+  urdf += "<geometry><sphere radius='0.01'/></geometry></collision></link>";
+  urdf += "<joint name='gripper_robotiq_85_left_knuckle_joint' type='revolute'>";
+  urdf += "<parent link='sf_grasp_tcp'/><child link='gripper_robotiq_85_left_finger_tip_link'/>";
+  urdf += "<axis xyz='0 1 0'/><limit lower='0' upper='0.8' effort='1' velocity='1'/>";
+  urdf += "</joint></robot>";
   node_->declare_parameter<std::string>("robot_description", urdf);
   node_->declare_parameter<std::string>(
     "robot_description_semantic",

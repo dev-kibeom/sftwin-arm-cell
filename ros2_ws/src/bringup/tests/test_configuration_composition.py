@@ -16,7 +16,7 @@ MISSIONS = SRC / 'bringup/config/missions'
 def test_composition_preserves_operational_behavior():
     config = load_profile(PROFILE)
     assert config['motion']['pick_strategy'] == 'PLANNED'
-    assert config['motion']['object_to_grasp_tcp_translation'] == [0, 0, 0.0375]
+    assert config['motion']['object_to_grasp_tcp_translation'] == [0, 0, 0.01]
     recipe = json.loads((Path(config['orchestration']['recipe_directory']) / 'TestCube.json').read_text())
     pose = recipe['place']['desired_object_pose']
     assert config['motion']['place_waypoint_target_pose_xyzw'] == pose['position'] + pose['orientation_xyzw']

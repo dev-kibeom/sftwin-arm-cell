@@ -5,7 +5,7 @@ pick_offset:
   translation_m:
   - 0.0
   - 0.0
-  - 0.0075
+  - 0.0
   quaternion_xyzw:
   - 0.0
   - 0.0
@@ -20,7 +20,7 @@ geometry:
   - 0.02
 calibration:
   status: pending_live_validation
-  reference: initial top contact depth 2.5 mm; verify with material-specific PnP trials
+  reference: volume-center grasp reference; verify with material-specific PnP trials
 display_color_rgb:
 - 0.65
 - 0.68
