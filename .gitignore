@@ -11,3 +11,6 @@
 .env
 .env.*
 !.env.example
+
+# Optional repository-local Python environment.
+/.venv/

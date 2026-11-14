@@ -110,294 +110,191 @@ Geometry-first Vision, Vision/Motion Occupancy 소유권, 재사용 Motion BT, O
 - **Python** — Isaac Sim 장면·런타임 entrypoint, 검증 도구, UI Hub 확장
 - **Xacro, TF2, OpenCV, OMPL** — 로봇 설명, 좌표 변환, 영상 처리, 모션 계획 지원
 
-## 시작하기
+## 준비 사항
 
-공개 저장소를 clone합니다.
+- Linux 호스트: 아래 명령은 Ubuntu 22.04 기준입니다.
+- ROS 2 Humble과 Isaac Sim 5.1 및 Isaac Sim을 실행할 수 있는 GPU·드라이버
+- GUI 런처: Python 3.10 이상, X11 또는 XWayland 디스플레이
+- 호스트 빌드: colcon, 초기화된 rosdep, `nlohmann-json3-dev`
+- Docker 실행을 선택하는 경우: Docker Compose v2
 
 ```bash
 git clone https://github.com/dev-kibeom/sftwin-arm-cell.git
 cd sftwin-arm-cell
 ```
 
+아래 명령은 별도 안내가 없으면 저장소 루트에서 실행합니다.
+
 ## ARM Cell 실행 방법
 
-두 방법 모두 Linux 호스트에 ROS 2 Humble과 Isaac Sim 5.1이 설치돼 있어야 합니다. Isaac Sim을 저장소 루트에서 시작합니다. 스크립트가 씬을 구성하고 Timeline과 UI Hub를 시작합니다.
+다음 중 한 경로를 선택합니다. GUI 런처는 호스트에 빌드한 ROS workspace를 사용합니다.
+Docker로 ROS를 실행하려면 [수동 실행](#수동-실행-호스트-또는-docker)을 사용합니다.
+GUI와 수동 실행으로 같은 셀을 동시에 시작하지 마세요.
+
+### GUI 런처로 실행
+
+**1. ROS workspace를 빌드합니다.** 새 터미널에서 실행합니다.
+
+```bash
+bash ros2_ws/build-local.bash
+```
+
+빌드가 완료되면 `ros2_ws/install/setup.bash`가 생성됩니다.
+
+**2. 런처 의존성을 설치합니다.** Python 의존성은 PySide6, PyYAML, xacro입니다.
+설치와 실행에는 같은 Python 환경을 사용합니다.
+
+```bash
+sudo apt-get install python3-pip libegl1 libxcb-cursor0 xterm
+```
+
+가상환경 사용 여부와 위치는 사용자가 선택합니다. 사용할 경우 Python 의존성을
+설치하기 전에 활성화합니다. 다음은 저장소 안의 `.venv`를 사용하는 예시입니다.
+
+```bash
+sudo apt-get install python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+```bash
+python3 -m pip install -r infra/launcher/requirements.txt
+```
+
+기존 설치를 갱신할 때도 같은 requirements 명령을 사용합니다.
+
+**3. 런처를 실행합니다.**
+
+```bash
+python3 launcher.py
+```
+
+Isaac Sim 설치 위치는 기본 `~/isaac_sim`입니다. 다른 위치나 ROS domain을 사용한다면
+실행 시 지정합니다.
+
+```bash
+ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
+```
+
+**4. 셀을 시작합니다.**
+
+1. Robot·Tool·Cell·Backend를 선택합니다. 현재 지원 조합은 M0609 + Robotiq 2F-85 +
+   `isaac_m0609` Cell입니다.
+2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
+3. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
+4. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.
+   런처의 실행 표시는 프로세스가 실행 중이라는 뜻입니다. 시스템 준비나 PnP 성공을 보장하지 않습니다.
+
+Isaac과 ROS마다 별도 `xterm` 창이 열립니다. 출력과 오류는 해당 터미널에서 확인합니다.
+종료는 런처의 `모두 종료` 또는 창 닫기를 사용합니다. 실행 터미널의 `Ctrl+C`나 창 닫기도
+종료로 처리됩니다. 종료 처리가 끝날 때까지 기다려 주세요.
+
+### 수동 실행: 호스트 또는 Docker
+
+**1. ROS 실행 환경을 준비합니다.** 호스트를 사용한다면 먼저 빌드합니다.
+Docker를 사용한다면 호스트 workspace 빌드는 필요하지 않습니다.
+
+```bash
+bash ros2_ws/build-local.bash
+```
+
+**2. 첫 번째 터미널에서 Isaac Sim을 시작합니다.**
 
 ```bash
 source /opt/ros/humble/setup.bash
 ./infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
-Launcher는 시작 전에 Bringup의 공개 export CLI로 runtime JSON을 생성합니다. Isaac은 이 파일만 읽으며 Bringup Python 코드를 import하지 않습니다. 자재·정책 설정을 변경하면 launcher를 다시 실행해 export를 갱신합니다. Script Editor 및 검증용 설정 export는 [설정 export와 Script Editor 실행](#설정-export와-script-editor-실행)을 참조하세요.
+설치 경로가 다르면 스크립트 앞에 `ISAAC_SIM_ROOT=/path/to/isaac_sim`을 지정합니다.
+씬·Timeline·After Playing 초기화가 완료된 뒤 다음 단계로 진행합니다.
 
-Isaac Sim 설치 위치가 `$HOME/isaac_sim`과 다르면 `ISAAC_SIM_ROOT`를 지정합니다.
+**3. 두 번째 터미널에서 ROS를 시작합니다.** 아래 둘 중 하나를 선택합니다.
+
+호스트 실행:
 
 ```bash
 source /opt/ros/humble/setup.bash
-ISAAC_SIM_ROOT=/path/to/isaac_sim ./infra/isaac_sim/scripts/isaac_arm_cell.sh
-```
-
-### PySide6 ARM Cell Launcher (호스트)
-
-ROS 시작 스크립트는 같은 checkout에서 실행한 이전 `ros2 launch arm_cell_bringup
-arm_cell.launch.py`와 자식 프로세스를 확인하고 SIGINT → SIGTERM → SIGKILL 순서로
-종료한 뒤 새 bringup을 시작합니다. PID 시작 시각과 pidfd로 종료 대상을 확인합니다.
-다른 checkout이나 부모가 사라진 노드는 자동 종료하지 않고 PID를 표시하며 시작을
-차단합니다. 새 시작 경로의 잠금을 보유한 bringup은 먼저 기존 launcher에서 종료해야
-합니다. 이 검사는 Isaac Timeline을 초기화하지 않으므로 Stop → Before Playing →
-Play → After Playing → 새 ROS bringup 순서는 계속 지켜야 합니다.
-
-
-Robot·Tool·Cell·Backend 선택과 호스트 프로세스 시작·종료를 GUI에서 관리합니다.
-ROS 2 Humble과 Isaac Sim 5.1을 설치하고, 아래 [호스트 빌드 절차](#방법-1-호스트에서-ros-2-빌드-및-실행)로
-`ros2_ws/install/setup.bash`를 먼저 준비합니다. 저장소 루트에서 Python 3.10 이상으로 설치합니다.
-Ubuntu 22.04 X11 기준 예시입니다.
-
-```bash
-sudo apt-get install python3-venv libegl1 libxcb-cursor0 xterm
-python3 -m venv ~/.venvs/arm-cell-launcher
-~/.venvs/arm-cell-launcher/bin/python -m pip install -r infra/launcher/requirements.txt
-~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
-```
-
-기존 설치도 위 requirements 설치 명령을 다시 실행해 의존성 제한을 적용합니다.
-PySide6 6.12.0은 Python 3.10/3.11에서 GUI 갱신 중 비정상 종료를 일으키는
-[참조 수 결함](https://qt-project.atlassian.net/browse/PYSIDE-3486) 때문에 제외합니다.
-
-Isaac 설치 경로가 기본값 `~/isaac_sim`과 다르면 실행 전에 `ISAAC_SIM_ROOT`를 지정합니다.
-필요한 `ROS_DOMAIN_ID`도 GUI 시작 시 환경변수로 지정합니다.
-
-```bash
-ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 \
-  ~/.venvs/arm-cell-launcher/bin/python infra/launcher/launcher.py
-```
-
-1. Robot·Tool·Cell·Backend를 선택합니다. 첫 버전은 M0609 + Robotiq 2F85 + 기존
-   `isaac_m0609` Cell만 지원합니다. 기존 YAML에서 목록을 읽고, production 배포 Profile에
-   등록되지 않았거나 실제 Isaac 지원 범위 밖인 조합은 실행을 차단합니다.
-2. `Isaac 시작`을 누르고 기존 씬·Timeline·After Playing 초기화가 끝났는지 확인합니다.
-3. 필요하면 `ROS 2 디버그 모드`를 선택하고 `ROS 2 시작`을 누릅니다. 기본값은 `info`,
-   디버그 모드는 기존 Bringup의 `log_level:=debug`입니다. 별도 diagnostics override 없이
-   기존 debug 기본 진단 선택을 따릅니다. 실행 중 모드 변경은 종료 후 재시작으로 적용합니다.
-   GUI의 실행 표시는 프로세스 상태이며 시스템 readiness나
-   PnP 성공을 뜻하지 않습니다. 기존 Endpoint·Fresh Readiness 확인 절차를 따릅니다.
-4. `모두 종료` 또는 창 닫기로 실행한 프로세스를 정리합니다. SIGINT 후 15초 동안
-   기다리고, 필요하면 SIGTERM 후 5초를 더 기다린 뒤 SIGKILL로 정리합니다.
-
-Bringup의 기존 조립·검증·export로 `runtime_configuration.json`을 OS 임시 디렉터리에
-한 번 생성합니다. Isaac과 ROS는 **동일한 파일**을 읽으며 재export하지 않습니다.
-관련 프로세스 그룹이 모두 종료될 때까지 Snapshot을 유지하고, 정상 종료·실행 실패·
-창 닫기 시 임시 디렉터리와 함께 삭제합니다. 원본 Profile은 변경하지 않습니다.
-
-Isaac과 ROS 2 실행마다 별도 `xterm` 창이 열리고 stdout/stderr는 해당 창에 표시됩니다.
-GUI에는 설정·실행 상태·오류만 표시하며 출력 영역이나 별도 영구 로그를 만들지 않습니다.
-각 터미널의 `Ctrl+C` 또는 창 닫기도 실행 종료로 처리하며, 나머지 환경을 정리합니다.
-정상 종료 중에는 runtime이 끝날 때까지 터미널을 유지한 뒤 닫습니다.
-`.run_records`에는 GUI의 임시 설정이나 중복 로그를 저장하지 않습니다.
-Isaac·ROS가 기존 정책으로 생산하는 진단·디버깅 기록, Kit 로그와 세션 관리는 그대로 유지합니다.
-터미널 출력은 창이 닫히면 사라지므로 영속 진단은 기존 기록을 사용합니다.
-터미널 시작에는 X11 또는 XWayland 디스플레이와 `xterm`이 필요합니다.
-같은 사용자로 실행한 GUI 사이에는 중복 실행 잠금을 사용합니다. 외부 CLI·Docker로
-별도 실행한 프로세스는 관리하지 않으므로 동시에 실행하지 않습니다.
-
-목록과 조합 판정은 GUI 위젯에 고정하지 않습니다. 새 조합에는 실제 어댑터 지원과
-production 배포 Profile이 필요하며, Isaac 지원을 확장할 때 Launcher의 지원 판정도
-함께 갱신합니다. 기존 CLI 및 Docker 실행 방법은 아래 안내를 그대로 사용할 수 있습니다.
-Isaac 없이 GUI 회귀 테스트를 실행하려면 같은 Python 환경에 `pytest`를 설치합니다.
-
-```bash
-~/.venvs/arm-cell-launcher/bin/python -m pip install pytest
-QT_QPA_PLATFORM=offscreen ~/.venvs/arm-cell-launcher/bin/python -m pytest -q infra/launcher/tests
-```
-
-### 설정 export와 Script Editor 실행
-
-기본 CLI 스크립트 `isaac_arm_cell.sh`는 선택한 운영 프로파일을 `.run_records/runtime_configuration.json`으로 export한 뒤 Isaac을 시작합니다. `ARM_CELL_PROFILE`로 입력 프로파일을, `ARM_CELL_RUNTIME_CONFIG`로 출력 파일을 선택할 수 있습니다.
-
-Scene 선택 진입점은 `infra/isaac_sim/scripts/scene_entrypoint.py`입니다. Cell Profile의 `isaac.scene_builder`는 scripts 루트 기준의 `모듈:함수`를 지정하며, 기본값은 `m0609_cell.scene_builder.composition:run_scene_build`입니다. 이 선택과 Builder import에는 M0609 디렉터리를 Python 검색 경로에 넣을 필요가 없습니다. Builder는 전달된 Runtime Configuration의 Assembly와 Cell 배치·Geometry를 소비합니다.
-
-Cell Profile의 `camera`는 논리 Prim, D455 Mount Prim과 기존 Geometry 기준 설치 Offset, Frame·Topic·해상도·센서 설정 및 TF Snapshot 경로를 소유합니다. Calibration 참조는 같은 Cell의 기존 `calibration_file`을 재사용합니다. Bringup은 원본 조립 때 Calibration의 Frame·CameraInfo Topic·해상도 정합성을 확인하고 Vision Topic을 같은 Camera 선택에서 구성합니다. Isaac Scene·Graph·Camera Snapshot은 export된 값을 소비합니다. 운영 ROS Camera Launch는 `runtime_profile`로 전달된 운영 Profile 또는 Runtime JSON을 우선하며, 단독 실행은 `ARM_CELL_RUNTIME_CONFIG`가 없을 때 기존 `profile`/`snapshot` 인자를 지원합니다. 운영 Camera Snapshot 생성도 Cell의 `camera.snapshot` 경로를 사용합니다. Camera 설치를 바꾸면 해당 Stage에서 Snapshot을 다시 생성하고 Calibration을 맞춰야 합니다.
-
-Cell의 `material_supply`는 기존 Supply Profile, Delivery Root와 기존 Geometry의 공급 지지면을 선택합니다. Bringup은 Supply Profile 내용을 Runtime Configuration에 포함하고 Vision·Supply가 공유하는 지지면 치수도 같은 Geometry에서 유도합니다. 공급 위치는 지지면 중심과 두께에서 유도하며 자재 종류·수량·랜덤 낙하·공급 완료 계산은 기존 설정과 알고리즘을 유지합니다. Adapter·Capture Registry·Demonstration·Pose 기록이 같은 Delivery Root를 소비하고 Sidecar·UI Hub·ROS Gateway 프로토콜은 유지합니다.
-
-공통 Startup은 scripts 루트의 `1_before_play.py` → Timeline Play → GUI/headless `2_after_play*.py`를 실행합니다. `isaac_runtime/runtime_workflow.py`가 기존 역할 순서를 소유하며, Script Editor의 기존 `m0609_cell/0_pre_build.py`, `1_before_play.py`, `2_after_play*.py`도 얇은 호환 진입점으로 유지합니다. 임시 Script Editor 복사본은 `SFTWIN_PROJECT_ROOT`로 공통 scripts 루트를 찾습니다.
-
-| 단계 | 실행 및 책임 |
-|---|---|
-| Pre Build (명시 실행) | 선택 Assembly의 Xacro → URDF → USD·Provenance 생성·검증. Startup/Before Play는 Build를 암묵적으로 실행하지 않음 |
-| Before Play | Runtime JSON 한 번 로드 → 선택 Scene Builder → Robot HOME·Drive → Cell 공급 Adapter·Timeline 연결 → Camera Snapshot → ROS Graph |
-| Play | 기존 Timeline callback이 Live Test Session 생성 |
-| After Play | 같은 설정 Snapshot으로 선택 Tool 초기화 → GUI일 때 UI Hub 활성화 |
-| Pause/Resume | 기존 Session·Tool·공급 상태 유지 |
-| Stop/Reset | Tool·Attachment Reset → 진단 Writer 종료 → HOME 복원 (Drive 재배율 없음) → 생성 자재 삭제 → Live Test Session 종료. 기존 Physics STOPPED 검증 정리는 멱등 경로를 유지 |
-| 재생·재실행·종료 | Stop 후 Play는 새 Live Test Session 생성. After Play 재실행은 기존 Tool Session·Subscription 교체. Before Play 재실행·종료는 Tool → 진단 Session → 공급 Subscription·Sidecar 정리 |
-
-선택 호출은 기존 `모듈:함수` 형식을 재사용합니다. Cell의 `isaac.scene_builder`, `material_supply_factory`, `camera_snapshot`, `action_graph_builder`는 Cell 구현을, Tool의 `runtime.isaac_bootstrap`은 Physics 준비 후 Tool 초기화를 선택합니다. Robot Binding·HOME·Drive는 Robot과 Assembly·Cell 배치 데이터를 함께 소비합니다. 공통 Runtime은 Plugin ID나 Prim 경로로 분기하지 않습니다. M0609 Scene·공급 장치와 Robotiq Capture/Actuator 구현은 기존 디렉터리에 남으며, 선택된 구현 내부의 기존 sibling import 경로는 아직 유지합니다. Launcher 지원 조합과 사용자 실행 명령은 바뀌지 않습니다. 다른 조합의 Runtime 지원은 선언하지 않습니다.
-
-M0609 실제 Lifecycle smoke는 export와 필요한 Pre Build 후 Isaac Python으로 실행할 수 있습니다. `--pre-build`는 선택 Assembly 산출물을 먼저 재생성합니다. 공급 Sidecar까지 확인하려면 해당 checkout의 ROS overlay가 필요합니다.
-
-```bash
-~/isaac_sim/python.sh infra/isaac_sim/scripts/m0609_cell/tests/acceptance/runtime_lifecycle_smoke.py --pre-build
-```
-
-이 검사는 headless Startup·관절 이동·Robotiq 실측 OPEN/CLOSE·Camera Prim·공급 Adapter·시연 자재 생성/삭제·Pause/Resume·HOME/Drive Reset·Session/Physics Subscription 교체를 확인합니다. ROS 공급 완료와 전체 PnP 라이브 검증은 별도입니다.
-
-
-Script Editor로 직접 시작할 때는 ROS workspace를 빌드하고 overlay를 source한 터미널에서 먼저 export합니다.
-
-```bash
-ros2 run arm_cell_bringup export_runtime_configuration \
-  --profile ros2_ws/src/bringup/config/operational_profile.yaml \
-  --output .run_records/runtime_configuration.json
-```
-
-Isaac 프로세스에 `SFTWIN_PROJECT_ROOT`를 저장소 절대 경로로 설정합니다. 기본 파일 이외의 export를 읽으려면 `ARM_CELL_RUNTIME_CONFIG`에 해당 파일의 절대 경로를 설정합니다. 설정을 바꾸면 다시 export하고 Isaac 구성을 다시 로드합니다. ROS의 명시적 `profile:=` 인자는 해당 ROS 실행에만 적용됩니다.
-
-검증용 PnP는 별도 프로파일을 export합니다.
-
-```bash
-ros2 run arm_cell_bringup export_runtime_configuration \
-  --profile ros2_ws/src/bringup/config/pnp_validation_profile.yaml \
-  --output .run_records/pnp_runtime_configuration.json
-```
-
-검증 entrypoint는 이 파일을 기본으로 읽으며, `SFTWIN_PNP_PROFILE`에 다른 export 파일의 절대 경로를 지정할 수 있습니다. 상대 설정 경로는 선언 파일 기준, `package://`는 해당 ROS 패키지 기준, `project://`는 프로젝트 기준으로 해석합니다.
-
-배포 YAML의 `profiles.robot`, `profiles.tool`, `profiles.cell`에서 조합할 설정 파일을 선택합니다. 기본 선택은 각각 `motion/config/robots/m0609.yaml`, `motion/config/tools/robotiq_2f85.yaml`, `bringup/config/cells/isaac_m0609.yaml`입니다. 결합 URDF/SRDF 자산은 `model_configuration`에서 별도로 선택하며 기본 M0609+2F85 모델은 그대로 사용합니다. Motion 실행 정책은 `components.motion`, IK·Planning 파일 선택은 `motion_configuration`에서 지정합니다. 가져올 Motion 입력 묶음은 `motion_profile_sections`, capture 출력 이름은 `capture_section`에 명시합니다. 검증 Profile은 Tool의 `validation_motion`을 선택하고 생산 Cell 경로 제약·손가락 탐색 치수를 제외하며, `validation.planning_scene_profiles`에서 접촉·Scene 입력 Owner를 선택합니다. HOME·관절 자세는 Robot, 그리퍼 치수·축 관례는 Tool, 작업 위치·Calibration 참조는 Cell에서 수정하고 다시 export합니다. 여러 소유자에 같은 파라미터를 정의하면 조립을 거부합니다. MoveIt 단독 실행은 `robot_profile:=<Robot YAML>`과 `model_configuration:=<결합 모델 YAML>`을 지원하며 생략 시 기존 기본 조합을 사용합니다. 설정 책임과 실행 책임의 구분은 [Components Architecture](docs/design/architecture/components.md)를 따릅니다.
-
-Plugin 전환 기반 설정은 기존 owner 아래에 포함됩니다. Robot의 `joint_policy`는 동치각 허용·PLACE IK Seed 관절, Assembly의 `model_id`·`planning_group`·`isaac`는 모델 식별·그룹·모델 내부 Articulation Binding, Tool의 `contact_links.payload_touch_links`는 실제 도구 접촉 Link, Cell의 `contact_objects.pick_retract`·`isaac.robot_prim_path`는 설비 접촉 대상·Stage 배치를 나타냅니다. 기존 HOME·관절 목록·Limits·Tool validation 접촉 Link·Cell 작업 위치는 그대로 재사용합니다. 이 메타데이터는 runtime JSON으로 전달됩니다. Isaac Model Builder는 선택된 Assembly의 Xacro와 Mesh 경로를 사용하며, `isaac.urdf`가 있으면 기존 Isaac용 Xacro Wrapper를 사용합니다. `isaac.revolute_joints`는 Import 후 Revolute Joint와 PhysX Mimic 부재를 확인할 모델 내부 Joint Binding입니다. 생성 URDF는 `infra/isaac_sim/assets/urdf/generated/<model_id>.urdf`, USD와 Provenance는 `infra/isaac_sim/assets/usd/<model_id>_generated.*`에 기록됩니다. 생성물은 원본 Assembly 설정이 아니며 기존 Provenance 검증을 거쳐 재사용합니다. M0609의 기존 파일명·Wrapper·Import 옵션은 유지합니다. Tool의 `runtime`은 Capability·Isaac 구현·폭 한계·구동 시간·지원 형상을, `grasp_pose_collision_links`는 TCP Pose 충돌 검사 링크를 제공합니다. Isaac Tool 실행은 선택된 Profile과 Assembly Binding을 소비합니다. Scene 배치는 기존 M0609 조합을 사용합니다. Launcher의 지원 조합과 실행 경로도 그대로입니다.
-
-원본 Profile 조립·export는 기존 Xacro 확장기를 사용해 URDF/SRDF와 선택 설정을 대조합니다. ROS 환경에는 기존 `xacro` 의존성을 사용하고, 독립 Launcher 환경에는 `infra/launcher/requirements.txt`로 설치합니다. export된 JSON을 읽는 소비자는 추가 모델 검사나 Xacro import를 수행하지 않습니다. Isaac Articulation 경로의 형식은 조립 시 검사하지만 실제 USD Prim 존재와 Play 이후 바인딩은 라이브 검증 대상입니다.
-
-자재는 `bringup/config/materials/*.yaml`에서 관리합니다. `TestCube`(70×70×80 mm), 알루미늄 빌릿(60×40×30 mm), 철강 블랭크(70×50×40 mm), 알루미늄 판재(80×60×20 mm)를 제공합니다. UI Hub의 Material type 목록은 export에 포함된 자재에서 생성되며, Random Drop 한 요청은 선택한 한 종류만 공급합니다. 새 cuboid는 자재 정의와 미션을 추가하고 runtime 설정을 다시 export하면 목록에 반영됩니다.
-
-판재의 일반 파지는 60 mm 방향으로 제한합니다. 80 mm 방향을 명시적으로 시험하거나 pick offset을 조정할 때는 별도의 검증 export를 사용합니다.
-
-```bash
-ros2 run arm_cell_bringup export_runtime_configuration \
-  --profile ros2_ws/src/bringup/config/pnp_validation_profile.yaml \
-  --material AL_PLATE_080_060_020 --grasp-width-mm 80 \
-  --output .run_records/pnp_runtime_configuration.json
-ros2 launch arm_cell_bringup arm_cell_pnp_validation.launch.py \
-  profile:="$(pwd)/.run_records/pnp_runtime_configuration.json"
-```
-
-`--pick-offset-z-m`은 자재 중심 기준 Z offset의 시험값입니다. 이 옵션은 원본 YAML을 변경하지 않습니다. Isaac에는 같은 export를 `SFTWIN_PNP_PROFILE`로 지정합니다. 신규 자재 offset은 기존 2.5 mm 상판 접촉 깊이에 기반한 초깃값이며 `pending_live_validation`으로 표시합니다. 실제 파지 결과를 확인한 뒤 자재 정의에 보정값과 근거를 반영해야 합니다.
-
-Isaac에서 검증 fixture를 생성한 뒤 출력된 등록 manifest로 `ros2 run arm_cell_bringup validate_material_grasp --profile <export.json> --manifest <manifest.json> --result <result.json>`을 실행하면 Fixed Vision과 기존 Task Execution API로 한 번의 PnP를 수행하고 결과를 기록합니다. 원본 자재 YAML은 자동 변경하지 않습니다.
-
-
-### 방법 1: 호스트에서 ROS 2 빌드 및 실행
-
-첫 실행에는 아래 Docker Compose 방법을 권장합니다. 로컬 개발 시 ROS 2 Humble, colcon, 초기화된 rosdep, `nlohmann-json3-dev`를 준비합니다. 새 터미널에서 저장소 루트 기준으로 아래 명령을 실행하면 Dockerfile과 동일한 TRAC-IK 리비전을 로컬에 빌드합니다.
-
-```bash
-bash ros2_ws/build-local.bash
 source ros2_ws/install/setup.bash
-ros2 pkg prefix trac_ik_kinematics_plugin
-```
-
-`info`는 기본 운영 로그 모드이고 선택적 구조화 진단 수집은 끕니다. 호스트에서 실행하려면 다음 명령을 사용합니다.
-
-```bash
 ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=info
 ```
 
-```bash
-ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=debug
-```
-
-`debug`는 ROS 노드의 상세 로그를 활성화하고 더 많은 로그와 진단 기록을 생성합니다. `diagnostics`를 생략하면 `debug`는 `motion`, `vision`, `safety`, `orchestration` 수집을 모두 켭니다. 로그 상세도와 구조화된 진단 수집은 별도 설정입니다. 예를 들어 진단 기록 없이 debug 로그만 보려면 `log_level:=debug diagnostics:=none`을 지정합니다. 반대로 info 로그에서 필요한 기록만 고를 수 있습니다.
-
-```bash
-ros2 launch arm_cell_bringup arm_cell.launch.py log_level:=info diagnostics:=vision,motion
-```
-
-`diagnostics`는 `none`, `all`, 또는 `motion,vision,safety,orchestration`의 쉼표 구분 목록을 받습니다. 이 설정은 ROS bringup에 적용되며 Isaac Sim UI 프로세스의 진단 설정과는 별도입니다.
-
-ROS bringup을 종료하려면 `Ctrl+C`를 누릅니다.
-
-파지 목표·attach 코드처럼 C++ Motion과 Isaac Python 사이의 메시지를 함께 변경한 경우,
-실행 중인 bringup을 종료한 뒤 위 빌드와 overlay source를 다시 수행하고 bringup을 재시작합니다.
-Isaac에서도 현재 체크아웃의 `2_after_play.py`를 다시 실행해 그리퍼 runtime을 교체합니다.
-`/tmp`의 검증용 빌드는 이 `ros2_ws/install`이나 실행 중인 프로세스를 갱신하지 않습니다.
-
-현재 파지 reference 메시지는 보정된 TCP 목표 `position`과 비전에서 계산한 자재 중심
-`object_position`을 함께 전달합니다. `capture_object_association_missing`이면 이전 Motion
-실행 파일이 보내는 메시지인지 확인합니다. `capture_object_association_runtime_unavailable`이면
-Isaac 그리퍼 runtime이 현재 Python 모듈로 다시 로드되었는지 확인합니다.
-
-### 방법 2: Docker Compose로 실행
-
-호스트에 Docker Compose v2가 필요합니다. 별도의 호스트 ROS workspace 빌드 없이 저장소 루트에서 실행합니다.
+Docker 실행:
 
 ```bash
 export ARM_CELL_UID="$(id -u)" ARM_CELL_GID="$(id -g)"
 docker compose up --build
 ```
 
-Compose는 호스트 Isaac 사용자와 같은 UID/GID로 기록합니다(기본값 `1000:1000`).
-기존 기록 폴더가 다른 사용자 소유라면 Isaac과 Compose를 종료한 후 한 번만 복구합니다.
-아래 명령은 기존 기록을 삭제하지 않고 소유자만 변경합니다.
+Isaac과 ROS는 같은 `ROS_DOMAIN_ID`와 RMW 설정을 사용해야 합니다. Compose 기본값은
+`ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`입니다.
+Docker 로그는 `docker compose logs -f arm-cell`로 확인합니다.
 
-저장소 루트에서 실행합니다. 경로를 바꿨다면 `record_dir`에는 `config/run_records.yaml`의 `root`를, `waypoint_dir`에는 Motion의 `config/place_waypoint.yaml`에 지정한 파일의 상위 디렉터리를 넣으세요. 상대 경로는 저장소 루트 기준입니다. 재귀적으로 소유권이 바뀌므로 기록과 waypoint 저장 전용 디렉터리만 지정하세요.
+종료할 때는 ROS 터미널에서 `Ctrl+C`를 누릅니다. Docker는 Compose 터미널의 `Ctrl+C`
+또는 `docker compose down`으로 종료합니다. ROS 종료 후 Isaac을 닫습니다.
 
-```bash
-record_dir=".run_records"
-waypoint_dir=".motion_data"
+## 기본 사용
 
-for dir in "$record_dir" "$waypoint_dir"; do
-  if [ -d "$dir" ]; then
-    sudo chown -R -- "$(id -u):$(id -g)" "$dir"
-  fi
-done
-```
+Isaac Sim의 **UI Hub**는 카메라·Vision 결과와 운영자 조작을 제공합니다.
+런처는 프로세스 시작·종료용이며, UI Hub는 시뮬레이터 안에서 사용합니다.
 
-C++ 소스 변경 후에는 기존 Compose 실행을 종료하고 `docker compose up --build`로
-이미지를 다시 빌드해 컨테이너를 교체합니다. 저장소 bind mount는 `/arm_cell`의 Python
-소스를 갱신하지만, 실행 파일은 이미지의 `/workspace/ros2_ws/install`에서 로드하므로
-Python 파일만 갱신해서는 Motion 메시지 변경이 반영되지 않습니다.
+- `External Handoff Trigger`에서 `Material type`과 `Quantity`를 선택하고
+  `Random Drop`으로 공급 자극을 발행합니다.
+  공급 완료 후 Safety·준비 조건에 따라 작업이 시작됩니다. 버튼의 발행 성공은 공급이나 작업 성공을 뜻하지 않습니다.
+- 카메라 영상과 Vision Snapshot에서 관측 결과를 확인합니다. 전체 시스템 상태와 작업 오류는
+  ROS 터미널 및 진단 기록에서 확인합니다. UI Hub는 종합 상태 대시보드를 제공하지 않습니다.
+- 잠시 멈출 때는 Isaac 표준 Timeline의 Pause를 사용합니다. Play로 같은 실험을 재개합니다.
+- 새 실험은 가장 간단하게 런처의 `모두 종료` 후 다시 시작합니다. 같은 Isaac 프로세스를 유지하려면
+  ROS 종료 → Timeline Stop → `1_before_play.py` → Play → `2_after_play.py` → 새 ROS 시작 순서를 따릅니다.
+  Stop은 시뮬레이션 상태 초기화이며 Safety Reset이나 실장비 비상정지를 대신하지 않습니다.
 
-Compose가 ROS workspace를 이미지로 빌드하고 `arm_cell_bringup`과 Python 3.10 sidecar를 시작합니다. Linux host networking, 기본 `ROS_DOMAIN_ID=0`, `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, Fast DDS UDPv4 transport를 사용합니다. Isaac Sim과 컨테이너의 ROS domain 및 RMW 설정을 일치시킵니다. 기본 모드는 `info`이며, Docker에서는 시작할 때 환경변수로 모드를 선택합니다.
+자세한 조작과 세션 동작은 [UI Hub 안내](docs/design/components/ui-hub/fds.md)와
+[시뮬레이션 세션](docs/design/components/simulation/fds-sim-session.md)을 참고하세요.
 
-```bash
-ARM_CELL_LOG_LEVEL=info docker compose up --build
-```
+## 설정과 로그
+
+- GUI는 선택한 설정을 Isaac과 ROS에 함께 적용합니다. 설정 파일을 수정했다면 실행을 종료하고 다시 시작합니다.
+- 수동 실행 예시는 기본 운영 프로파일을 사용합니다. Isaac 시작 스크립트가 생성하는
+  설정 파일의 기본 경로는 `.run_records/runtime_configuration.json`입니다.
+- 자재 정의는 `ros2_ws/src/bringup/config/materials/`에 있습니다. UI Hub 목록은 실행 시 읽은 설정을 사용합니다.
+- 진단 기록은 기본 `.run_records/` 아래에 저장됩니다. 런처 터미널 출력은 창이 닫히면 사라집니다.
+- 호스트 ROS 상세 로그는 `log_level:=debug`로 켭니다. 기본 `info`는 선택적 진단 수집을 끄고,
+  `debug`는 모든 ROS 진단 수집을 켭니다. `diagnostics:=none`, `all`, 또는
+  `motion,vision,safety,orchestration` 중 쉼표 구분 목록으로 수집 범위를 선택합니다.
+
+Docker에서는 시작할 때 환경변수로 로그와 진단을 선택합니다. 변경하려면 기존 실행을 종료하고 다시 시작합니다.
 
 ```bash
 ARM_CELL_LOG_LEVEL=debug docker compose up --build
-```
-
-`ARM_CELL_DIAGNOSTICS`를 생략하면 `info`는 선택적 진단 수집을 끄고 `debug`는 모든 ROS 진단 수집을 켭니다. 일부 기록만 수집하려면 함께 지정합니다.
-
-```bash
 ARM_CELL_LOG_LEVEL=info ARM_CELL_DIAGNOSTICS=vision,motion docker compose up --build
 ```
 
-```bash
-ARM_CELL_LOG_LEVEL=debug ARM_CELL_DIAGNOSTICS=none docker compose up --build
-```
+설정 구조·컴포넌트 책임은 [구성요소 아키텍처](docs/design/architecture/components.md),
+기록 해석은 [Observability Records ICD](docs/design/interfaces/icd-observability-records.md)를 참고하세요.
 
-`ARM_CELL_DIAGNOSTICS`는 `none`, `all`, 또는 `motion,vision,safety,orchestration`의 쉼표 구분 목록을 받습니다. 실행 중인 컨테이너의 모드를 바꾸려면 기존 Compose 실행을 내린 뒤 원하는 환경변수로 다시 시작합니다. 로그는 `docker compose logs -f arm-cell`로 확인하고, 종료할 때는 Compose 터미널에서 `Ctrl+C`를 누르거나 `docker compose down`을 실행합니다.
+## 문제 해결
+
+| 증상 | 확인할 사항 |
+|---|---|
+| 런처에서 Python 모듈을 찾지 못함 | 런처 실행에 쓰는 Python으로 requirements를 설치했는지 확인합니다. 가상환경을 사용한다면 활성화합니다. |
+| `ros2_ws/install/setup.bash`가 없음 | 호스트 빌드를 완료합니다. GUI 런처는 Docker 이미지의 빌드 결과를 사용하지 않습니다. |
+| Isaac 실행 파일을 찾지 못함 | `ISAAC_SIM_ROOT`가 `isaac-sim.sh`를 포함한 디렉터리인지 확인합니다. |
+| 실행 터미널이 열리지 않음 | `xterm` 설치와 X11/XWayland 디스플레이를 확인합니다. |
+| ROS 시작이 차단되거나 이미 실행 중이라고 표시됨 | 기존 런처·CLI·Docker 실행을 먼저 종료합니다. 다른 checkout의 프로세스는 자동 정리하지 않습니다. |
+| 영상이나 로봇 상태가 갱신되지 않음 | Timeline이 Play 상태인지, After Playing 초기화가 완료됐는지, Isaac과 ROS의 domain·RMW 설정이 같은지 확인합니다. |
+| 코드 수정이 실행에 반영되지 않음 | 호스트는 재빌드 후 overlay를 다시 source하고, Docker는 `docker compose up --build`로 교체합니다. Isaac Python 변경은 runtime 재로드 또는 재시작이 필요합니다. |
+| Docker 기록 저장 권한 오류 | Isaac과 Compose를 종료하고 `.run_records/`, `.motion_data/`의 소유자와 `ARM_CELL_UID`·`ARM_CELL_GID`를 확인합니다. |
 
 ## 문서 탐색
 
-- [v0.3.4 릴리즈 노트](docs/releases/v0.3.4.ko.md) / [English](docs/releases/v0.3.4.en.md) · [이전 버전 v0.3.3](docs/releases/v0.3.3.ko.md)
-
-- [ARM Cell 데모 정의](docs/product/definition.md)
-- [최종 라이브 인수 계약](docs/product/acceptance.md)
-- [시스템 아키텍처](docs/design/architecture/), [ARM Cell 컴포넌트 설계](docs/design/components/)
-- [ROS 및 simulator 인터페이스 계약](docs/design/interfaces/)
+- [v0.3.4 릴리즈 노트](docs/releases/v0.3.4.ko.md) / [English](docs/releases/v0.3.4.en.md): 변경·업그레이드·검증 범위
+- [프로젝트 정의](docs/product/definition.md), [라이브 인수 계약](docs/product/acceptance.md)
+- [시스템 아키텍처](docs/design/architecture/), [컴포넌트 설계](docs/design/components/), [인터페이스](docs/design/interfaces/)
 - [알고리즘 설계](docs/design/algorithms/)
-- [아키텍처 결정 기록(ADR)](docs/record/architecture-decision/)
-- [Engineering Stories](docs/record/engineering-story/)
-- [기술 기록](docs/record/)
+- [설계 결정과 Engineering Stories](docs/record/)
 - [Acceptance 보고서](docs/reports/acceptance/)
-
-## 구현 상태 및 한계
-
-v0.3.4의 주요 변경과 업그레이드 안내, 검증 범위는 [릴리즈 노트](docs/releases/v0.3.4.ko.md)를 참고하세요. 이번 버전 문서 갱신에서는 소스 검사와 문서 링크를 확인했습니다. 전체 ROS 테스트 모음과 라이브 Isaac Mission acceptance는 다시 실행하지 않았습니다.
 
 ## 라이선스 및 제3자 저작물
 
-프로젝트 자체 코드는 [MIT License](LICENSE)를 따릅니다. 로봇 모델과 제3자 에셋에는 각각의 upstream 조건이 적용됩니다. 재배포 전 [Third-Party Notices](THIRD_PARTY_NOTICES.md)와 함께 배포된 upstream 라이선스 및 출처 정보를 확인하세요.
+프로젝트 자체 코드는 [MIT License](LICENSE)를 따릅니다. 로봇 모델과 제3자 에셋에는
+각각의 upstream 조건이 적용됩니다. 재배포 전 [Third-Party Notices](THIRD_PARTY_NOTICES.md)와
+함께 배포된 라이선스 및 출처 정보를 확인하세요.
