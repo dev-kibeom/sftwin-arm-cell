@@ -73,7 +73,8 @@ def selected_deployment(entries, selection):
 
 def export_selection(entry, destination):
     # No parallel configuration engine or edited copies of source profiles.
-    return export_runtime_configuration(entry['profile'], destination)
+    return export_runtime_configuration(entry['profile'], destination,
+        tool_actuator=entry.get('tool_actuator'), tool_grasp=entry.get('tool_grasp'))
 
 
 def terminal_command(name, slave, master):
@@ -134,6 +135,13 @@ class Launcher(QMainWindow):
             self.selectors[key] = combo
             combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
+        self.tool_modes = {'actuator': QComboBox(), 'grasp': QComboBox()}
+        form.addRow('Actuator', self.tool_modes['actuator'])
+        form.addRow('Grasp', self.tool_modes['grasp'])
+        self.selectors['tool'].currentIndexChanged.connect(self.refresh_tool_modes)
+        self.tool_modes['actuator'].currentIndexChanged.connect(self.refresh_grasp_modes)
+        self.tool_modes['grasp'].currentIndexChanged.connect(self.validate)
+        self.refresh_tool_modes()
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
         buttons = QHBoxLayout()
@@ -156,20 +164,51 @@ class Launcher(QMainWindow):
         self.timer.start(100)
         self.validate()
 
+    def refresh_tool_modes(self):
+        runtime = read(self.selectors['tool'].currentData())['runtime']
+        self.mode_pairs = runtime.get('supported_combinations', [['logical', 'fixed_attach']])
+        combo = self.tool_modes['actuator']
+        combo.blockSignals(True)
+        combo.clear()
+        for mode in dict.fromkeys(pair[0] for pair in self.mode_pairs):
+            combo.addItem(mode.title(), mode)
+        combo.setCurrentIndex(combo.findData(runtime.get('actuator', 'logical')))
+        combo.blockSignals(False)
+        self.refresh_grasp_modes(runtime.get('grasp', 'fixed_attach'))
+
+    def refresh_grasp_modes(self, preferred=None):
+        combo = self.tool_modes['grasp']
+        previous = preferred if isinstance(preferred, str) else combo.currentData()
+        combo.blockSignals(True)
+        combo.clear()
+        actuator = self.tool_modes['actuator'].currentData()
+        for mode in dict.fromkeys(pair[1] for pair in self.mode_pairs if pair[0] == actuator):
+            combo.addItem(mode.replace('_', ' ').title(), mode)
+        index = combo.findData(previous)
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.blockSignals(False)
+        if hasattr(self, 'status'):
+            self.validate()
+
     def selection(self):
-        return selected_deployment(self.entries, {key: combo.currentData() for key, combo in self.selectors.items()})
+        entry = selected_deployment(self.entries, {key: combo.currentData() for key, combo in self.selectors.items()})
+        actuator = self.tool_modes['actuator'].currentData()
+        grasp = self.tool_modes['grasp'].currentData()
+        if [actuator, grasp] not in self.mode_pairs:
+            raise ValueError('Unsupported Tool actuator/grasp combination')
+        return dict(entry, tool_actuator=actuator, tool_grasp=grasp)
 
     def validate(self):
         valid = True
         try:
             entry = self.selection()
-            message = f"Profile: {entry['profile'].name}"
-            if entry['validation_status'] == 'live-pending':
+            message = f"Profile: {entry['profile'].name} | {entry['tool_actuator']} + {entry['tool_grasp']}"
+            if entry['tool_actuator'] == 'physics' or entry['validation_status'] == 'live-pending':
                 message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
         except ValueError as exc:
             valid, message = False, str(exc)
         active = bool(self.processes or self.terminals) or self.stopping
-        for combo in self.selectors.values():
+        for combo in (*self.selectors.values(), *self.tool_modes.values()):
             combo.setEnabled(not active)
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)

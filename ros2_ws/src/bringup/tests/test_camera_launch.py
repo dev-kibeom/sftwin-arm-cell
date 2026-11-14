@@ -102,7 +102,7 @@ def test_camera_overlay_uses_simulation_adapter_snapshot_by_default(
     bringup_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_bringup"
     vision_share = tmp_path / "checkout/ros2_ws/install/share/arm_cell_sim_adapter"
     bringup_share.mkdir(parents=True)
-    snapshot = vision_share / "config/isaac_camera_stage_snapshot.json"
+    snapshot = vision_share / "config/isaac_camera_runtime_config.json"
     snapshot.parent.mkdir(parents=True)
     snapshot.write_text(
         json.dumps(

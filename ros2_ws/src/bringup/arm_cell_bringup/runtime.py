@@ -108,8 +108,11 @@ def selected_profiles(references, base):
     return owners
 
 
-def compose_owner_profiles(config, path):
+def compose_owner_profiles(config, path, *, tool_actuator=None, tool_grasp=None):
     owners = selected_profiles(config.pop('profiles', DEFAULT_PROFILES), path.parent)
+    for key, value in (('actuator', tool_actuator), ('grasp', tool_grasp)):
+        if value is not None:
+            owners['tool']['runtime'][key] = value
     motion = config.setdefault('motion', {})
     for name, sections in config.pop('motion_profile_sections').items():
         for section in sections:
@@ -209,7 +212,7 @@ def write_recipes(recipes, output_root=None):
     return str(output)
 
 
-def load_profile(path, *, material_id=None, pick_offset_z_m=None):
+def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=None, tool_grasp=None):
     path = Path(path).expanduser().resolve()
     config = read(path)
     if config.get('kind') == 'arm-cell-runtime-configuration':
@@ -219,15 +222,17 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
         digest = hashlib.sha256(json.dumps(configuration, sort_keys=True, allow_nan=False).encode()).hexdigest()
         if digest != config.get('configuration_sha256'):
             raise ValueError('Runtime configuration checksum mismatch')
-        if any(value is not None for value in (material_id, pick_offset_z_m)):
-            raise ValueError('Re-export the source profile to change material trial settings')
+        if any(value is not None for value in (material_id, pick_offset_z_m, tool_actuator, tool_grasp)):
+            raise ValueError('Re-export the source profile to change runtime settings')
         configuration = copy.deepcopy(configuration)
         recipes = configuration.get('_mission_recipes', {configuration['_mission_recipe']['target_id']: configuration['_mission_recipe']})
         configuration['orchestration']['recipe_directory'] = write_recipes(recipes)
         return configuration
     if 'components' not in config:
         if 'profiles' in config:
-            compose_owner_profiles(config, path)
+            compose_owner_profiles(config, path, tool_actuator=tool_actuator, tool_grasp=tool_grasp)
+        elif tool_actuator is not None or tool_grasp is not None:
+            raise ValueError('Tool mode selection requires owner profiles')
         return validation_configuration(config, path, material_id, pick_offset_z_m)
     if any(value is not None for value in (pick_offset_z_m,)):
         raise ValueError('Grasp calibration trial settings require a validation profile')
@@ -237,7 +242,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None):
         if section in config:
             raise ValueError(f'Duplicate configuration owner: {section}')
         config[section] = read(resolve(reference, path.parent))
-    owners = compose_owner_profiles(config, path)
+    owners = compose_owner_profiles(config, path, tool_actuator=tool_actuator, tool_grasp=tool_grasp)
     if 'calibration_file' in config['vision']:
         raise ValueError('Duplicate configuration owner: vision.calibration_file')
     config['vision']['calibration_file'] = owners['cell']['calibration_file']

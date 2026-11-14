@@ -58,7 +58,7 @@ def compose(context):
     if not snapshot_path and camera is None:
         candidate = (
             Path(get_package_share_directory("arm_cell_sim_adapter"))
-            / "config/isaac_camera_stage_snapshot.json"
+            / "config/isaac_camera_runtime_config.json"
         )
         if candidate.is_file():
             snapshot_path = str(candidate)

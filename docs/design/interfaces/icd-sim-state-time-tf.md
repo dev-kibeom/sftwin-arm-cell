@@ -24,6 +24,10 @@
 - Timeline Stop은 Safety Reset 명령이 아니다. 세션 전환과 Process-local Mission Accounting의 수명은 각 FDS가 소유한다.
 - `robot_state_publisher`의 로봇 모델 TF와 Bringup의 `world → base_link` TF는 각각 단일 권한만 갖는다. MoveIt Virtual Joint가 추가 발행 권한을 만들지 않는다.
 
+Isaac Stage에서 생성하는 `isaac_camera_runtime_config.json`은 카메라 정적 TF의 실행 입력이다.
+Cell Profile의 경로를 Isaac 생성기와 ROS 소비자가 함께 사용하며, 진단 기록이나 원본 Calibration 설정으로 취급하지 않는다.
+동일한 JSON 값의 재관측은 파일을 다시 쓰지 않는다. 실제 값이 바뀌면 갱신하며 기존 카메라 Binding·TF 소유권 검증을 유지한다.
+
 ## 4. 상호운용 조건
 
 | 조건 | 공통 해석 |

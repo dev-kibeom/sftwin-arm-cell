@@ -140,29 +140,25 @@ Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick
 
 ## 실행
 
-저장소 root에서 기존 Profile을 복사해 선택한다. RB5는 `rb5_850_profile.yaml`을 대신 사용한다.
+GUI 런처에서 Robot·Tool·Cell·Backend와 함께 Actuator·Grasp를 선택한다.
+기본은 `Logical + Fixed Attach`다. `Physics`를 선택하면 `Fixed Attach` 또는 `Physical`을 선택할 수 있다.
+Tool Profile의 지원 조합을 사용하며 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
+Isaac과 ROS에 같은 Runtime Configuration을 전달한다. 원본 Tool/Deployment YAML을 수정하거나 복사하지 않는다.
+
+CLI/Script Editor에서는 기존 export CLI에 선택을 전달한다. RB5는 Profile을 `rb5_850_profile.yaml`로 바꾼다.
 
 ```bash
 source /opt/ros/humble/setup.bash
-python3 - <<'PY'
-from pathlib import Path
-import yaml
-root = Path.cwd()
-out = root / '.run_records'
-out.mkdir(exist_ok=True)
-tool = yaml.safe_load((root / 'ros2_ws/src/motion/config/tools/robotiq_2f85.yaml').read_text())
-tool['runtime'].update(actuator='physics', grasp='physical')
-(out / 'physics-tool.yaml').write_text(yaml.safe_dump(tool))
-profile = yaml.safe_load((root / 'ros2_ws/src/bringup/config/operational_profile.yaml').read_text())
-profile['profiles']['tool'] = str(out / 'physics-tool.yaml')
-(out / 'physics-profile.yaml').write_text(yaml.safe_dump(profile))
-PY
-ARM_CELL_PROFILE="$PWD/.run_records/physics-profile.yaml" bash infra/isaac_sim/scripts/isaac_arm_cell.sh
+PYTHONPATH=ros2_ws/src/bringup python3 ros2_ws/src/bringup/scripts/export_runtime_configuration \
+  --profile ros2_ws/src/bringup/config/operational_profile.yaml \
+  --tool-actuator physics --tool-grasp physical \
+  --output /tmp/arm-cell-physics-runtime.json
+bash infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /tmp/arm-cell-physics-runtime.json
 ```
 
-Launcher가 조립한 Runtime Configuration을 사용한다. Script Editor 직접 실행은 기존 export 명령으로 같은 Profile을 export한 뒤
-`ARM_CELL_RUNTIME_CONFIG`를 지정하고 기존 Before Play/After Play 순서를 따른다.
-원본 generated USD를 다시 저장하지 않는다. Physics + Fixed Attach를 조사하려면 위 선택의 `grasp`만 `fixed_attach`로 지정한다.
+Script Editor 직접 실행은 위 파일을 `ARM_CELL_RUNTIME_CONFIG`로 지정하고 기존 Before Play/After Play 순서를 따른다.
+이미 export한 설정은 실행 중 수정하지 않는다. 선택을 바꿀 때 원본 Profile에서 다시 export하고 실행을 재시작한다.
+원본 generated USD를 다시 저장하지 않는다. Physics + Fixed Attach는 `--tool-grasp fixed_attach`를 지정한다.
 
 ## 검증 범위와 사용자 라이브 확인
 

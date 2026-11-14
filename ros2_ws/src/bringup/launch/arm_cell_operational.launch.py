@@ -372,7 +372,7 @@ def camera_configuration_provenance(camera=None):
     try:
         path = (Path(camera['snapshot']) if camera is not None else
                 Path(get_package_share_directory("arm_cell_sim_adapter")) /
-                "config/isaac_camera_stage_snapshot.json")
+                "config/isaac_camera_runtime_config.json")
         return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "scope": "selected_cell" if camera is not None else "packaged_default"}
     except (OSError, LookupError):

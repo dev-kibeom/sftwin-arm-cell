@@ -10,8 +10,10 @@ parser.add_argument('--profile', type=Path)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--material', dest='material_id')
 parser.add_argument('--pick-offset-z-m', type=float)
+parser.add_argument('--tool-actuator', help='Selected Tool actuator implementation')
+parser.add_argument('--tool-grasp', help='Selected Tool grasp implementation')
 args = parser.parse_args()
 if args.profile is None:
     from ament_index_python.packages import get_package_share_directory
     args.profile = Path(get_package_share_directory('arm_cell_bringup')) / 'config/operational_profile.yaml'
-print(export_runtime_configuration(args.profile, args.output, material_id=args.material_id, pick_offset_z_m=args.pick_offset_z_m))
+print(export_runtime_configuration(args.profile, args.output, material_id=args.material_id, pick_offset_z_m=args.pick_offset_z_m, tool_actuator=args.tool_actuator, tool_grasp=args.tool_grasp))
