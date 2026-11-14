@@ -79,15 +79,11 @@ def validate_validation_profile(profile: dict) -> dict:
     if len(dimensions_m) != 3 or any(value <= 0.0 for value in dimensions_m):
         raise ValueError("fixture dimensions must contain three positive values")
 
-    grasp_policy = profile.get("_mission_recipe", {}).get("grasp")
-    if grasp_policy is None:
-        grasp_dimensions_mm = [dimensions_m[0] * 1000.0]
-    else:
-        grasp_dimensions_mm = [value * 1000.0 for value in dimensions_m
-            if grasp_policy["min_expected_contact_width_mm"] <= value * 1000.0
-            <= grasp_policy["max_expected_contact_width_mm"]]
+    # Motion selects a feasible closing axis from the observed box dimensions;
+    # recipes no longer impose an expected-contact-width interval.
+    grasp_dimensions_mm = [value * 1000.0 for value in dimensions_m]
     if not any(0 < width <= Robotiq2F85Actuator.MAX_WIDTH_MM for width in grasp_dimensions_mm):
-        raise ValueError("fixture grasp dimension exceeds Robotiq 2F-85 opening or policy")
+        raise ValueError("fixture grasp dimension exceeds Robotiq 2F-85 opening")
     motion = profile["motion"]
     observation_reference = motion.get("observation_reference")
     if not isinstance(observation_reference, str) or not observation_reference:
@@ -116,6 +112,8 @@ def validate_validation_profile(profile: dict) -> dict:
     recipe = fixture.get("grasp_recipe")
     if not isinstance(recipe, dict):
         raise ValueError("validation fixture grasp_recipe is required")
+    # Historical dry-run measurement is provenance, not an eligibility range
+    # for the volume-center reference. Preserve validation of its stored shape.
     band = recipe.get("measured_contact_band_m")
     selected_offset = recipe.get("object_top_to_grasp_tcp_z_m")
     if (
@@ -124,7 +122,6 @@ def validate_validation_profile(profile: dict) -> dict:
         or not all(math.isfinite(float(value)) for value in band)
         or float(band[0]) >= float(band[1])
         or not math.isfinite(float(selected_offset))
-        or not float(band[0]) <= float(selected_offset) <= float(band[1])
     ):
         raise ValueError("validation grasp recipe contact band is invalid")
     if not math.isclose(

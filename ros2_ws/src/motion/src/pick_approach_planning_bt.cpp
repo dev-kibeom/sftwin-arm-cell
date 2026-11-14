@@ -482,7 +482,14 @@ BT::NodeStatus ValidateGraspCollision::execute(PlanningContext & context)
     context.attempt.grasp_validation_result->state, tcp,
     Eigen::Vector3d(center.x, center.y, center.z), context.object_orientation,
     context.attempt.grasp_contact_result.contact, insertion,
-    context.non_target_occupancy, context.finger_clearance, context.joint_group->getName());
+    context.non_target_occupancy, context.finger_clearance, context.joint_group->getName(),
+    (context.robot_model->hasJointModel("gripper_robotiq_85_left_knuckle_joint") ||
+    context.rectangle_long_side_m > 0.0 || context.rectangle_short_side_m > 0.0 ||
+    context.object_height_m > 0.0) ?
+    std::optional<Eigen::Vector3d>(
+      Eigen::Vector3d(
+        context.rectangle_long_side_m, context.rectangle_short_side_m, context.object_height_m)) :
+    std::nullopt);
   if (!validation.valid) {
     context.attempt.failure_stage = "GRASP_COLLISION";
     context.attempt.failure_reason = validation.reason;

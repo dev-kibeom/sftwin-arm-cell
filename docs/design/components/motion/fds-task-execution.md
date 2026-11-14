@@ -612,7 +612,7 @@ Mode 없이 정밀 실현 가능성 탐색을 직접 수행한다.
 
 이 정책은 해당 PICK 요청의 명시된 구간·검사에만 적용한다. 공유 Planning Scene 객체를 전역 삭제하거나 제약을 완화해서는 안 된다. 제외 구간에서는 Vision Occupancy 두 종류에 동일한
 제외 규칙을 적용한다. UNKNOWN은 불확실한 증거이며 자유 공간으로 재해석하지 않는다. 고정 설비·Tray·Rail·Robot Self Collision·Attached Object·관절/궤적 한계·Grasp
-Geometry·Safety·Gripper/Capture/Holding 성공 검사는 계속 적용한다. PLACE는 §3을 따른다.
+Geometry·Safety·Gripper/Capture/Holding 성공 검사는 계속 적용한다. Grasp 끝점에서 자재 접촉 폭까지 닫힌 Gripper 형상, 선택 자재와 몸체의 충돌 및 제한된 손끝–Tray 접촉은 [Motion Execution FDS](fds-motion-execution.md)의 Grasp Occupancy 전략을 따른다. PLACE는 §3을 따른다.
 
 Approach Global Planning은 Vision의 두 Occupancy 종류에 대해 전체 Route의 충돌을 검증한다. Vision Occupancy를 완화하는 별도의 Approach Planning Probe는
 수행하지 않는다. Cartesian Global Fallback은 실패한 Cartesian 구간의 대체 Route이고 해당 구간의 충돌 정책을 따르며, Approach 실현 가능성을 검사하는 Probe가 아니다.

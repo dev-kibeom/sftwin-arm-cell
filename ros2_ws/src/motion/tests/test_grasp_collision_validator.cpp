@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <moveit/utils/robot_model_test_utils.h>
 #include <nlohmann/json.hpp>
+#include <srdfdom/model.h>
+#include <urdf_parser/urdf_parser.h>
 #include "arm_cell_motion/pick_approach_planning_bt.hpp"
 #include "arm_cell_motion/pick_planning_diagnostics.hpp"
 
@@ -174,15 +176,15 @@ TEST_F(GraspCollisionValidatorTest, FullCollisionUsesConvexMeshInsteadOfBounding
   const auto set_vertices = [&](const std::vector<Eigen::Vector2d> & vertices) {
       p.top_vertices.clear();
       for (const auto & v : vertices) {
-        geometry_msgs::msg::Point point; point.x=v.x(); point.y=v.y(); point.z=0.01;
+        geometry_msgs::msg::Point point; point.x = v.x(); point.y = v.y(); point.z = 0.01;
         p.top_vertices.push_back(point);
       }
     };
   context->grasp_occupancy_mode = GraspOccupancyMode::FULL_COLLISION;
-  set_vertices({{0.004,0.04},{0.04,0.004},{0.04,0.04}});
+  set_vertices({{0.004, 0.04}, {0.04, 0.004}, {0.04, 0.04}});
   scenes({p});
   EXPECT_EQ(validate(), BT::NodeStatus::SUCCESS);
-  set_vertices({{-0.003,-0.003},{0.006,-0.003},{-0.003,0.006}});
+  set_vertices({{-0.003, -0.003}, {0.006, -0.003}, {-0.003, 0.006}});
   scenes({p});
   EXPECT_EQ(validate(), BT::NodeStatus::FAILURE);
 }
@@ -190,9 +192,10 @@ TEST_F(GraspCollisionValidatorTest, ConvexTopIntrusionUsesFingerClearance)
 {
   Primitive p; p.shape_type = Primitive::CONVEX_TOP; p.pose.orientation.w = 1;
   p.bottom_height_m = -0.015;
-  for (const auto & v : std::vector<Eigen::Vector3d>{{0.034,-0.002,-0.005},
-      {0.036,-0.002,-0.004}, {0.036,0.002,-0.004}, {0.034,0.002,-0.005}}) {
-    geometry_msgs::msg::Point point; point.x=v.x(); point.y=v.y(); point.z=v.z();
+  for (const auto & v : std::vector<Eigen::Vector3d>{{0.034, -0.002, -0.005},
+      {0.036, -0.002, -0.004}, {0.036, 0.002, -0.004}, {0.034, 0.002, -0.005}})
+  {
+    geometry_msgs::msg::Point point; point.x = v.x(); point.y = v.y(); point.z = v.z();
     p.top_vertices.push_back(point);
   }
   scenes({p});
@@ -412,4 +415,125 @@ TEST_F(GraspCollisionValidatorTest, SelectedSceneBoxesPreserveFingerClearanceRes
   EXPECT_EQ(before.world, after.world);
   EXPECT_EQ(before.allowed_collision_matrix, after.allowed_collision_matrix);
 }
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST(ClosedGraspCollision, MissingToolModelCannotSkipRequestedTargetCheck)
+{
+  moveit::core::RobotModelBuilder builder("missing_tool", "base_link");
+  builder.addChain("base_link->sf_grasp_tcp", "prismatic");
+  auto model = builder.build();
+  moveit::core::RobotState state(model);
+  state.setToDefaultValues();
+  planning_scene::PlanningScene scene(model);
+  const auto result = validate_grasp_collision(
+    GraspOccupancyMode::NONE, scene, scene, state, Eigen::Isometry3d::Identity(),
+    Eigen::Vector3d::Zero(), Eigen::Quaterniond::Identity(), BoxGraspContact{0U, 70.0},
+    Eigen::Vector3d::UnitZ(), {}, FingerClearanceParameters{}, "",
+    Eigen::Vector3d(0.07, 0.07, 0.08));
+  EXPECT_FALSE(result.valid);
+  EXPECT_FALSE(result.allowed);
+}
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+namespace
+{
+class ClosedGraspCollisionTest : public ::testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    const std::string xml =
+      R"(<robot name="closed_tool">
+      <link name="base_link"><collision><origin xyz="0 0 0.3"/>
+      <geometry><box size="0.02 0.02 0.02"/></geometry></collision></link>
+      <link name="gripper_robotiq_85_left_knuckle_link"/>
+      <joint name="gripper_robotiq_85_left_knuckle_joint" type="revolute">
+      <parent link="base_link"/><child link="gripper_robotiq_85_left_knuckle_link"/>
+      <axis xyz="0 1 0"/><limit lower="0" upper="0.8" effort="1" velocity="1"/></joint>
+      <link name="gripper_robotiq_85_left_finger_tip_link"><collision>
+      <geometry><box size="0.01 0.01 0.01"/></geometry></collision></link>
+      <joint name="tip" type="fixed"><parent link="gripper_robotiq_85_left_knuckle_link"/>
+      <child link="gripper_robotiq_85_left_finger_tip_link"/><origin xyz="0.05 0 0"/></joint>
+      </robot>)";
+    auto urdf = urdf::parseURDF(xml);
+    auto srdf = std::make_shared<srdf::Model>();
+    ASSERT_TRUE(srdf->initString(*urdf, "<robot name=\"closed_tool\"/>"));
+    model = std::make_shared<moveit::core::RobotModel>(urdf, srdf);
+    state = std::make_unique<moveit::core::RobotState>(model);
+    state->setToDefaultValues();
+    scene = std::make_unique<planning_scene::PlanningScene>(model);
+  }
+  GraspCollisionValidationResult check(
+    double width = 85.0,
+    Eigen::Vector3d center = Eigen::Vector3d::Zero(),
+    GraspOccupancyMode mode = GraspOccupancyMode::NONE)
+  {
+    return validate_grasp_collision(
+      mode, *scene, *scene, *state, Eigen::Isometry3d::Identity(),
+      center, Eigen::Quaterniond::Identity(), BoxGraspContact{0U, width},
+      Eigen::Vector3d::UnitZ(), {}, FingerClearanceParameters{}, "",
+      Eigen::Vector3d(0.07, 0.07, 0.08));
+  }
+  void floor(double depth, const std::string & id = "amr_tray")
+  {
+    Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+    pose.translation().z() = -0.005 - 0.01 + depth;
+    scene->getWorldNonConst()->removeObject(id);
+    scene->getWorldNonConst()->addToObject(
+      id,
+      shapes::ShapeConstPtr(new shapes::Box(0.2, 0.2, 0.02)), pose);
+  }
+  moveit::core::RobotModelPtr model;
+  std::unique_ptr<moveit::core::RobotState> state;
+  std::unique_ptr<planning_scene::PlanningScene> scene;
+};
+TEST_F(ClosedGraspCollisionTest, AllowsOnlyShallowTipFloorContactAndPreservesInput)
+{
+  floor(0.0002);
+  EXPECT_TRUE(check().allowed);
+  EXPECT_DOUBLE_EQ(state->getVariablePosition("gripper_robotiq_85_left_knuckle_joint"), 0.0);
+  collision_detection::AllowedCollision::Type allowed;
+  EXPECT_FALSE(
+    scene->getAllowedCollisionMatrix().getEntry(
+      "amr_tray", "gripper_robotiq_85_left_finger_tip_link", allowed));
+  floor(0.001);
+  const auto collision = check();
+  EXPECT_TRUE(collision.valid);
+  EXPECT_FALSE(collision.allowed);
+  EXPECT_TRUE(collision.common.collision);
+  EXPECT_FALSE(collision.common.contacts.empty());
+}
+TEST_F(ClosedGraspCollisionTest, CandidateWidthChangesTipGeometryInsteadOfUsingMeasuredOpening)
+{
+  floor(0.0002);
+  EXPECT_TRUE(check(85.0).allowed);
+  EXPECT_FALSE(check(70.0).allowed);
+}
+TEST_F(ClosedGraspCollisionTest, TargetBodyCollisionIsRejectedAndFingerContactAllowed)
+{
+  EXPECT_TRUE(check(85.0, Eigen::Vector3d(0.05, 0.0, 0.0)).allowed);
+  for (auto mode : kModes) {
+    const auto body = check(85.0, Eigen::Vector3d(0.0, 0.0, 0.3), mode);
+    EXPECT_FALSE(body.allowed);
+    EXPECT_TRUE(body.common.collision);
+    EXPECT_FALSE(body.common.contacts.empty());
+  }
+}
+TEST_F(ClosedGraspCollisionTest, OtherFloorObjectsAndBodyFloorContactsStayForbidden)
+{
+  floor(0.0002, "other_floor");
+  EXPECT_FALSE(check().allowed);
+  scene->getWorldNonConst()->removeObject("other_floor");
+  Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+  pose.translation().z() = 0.3;
+  scene->getWorldNonConst()->addToObject(
+    "amr_tray",
+    shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)), pose);
+  EXPECT_FALSE(check().allowed);
+}
+}  // namespace
 }  // namespace arm_cell_motion

@@ -46,11 +46,11 @@ def test_validation_uses_material_offset_without_recipe_width_policy(tmp_path):
     )
     config = json.loads(output.read_text())['configuration']
     assert config['fixture']['dimensions_m'] == [0.08, 0.06, 0.02]
-    assert config['motion']['object_to_grasp_tcp_translation'] == [0, 0, 0.0075]
+    assert config['motion']['object_to_grasp_tcp_translation'] == [0, 0, 0]
     recipe = config['_mission_recipe']
     assert 'min_expected_contact_width_mm' not in recipe['grasp']
     assert 'max_expected_contact_width_mm' not in recipe['grasp']
-    assert recipe['object_to_grasp_tcp']['translation_m'] == [0, 0, 0.0075]
+    assert recipe['object_to_grasp_tcp']['translation_m'] == [0, 0, 0]
     assert recipe['object_to_grasp_tcp']['quaternion_xyzw'] == [1, 0, 0, 0]
     # Production recipes also leave contact width to Motion.
     from arm_cell_bringup.runtime import compile_mission
@@ -68,3 +68,14 @@ def test_calibration_trial_does_not_modify_catalog(tmp_path):
     )
     assert json.loads(result.read_text())['configuration']['motion']['object_to_grasp_tcp_translation'][2] == 0.005
     assert (MATERIALS / 'AL_PLATE_080_060_020.yaml').read_bytes() == original
+
+
+@pytest.mark.parametrize('material_id', [
+    'TestCube', 'AL_BILLET_060_040_030',
+    'STEEL_BLANK_070_050_040', 'AL_PLATE_080_060_020',
+])
+def test_compiled_material_grasp_reference_is_volume_center(material_id):
+    from arm_cell_bringup.runtime import compile_mission
+    recipe, material = compile_mission(MATERIALS.parent / f'missions/{material_id}.yaml')
+    assert material['pick_offset']['translation_m'] == [0.0, 0.0, 0.0]
+    assert recipe['object_to_grasp_tcp']['translation_m'] == [0.0, 0.0, 0.0]
