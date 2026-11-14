@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 
-from PySide6.QtCore import QLockFile, QTimer
+from PySide6.QtCore import QLockFile, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
                               QLabel, QMainWindow, QPushButton,
                               QVBoxLayout, QWidget)
@@ -69,6 +69,16 @@ def selected_deployment(entries, selection):
     if len(matches) != 1:
         raise ValueError('Unsupported or ambiguous combination: select a registered production Profile')
     return matches[0]
+
+
+def tool_mode_choices(profile):
+    """Tool-owned display names bind to the existing supported runtime pairs."""
+    runtime = profile['runtime']
+    names = {tuple(mode['combination']): mode for mode in runtime.get('launcher_modes', [])}
+    return [dict(combination=pair,
+                 label=names.get(tuple(pair), {}).get('label', ' / '.join(pair)),
+                 description=names.get(tuple(pair), {}).get('description', ''))
+            for pair in runtime.get('supported_combinations', [['logical', 'fixed_attach']])]
 
 
 def export_selection(entry, destination):
@@ -135,12 +145,10 @@ class Launcher(QMainWindow):
             self.selectors[key] = combo
             combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
-        self.tool_modes = {'actuator': QComboBox(), 'grasp': QComboBox()}
-        form.addRow('Actuator', self.tool_modes['actuator'])
-        form.addRow('Grasp', self.tool_modes['grasp'])
+        self.tool_mode = QComboBox()
+        form.insertRow(2, 'Tool Mode', self.tool_mode)
         self.selectors['tool'].currentIndexChanged.connect(self.refresh_tool_modes)
-        self.tool_modes['actuator'].currentIndexChanged.connect(self.refresh_grasp_modes)
-        self.tool_modes['grasp'].currentIndexChanged.connect(self.validate)
+        self.tool_mode.currentIndexChanged.connect(self.validate)
         self.refresh_tool_modes()
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
@@ -165,50 +173,40 @@ class Launcher(QMainWindow):
         self.validate()
 
     def refresh_tool_modes(self):
-        runtime = read(self.selectors['tool'].currentData())['runtime']
-        self.mode_pairs = runtime.get('supported_combinations', [['logical', 'fixed_attach']])
-        combo = self.tool_modes['actuator']
-        combo.blockSignals(True)
-        combo.clear()
-        for mode in dict.fromkeys(pair[0] for pair in self.mode_pairs):
-            combo.addItem(mode.title(), mode)
-        combo.setCurrentIndex(combo.findData(runtime.get('actuator', 'logical')))
-        combo.blockSignals(False)
-        self.refresh_grasp_modes(runtime.get('grasp', 'fixed_attach'))
-
-    def refresh_grasp_modes(self, preferred=None):
-        combo = self.tool_modes['grasp']
-        previous = preferred if isinstance(preferred, str) else combo.currentData()
-        combo.blockSignals(True)
-        combo.clear()
-        actuator = self.tool_modes['actuator'].currentData()
-        for mode in dict.fromkeys(pair[1] for pair in self.mode_pairs if pair[0] == actuator):
-            combo.addItem(mode.replace('_', ' ').title(), mode)
-        index = combo.findData(previous)
-        combo.setCurrentIndex(index if index >= 0 else 0)
-        combo.blockSignals(False)
+        profile = read(self.selectors['tool'].currentData())
+        runtime = profile['runtime']
+        choices = tool_mode_choices(profile)
+        self.mode_pairs = [choice['combination'] for choice in choices]
+        self.tool_mode.blockSignals(True)
+        self.tool_mode.clear()
+        for choice in choices:
+            self.tool_mode.addItem(choice['label'], choice['combination'])
+            self.tool_mode.setItemData(self.tool_mode.count() - 1, choice['description'], Qt.ToolTipRole)
+        default = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
+        self.tool_mode.setCurrentIndex(self.tool_mode.findData(default))
+        self.tool_mode.blockSignals(False)
         if hasattr(self, 'status'):
             self.validate()
 
     def selection(self):
         entry = selected_deployment(self.entries, {key: combo.currentData() for key, combo in self.selectors.items()})
-        actuator = self.tool_modes['actuator'].currentData()
-        grasp = self.tool_modes['grasp'].currentData()
-        if [actuator, grasp] not in self.mode_pairs:
+        pair = self.tool_mode.currentData()
+        if pair not in self.mode_pairs:
             raise ValueError('Unsupported Tool actuator/grasp combination')
-        return dict(entry, tool_actuator=actuator, tool_grasp=grasp)
+        return dict(entry, tool_actuator=pair[0], tool_grasp=pair[1])
 
     def validate(self):
+        self.tool_mode.setToolTip(self.tool_mode.currentData(Qt.ToolTipRole) or '')
         valid = True
         try:
             entry = self.selection()
-            message = f"Profile: {entry['profile'].name} | {entry['tool_actuator']} + {entry['tool_grasp']}"
+            message = f"Profile: {entry['profile'].name} | {self.tool_mode.currentText()}"
             if entry['tool_actuator'] == 'physics' or entry['validation_status'] == 'live-pending':
                 message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
         except ValueError as exc:
             valid, message = False, str(exc)
         active = bool(self.processes or self.terminals) or self.stopping
-        for combo in (*self.selectors.values(), *self.tool_modes.values()):
+        for combo in (*self.selectors.values(), self.tool_mode):
             combo.setEnabled(not active)
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)

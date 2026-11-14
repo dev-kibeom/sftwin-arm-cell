@@ -140,9 +140,11 @@ Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick
 
 ## 실행
 
-GUI 런처에서 Robot·Tool·Cell·Backend와 함께 Actuator·Grasp를 선택한다.
-기본은 `Logical + Fixed Attach`다. `Physics`를 선택하면 `Fixed Attach` 또는 `Physical`을 선택할 수 있다.
-Tool Profile의 지원 조합을 사용하며 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
+GUI 런처는 선택한 Tool에 연동된 단일 `Tool Mode`를 표시한다.
+병렬 그리퍼의 `Logical Snap`은 Logical + Fixed Attach(기본), `Physics Snap`은 Physics + Fixed Attach,
+`Physics Real`은 Physics + Physical이다. `Real`은 접촉·마찰 기반 시뮬레이션을 의미한다.
+Tool Profile의 `runtime.launcher_modes`가 표시 이름·설명을 제공하며, 실제 지원 범위는 기존 `supported_combinations`가 소유한다.
+표시용 메타데이터가 미지원 조합을 추가하지 않는다. 내부 Actuator·Grasp 분리는 유지하고 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
 Isaac과 ROS에 같은 Runtime Configuration을 전달한다. 원본 Tool/Deployment YAML을 수정하거나 복사하지 않는다.
 
 CLI/Script Editor에서는 기존 export CLI에 선택을 전달한다. RB5는 Profile을 `rb5_850_profile.yaml`로 바꾼다.

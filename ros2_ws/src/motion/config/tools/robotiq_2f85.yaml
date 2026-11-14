@@ -51,6 +51,17 @@ runtime:
     - [logical, fixed_attach]
     - [physics, fixed_attach]
     - [physics, physical]
+  # Presentation metadata only; supported_combinations owns executable support.
+  launcher_modes:
+    - label: Logical Snap
+      combination: [logical, fixed_attach]
+      description: 논리적으로 손가락을 구동하고 Fixed Joint로 물체를 고정합니다.
+    - label: Physics Snap
+      combination: [physics, fixed_attach]
+      description: 손가락을 물리 구동하고 Fixed Joint로 물체를 고정합니다.
+    - label: Physics Real
+      combination: [physics, physical]
+      description: 접촉·마찰 기반 시뮬레이션 파지입니다. 미끄러짐·낙하가 가능합니다.
   isaac_prepare: gripper_runtime.physics_model:prepare
   physics:
     primary_joint: gripper_robotiq_85_left_knuckle_joint
