@@ -10,7 +10,7 @@ import yaml
 
 def load_rawpart_profile(project_root):
     """Validate TestCube data delivered in the exported runtime contract."""
-    from runtime_configuration import load_runtime_configuration, selected_configuration
+    from isaac_runtime.runtime_configuration import load_runtime_configuration, selected_configuration
     return validate_rawpart_profile(load_runtime_configuration(selected_configuration(project_root)))
 
 

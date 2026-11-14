@@ -54,7 +54,7 @@ def test_after_play_does_not_change_before_play_diagnostics(tmp_path, monkeypatc
     )
     monkeypatch.setenv("SFTWIN_LIVE_TEST_SESSION_PATH", str(descriptor))
     monkeypatch.setenv("SFTWIN_DIAGNOSTICS", "none")
-    entrypoint = ModuleType("shared.role_entrypoint")
+    entrypoint = ModuleType("isaac_runtime.role_entrypoint")
     observed = {}
 
     def run(role, namespace):
@@ -62,8 +62,8 @@ def test_after_play_does_not_change_before_play_diagnostics(tmp_path, monkeypatc
         observed["selection"] = __import__("os").environ["SFTWIN_DIAGNOSTICS"]
 
     entrypoint.run = run
-    monkeypatch.setitem(sys.modules, "shared.role_entrypoint", entrypoint)
-    import shared
+    monkeypatch.setitem(sys.modules, "isaac_runtime.role_entrypoint", entrypoint)
+    import isaac_runtime as shared
 
     monkeypatch.setattr(shared, "role_entrypoint", entrypoint, raising=False)
     monkeypatch.setattr("importlib.reload", lambda module: module)
@@ -72,11 +72,11 @@ def test_after_play_does_not_change_before_play_diagnostics(tmp_path, monkeypatc
 
 
 def test_headless_after_play_uses_physics_only_role(monkeypatch):
-    entrypoint = ModuleType("shared.role_entrypoint")
+    entrypoint = ModuleType("isaac_runtime.role_entrypoint")
     observed = {}
     entrypoint.run = lambda role, _namespace: observed.setdefault("role", role)
-    monkeypatch.setitem(sys.modules, "shared.role_entrypoint", entrypoint)
-    import shared
+    monkeypatch.setitem(sys.modules, "isaac_runtime.role_entrypoint", entrypoint)
+    import isaac_runtime as shared
 
     monkeypatch.setattr(shared, "role_entrypoint", entrypoint, raising=False)
     monkeypatch.setattr("importlib.reload", lambda module: module)

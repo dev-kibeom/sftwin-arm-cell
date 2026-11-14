@@ -24,7 +24,7 @@ REPOSITORY = Path(__file__).resolve().parents[6]
 
 def test_kit_material_supply_path_has_no_rclpy_import():
     paths = (
-        REPOSITORY / "infra/isaac_sim/scripts/m0609_cell/runtime_steps/setup_scene.py",
+        REPOSITORY / "infra/isaac_sim/scripts/m0609_cell/cell_runtime.py",
         REPOSITORY
         / "infra/isaac_sim/scripts/m0609_cell/scene_builder/material_supply_adapter.py",
         REPOSITORY
@@ -1053,10 +1053,10 @@ def test_scene_supply_startup_resolves_diagnostic_directory(tmp_path, monkeypatc
     import pytest
     import yaml
 
-    source = REPOSITORY / "infra/isaac_sim/scripts/m0609_cell/runtime_steps/setup_scene.py"
+    source = REPOSITORY / "infra/isaac_sim/scripts/m0609_cell/cell_runtime.py"
     tree = ast.parse(source.read_text())
     startup = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
-                   and node.name == "_start_material_supply_adapter")
+                   and node.name == "start_material_supply")
     config = tmp_path / "infra/isaac_sim/config/material_supply.yaml"
     config.parent.mkdir(parents=True)
     config.write_text('{}')
@@ -1094,7 +1094,9 @@ def test_scene_supply_startup_resolves_diagnostic_directory(tmp_path, monkeypatc
     # get_timeline_interface is evaluated after artifact_directory.
     timeline.get_timeline_interface = lambda: object()
     with pytest.raises(AdapterReached):
-        namespace["_start_material_supply_adapter"](context)
+        namespace["start_material_supply"](
+            configuration={**load_runtime_configuration(), "material_catalog": {}},
+            context=context)
     directory = captured["artifact_directory"]
     assert directory.name == "simulation"
     assert directory.parent.name == "diagnostic"

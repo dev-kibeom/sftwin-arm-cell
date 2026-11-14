@@ -43,6 +43,9 @@ collision_objects:
 contact_objects:
   pick_retract: amr_tray
 isaac:
+  material_supply_factory: m0609_cell.cell_runtime:start_material_supply
+  camera_snapshot: m0609_cell.runtime_entrypoints:snapshot_camera
+  action_graph_builder: m0609_cell.runtime_entrypoints:build_action_graph
   scene_builder: m0609_cell.scene_builder.composition:run_scene_build
   robot_prim_path: /World/SF_Twin_Cell/m0609
 # Sensor placement remains relative to the existing Cell geometry.

@@ -47,13 +47,14 @@ class GripperRuntimeSession:
         physx_observer=None,
         diagnostic_output_directory=None,
         tool=None,
+        configuration=None,
     ):
         self.grasp_config = capture_config
         self.registry = registry or EligibleObjectRegistry()
         if tool is None and actuator_cls is None:
             from runtime_configuration import load_runtime_configuration
             from robot_binding import RobotBinding
-            configuration = load_runtime_configuration()
+            configuration = configuration if configuration is not None else load_runtime_configuration()
             tool = select_tool_runtime(
                 configuration['tool'], RobotBinding.from_runtime(configuration)
             )
@@ -755,12 +756,14 @@ def create_gripper_runtime_session(
     initial_status_sequence=0,
     registry=None,
     diagnostic_output_directory=None,
+    configuration=None,
 ):
     """Construct and subscribe the stable Script Editor runtime session."""
     if previous_session is not None:
         previous_session.shutdown()
     session = GripperRuntimeSession(
         physics_interface,
+        configuration=configuration,
         capture_config=capture_config,
         capture_reference_config=capture_reference_config,
         registry=registry,

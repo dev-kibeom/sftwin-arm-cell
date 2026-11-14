@@ -1,16 +1,13 @@
-import importlib.util
 from pathlib import Path
 
 import pytest
 
 
-MODULE = Path(__file__).parents[2] / "shared/environment_setup.py"
-spec = importlib.util.spec_from_file_location("environment_setup", MODULE)
-setup = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(setup)
+from isaac_runtime import environment_setup as setup
 
 PROJECT_ROOT = Path(__file__).resolve().parents[6]
 CELL_ROOT = PROJECT_ROOT / "infra/isaac_sim/scripts/m0609_cell"
+SCRIPTS_ROOT = CELL_ROOT.parent
 
 
 @pytest.fixture(autouse=True)
@@ -28,7 +25,7 @@ def test_explicit_project_root_is_validated_without_discovery():
 
 def test_public_layout_root_does_not_require_private_agents_file(tmp_path):
     public_root = tmp_path / "public-arm-cell"
-    (public_root / setup.CELL_RELATIVE_PATH / "shared").mkdir(parents=True)
+    (public_root / setup.SCRIPTS_RELATIVE_PATH / "isaac_runtime").mkdir(parents=True)
     (public_root / "ros2_ws/src").mkdir(parents=True)
 
     assert setup.validate_project_root(public_root) == public_root.resolve()
@@ -68,9 +65,9 @@ def test_configure_environment_sets_process_root_and_module_path(monkeypatch):
     monkeypatch.setattr(setup.sys, "path", python_paths)
     result = setup.configure_environment(PROJECT_ROOT, environ=environment)
     assert result["SFTWIN_PROJECT_ROOT"] == str(PROJECT_ROOT)
-    assert result["module_root"] == str(CELL_ROOT)
+    assert result["module_root"] == str(SCRIPTS_ROOT)
     assert environment["SFTWIN_PROJECT_ROOT"] == str(PROJECT_ROOT)
-    assert python_paths == [str(CELL_ROOT)]
+    assert python_paths == [str(SCRIPTS_ROOT)]
 
 
 def test_live_environment_bootstrap_needs_no_diagnostic_profile(monkeypatch):
@@ -86,7 +83,7 @@ def test_live_environment_bootstrap_needs_no_diagnostic_profile(monkeypatch):
     assert result["SFTWIN_DIAGNOSTICS"] == "none"
     assert environment["SFTWIN_DIAGNOSTICS"] == "none"
     assert "SFTWIN_PNP_PROFILE" not in environment
-    assert python_paths == [str(CELL_ROOT)]
+    assert python_paths == [str(SCRIPTS_ROOT)]
 
 
 def test_before_play_bootstraps_live_environment_without_running_setup_entrypoint(
@@ -98,9 +95,9 @@ def test_before_play_bootstraps_live_environment_without_running_setup_entrypoin
     from types import ModuleType
 
     calls = []
-    role_entrypoint = ModuleType("shared.role_entrypoint")
+    role_entrypoint = ModuleType("isaac_runtime.role_entrypoint")
     role_entrypoint.run = lambda role, namespace: calls.append(role)
-    monkeypatch.setitem(sys.modules, "shared.role_entrypoint", role_entrypoint)
+    monkeypatch.setitem(sys.modules, "isaac_runtime.role_entrypoint", role_entrypoint)
     monkeypatch.setattr(importlib, "reload", lambda module: module)
     environment = monkeypatch.context()
     with environment as scoped:
@@ -132,9 +129,9 @@ def test_before_play_selection_sets_existing_diagnostics_environment(
         ),
         encoding="utf-8",
     )
-    entrypoint = ModuleType("shared.role_entrypoint")
+    entrypoint = ModuleType("isaac_runtime.role_entrypoint")
     entrypoint.run = lambda *_args: None
-    monkeypatch.setitem(sys.modules, "shared.role_entrypoint", entrypoint)
+    monkeypatch.setitem(sys.modules, "isaac_runtime.role_entrypoint", entrypoint)
     monkeypatch.setattr(importlib, "reload", lambda module: module)
     with monkeypatch.context() as scoped:
         scoped.setenv("SFTWIN_PROJECT_ROOT", str(PROJECT_ROOT))
@@ -150,16 +147,17 @@ def test_pre_build_uses_explicit_project_root_without_live_runtime_setup(monkeyp
     from types import ModuleType
 
     calls = []
-    role_entrypoint = ModuleType("shared.role_entrypoint")
+    role_entrypoint = ModuleType("isaac_runtime.role_entrypoint")
     role_entrypoint.run = lambda role, namespace: calls.append(role)
-    monkeypatch.setitem(sys.modules, "shared.role_entrypoint", role_entrypoint)
+    monkeypatch.setitem(sys.modules, "isaac_runtime.role_entrypoint", role_entrypoint)
     monkeypatch.setattr(importlib, "reload", lambda module: module)
     with monkeypatch.context() as scoped:
         scoped.delenv("SFTWIN_PROJECT_ROOT", raising=False)
         scoped.delenv("ROS_DOMAIN_ID", raising=False)
         scoped.delenv("SFTWIN_PNP_PROFILE", raising=False)
         scoped.delenv("SFTWIN_RUNTIME_MODE", raising=False)
-        runpy.run_path(str(CELL_ROOT / "0_pre_build.py"))
+        runpy.run_path(str(CELL_ROOT.parent / "0_pre_build.py"),
+                       init_globals={"PROJECT_ROOT": str(PROJECT_ROOT)})
         assert calls == ["pre_build"]
         assert setup.os.environ["SFTWIN_PROJECT_ROOT"] == str(PROJECT_ROOT)
         assert "ROS_DOMAIN_ID" not in setup.os.environ

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 import carb
@@ -10,23 +11,29 @@ import omni.timeline
 
 
 PROJECT_ROOT = Path(os.environ["SFTWIN_PROJECT_ROOT"]).expanduser().resolve()
-# Keep the existing lifecycle steps. Before Play selects the Cell Scene via
-# scripts/scene_entrypoint.py and binds arm control from Runtime Configuration.
-# Tool, Camera, UI and diagnostics still live in the established Cell modules.
-ENTRYPOINTS = PROJECT_ROOT / "infra/isaac_sim/scripts/m0609_cell"
+ENTRYPOINTS = PROJECT_ROOT / "infra/isaac_sim/scripts"
 BEFORE_PLAY = ENTRYPOINTS / "1_before_play.py"
 HEADLESS = os.environ.get("SFTWIN_HEADLESS") == "1"
 AFTER_PLAY = ENTRYPOINTS / (
     "2_after_play_headless.py" if HEADLESS else "2_after_play.py"
 )
 
+if str(ENTRYPOINTS) not in sys.path:
+    sys.path.insert(0, str(ENTRYPOINTS))
+from isaac_runtime import runtime_workflow
+# Kit re-execution keeps cleanup handles in one namespace, just like Script Editor.
+_RUNTIME_NAMESPACE = getattr(runtime_workflow, "startup_namespace", None)
+if _RUNTIME_NAMESPACE is None:
+    _RUNTIME_NAMESPACE = {"__name__": "__main__"}
+    runtime_workflow.startup_namespace = _RUNTIME_NAMESPACE
+
 
 def _run_entrypoint(path):
     if not path.is_file():
         raise FileNotFoundError(f"ARM Cell startup entrypoint is missing: {path}")
     source = compile(path.read_text(encoding="utf-8"), str(path), "exec")
-    namespace = {"__name__": "__main__", "__file__": str(path)}
-    exec(source, namespace)
+    _RUNTIME_NAMESPACE["__file__"] = str(path)
+    exec(source, _RUNTIME_NAMESPACE)
 
 
 async def _start_arm_cell():

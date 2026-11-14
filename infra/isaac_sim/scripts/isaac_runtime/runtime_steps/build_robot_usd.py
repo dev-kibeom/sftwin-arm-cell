@@ -1,0 +1,342 @@
+"""
+SF-Twin Robot Asset Builder
+
+Pipeline:
+    Xacro
+      -> URDF
+      -> Isaac Sim URDF Importer (mimic disabled)
+      -> USD validation
+
+Target:
+    Assembly selected by Runtime Configuration
+    Isaac Sim 5.1
+
+Design note:
+    The source URDF keeps Robotiq mimic joints for ROS / MoveIt.
+    Isaac Sim intentionally ignores mimic constraints. SF-Twin will control
+    the gripper as a logical 1-DOF tool in a separate controller layer.
+"""
+
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+from isaac_runtime.model_build_configuration import ModelBuildConfiguration
+
+import omni.kit.commands
+
+from omni.isaac.core.utils.extensions import enable_extension
+from pxr import Usd, UsdPhysics
+
+from isaac_runtime.model_provenance import (
+    build_manifest,
+    write_manifest,
+    xacro_subprocess_environment,
+)
+from isaac_runtime.script_editor_bootstrap import module_root_from_project_root
+from isaac_runtime.usd_visual_cleanup import cleanup_generated_base_layer
+
+# ---------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------
+
+
+def resolve_project_root():
+    configured_root = os.environ.get("SFTWIN_PROJECT_ROOT")
+    if not configured_root:
+        raise RuntimeError("SFTWIN_PROJECT_ROOT is required for asset preparation")
+    root = Path(configured_root).expanduser().resolve()
+    module_root_from_project_root(root)
+    if not (root / "ros2_ws/src").is_dir():
+        raise RuntimeError(
+            f"SFTWIN_PROJECT_ROOT is not a validated SFTwin repository: {root}"
+        )
+    return root
+
+
+PROJECT_ROOT = resolve_project_root()
+MODEL = ModelBuildConfiguration.from_runtime(
+    runtime_configuration, PROJECT_ROOT
+)
+XACRO_PATH = MODEL.source
+GENERATED_URDF = MODEL.generated_urdf
+OUTPUT_USD = MODEL.usd
+PROVENANCE = MODEL.provenance
+GENERATED_BASE_LAYER = MODEL.base_layer
+
+
+# ---------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------
+
+
+def check_file(path: Path, label: str):
+    if not path.exists():
+        raise FileNotFoundError(f"[ERROR] {label} not found: {path}")
+
+
+def validate_urdf():
+    print("\n" + "=" * 70)
+    print(">>> Validate URDF")
+
+    check_file(GENERATED_URDF, "Generated URDF")
+    executable = shutil.which("check_urdf")
+
+    if executable is None:
+        print(">>> [WARNING] check_urdf not found. Validation skipped.")
+        return
+
+    result = subprocess.run(
+        [executable, str(GENERATED_URDF)],
+        capture_output=True,
+        text=True,
+        env=xacro_subprocess_environment(),
+    )
+
+    if result.stdout:
+        print(result.stdout)
+
+    if result.returncode != 0:
+        if result.stderr:
+            print(result.stderr)
+        raise RuntimeError("[ERROR] URDF validation failed.")
+
+    print(">>> [SUCCESS] URDF validation passed.")
+
+
+def find_xacro():
+    """Prefer the xacro executable available in the ROS environment."""
+    executable = shutil.which("xacro")
+
+    if executable is None:
+        raise RuntimeError(
+            "[ERROR] xacro executable not found.\n"
+            "Source your ROS environment before launching Isaac Sim.\n"
+            "Example:\n"
+            "  source /opt/ros/humble/setup.bash"
+        )
+
+    return executable
+
+
+def find_joint_prim(stage: Usd.Stage, joint_name: str):
+    """Find exactly one joint by prim name without assuming a root prim path."""
+    matches = [prim for prim in stage.Traverse() if prim.GetName() == joint_name]
+
+    if not matches:
+        raise RuntimeError(f"[USD Validate] Joint not found: {joint_name}")
+
+    if len(matches) > 1:
+        paths = ", ".join(str(prim.GetPath()) for prim in matches)
+        raise RuntimeError(
+            f"[USD Validate] Multiple joints named '{joint_name}' found: {paths}"
+        )
+
+    return matches[0]
+
+
+# ---------------------------------------------------------
+# 1. Xacro -> URDF
+# ---------------------------------------------------------
+
+
+def build_urdf_from_xacro():
+    print("\n" + "=" * 70)
+    print(">>> [1/3] Xacro -> URDF")
+
+    check_file(XACRO_PATH, "Assembly Xacro")
+    GENERATED_URDF.parent.mkdir(parents=True, exist_ok=True)
+
+    xacro_exe = find_xacro()
+    command = [
+        xacro_exe,
+        str(XACRO_PATH),
+        *MODEL.xacro_arguments,
+        "-o",
+        str(GENERATED_URDF),
+    ]
+
+    print(">>> Command:", " ".join(command))
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        env=xacro_subprocess_environment(),
+    )
+
+    if result.stdout:
+        print(result.stdout)
+
+    if result.returncode != 0:
+        print(result.stderr)
+        raise RuntimeError("[ERROR] Xacro generation failed.")
+
+    check_file(GENERATED_URDF, "Generated URDF")
+    print(f">>> [SUCCESS] URDF generated:\n    {GENERATED_URDF}")
+
+
+# ---------------------------------------------------------
+# 2. URDF -> USD
+# ---------------------------------------------------------
+
+
+def build_usd_from_urdf():
+    print("\n" + "=" * 70)
+    print(">>> [2/3] URDF -> USD")
+
+    enable_extension("isaacsim.asset.importer.urdf")
+    check_file(GENERATED_URDF, "Generated URDF")
+    OUTPUT_USD.parent.mkdir(parents=True, exist_ok=True)
+
+    # Isaac Sim 5.1 import namespace compatibility
+    try:
+        import _urdf
+
+        target_drive_type = _urdf.UrdfJointTargetType.JOINT_DRIVE_POSITION
+    except Exception:
+        from isaacsim.asset.importer.urdf import _urdf
+
+        target_drive_type = _urdf.UrdfJointTargetType.JOINT_DRIVE_POSITION
+
+    status, import_config = omni.kit.commands.execute("URDFCreateImportConfig")
+
+    if not status:
+        raise RuntimeError("[ERROR] URDFCreateImportConfig failed.")
+
+    # Preserve semantic/tool frames such as tool0, tool_mount and sf_grasp_tcp.
+    import_config.merge_fixed_joints = False
+
+    # Preserve the fixed-base import used by the current Isaac backend.
+    import_config.fix_base = True
+    import_config.make_default_prim = True
+
+    # Internal robot/gripper self-collision is not required for SF-Twin PnP.
+    import_config.self_collision = False
+    import_config.create_physics_scene = False
+
+    import_config.default_drive_type = target_drive_type
+    import_config.distance_scale = 1.0
+
+    # IMPORTANT:
+    # Keep <mimic> in the source URDF for ROS/MoveIt, but do not generate
+    # PhysX Mimic API constraints in Isaac. Gripper motion will be handled by
+    # the SF-Twin logical 1-DOF controller instead.
+    import_config.parse_mimic = False
+
+    print(f">>> Input URDF:\n    {GENERATED_URDF}")
+    print(f">>> Output USD:\n    {OUTPUT_USD}")
+    print(">>> PhysX mimic import: DISABLED")
+
+    status, result = omni.kit.commands.execute(
+        "URDFParseAndImportFile",
+        urdf_path=str(GENERATED_URDF),
+        import_config=import_config,
+        dest_path=str(OUTPUT_USD),
+    )
+
+    if not status:
+        raise RuntimeError("[ERROR] URDF import failed.")
+
+    check_file(OUTPUT_USD, "Generated USD")
+    cleaned = cleanup_generated_base_layer(GENERATED_URDF, GENERATED_BASE_LAYER)
+    if cleaned:
+        print(">>> [SUCCESS] Removed dangling visual references: " + ", ".join(cleaned))
+    write_manifest(
+        PROVENANCE,
+        build_manifest(
+            XACRO_PATH, GENERATED_URDF, OUTPUT_USD, find_xacro(),
+            xacro_arguments=MODEL.xacro_arguments,
+        ),
+    )
+    print(f">>> [SUCCESS] Robot USD generated:\n    {OUTPUT_USD}")
+    print(f">>> [SUCCESS] Provenance  : {PROVENANCE}")
+
+
+# ---------------------------------------------------------
+# 3. Validate Isaac-specific gripper import
+# ---------------------------------------------------------
+
+
+def validate_isaac_gripper_import():
+    """
+    Verify the assumptions required by the simplified SF-Twin gripper model:
+      1) all selected Assembly revolute joints still exist;
+      2) no PhysX mimic attributes were authored on those joints;
+      3) each joint remains a revolute joint for the next controller step.
+
+    This function intentionally does not alter the generated USD.
+    """
+    print("\n" + "=" * 70)
+    print(">>> [3/3] Validate Assembly joint import")
+
+    check_file(OUTPUT_USD, "Generated USD")
+    stage = Usd.Stage.Open(str(OUTPUT_USD))
+
+    if stage is None:
+        raise RuntimeError(f"[ERROR] Failed to open USD: {OUTPUT_USD}")
+
+    mimic_attrs_found = []
+
+    for joint_name in MODEL.revolute_joints:
+        prim = find_joint_prim(stage, joint_name)
+        joint = UsdPhysics.RevoluteJoint(prim)
+
+        if not joint:
+            raise RuntimeError(f"[USD Validate] Not a revolute joint: {prim.GetPath()}")
+
+        mimic_attrs = [
+            attr.GetName()
+            for attr in prim.GetAttributes()
+            if "physxMimicJoint" in attr.GetName()
+        ]
+
+        if mimic_attrs:
+            mimic_attrs_found.append((prim.GetPath(), mimic_attrs))
+
+        drive = UsdPhysics.DriveAPI.Get(prim, "angular")
+        drive_state = "present" if drive else "none"
+
+        print(
+            f"    {joint_name}\n"
+            f"      path  = {prim.GetPath()}\n"
+            f"      mimic = {'present' if mimic_attrs else 'none'}\n"
+            f"      drive = {drive_state}"
+        )
+
+    if mimic_attrs_found:
+        details = "\n".join(f"  {path}: {attrs}" for path, attrs in mimic_attrs_found)
+        raise RuntimeError(
+            "[USD Validate] PhysX mimic attributes still exist although "
+            "parse_mimic=False:\n" + details
+        )
+
+    print(
+        f">>> [SUCCESS] Assembly import validated: "
+        f"{len(MODEL.revolute_joints)} revolute joints present, PhysX mimic absent."
+    )
+
+
+# ---------------------------------------------------------
+# Main
+# ---------------------------------------------------------
+
+try:
+    print("\n" + "=" * 70)
+    print(f">>> SF-Twin Robot Builder : {MODEL.model_id}")
+
+    build_urdf_from_xacro()
+    validate_urdf()
+    build_usd_from_urdf()
+    validate_isaac_gripper_import()
+
+    print("\n" + "=" * 70)
+    print(">>> [SUCCESS] Complete robot asset build finished.")
+    print("=" * 70)
+
+except Exception as exc:
+    print("\n" + "=" * 70)
+    print(f">>> [FAILED] {exc}")
+    print("=" * 70)
+    raise

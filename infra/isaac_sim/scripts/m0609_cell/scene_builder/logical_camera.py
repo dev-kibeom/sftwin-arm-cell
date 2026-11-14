@@ -1,6 +1,6 @@
 """Logical Camera_Sensor construction owned by the M0609 scene builder."""
 
-from runtime_configuration import selected_camera
+from isaac_runtime.runtime_configuration import selected_camera
 
 from .camera_extrinsic import author_camera_sensor_from_d455_color
 

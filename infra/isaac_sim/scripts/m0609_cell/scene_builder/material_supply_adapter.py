@@ -9,15 +9,15 @@ import secrets
 import uuid
 from dataclasses import asdict
 from pathlib import Path
-from shared.run_records import diagnostic_component_directory, run_records_root
+from isaac_runtime.run_records import diagnostic_component_directory, run_records_root
 from typing import Any
 
-from scene_builder.material_supply import MaterialSupplyProfile, sample_initial_poses
-from scene_builder.material_supply_pose_recorder import RawPartPoseRecorder
-from scene_builder.cuboid_demonstration import bind_adapter
-from scene_builder.material_supply_run import MaterialSupplyRun
-from scene_builder.material_supply_sidecar import simulation_time_ns
-from runtime_configuration import selected_delivery_root
+from .material_supply import MaterialSupplyProfile, sample_initial_poses
+from .material_supply_pose_recorder import RawPartPoseRecorder
+from .cuboid_demonstration import bind_adapter
+from .material_supply_run import MaterialSupplyRun
+from .material_supply_sidecar import simulation_time_ns
+from isaac_runtime.runtime_configuration import selected_delivery_root
 
 
 def _world_pose_to_local_transform(
@@ -228,7 +228,7 @@ class IsaacMaterialSupplyAdapter:
         unavailable = self.demonstration_load_unavailable_reason()
         if unavailable is not None:
             raise RuntimeError(unavailable)
-        from scene_builder.cuboid_demonstrations import build_layout
+        from .cuboid_demonstrations import build_layout
 
         parts = build_layout(
             scenario_id, self.profile.dimensions_m, self.shelf_origin_m

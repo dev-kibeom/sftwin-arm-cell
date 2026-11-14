@@ -16,6 +16,12 @@ if not configured_root:
         "bootstrapping the gripper runtime."
     )
 project_root = Path(configured_root).expanduser().resolve()
+scripts_root = str(project_root / "infra/isaac_sim/scripts")
+if scripts_root not in sys.path:
+    sys.path.insert(0, scripts_root)
+from isaac_runtime.runtime_configuration import load_runtime_configuration
+if "runtime_configuration" not in globals():
+    runtime_configuration = load_runtime_configuration()
 cell_root = project_root / "infra/isaac_sim/scripts/m0609_cell"
 shared_bytecode_cache = cell_root / "shared" / "__pycache__"
 if shared_bytecode_cache.is_dir():
@@ -100,8 +106,7 @@ else:
         production_capture_configuration,
     )
 
-    from runtime_configuration import load_runtime_configuration
-    operational_profile = load_runtime_configuration()
+    operational_profile = runtime_configuration
     mission_recipe = operational_profile['_mission_recipe']
     (
         capture_config,
@@ -119,6 +124,7 @@ ACTION_GRAPH_PATH = GRAPH_PATH
 
 runtime_session = session_module.create_gripper_runtime_session(
     omni.physx.get_physx_interface(),
+    configuration=runtime_configuration,
     capture_config=capture_config,
     capture_reference_config=capture_reference_config,
     registry=capture_registry,
