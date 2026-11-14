@@ -2012,7 +2012,7 @@ bool IsaacRosMotionTransport::commit_pending_grasp_relation()
   }
   if (capture_reference_publisher_ && !execution_id.empty()) {
     std_msgs::msg::String invalidation;
-    invalidation.data = "{\"motion_goal_uuid\":\"" + execution_id + "\",\"invalidate\":true}";
+    invalidation.data = "{\"motion_goal_uuid\":\"" + execution_id + "\",\"invalidate\":true,\"retire_pending\":true}";
     capture_reference_publisher_->publish(invalidation);
   }
   RCLCPP_DEBUG(
@@ -8464,9 +8464,10 @@ HoldingObservation IsaacRosMotionTransport::holding_observation() const
   observation.observed_at = latest_gripper_status_receipt_;
   observation.sequence = gripper_status_sequence_;
   if (tool_width_control_) {observation.width_mm = gripper_width_mm_;}
-  if (object_attached_ && grasp_confirmed_) {
+  // Holding is Tool observation; attachment describes simulator topology only.
+  if (grasp_confirmed_ && !release_confirmed_) {
     observation.state = HoldingState::HELD;
-  } else if (!object_attached_ && release_confirmed_) {
+  } else if (!grasp_confirmed_ && !object_attached_ && release_confirmed_) {
     observation.state = HoldingState::RELEASED;
   }
   return observation;

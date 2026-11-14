@@ -221,4 +221,7 @@ context = run_scene_build(
 
 _author_initial_home_targets(World.instance().stage)
 apply_joint_drive_profile(World.instance().stage, _robot_binding, UsdPhysics)
+prepare_tool = runtime_configuration['tool']['runtime'].get('isaac_prepare')
+if prepare_tool:
+    call_selected(prepare_tool, configuration=runtime_configuration, stage=World.instance().stage)
 _start_material_supply_adapter(context)

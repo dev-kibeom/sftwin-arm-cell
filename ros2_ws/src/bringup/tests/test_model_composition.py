@@ -312,3 +312,30 @@ def test_tool_grasp_collision_links_preserve_robotiq_geometry_selection():
                 if link.attrib['name'].startswith('gripper_') and link.find('collision') is not None}
     assert set(config['tool']['grasp_pose_collision_links']) == previous
     assert config['motion']['tool_grasp_collision_links'] == config['tool']['grasp_pose_collision_links']
+
+
+@pytest.mark.parametrize('profile_name', ['operational_profile.yaml', 'rb5_850_profile.yaml'])
+def test_physics_tool_export_preserves_robot_and_derives_linkage(tmp_path, profile_name):
+    from arm_cell_bringup.runtime import load_profile, export_runtime_configuration
+    import json
+    config_root = Path(__file__).resolve().parents[1] / 'config'
+    baseline = load_profile(config_root / profile_name)
+    tool = yaml.safe_load((config_root.parents[1] / 'motion/config/tools/robotiq_2f85.yaml').read_text())
+    tool['runtime']['actuator'] = 'physics'
+    tool['runtime']['grasp'] = 'physical'
+    selected_tool = tmp_path / 'tool.yaml'
+    selected_tool.write_text(yaml.safe_dump(tool))
+    profile = yaml.safe_load((config_root / profile_name).read_text())
+    profile['profiles']['tool'] = str(selected_tool)
+    path = tmp_path / 'profile.yaml'
+    path.write_text(yaml.safe_dump(profile))
+    selected = load_profile(path)
+    assert selected['robot'] == baseline['robot']
+    assert selected['home_joint_positions'] == baseline['home_joint_positions']
+    joints = selected['tool']['runtime']['joint_model']
+    primary = selected['tool']['runtime']['physics']['primary_joint']
+    assert all(name not in selected['robot']['motion']['arm_joint_names'] for name in joints)
+    assert {value['mimic']['joint'] for value in joints.values() if 'mimic' in value} == {primary}
+    assert sum('mimic' not in value for value in joints.values()) == 1
+    exported = export_runtime_configuration(path, tmp_path / 'runtime.json')
+    assert json.loads(exported.read_text())['configuration']['tool']['runtime'] == selected['tool']['runtime']

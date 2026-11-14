@@ -387,17 +387,14 @@ def test_session_records_four_distinct_physx_and_stage_step_observations():
                 },
             }
 
-    session = GripperRuntimeSession.__new__(GripperRuntimeSession)
-    session.grasp_manager = _Manager()
-    record = session.grasp_manager.capture_diagnostic_record
-    session.physx_observer = _Observer()
-    session._physics_step_sequence = 10
-    session._capture_physics_steps = 0
-    session._previous_capture_relative = None
-
-    for _ in range(4):
-        session._physics_step_sequence += 1
-        session._observe_capture_physics_step(1.0 / 60.0)
+    from gripper_runtime.capture_diagnostics import AttachmentPhysicsDiagnostics
+    manager = _Manager()
+    record = manager.capture_diagnostic_record
+    manager.physx_observer = _Observer()
+    diagnostics = AttachmentPhysicsDiagnostics(manager)
+    diagnostics.observe(1.0 / 60.0, 10)
+    for step in range(11, 15):
+        diagnostics.observe(1.0 / 60.0, step)
 
     events = record.events
     assert [event[2]["physics_step"] for event in events] == [11, 12, 13, 14]
@@ -407,7 +404,7 @@ def test_session_records_four_distinct_physx_and_stage_step_observations():
         event[1]["stage_world_pose"]["source"] == "usd_stage_world" for event in events
     )
     assert record.data["coverage"]["physics_steps_observed"] == 4
-    assert session.grasp_manager.finalized is True
+    assert manager.finalized is True
 
 
 def test_failed_capture_record_retains_goal_uuid_and_unknown_reason(tmp_path):

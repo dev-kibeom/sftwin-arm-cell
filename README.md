@@ -314,3 +314,5 @@ Stage의 `ARM`은 독립 고정형 로봇팔의 설치 역할이며 모델명은
 설치 경로는 Cell의 `isaac.robot_prim_path`에서만 설정하고 Graph·Tool·Capture는 같은 Robot Binding을 소비합니다.
 기존 URDF/SRDF·USD·Mesh와 모델별 HOME·Drive 설정은 유지합니다.
 이 변경 코드의 라이브 PnP·Stop/Reset·E-Stop 회귀는 사용자가 별도로 확인해야 합니다.
+
+Tool의 Logical/Physics 구동 및 Fixed Attach/Physical Grasp 선택·한계·라이브 검증 항목은 [Tool Runtime 안내](infra/isaac_sim/TOOL_RUNTIME.md)를 참조한다.

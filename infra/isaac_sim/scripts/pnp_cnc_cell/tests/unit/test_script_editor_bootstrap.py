@@ -120,17 +120,17 @@ def test_gripper_bootstrap_replaces_session_and_reloads_split_packages(
     cell_root.mkdir(parents=True)
     for package in (
         "shared",
-        "gripper_runtime",
         "pnp_validation",
         "graph_builder",
         "runtime_steps",
     ):
         shutil.copytree(CELL_ROOT / package, cell_root / package)
+    shutil.copytree(CELL_ROOT.parent / 'gripper_runtime', cell_root.parent / 'gripper_runtime')
     config_root = project_root / "ros2_ws/src/bringup/config"
     config_root.mkdir(parents=True)
     from arm_cell_bringup.runtime import export_runtime_configuration
     profile = export_runtime_configuration(
-        PROJECT_ROOT / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml",
+        PROJECT_ROOT / "ros2_ws/src/bringup/config/operational_profile.yaml",
         config_root / "validation.json",
     )
     shutil.copy2(CELL_ROOT / 'runtime_configuration.py', cell_root / 'runtime_configuration.py')
@@ -239,8 +239,8 @@ def test_gripper_bootstrap_replaces_session_and_reloads_split_packages(
 
     monkeypatch.setattr(importlib, "reload", reload_and_install_session_factory)
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(project_root))
-    monkeypatch.setenv("SFTWIN_RUNTIME_MODE", "diagnostic")
-    monkeypatch.setenv("SFTWIN_PNP_PROFILE", str(profile))
+    monkeypatch.setenv("SFTWIN_RUNTIME_MODE", "production")
+    monkeypatch.setenv("ARM_CELL_RUNTIME_CONFIG", str(profile))
     monkeypatch.setenv("SFTWIN_LIVE_TEST_SESSION_PATH", str(live_session_descriptor))
     namespace = {"runtime_session": previous_session}
     entrypoint = cell_root / "runtime_steps/bootstrap_gripper.py"
@@ -263,11 +263,11 @@ def test_gripper_bootstrap_replaces_session_and_reloads_split_packages(
         for module_name in (
             "gripper_runtime.grasp_stage",
             "gripper_runtime.grasp_joint",
-            "pnp_validation.profile",
+            "pnp_validation.editor_lifecycle",
             "graph_builder.graph_contract",
         ):
             module = sys.modules[module_name]
-            assert Path(module.__file__).is_relative_to(cell_root)
+            assert Path(module.__file__).is_relative_to(cell_root.parent)
         assert namespace["runtime_session"] is session
         assert namespace["pnp_validation_session_owner"]._session is session
     finally:

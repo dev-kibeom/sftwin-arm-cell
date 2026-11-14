@@ -38,9 +38,9 @@ Motion이 제공하는 선택된 TCP Grasp Pose와 Geometry에서 도출한 예�
 
 Tool 작업 의도 GRASP는 자재 확보 요청, RELEASE는 자재 해제 요청이다. 병렬 그리퍼는 CLOSE/OPEN으로, 흡착기 유형은 VACUUM_ON/OFF로 실현할 수 있다. 의도 수락·Tool 구동 완료·Qualification 통과·Attach/Detach 완료는 별개의 사실이다. 기존 close/open API와 폭 기반 ROS 명령은 병렬 그리퍼 호환 경로로 유지한다.
 
-Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
+Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction, force_setting을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
 
-Tool별 Qualification은 해당 접촉·확보 조건을 제공하고 기존 Capture 소유자가 Attach를 완료한 뒤에만 HELD를 발행한다. RELEASE도 Tool별 해제 완료와 소유 Attachment 제거가 모두 확인되어야 RELEASED다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만 주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
+Fixed Attach에서 Tool별 Qualification은 해당 접촉·확보 조건을 제공하고 기존 Capture 소유자가 Attach를 완료한 뒤에만 HELD를 발행한다. RELEASE도 Tool별 해제 완료와 소유 Attachment 제거가 모두 확인되어야 RELEASED다. 명시적으로 선택한 Physical Grasp는 Fixed Joint를 생성하지 않으며 물리적 접촉·마찰에 의존한다. 선택된 유효 Capture Reference의 예상 폭과 실제 관절 위치·속도·닫힘 목표·지속 정지 조건을 함께 사용해 HELD를 추정한다. 추정 이후에도 실제 관측을 계속 평가하며 근거가 소실되면 UNKNOWN을 전달한다. 정지 또는 접촉 하나만으로 보유를 확정하지 않으며 자재 Ground Truth를 뜻하지 않는다. ROS status의 grasp는 보유 관측이고 attached는 실제 Attachment 소유 여부이므로 Physical HELD는 attached=0과 양립한다. Physical OPEN 완료는 실제 관절 관측으로 확인한다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만 주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
 
 ## 4. 상호운용 조건
 
@@ -72,3 +72,5 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 - [Motion Execution FDS](../components/motion/fds-motion-execution.md) 및 [Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md): PICK·PLACE 동작과 관측 사용
 - [Motion Stop FDS](../components/motion/fds-stop-recovery.md): 중단 처리 순서
 - [Safety–Motion ICD](icd-safety-motion.md): 외부 정지 완료 및 Safety 권한 의미
+
+Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`는 해당 실행의 물리 보유 추정 근거도 무효화한다. 파지 승인 후 pending 참조의 정상 퇴역은 `invalidate:true, retire_pending:true`로 구별한다. 이 퇴역만 수락된 CLOSE의 실행 ID·예상 폭 근거를 유지하며 새 CLOSE를 허가하지 않는다. 유지된 근거도 실제 관절 관측과 계속 대조하며 STOP/OPEN/새 선택·Reset/Shutdown에서 폐기한다. 이는 자재 World Pose 추적이나 Attachment를 대신 생성하는 계약이 아니다.

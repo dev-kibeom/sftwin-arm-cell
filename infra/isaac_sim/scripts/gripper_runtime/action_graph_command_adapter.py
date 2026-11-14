@@ -70,6 +70,7 @@ class SimGripperAdapter:
         self._capture_reference_attribute = None
         self._close_id_attribute = None
         self._applied_capture_reference_id = None
+        self._selected_reference_identity = None
         self._last_capture_reference_packet = None
         self._last_command_width_mm = None
         self._last_command_generation = None
@@ -131,6 +132,21 @@ class SimGripperAdapter:
         self._capture_reference_attribute = attr
         return True
 
+    def _invalid_capture_reference(self):
+        # Malformed replacement data invalidates the current accepted selection,
+        # even after its pending ACK was retired. Foreign valid invalidations
+        # still carry their own identity through the normal path below.
+        identity = self._applied_capture_reference_id or self._selected_reference_identity
+        if not identity:
+            return None
+        self._applied_capture_reference_id = None
+        self._selected_reference_identity = None
+        signature = (identity, True, False)
+        if signature == self._last_capture_reference_packet:
+            return None
+        self._last_capture_reference_packet = signature
+        return dict(motion_goal_uuid=identity, invalidate=True)
+
     def read_capture_reference(self):
         if self._capture_reference_attribute is None:
             if not self._resolve_capture_reference_attribute():
@@ -140,17 +156,18 @@ class SimGripperAdapter:
             packet = json.loads(raw)
         except Exception:
             self._capture_reference_attribute = None
-            return None
+            return self._invalid_capture_reference()
         if not isinstance(packet, dict) or not isinstance(
             packet.get("motion_goal_uuid"), str
         ):
-            self._applied_capture_reference_id = None
-            return None
+            return self._invalid_capture_reference()
         if packet.get("invalidate") is True:
-            signature = (packet["motion_goal_uuid"], True)
+            signature = (packet["motion_goal_uuid"], True, packet.get("retire_pending") is True)
             if signature == self._last_capture_reference_packet:
                 return None
             self._last_capture_reference_packet = signature
+            if packet.get('retire_pending') is not True and packet['motion_goal_uuid'] == self._selected_reference_identity:
+                self._selected_reference_identity = None
             if packet["motion_goal_uuid"] == self._applied_capture_reference_id:
                 self._applied_capture_reference_id = None
             return packet
@@ -172,22 +189,21 @@ class SimGripperAdapter:
                 )
             )
         except (KeyError, TypeError, ValueError):
-            return None
+            return self._invalid_capture_reference()
         if len(values) != 9 or not all(math.isfinite(value) for value in values):
-            return None
+            return self._invalid_capture_reference()
         if values[7] <= 0.0 or values[8] not in (0.0, 1.0, 2.0, 4.0):
-            self._applied_capture_reference_id = None
-            return None
+            return self._invalid_capture_reference()
         object_position = None
         if "object_position" in packet:
             try:
                 if not isinstance(packet["object_position"], (list, tuple)):
-                    return None
+                    return self._invalid_capture_reference()
                 object_position = tuple(float(v) for v in packet["object_position"])
                 if len(object_position) != 3 or not all(math.isfinite(v) for v in object_position):
-                    return None
+                    return self._invalid_capture_reference()
             except (TypeError, ValueError):
-                return None
+                return self._invalid_capture_reference()
         signature = (
             packet["motion_goal_uuid"],
             False,
@@ -226,6 +242,8 @@ class SimGripperAdapter:
 
     def mark_capture_reference_applied(self, execution_id):
         self._applied_capture_reference_id = execution_id
+        if execution_id:
+            self._selected_reference_identity = execution_id
 
     def _resolve_generation_attribute(self):
         path = f"{self.graph_path}/GripperCommandGeneration.outputs:count"
@@ -356,7 +374,13 @@ class SimGripperAdapter:
             # In particular, STOP must not be followed by replay of an older CLOSE.
             self._last_width_generation = self._read_command_generation()
             self._last_close_generation = self._read_close_generation()
-            self.tool.command(intent, self.move_duration)
+            try:
+                parameters = packet.get('parameters')
+                if parameters is not None and not isinstance(parameters, dict):
+                    return False
+                self.tool.command(intent, self.move_duration, parameters=parameters)
+            except (ValueError, TypeError):
+                return False
             self.last_intent = intent
             self._intent_execution_id = execution_id
             self._last_command_width_mm = self.MAX_WIDTH_MM if intent is ToolIntent.RELEASE else None

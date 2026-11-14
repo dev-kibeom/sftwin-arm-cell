@@ -2001,6 +2001,17 @@ TEST_F(IsaacRosMotionTransportTest, HoldingObservationUsesFreshReleasedStatus)
   EXPECT_TRUE(observation.fresh());
 }
 
+TEST_F(IsaacRosMotionTransportTest, PhysicalHoldingDoesNotRequireSimulationAttachment)
+{
+  publish_feedback(std::vector<double>(6, 0.0));
+  publish_status(true, true, false, false, 1);
+  EXPECT_EQ(transport_->holding_observation().state, HoldingState::HELD);
+  publish_status(true, false, false, false, 2);
+  EXPECT_EQ(transport_->holding_observation().state, HoldingState::UNKNOWN);
+  publish_status(true, false, false, true, 3);
+  EXPECT_EQ(transport_->holding_observation().state, HoldingState::RELEASED);
+}
+
 TEST_F(IsaacRosMotionTransportTest, SameSequenceRefreshesWidthAndRejectsSemanticReplay)
 {
   publish_feedback(std::vector<double>(6, 0.0));
@@ -2489,6 +2500,23 @@ TEST_F(IsaacRosMotionTransportTest, WidthlessToolIntentsPreserveHoldingAndStopCo
   observation = transport_->holding_observation();
   EXPECT_EQ(observation.state, HoldingState::HELD);
   EXPECT_GT(observation.sequence, 1U);
+}
+
+TEST_F(IsaacRosMotionTransportTest, AcceptedCloseRetiresPendingReferenceWithExplicitProvenance)
+{
+  geometry_msgs::msg::PoseStamped selected;
+  selected.header.frame_id = "base_link";
+  selected.pose.orientation.w = 1.0;
+  ASSERT_TRUE(transport_->stage_pick_capture_reference(selected, 42.5, 2, "pick-retire"));
+  geometry_msgs::msg::Transform relation;
+  relation.rotation.w = 1.0;
+  transport_->stage_selected_pick_grasp_relation(relation);
+  ASSERT_TRUE(transport_->commit_pending_grasp_relation());
+  pump_until([this]() {return capture_reference_payloads().size() >= 2U;});
+  const auto packet = nlohmann::json::parse(capture_reference_payloads().back());
+  EXPECT_EQ(packet["motion_goal_uuid"], "pick-retire");
+  EXPECT_TRUE(packet["invalidate"]);
+  EXPECT_TRUE(packet["retire_pending"]);
 }
 
 class SelectedCaptureReferenceTest : public IsaacRosMotionTransportTest,

@@ -72,7 +72,7 @@ elif previous_session is not None:
 for package_name in ("gripper_runtime", "pnp_validation", "graph_builder"):
     clear_imported_package(package_name)
 
-removed_gripper_bytecode = clear_package_bytecode(Path(SCRIPT_DIR) / "gripper_runtime")
+removed_gripper_bytecode = clear_package_bytecode(Path(scripts_root) / "gripper_runtime")
 importlib.invalidate_caches()
 
 import gripper_runtime.action_graph_command_adapter as adapter_module
@@ -139,7 +139,9 @@ runtime_session = session_module.create_gripper_runtime_session(
 )
 # Both Motion-driven profiles require the selected reference. Direct users of
 # StageCaptureQuery retain the explicit configured legacy-reference behavior.
-runtime_session.grasp_manager.candidate_source.require_motion_reference = True
+candidate_source = getattr(runtime_session.grasp_manager, 'candidate_source', None)
+if candidate_source is not None:
+    candidate_source.require_motion_reference = True
 from pnp_validation.editor_lifecycle import ValidationSessionOwner
 
 _validation_session_owner = ValidationSessionOwner(

@@ -6,6 +6,7 @@ from gripper_runtime.action_graph_command_adapter import SimGripperAdapter
 from gripper_runtime.grasp_attachment import HoldingState
 from gripper_runtime.grasp_policy import CaptureConfig
 from gripper_runtime.robotiq_actuator import GripperState, Robotiq2F85Actuator
+from gripper_runtime.capture_diagnostics import AttachmentPhysicsDiagnostics
 from gripper_runtime.session import GripperRuntimeSession, initial_status_sequence
 from pnp_validation.run_validation import (
     ValidationStartPending,
@@ -1187,10 +1188,10 @@ def test_physx_relative_pose_change_is_separate_from_stage_pose():
         },
     }
 
-    relative_before = GripperRuntimeSession._relative_physx(before)
-    relative_after = GripperRuntimeSession._relative_physx(after)
+    relative_before = AttachmentPhysicsDiagnostics._relative_physx(before)
+    relative_after = AttachmentPhysicsDiagnostics._relative_physx(after)
 
-    change = GripperRuntimeSession._relative_change(relative_before, relative_after)
+    change = AttachmentPhysicsDiagnostics._relative_change(relative_before, relative_after)
     assert relative_after["status"] == "observed"
     assert change["orientation_delta_deg"] == pytest.approx(180.0)
     assert change["angular_velocity_difference_delta_world_rad_s"] == (0, 0, 3.14)
