@@ -151,7 +151,7 @@ def test_capture_reference_profile_maps_fixture_geometry_and_motion_semantics():
 def _center_profile():
     from arm_cell_bringup.runtime import load_profile
     path = Path(__file__).parents[6] / "ros2_ws/src/bringup/config/pnp_validation_profile.yaml"
-    return load_profile(path)
+    return load_profile(path, pick_offset_z_m=0.0)
 
 
 def test_center_grasp_does_not_claim_historical_contact_band_eligibility():

@@ -61,7 +61,7 @@ def test_validation_fixture_uses_selected_json_recipe_from_profile_registry(tmp_
     )
     assert loaded.target_id == "TestCube"
     assert loaded.expected_fixture_release_position_base == pytest.approx(
-        (0.5, 0.25, 0.37)
+        (0.5, 0.25, 0.38)
     )
 
 

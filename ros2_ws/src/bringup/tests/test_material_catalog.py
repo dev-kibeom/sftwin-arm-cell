@@ -74,8 +74,9 @@ def test_calibration_trial_does_not_modify_catalog(tmp_path):
     'TestCube', 'AL_BILLET_060_040_030',
     'STEEL_BLANK_070_050_040', 'AL_PLATE_080_060_020',
 ])
-def test_compiled_material_grasp_reference_is_volume_center(material_id):
+def test_compiled_material_grasp_reference_uses_material_offset(material_id):
     from arm_cell_bringup.runtime import compile_mission
     recipe, material = compile_mission(MATERIALS.parent / f'missions/{material_id}.yaml')
-    assert material['pick_offset']['translation_m'] == [0.0, 0.0, 0.0]
-    assert recipe['object_to_grasp_tcp']['translation_m'] == [0.0, 0.0, 0.0]
+    expected = [0.0, 0.0, 0.01 if material_id == 'TestCube' else 0.0]
+    assert material['pick_offset']['translation_m'] == expected
+    assert recipe['object_to_grasp_tcp']['translation_m'] == expected
