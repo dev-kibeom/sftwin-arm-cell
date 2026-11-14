@@ -38,9 +38,9 @@ def test_startup_keeps_before_play_play_after_play_order(monkeypatch, headless):
         namespace = runpy.run_path(str(SCRIPTS / 'isaac_arm_cell_startup.py'))
         start = namespace['_start_arm_cell']
         # Execute the real async startup against fake Kit/Timeline services.
-        monkeypatch.setitem(start.__globals__, '_run_entrypoint', lambda path: events.append(path.name))
+        monkeypatch.setitem(start.__globals__, '_run_entrypoint', lambda path: events.append((path.parent, path.name)))
         loop.run_until_complete(namespace['_ARM_CELL_STARTUP_TASK'])
     finally:
         loop.close()
-    assert events == ['update', '1_before_play.py', 'play', 'update',
-                      '2_after_play_headless.py' if headless else '2_after_play.py']
+    assert events == ['update', (SCRIPTS, '1_before_play.py'), 'play', 'update',
+                      (SCRIPTS, '2_after_play_headless.py' if headless else '2_after_play.py')]

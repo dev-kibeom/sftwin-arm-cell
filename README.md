@@ -220,7 +220,27 @@ Cell Profile의 `camera`는 논리 Prim, D455 Mount Prim과 기존 Geometry 기�
 
 Cell의 `material_supply`는 기존 Supply Profile, Delivery Root와 기존 Geometry의 공급 지지면을 선택합니다. Bringup은 Supply Profile 내용을 Runtime Configuration에 포함하고 Vision·Supply가 공유하는 지지면 치수도 같은 Geometry에서 유도합니다. 공급 위치는 지지면 중심과 두께에서 유도하며 자재 종류·수량·랜덤 낙하·공급 완료 계산은 기존 설정과 알고리즘을 유지합니다. Adapter·Capture Registry·Demonstration·Pose 기록이 같은 Delivery Root를 소비하고 Sidecar·UI Hub·ROS Gateway 프로토콜은 유지합니다.
 
-공통 Startup은 기존 `m0609_cell/1_before_play.py`와 GUI/headless After Play 단계를 계속 호출합니다. 이 경로는 HOME·Joint Drive·Action Graph·Gripper·UI·진단·Material Supply의 기존 실행 생명주기를 위한 것이며, Scene Builder 선택은 Before Play에서 공통 진입점에 위임합니다. 다른 Cell의 Scene 선택만으로 그 Cell의 전체 Runtime이 지원되지는 않습니다.
+공통 Startup은 scripts 루트의 `1_before_play.py` → Timeline Play → GUI/headless `2_after_play*.py`를 실행합니다. `isaac_runtime/runtime_workflow.py`가 기존 역할 순서를 소유하며, Script Editor의 기존 `m0609_cell/0_pre_build.py`, `1_before_play.py`, `2_after_play*.py`도 얇은 호환 진입점으로 유지합니다. 임시 Script Editor 복사본은 `SFTWIN_PROJECT_ROOT`로 공통 scripts 루트를 찾습니다.
+
+| 단계 | 실행 및 책임 |
+|---|---|
+| Pre Build (명시 실행) | 선택 Assembly의 Xacro → URDF → USD·Provenance 생성·검증. Startup/Before Play는 Build를 암묵적으로 실행하지 않음 |
+| Before Play | Runtime JSON 한 번 로드 → 선택 Scene Builder → Robot HOME·Drive → Cell 공급 Adapter·Timeline 연결 → Camera Snapshot → ROS Graph |
+| Play | 기존 Timeline callback이 Live Test Session 생성 |
+| After Play | 같은 설정 Snapshot으로 선택 Tool 초기화 → GUI일 때 UI Hub 활성화 |
+| Pause/Resume | 기존 Session·Tool·공급 상태 유지 |
+| Stop/Reset | Tool·Attachment Reset → 진단 Writer 종료 → HOME 복원 (Drive 재배율 없음) → 생성 자재 삭제 → Live Test Session 종료. 기존 Physics STOPPED 검증 정리는 멱등 경로를 유지 |
+| 재생·재실행·종료 | Stop 후 Play는 새 Live Test Session 생성. After Play 재실행은 기존 Tool Session·Subscription 교체. Before Play 재실행·종료는 Tool → 진단 Session → 공급 Subscription·Sidecar 정리 |
+
+선택 호출은 기존 `모듈:함수` 형식을 재사용합니다. Cell의 `isaac.scene_builder`, `material_supply_factory`, `camera_snapshot`, `action_graph_builder`는 Cell 구현을, Tool의 `runtime.isaac_bootstrap`은 Physics 준비 후 Tool 초기화를 선택합니다. Robot Binding·HOME·Drive는 Robot과 Assembly·Cell 배치 데이터를 함께 소비합니다. 공통 Runtime은 Plugin ID나 Prim 경로로 분기하지 않습니다. M0609 Scene·공급 장치와 Robotiq Capture/Actuator 구현은 기존 디렉터리에 남으며, 선택된 구현 내부의 기존 sibling import 경로는 아직 유지합니다. Launcher 지원 조합과 사용자 실행 명령은 바뀌지 않습니다. 다른 조합의 Runtime 지원은 선언하지 않습니다.
+
+M0609 실제 Lifecycle smoke는 export와 필요한 Pre Build 후 Isaac Python으로 실행할 수 있습니다. `--pre-build`는 선택 Assembly 산출물을 먼저 재생성합니다. 공급 Sidecar까지 확인하려면 해당 checkout의 ROS overlay가 필요합니다.
+
+```bash
+~/isaac_sim/python.sh infra/isaac_sim/scripts/m0609_cell/tests/acceptance/runtime_lifecycle_smoke.py --pre-build
+```
+
+이 검사는 headless Startup·관절 이동·Robotiq 실측 OPEN/CLOSE·Camera Prim·공급 Adapter·시연 자재 생성/삭제·Pause/Resume·HOME/Drive Reset·Session/Physics Subscription 교체를 확인합니다. ROS 공급 완료와 전체 PnP 라이브 검증은 별도입니다.
 
 
 Script Editor로 직접 시작할 때는 ROS workspace를 빌드하고 overlay를 source한 터미널에서 먼저 export합니다.

@@ -15,7 +15,13 @@ import camera_tooling.stage_inspector as stage_inspector
 
 importlib.reload(run_records)
 importlib.reload(stage_inspector)
-output = stage_inspector.script_editor_output_path(os.environ, __file__)
+from isaac_runtime.runtime_configuration import load_runtime_configuration
+if "runtime_configuration" not in globals():
+    runtime_configuration = load_runtime_configuration()
+
+output = Path(runtime_configuration["cell"]["camera"]["snapshot"])
+output.parent.mkdir(parents=True, exist_ok=True)
 stage_inspector.inspect_stage(
-    str(output), stage_inspector.script_editor_reference_prims(os.environ)
+    str(output), stage_inspector.script_editor_reference_prims(os.environ),
+    camera_configuration=runtime_configuration["cell"]["camera"],
 )

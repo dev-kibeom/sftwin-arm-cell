@@ -8,7 +8,7 @@ from camera_tooling import stage_inspector as camera
 
 def project_root(tmp_path):
     root = tmp_path / "sftwin-project"
-    (root / "infra/isaac_sim/scripts/m0609_cell/shared").mkdir(parents=True)
+    (root / "infra/isaac_sim/scripts/isaac_runtime").mkdir(parents=True)
     (root / "ros2_ws/src").mkdir(parents=True)
     return root
 

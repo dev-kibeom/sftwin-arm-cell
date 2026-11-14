@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 import uuid
 from typing import Any
-from runtime_configuration import selected_delivery_root
+from isaac_runtime.runtime_configuration import selected_delivery_root
 
 
 SAMPLE_INTERVAL_SECONDS = 0.2

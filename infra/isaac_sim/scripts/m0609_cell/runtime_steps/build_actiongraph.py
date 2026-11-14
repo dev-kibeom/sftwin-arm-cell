@@ -51,6 +51,11 @@ importlib.reload(script_editor_bootstrap)
 script_editor_bootstrap.clear_imported_package("graph_builder")
 
 from graph_builder.ros_action_graph import build_ros_action_graph
+from isaac_runtime.robot_binding import RobotBinding
+from isaac_runtime.runtime_configuration import load_runtime_configuration
+if "runtime_configuration" not in globals():
+    runtime_configuration = load_runtime_configuration()
+
 
 enable_extension("isaacsim.ros2.bridge")
 enable_extension("isaacsim.core.nodes")
@@ -61,4 +66,6 @@ build_ros_action_graph(
     sdf_path=usdrt.Sdf.Path,
     usd_geom=UsdGeom,
     usd_physics=UsdPhysics,
+    binding=RobotBinding.from_runtime(runtime_configuration),
+    camera=runtime_configuration["cell"]["camera"],
 )
