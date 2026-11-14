@@ -138,3 +138,16 @@ def test_registered_rb5_assembly_reaches_graph_and_common_tool(tmp_path, monkeyp
     monkeypatch.setattr(entries, '_run', lambda step, configuration, namespace: observed.append((step, configuration)))
     call_selected(config['tool']['runtime']['isaac_bootstrap'], configuration=config, namespace={})
     assert observed == [('bootstrap_gripper.py', config)]
+
+
+def test_force_override_preserves_unselected_drives(exported_configuration):
+    from dataclasses import replace
+    binding = alternate(load_runtime_configuration(exported_configuration))
+    binding = replace(binding, max_forces={'shoulder': 1000.0})
+    shoulder = Joint('/World/Other/Arm/joints/shoulder')
+    elbow = Joint('/World/Other/Arm/joints/elbow')
+    shoulder.force = Attribute(10)
+    shoulder.GetMaxForceAttr = lambda: shoulder.force
+    apply_joint_drive_profile(Stage([shoulder, elbow]), binding, Physics)
+    assert shoulder.force.Get() == 1000.0
+    assert elbow.stiffness.Get() == 300

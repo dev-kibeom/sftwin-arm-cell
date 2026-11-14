@@ -1,5 +1,5 @@
 """Isaac robot bindings and USD drive authoring from the exported owner data."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 
@@ -11,6 +11,7 @@ class RobotBinding:
     joint_names: tuple
     home_positions: tuple
     stiffness_scales: dict
+    max_forces: dict = field(default_factory=dict)
 
     @classmethod
     def from_runtime(cls, configuration):
@@ -23,6 +24,7 @@ class RobotBinding:
             tuple(configuration['motion']['arm_joint_names']),
             tuple(configuration['home_joint_positions']),
             configuration['robot'].get('isaac', {}).get('joint_drive_stiffness_scales', {}),
+            configuration['robot'].get('isaac', {}).get('joint_drive_max_forces', {}),
         )
 
 
@@ -76,3 +78,14 @@ def apply_joint_drive_profile(stage, binding, usd_physics):
         if not math.isfinite(base_stiffness) or base_stiffness <= 0.0:
             raise RuntimeError(f'{name} imported angular stiffness must be positive')
         stiffness.Set(base_stiffness * scale)
+
+    for name, value in binding.max_forces.items():
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise RuntimeError(f'{name} max force must be finite and positive')
+        if name not in binding.joint_names:
+            raise RuntimeError(f'unknown arm joint: {name}')
+        joint = _robot_joints(stage, binding, [name])[name]
+        drive = usd_physics.DriveAPI.Get(joint, 'angular')
+        if not drive or not drive.GetMaxForceAttr().IsValid():
+            raise RuntimeError(f'angular drive max force unavailable for {name}')
+        drive.GetMaxForceAttr().Set(value)
