@@ -144,6 +144,8 @@ Vision-derived PICK의 Candidate Geometry 입력은 [Task Execution–Motion ICD
 
 ### Grasp Occupancy 전략
 
+Grasp endpoint의 전체 Robot 검사에서는 고정 설치 접촉인 `base_link`–`robot_riser` 쌍만 요청 로컬 Scene에서 허용한다. 다른 Robot Link와 Riser의 충돌 및 공유 Scene의 ACM은 변경하지 않는다.
+
 Grasp endpoint 충돌 검증에서는 선택 후보의 Closing Axis에 대응하는 자재 치수(예상 접촉 폭)까지 닫힌 Gripper 관절 형상을 사용한다. 이 상태는 검증용이며 실제 Gripper Close 명령이나 Holding 성공 조건을 바꾸지 않는다. Robot Self Collision, 정적 Tray·Fixture 및 기존 고정 객체 충돌을 검사한 뒤 운영 Profile의 `grasp_occupancy_mode`로 선택된 Occupancy 전략을 적용한다.
 
 선택 target은 관측한 Object 중심·방향·직육면체 치수의 BOX로 별도 검사한다. 의도된 손가락 접촉면과 target의 접촉은 허용하지만 Gripper 몸체와 target의 충돌은 거부한다. 이는 주변 자재 Occupancy 전략과 독립적이므로 `NONE`에서도 생략하지 않는다. Grasp endpoint에서만 양쪽 Finger Tip Link와 `amr_tray` 사이 접촉 및 최대 0.5 mm의 침투를 허용하며, 그보다 깊은 침투·다른 Robot Link·다른 환경 객체는 기존 충돌 판단을 유지한다. 충돌 쌍 전체를 무조건 허용하거나 공유 Scene을 변경해서는 안 된다. 이 허용은 접촉 힘 제한 또는 물리적 파지 성공의 근거가 아니다.

@@ -47,6 +47,16 @@ GraspCollisionValidationResult validate_grasp_collision(
     };
   auto common = copy_scene(common_scene);
   auto full = copy_scene(full_scene);
+  // The fixed robot base is mounted on this riser. Whole-robot endpoint
+  // checks include that installation contact; only this exact pair is exempt.
+  // Apply to private copies so shared scene policy and other contacts survive.
+  for (const auto & scene : {common, full}) {
+    if (state.getRobotModel()->hasLinkModel("base_link") &&
+      scene->getWorld()->hasObject("robot_riser"))
+    {
+      scene->getAllowedCollisionMatrixNonConst().setEntry("base_link", "robot_riser", true);
+    }
+  }
   std::string collision_group = planning_group;
   if (target_dimensions) {
     constexpr const char * joint_name = "gripper_robotiq_85_left_knuckle_joint";
