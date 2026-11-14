@@ -4,7 +4,7 @@
 
 Doosan M0609 로봇과 Robotiq 2F-85 그리퍼를 대상으로 하는 시뮬레이터 기반 ROS 2 로봇 셀 프로젝트입니다. 비전, 모션 계획, 작업 오케스트레이션, 소프트웨어 안전 감독, 자재 인계, 운영자 UI를 공통 ROS 인터페이스로 연결합니다.
 
-현재 공식 배포 버전은 v0.3.4입니다. v0.3.4는 Vision/PICK 후보 선택과 PLACE 복구, 실행별 진단 기록, 로컬 D455 자산과 런타임 로그를 개선했습니다. 엔지니어링 및 시뮬레이션 프로젝트이며, 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
+현재 공식 배포 버전은 v1.0.0입니다. Robot·Tool·Cell 구성, GUI 런처, RB5-850E와 Vision/PnP 개선을 포함하는 엔지니어링·시뮬레이션 릴리즈입니다. 생산용 셀이나 안전 등급을 인증받은 시스템은 아닙니다.
 
 ## 프로젝트 개요
 
@@ -287,7 +287,7 @@ ARM_CELL_LOG_LEVEL=info ARM_CELL_DIAGNOSTICS=vision,motion docker compose up --b
 
 ## 문서 탐색
 
-- [v0.3.4 릴리즈 노트](docs/releases/v0.3.4.ko.md) / [English](docs/releases/v0.3.4.en.md): 변경·업그레이드·검증 범위
+- [v1.0.0 릴리즈 노트](docs/releases/v1.0.0.ko.md) / [English](docs/releases/v1.0.0.en.md): 변경·업그레이드·검증 범위
 - [프로젝트 정의](docs/product/definition.md), [라이브 인수 계약](docs/product/acceptance.md)
 - [시스템 아키텍처](docs/design/architecture/), [컴포넌트 설계](docs/design/components/), [인터페이스](docs/design/interfaces/)
 - [알고리즘 설계](docs/design/algorithms/)
