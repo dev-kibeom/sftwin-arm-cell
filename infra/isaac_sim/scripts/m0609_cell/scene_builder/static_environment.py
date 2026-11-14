@@ -20,6 +20,7 @@ REQUIRED_STATIC_OBJECT_IDS = {
     "camera_rig_top_beam",
     "camera_boom",
     "camera_drop_bracket",
+    "camera_bracket_arm",
     "cable_tray",
     "amr_base",
     "amr_upper_body",

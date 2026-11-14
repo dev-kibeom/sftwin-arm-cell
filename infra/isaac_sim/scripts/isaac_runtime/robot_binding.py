@@ -12,6 +12,7 @@ class RobotBinding:
     home_positions: tuple
     stiffness_scales: dict
     max_forces: dict = field(default_factory=dict)
+    damping: dict = field(default_factory=dict)
 
     @classmethod
     def from_runtime(cls, configuration):
@@ -25,6 +26,7 @@ class RobotBinding:
             tuple(configuration['home_joint_positions']),
             configuration['robot'].get('isaac', {}).get('joint_drive_stiffness_scales', {}),
             configuration['robot'].get('isaac', {}).get('joint_drive_max_forces', {}),
+            configuration['robot'].get('isaac', {}).get('joint_drive_damping', {}),
         )
 
 
@@ -89,3 +91,13 @@ def apply_joint_drive_profile(stage, binding, usd_physics):
         if not drive or not drive.GetMaxForceAttr().IsValid():
             raise RuntimeError(f'angular drive max force unavailable for {name}')
         drive.GetMaxForceAttr().Set(value)
+
+    for name, value in binding.damping.items():
+        if (name not in binding.joint_names or isinstance(value, bool)
+                or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0):
+            raise RuntimeError(f'{name} damping requires an arm joint and finite nonnegative value')
+        joint = _robot_joints(stage, binding, [name])[name]
+        drive = usd_physics.DriveAPI.Get(joint, 'angular')
+        if not drive or not drive.GetDampingAttr().IsValid():
+            raise RuntimeError(f'angular drive damping unavailable for {name}')
+        drive.GetDampingAttr().Set(value)

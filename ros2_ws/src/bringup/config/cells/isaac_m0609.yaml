@@ -1,3 +1,4 @@
+display_name: PnP_CNC
 geometry: project://config/m0609_static_environment.json
 static_scene: package://arm_cell_motion/config/moveit/m0609_static_scene.json
 world_to_base:

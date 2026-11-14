@@ -138,6 +138,13 @@ def build_camera_rig(context):
             mat_black,
         ),
         (
+            "camera_bracket_arm",
+            f"{cell_root}/CameraRig/CameraBracketArm",
+            "camera_bracket_arm",
+            colors["black"],
+            mat_black,
+        ),
+        (
             "cable_tray",
             f"{cell_root}/CameraRig/CableTray",
             "camera_cable_tray",

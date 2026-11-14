@@ -29,8 +29,10 @@ def _canonical_tray_support_origin(project_root):
 def test_cell_metadata_initialization_owns_root_children_and_identity_metadata():
     ensured = []
     metadata = []
+    display_names = []
     context = SimpleNamespace(
-        stage=object(),
+        stage=SimpleNamespace(GetPrimAtPath=lambda path: SimpleNamespace(
+            SetDisplayName=lambda name: display_names.append((path, name)))),
         cell_root=CELL_ROOT,
         ensure_xform=lambda stage, path: ensured.append((stage, path)),
         set_custom_data=lambda stage, path, key, value: metadata.append(
@@ -39,6 +41,7 @@ def test_cell_metadata_initialization_owns_root_children_and_identity_metadata()
     )
 
     initialize_cell_metadata(context)
+    assert display_names == [(CELL_ROOT, "PnP_CNC")]
 
     assert [path for _, path in ensured] == [
         CELL_ROOT,
@@ -206,3 +209,17 @@ def test_tray_marker_post_joins_front_rail_to_marker_underside():
     assert abs(marker_plane_z - (post_center[2] + half_post_height) - 0.0001) < 1e-9
     assert abs(post_center[0] - marker_center_xy[0]) <= marker_half_size
     assert abs(post_center[1] - marker_center_xy[1]) <= marker_half_size
+
+
+def test_camera_boom_sits_on_top_beam():
+    project_root = Path(__file__).resolve().parents[6]
+    manifest = json.loads((project_root / "config/m0609_static_environment.json").read_text())
+    objects = {item["id"]: item for item in manifest["objects"]}
+    def face(name, direction):
+        item = objects[name]
+        return item["pose"]["position_m"][2] + direction * item["geometry"]["dimensions_m"][2] / 2
+    assert abs(face("camera_boom", -1) - face("camera_rig_top_beam", 1)) < 1e-9
+    assert abs(face("camera_drop_bracket", 1) - face("camera_boom", -1)) < 1e-9
+    assert abs(face("camera_bracket_arm", 1) - face("camera_drop_bracket", -1)) < 1e-9
+    assert abs(face("camera_bracket_arm", -1) - 1.75) < 1e-9
+    assert abs(face("cable_tray", -1) - face("camera_boom", 1)) < 1e-9

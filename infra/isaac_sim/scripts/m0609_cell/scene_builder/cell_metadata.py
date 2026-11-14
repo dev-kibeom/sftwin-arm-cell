@@ -7,6 +7,7 @@ def initialize_cell_metadata(context):
     ensure_xform = context.ensure_xform
     set_custom_data = context.set_custom_data
     ensure_xform(stage, cell_root)
+    stage.GetPrimAtPath(cell_root).SetDisplayName("PnP_CNC")
     for child in [
         "Environment",
         "Safety",
@@ -121,7 +122,7 @@ def build_status_hardware(context):
         stage,
         f"{CELL_ROOT}/Status/CellID",
         "sf_twin:label",
-        "SF-TWIN CELL-A01 / DIRECT AMR-CNC TENDING",
+        "PnP_CNC / DIRECT AMR-CNC TENDING",
     )
 
 

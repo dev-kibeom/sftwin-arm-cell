@@ -129,7 +129,8 @@ class Launcher(QMainWindow):
         for key, paths in profile_choices().items():
             combo = QComboBox()
             for path in paths:
-                combo.addItem(('Isaac / ' if key == 'backend' else '') + Path(path).stem, path)
+                label = read(path).get('display_name', Path(path).stem)
+                combo.addItem(('Isaac / ' if key == 'backend' else '') + label, path)
             self.selectors[key] = combo
             combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)

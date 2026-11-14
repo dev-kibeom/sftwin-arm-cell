@@ -137,6 +137,10 @@ def validate_model_configuration(config):
     if (not isinstance(forces, dict) or not set(forces) <= set(arm)
             or any(not finite_number(value) or value <= 0 for value in forces.values())):
         raise ValueError('Robot Isaac max forces require arm joint names and finite positive values')
+    damping = robot.get('isaac', {}).get('joint_drive_damping', {})
+    if (not isinstance(damping, dict) or not set(damping) <= set(arm)
+            or any(not finite_number(value) or value < 0 for value in damping.values())):
+        raise ValueError('Robot Isaac damping requires arm joint names and finite nonnegative values')
     overrides = planning_limits(robot['joint_limits'], arm, joints)
     joint_pose(config['home_joint_positions'], 'Robot HOME', arm, joints, overrides)
     for key in ('retract_joint_positions', 'place_tray_return_joint_positions'):

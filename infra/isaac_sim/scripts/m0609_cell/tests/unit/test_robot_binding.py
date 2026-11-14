@@ -151,3 +151,17 @@ def test_force_override_preserves_unselected_drives(exported_configuration):
     apply_joint_drive_profile(Stage([shoulder, elbow]), binding, Physics)
     assert shoulder.force.Get() == 1000.0
     assert elbow.stiffness.Get() == 300
+
+
+def test_damping_override_is_absolute_and_repeatable(exported_configuration):
+    from dataclasses import replace
+    binding = replace(alternate(load_runtime_configuration(exported_configuration)),
+                      stiffness_scales={}, damping={'shoulder': 50.0})
+    joint = Joint('/World/Other/Arm/joints/shoulder')
+    joint.damping = Attribute(0)
+    joint.GetDampingAttr = lambda: joint.damping
+    stage = Stage([joint])
+    apply_joint_drive_profile(stage, binding, Physics)
+    apply_joint_drive_profile(stage, binding, Physics)
+    assert joint.damping.Get() == 50.0
+    assert joint.stiffness.Get() == 100
