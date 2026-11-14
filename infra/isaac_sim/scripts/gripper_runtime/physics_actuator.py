@@ -159,7 +159,16 @@ class Robotiq2F85PhysicsActuator:
 
     def observation(self):
         actual = self._read()
-        return dict(actual_position_rad=actual.pos, actual_velocity_rad_s=actual.vel,
+        # DC reports joint effort including gravity, not isolated motor/contact load.
+        effort = getattr(actual, 'effort', None)
+        effort = effort if effort is not None and math.isfinite(effort) else None
+        return dict(joint_effort_nm=effort, effort_source='dynamic_control_joint_effort_including_gravity', actual_position_rad=actual.pos, actual_velocity_rad_s=actual.vel,
+                    actual_width_mm=self.MAX_WIDTH_MM * (1. - (actual.pos - self.lower) / (self.upper - self.lower)),
+                    target_position_rad=self._target,
+                    command_direction=None if self._direction is None else self._direction.value,
+                    position_tolerance_rad=self.settings['position_tolerance_rad'],
+                    stopped_velocity_rad_s=self.settings['stopped_velocity_rad_s'],
+                    stopped_duration_s=self._dwell, lower_limit_rad=self.lower, upper_limit_rad=self.upper,
                     target_position=self.target_position, motion_status=self.state.value,
                     object_detection=self.object_detection, speed_fraction=self.speed_fraction,
                     force_setting=self.force_setting)

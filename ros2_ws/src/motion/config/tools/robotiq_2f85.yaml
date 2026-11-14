@@ -63,6 +63,11 @@ runtime:
     position_tolerance_rad: 0.01
     stopped_velocity_rad_s: 0.01
     blocked_dwell_s: 0.15
+    holding:
+      # Motor-state inference tuning; not calibrated payload retention proof.
+      width_tolerance_mm: 3.0
+      stopped_dwell_s: 0.20
+      held_position_tolerance_rad: 0.015
     contact_material:
       # Uncalibrated rubber-like contact approximation; tune with payload tests.
       static_friction: 0.8

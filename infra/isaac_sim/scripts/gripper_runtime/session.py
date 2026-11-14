@@ -1,7 +1,6 @@
 """Play-time lifecycle for the selected Tool actuator and Isaac adapter."""
 
 import logging
-import math
 import time
 from pathlib import Path
 
@@ -164,8 +163,6 @@ class GripperRuntimeSession:
         self._feedback_generation = 0
         self.gripper.feedback_generation = 0
         self._physics_step_sequence = 0
-        self._capture_physics_steps = 0
-        self._previous_capture_relative = None
         self._active_release_record = None
         self._last_release_joint_owned = None
         self._last_release_holding_state = None
@@ -173,9 +170,6 @@ class GripperRuntimeSession:
 
     def on_physics_step(self, dt):
         self._physics_step_sequence += 1
-        capture_record_before = getattr(
-            self.grasp_manager, "capture_diagnostic_record", None
-        )
         read_capture_reference = getattr(
             self.sim_adapter, "read_capture_reference", None
         )
@@ -268,6 +262,7 @@ class GripperRuntimeSession:
                 generation = getattr(self.sim_adapter, "last_command_generation", None)
                 if callable(note_open) and generation is not None:
                     note_open(generation, command_width)
+        close_rejected = False
         command_is_closing = getattr(self.sim_adapter, "last_command_is_closing", None)
         if command_applied and command_is_closing is True:
             close_id_reader = getattr(self.sim_adapter, "read_close_execution_id", None)
@@ -282,16 +277,13 @@ class GripperRuntimeSession:
                     reason = (
                         getattr(
                             self.grasp_manager,
-                            "_close_transaction_failure_reason",
+                            "close_failure_reason",
                             None,
                         )
                         or "close_transaction_arm_failed"
                     )
-                    self.grasp_manager._mark_unknown(reason)
-                    outcome = getattr(self.grasp_manager, "_diagnostic_outcome", None)
-                    if callable(outcome):
-                        outcome(reason, capture_result="not_attempted")
-                    return self.grasp_manager.state
+                    self.grasp_manager.reject_close_transaction(reason)
+                    close_rejected = True
                 if getattr(self.sim_adapter, "verbose", False):
                     generation = getattr(
                         self.sim_adapter, "last_command_generation", None
@@ -323,7 +315,8 @@ class GripperRuntimeSession:
             )
         self._feedback_generation += 1
         self.gripper.feedback_generation = self._feedback_generation
-        self.grasp_manager.update(dt)
+        if not close_rejected:
+            self.grasp_manager.update(dt)
         consume_detach = getattr(
             self.grasp_manager, "consume_release_detach_event", None
         )
@@ -335,17 +328,9 @@ class GripperRuntimeSession:
                 physics_step=self._physics_step_sequence,
             )
         self._observe_release_step()
-        capture_record_after = getattr(
-            self.grasp_manager, "capture_diagnostic_record", None
-        )
-        if (
-            capture_record_before is not None
-            and capture_record_after is not capture_record_before
-        ):
-            self._capture_physics_steps = 0
-            self._previous_capture_relative = None
-        elif capture_record_before is not None:
-            self._observe_capture_physics_step(dt)
+        observe_diagnostics = getattr(self.grasp_manager, 'observe_capture_diagnostic_step', None)
+        if callable(observe_diagnostics):
+            observe_diagnostics(dt, self._physics_step_sequence)
         runtime_ready = bool(getattr(self.grasp_manager, "ready", False))
         observation = getattr(self.grasp_manager, "holding_observation", None)
         if not callable(observation):
@@ -356,7 +341,7 @@ class GripperRuntimeSession:
             raise RuntimeError("gripper status sequence must be non-zero")
         held = runtime_ready and observation.state is HoldingState.HELD
         released = runtime_ready and observation.state is HoldingState.RELEASED
-        attached = runtime_ready and held and bool(self._safe_attachment_owned())
+        attached = runtime_ready and bool(self._safe_attachment_owned())
         if runtime_ready != self._last_runtime_ready:
             LOGGER.info(
                 "gripper runtime state=%s",
@@ -464,8 +449,10 @@ class GripperRuntimeSession:
 
     def _safe_attachment_owned(self):
         try:
-            owner = getattr(self.grasp_manager, 'joint_owner', None)
-            return False if owner is None else bool(owner.has_owned_joint())
+            observe = getattr(self.grasp_manager, 'attachment_owned', None)
+            if callable(observe):
+                return bool(observe())
+            return False
         except Exception as error:
             LOGGER.warning(
                 "Isaac gripper release diagnostic attachment observation failed; gripper operation is unchanged: %s",
@@ -490,9 +477,7 @@ class GripperRuntimeSession:
             return False
         try:
             observation = self.grasp_manager.holding_observation()
-            joint_owner = getattr(self.grasp_manager, "joint_owner", None)
-            has_owned_joint = getattr(joint_owner, "has_owned_joint", None)
-            owned_joint = bool(has_owned_joint()) if callable(has_owned_joint) else None
+            owned_joint = self._safe_attachment_owned()
             record.finalize(
                 outcome,
                 {
@@ -516,155 +501,6 @@ class GripperRuntimeSession:
         self._active_release_record = None
         self._last_release_joint_owned = None
         self._last_release_holding_state = None
-
-    def _observe_capture_physics_step(self, dt):
-        record = getattr(self.grasp_manager, "capture_diagnostic_record", None)
-        target_path = getattr(
-            self.grasp_manager, "capture_diagnostic_target_path", None
-        )
-        if record is None or target_path is None:
-            return
-        self._capture_physics_steps += 1
-        try:
-            pair = self.physx_observer.observe_pair(
-                self.grasp_manager.tcp_path, target_path
-            )
-        except Exception as error:
-            pair = {
-                "status": "unavailable",
-                "reason": f"{type(error).__name__}: {error}",
-            }
-        stage = self._stage_pair(self.grasp_manager, target_path)
-        relative = self._relative_physx(pair)
-        change = self._relative_change(self._previous_capture_relative, relative)
-        self._previous_capture_relative = relative
-        record.append(
-            "observation",
-            {
-                "phase": "post_attach_physics_step",
-                "source": "physx_rigid_body",
-                "pair": pair,
-                "relative_pose": relative,
-                "relative_change_from_previous_step": change,
-                "stage_world_pose": stage,
-                "holding_state": self.grasp_manager.holding_observation().state.value,
-            },
-            physics_step=self._physics_step_sequence,
-            dt_s=float(dt),
-        )
-        record.data["coverage"]["physics_steps_observed"] = self._capture_physics_steps
-        if self._capture_physics_steps >= 4:
-            self.grasp_manager.finalize_capture_diagnostic()
-            self._capture_physics_steps = 0
-            self._previous_capture_relative = None
-
-    @staticmethod
-    def _stage_pair(manager, target_path):
-        try:
-            source = manager.candidate_source
-            world_transform = getattr(source, "_world_transform")
-            pose_dict = source._pose_dict
-            return {
-                "source": "usd_stage_world",
-                "tcp": pose_dict(world_transform(manager.tcp_path)),
-                "rawpart": pose_dict(world_transform(target_path)),
-            }
-        except Exception as error:
-            return {
-                "source": "usd_stage_world",
-                "status": "unavailable",
-                "reason": f"{type(error).__name__}: {error}",
-            }
-
-    @staticmethod
-    def _relative_physx(pair):
-        try:
-            tcp = pair["tcp"]
-            rawpart = pair["rawpart"]
-            if tcp.get("status") != "observed" or rawpart.get("status") != "observed":
-                return {
-                    "status": "unavailable",
-                    "reason": "one or both PhysX rigid-body states are unavailable",
-                }
-            p0 = tcp["pose_world"]["position_m"]
-            p1 = rawpart["pose_world"]["position_m"]
-            q0 = tcp["pose_world"]["orientation_wxyz"]
-            q1 = rawpart["pose_world"]["orientation_wxyz"]
-            inv0 = (q0[0], -q0[1], -q0[2], -q0[3])
-            delta = tuple(p1[i] - p0[i] for i in range(3))
-            rotated_delta = GripperRuntimeSession._rotate(inv0, delta)
-            qrel = GripperRuntimeSession._multiply(inv0, q1)
-            v0, v1 = tcp["linear_velocity_m_s"], rawpart["linear_velocity_m_s"]
-            w0, w1 = tcp["angular_velocity_rad_s"], rawpart["angular_velocity_rad_s"]
-            return {
-                "status": "observed",
-                "position_tcp_frame_m": rotated_delta,
-                "orientation_tcp_frame_wxyz": qrel,
-                "linear_velocity_difference_world_m_s": tuple(
-                    v1[i] - v0[i] for i in range(3)
-                ),
-                "angular_velocity_difference_world_rad_s": tuple(
-                    w1[i] - w0[i] for i in range(3)
-                ),
-            }
-        except Exception as error:
-            return {
-                "status": "unavailable",
-                "reason": f"{type(error).__name__}: {error}",
-            }
-
-    @staticmethod
-    def _relative_change(previous, current):
-        if previous is None or current.get("status") != "observed":
-            return {
-                "status": "unavailable",
-                "reason": "no prior comparable PhysX sample",
-            }
-        if previous.get("status") != "observed":
-            return {"status": "unavailable", "reason": "prior PhysX sample unavailable"}
-        before = previous["position_tcp_frame_m"]
-        after = current["position_tcp_frame_m"]
-        dq = sum(
-            a * b
-            for a, b in zip(
-                previous["orientation_tcp_frame_wxyz"],
-                current["orientation_tcp_frame_wxyz"],
-            )
-        )
-        return {
-            "status": "observed",
-            "position_delta_m": tuple(after[i] - before[i] for i in range(3)),
-            "orientation_delta_deg": math.degrees(2.0 * math.acos(min(1.0, abs(dq)))),
-            "linear_velocity_difference_delta_world_m_s": tuple(
-                current["linear_velocity_difference_world_m_s"][i]
-                - previous["linear_velocity_difference_world_m_s"][i]
-                for i in range(3)
-            ),
-            "angular_velocity_difference_delta_world_rad_s": tuple(
-                current["angular_velocity_difference_world_rad_s"][i]
-                - previous["angular_velocity_difference_world_rad_s"][i]
-                for i in range(3)
-            ),
-        }
-
-    @staticmethod
-    def _multiply(a, b):
-        aw, ax, ay, az = a
-        bw, bx, by, bz = b
-        return (
-            aw * bw - ax * bx - ay * by - az * bz,
-            aw * bx + ax * bw + ay * bz - az * by,
-            aw * by - ax * bz + ay * bw + az * bx,
-            aw * bz + ax * by - ay * bx + az * bw,
-        )
-
-    @staticmethod
-    def _rotate(q, v):
-        rotated = GripperRuntimeSession._multiply(
-            GripperRuntimeSession._multiply(q, (0.0, *v)),
-            (q[0], -q[1], -q[2], -q[3]),
-        )
-        return tuple(rotated[1:])
 
     def subscribe(self):
         self._unsubscribe()
@@ -708,9 +544,6 @@ class GripperRuntimeSession:
         )
         shutdown = getattr(self.grasp_manager, "shutdown", None)
         result = True if not callable(shutdown) else bool(shutdown())
-        finalize = getattr(self.grasp_manager, "finalize_capture_diagnostic", None)
-        if callable(finalize):
-            finalize("runtime_session_shutdown_before_step_window_complete")
         close_writer = getattr(self.capture_diagnostic_writer, "close", None)
         if callable(close_writer) and close_writer() is False:
             LOGGER.warning(

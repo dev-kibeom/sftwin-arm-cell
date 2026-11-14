@@ -94,6 +94,12 @@ class ParallelGripperCapture:
             return False
 
     @staticmethod
+    def width_matches_reference(measured, expected, tolerance):
+        return (all(math.isfinite(v) for v in (measured, expected, tolerance))
+                and measured >= 0.0 and expected > 0.0 and tolerance >= 0.0
+                and abs(measured - expected) <= tolerance)
+
+    @staticmethod
     def on_capture_ready(actuator):
         actuator.stop()
 
@@ -151,7 +157,8 @@ def _robotiq_runtime(profile, binding):
             if len(paths) != 1:
                 raise ValueError('Physical Grasp requires one Tool TCP in selected Assembly')
             tool.grasp_factory = lambda **services: PhysicalGraspManager(
-                stage=stage, tcp_path=paths[0], **services)
+                stage=stage, tcp_path=paths[0],
+                holding_settings=settings['physics']['holding'], **services)
         return tool
     actuator = Robotiq2F85Actuator(
         robot_root_path=binding.robot_path,

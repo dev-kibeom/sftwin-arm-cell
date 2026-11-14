@@ -99,14 +99,44 @@ STOP에는 추가 파라미터를 받지 않는다. Logical 구현은 추가 제
 추가 필드를 모든 Tool에 필수화하지 않는다. `ToolRuntime.observation()`은 제공하는 구현에서만 position/velocity,
 target, motion status, inferred object status와 설정을 반환한다.
 
-Physical Grasp에서는 OPEN 완료의 실제 위치 관측 이후 RELEASED를 보고한다. CLOSE·motor stall·양쪽 접촉만으로
-하중 유지와 미끄러짐 부재를 증명할 수 없으므로 현재 구현은 **HELD를 발행하지 않고 UNKNOWN을 유지**한다.
-따라서 현재 정식 PnP는 Physical Grasp로 성공할 수 없다. 기존의 fresh HELD 요구조건을 완화하거나 새 Mission 중단 조건을 추가하지 않는다.
-보유 판정의 향후 보정은 별도 관측 근거를 요구한다.
+Physical Grasp는 실제 관절 관측으로 보유를 **추정**한다. 유효한 Motion Capture Reference와 일치하는 CLOSE를 수락한 뒤 다음 조건을 함께 확인한다.
+
+- closing target이 실제 위치보다 더 닫힌 쪽에 있고 목표 오차가 position tolerance를 초과한다.
+- 실제 위치가 양쪽 joint limit에서 떨어져 있고, 실제 속도가 Tool의 정지 속도 이하다.
+- Actuator의 `stopped_closing`과 기대 폭 대비 실제 관절에서 계산한 개방 폭의 허용오차를 충족한다.
+- Tool Profile `runtime.physics.holding.stopped_dwell_s` 동안 이 조건과 위치 안정성이 지속된다.
+
+정지 하나, contact event 하나, 명령 Force Limit만으로 HELD를 확정하지 않는다.
+폭 허용오차와 위치 안정성은 `width_tolerance_mm`, `held_position_tolerance_rad`가 소유한다.
+폭 비교는 Parallel Tool의 폭 일치 predicate를 사용하며 Fixed Attach의 Stage 후보 선택·자재 Pose·Joint 생성은 사용하지 않는다.
+완전히 닫힌 빈 그리퍼, joint limit 또는 기대 폭과 다른 환경 걸림은 UNKNOWN이다.
+기대 폭과 우연히 일치하는 환경 걸림은 관절 관측만으로 완전히 구분할 수 없다.
+현재 폭은 실제 관절에서 계산한 선형 추정이므로 실제 fingertip geometry 보정도 라이브 확인이 필요하다.
+
+HELD 이후에도 같은 closing target을 유지하면서 실제 위치·속도·폭을 매 tick 재평가한다.
+움직임·추가 닫힘·폭/목표 조건 상실은 즉시 UNKNOWN으로 되돌린다. 이후 적합한 정지가 다시 지속되면 재추정할 수 있다.
+STOP, OPEN 시작, 참조 교체·취소·진정한 무효화, Reset/Shutdown은 누적 근거를 폐기한다.
+OPEN 중에는 UNKNOWN, 실제 full OPEN 완료에만 RELEASED를 보고한다. 미끄러짐 추정만으로 RELEASED를 발행하지 않는다.
+
+Motion의 파지 승인 후에는 pending Capture Reference가 퇴역한다. 이 경우만 `invalidate:true, retire_pending:true`로 표시하며
+수락된 CLOSE의 실행 ID·예상 폭 snapshot은 해당 파지의 지속 관측 근거로 유지한다. 이는 자재 Pose snapshot이 아니다.
+퇴역은 새 CLOSE를 허가하지 않는다. 새 명령에는 새 유효 참조가 필요하다. 취소/실패의 일반 `invalidate:true`는 유지 근거도 폐기한다.
+재전송된 퇴역이 HELD를 만들거나 소실된 근거를 복구하지 않는다.
+
+ROS `grasp`는 Holding Observation, `attached`는 실제 시뮬레이션 Attachment 소유 여부다.
+따라서 Physical HELD는 `grasp=1, attached=0`이며 기존 신선도·Sequence·Timestamp 및 PICK의 fresh HELD 요구조건을 유지한다.
+이 관측이 유효하면 기존 PnP가 진행할 수 있다. Motion·Orchestration 알고리즘에 예외나 새로운 Gate를 추가하지 않는다.
+공통 Session은 CLOSE 거부·Attachment 관측의 공개 메서드를 사용하며, Fixed Attach의 post-attach Pose 진단과 종료는 해당 구현이 소유한다.
+Physical 구현에는 자재 Pose 진단이나 의미 없는 Fixed Attach 메서드를 요구하지 않는다.
+
+Isaac 5.1 DC `get_dof_state().effort`는 gravity를 포함하는 joint effort이며 순수 motor 저항/접촉 토크 센서가 아니다.
+회전 joint의 해당 값은 N·m 진단으로만 노출하고 HELD 임계값으로 사용하지 않는다. `get_dof_effort()`의 applied command나
+`max_effort`/Drive `maxForce`도 실제 관측 저항으로 치환하지 않는다. 현재 보유 추정은 위치·속도·지속 정지와 폭에 근거한다.
+모터 전류나 정밀 Force Sensor 값을 합성하지 않는다.
 
 Physics contact report의 actor pair·접촉점·법선·impulse와 실제 관절 상태는 선택적 진단이다.
 `physical_grasp` 기록은 기존 bounded gripper diagnostic writer에 10 Hz로 제출한다. impulse(N·s)는 force(N)가 아니다.
-Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick마다 교체한다. 지속 보유/미끄러짐 검증은 아직 완료하지 않았다.
+Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick마다 교체한다. 접촉 진단은 HELD 판정 입력이 아니다. 지속 보유/미끄러짐 검증은 아직 완료하지 않았다.
 
 ## 실행
 
@@ -137,7 +167,7 @@ Launcher가 조립한 Runtime Configuration을 사용한다. Script Editor 직�
 ## 검증 범위와 사용자 라이브 확인
 
 자동 검증은 Logical 동작·Fixed Attach/Release 회귀, Physics target/read/STOP, unsupported 조합,
-URDF 연동 파생·configuration export, 두 Robot의 HOME·Profile 보존을 확인한다.
+URDF 연동 파생·configuration export, 두 Robot의 HOME·Profile 보존을 확인한다. 물리 보유 추정·Session lifecycle·참조 퇴역과 ROS Holding/Attachment 분리는 Mock 및 transport 자동 테스트로 확인한다.
 설치된 Isaac Sim 5.1 API/schema 검토와 USD 조립 검사는 물리 엔진 실행을 대신하지 않는다.
 테스트 결과와 기존 기준선 실패는 PR 검증 항목에 기록한다.
 
@@ -147,7 +177,7 @@ URDF 연동 파생·configuration export, 두 Robot의 HOME·Profile 보존을 �
 - Physics에서 85 mm 실제 개방 geometry·joint limit·속도, mimic 오차와 접촉 정지·OPEN·STOP·재시작.
 - 빈 CLOSE와 물체/환경 걸림의 진단 구분; 고착을 보유로 보고하지 않는지.
 - 실제 payload 질량·형상별 마찰, 토크, 손가락 접촉·유지·미끄러짐/낙하. 현 tuning은 성공 보장이 없다.
-- Physical 모드에서 Fixed Joint 생성·자재 순간이동·충돌 무시가 없는지와 UNKNOWN 피드백.
+- Physical 모드에서 Fixed Joint 생성·자재 순간이동·충돌 무시가 없는지, 유효한 추정 HELD/근거 소실 시 UNKNOWN, HELD 이후 참조 퇴역과 후퇴·PLACE 진행.
 - Physics + Fixed Attach의 실제 접촉 정지 이후 Capture Qualification 가능 여부는 별도 확인.
 
 실제 Isaac Physics tick을 실행한 파지/접촉/하중 유지 검증은 이번 자동 검증의 완료 주장에 포함하지 않는다.

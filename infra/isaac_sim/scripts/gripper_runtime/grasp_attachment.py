@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 
-from gripper_runtime.capture_diagnostics import CaptureDiagnosticRecord
+from gripper_runtime.capture_diagnostics import CaptureDiagnosticRecord, AttachmentPhysicsDiagnostics
 from gripper_runtime.tool_plugin import ParallelGripperCapture, ToolIntent
 from gripper_runtime.grasp_qualification import GraspQualification, GripperCharacteristics
 from gripper_runtime.grasp_joint import UsdFixedJointOwner
@@ -156,6 +156,7 @@ class GraspManager:
         self.physx_observer = None
         self.capture_diagnostic_record = None
         self.capture_diagnostic_target_path = None
+        self._attachment_diagnostics = AttachmentPhysicsDiagnostics(self)
         self._close_command_generation = None
         self.released_material_handler = ReleasedMaterialHandler(
             lambda path: enable_material_gravity(self.stage, path),
@@ -196,6 +197,9 @@ class GraspManager:
     def _submit_release_diagnostic(self, record):
         if self.capture_diagnostic_writer is not None:
             self.capture_diagnostic_writer.submit(record)
+
+    def observe_capture_diagnostic_step(self, dt, physics_step):
+        self._attachment_diagnostics.observe(dt, physics_step)
 
     def set_diagnostic_observers(self, writer=None, physx_observer=None):
         self.capture_diagnostic_writer = writer
@@ -644,6 +648,18 @@ class GraspManager:
         self._pending_release_command = (generation, width_mm)
         return True
 
+    @property
+    def close_failure_reason(self):
+        return self._close_transaction_failure_reason
+
+    def attachment_owned(self):
+        return bool(self.joint_owner.has_owned_joint())
+
+    def reject_close_transaction(self, reason):
+        self._capture_transaction_armed = False
+        self._mark_unknown(reason)
+        self._diagnostic_outcome(reason, capture_result='not_attempted')
+
     def cancel_tool_transaction(self):
         """Cancel pending actuation/capture; attachment cleanup retains its existing owner."""
         self._capture_transaction_armed = False
@@ -792,6 +808,7 @@ class GraspManager:
             cleanup_ok = self.reconcile_stale_owned_joint()
         self.ready = False
         self._mark_unknown("runtime_shutdown")
+        self.finalize_capture_diagnostic("runtime_session_shutdown_before_step_window_complete")
         return cleanup_ok
 
     def reset_for_simulation_stop(self):
