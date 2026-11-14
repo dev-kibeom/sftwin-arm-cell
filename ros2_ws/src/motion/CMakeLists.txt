@@ -342,12 +342,17 @@ if(BUILD_TESTING)
 endif()
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets/robots/"
-  DESTINATION share/${PROJECT_NAME}/assets/robots)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets/"
+  DESTINATION share/${PROJECT_NAME}/assets)
 install(PROGRAMS scripts/load_static_scene.py scripts/generate_static_scene.py
   DESTINATION lib/${PROJECT_NAME})
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
+  ament_add_gtest_executable(selected_model_probe tests/test_selected_model.cpp)
+  ament_target_dependencies(selected_model_probe moveit_ros_planning_interface moveit_core rclcpp)
+  target_link_libraries(selected_model_probe nlohmann_json::nlohmann_json)
+  ament_add_pytest_test(test_selected_model tests/test_selected_model.py
+    ENV "ARM_CELL_MODEL_PROBE=$<TARGET_FILE:selected_model_probe>")
   foreach(asset_test test_robot_description test_moveit_configuration test_static_scene_loader test_console_output_format)
     ament_add_pytest_test(${asset_test} tests/${asset_test}.py)
   endforeach()

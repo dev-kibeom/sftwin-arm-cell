@@ -289,3 +289,11 @@ for record interpretation.
 Project-owned code uses the [MIT License](LICENSE). Robot models and third-party
 assets retain their upstream terms. Check [Third-Party Notices](THIRD_PARTY_NOTICES.md)
 and retained licenses and source information before redistribution.
+
+### RB5-850E Robot selection
+
+The default remains the user-verified M0609 + Robotiq 2F-85 + `isaac_m0609` Cell.
+The launcher also registers RB5-850E with the same Tool and Cell, explicitly marked
+**live validation pending**. See the [RB5 preparation and user validation guide](infra/isaac_sim/RB5_850.md).
+Model/profile, static USD and MoveIt checks do not certify live joint control, HOME,
+attachment, PICK/PLACE, PnP or recovery. Those live checks are performed by the user.

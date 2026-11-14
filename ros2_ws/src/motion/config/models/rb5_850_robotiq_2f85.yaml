@@ -1,0 +1,17 @@
+urdf: package://arm_cell_motion/assets/robots/rb5_850/urdf/rb5_850_robotiq_2f85.urdf.xacro
+mesh_root: package://arm_cell_motion/assets/robots/rb5_850/meshes
+semantic: package://arm_cell_motion/config/moveit/rb5_850_robotiq_2f85.srdf
+robot_id: rb5_850
+tool_id: robotiq_2f85
+model_id: rb5_850_robotiq_2f85
+planning_group: arm
+isaac:
+  articulation_root: root_joint
+  articulation_base: base_link
+  revolute_joints:
+  - gripper_robotiq_85_left_knuckle_joint
+  - gripper_robotiq_85_right_knuckle_joint
+  - gripper_robotiq_85_left_inner_knuckle_joint
+  - gripper_robotiq_85_right_inner_knuckle_joint
+  - gripper_robotiq_85_left_finger_tip_joint
+  - gripper_robotiq_85_right_finger_tip_joint

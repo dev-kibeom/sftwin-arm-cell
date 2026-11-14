@@ -225,7 +225,8 @@ def test_sf_grasp_tcp_matches_nominal_contact_geometry():
         PACKAGE_ROOT.parents[2]
         / "assets/robots/m0609_robotiq_2f85/urdf/m0609_robotiq_2f85.urdf.xacro"
     )
-    root = ET.parse(urdf).getroot()
+    import xacro
+    root = ET.fromstring(xacro.process_file(str(urdf)).toxml())
     joint = root.find(".//joint[@name='gripper_to_sf_grasp_tcp']/origin")
     assert joint is not None
     xyz = [float(value) for value in joint.attrib["xyz"].split()]

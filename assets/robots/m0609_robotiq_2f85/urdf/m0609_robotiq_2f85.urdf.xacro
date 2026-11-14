@@ -13,7 +13,7 @@
     <xacro:include filename="m0609_tool_adapter.xacro"/>
 
     <!-- Vendored Robotiq 2F-85 -->
-    <xacro:include filename="robotiq_2f_85_macro.urdf.xacro"/>
+    <xacro:include filename="../../../tools/robotiq_2f85/urdf/assembly.xacro"/>
 
 
     <!-- =========================================================
@@ -40,36 +40,6 @@
          Robotiq 2F-85
          ========================================================= -->
 
-    <xacro:robotiq_gripper
-        name="robotiq_2f85"
-        prefix="gripper_"
-        parent="tool_mount"
-
-        mesh_dir="$(arg mesh_root)/robotiq"
-
-        sim_gazebo="false"
-        sim_isaac="false">
-
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-
-    </xacro:robotiq_gripper>
-
-
-    <!-- =========================================================
-         SF-Twin canonical grasp TCP
-         ========================================================= -->
-
-    <link name="sf_grasp_tcp"/>
-
-    <joint name="gripper_to_sf_grasp_tcp" type="fixed">
-        <parent link="gripper_robotiq_85_base_link"/>
-        <child link="sf_grasp_tcp"/>
-
-        <!-- WU-14 validation TCP: nominal 70 mm opening, derived from the
-             midpoint of the inward-facing fingertip collision surfaces at
-             mimic q=0.176470588. The TCP orientation is unchanged: +Z is
-             the insertion direction used by the configured Motion profile. -->
-        <origin xyz="0 -0.0003749994 0.1357482403" rpy="0 0 0"/>
-    </joint>
+    <xacro:robotiq_2f85_assembly mesh_dir="$(arg mesh_root)/robotiq"/>
 
 </robot>

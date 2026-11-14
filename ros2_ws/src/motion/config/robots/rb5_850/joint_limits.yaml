@@ -1,0 +1,2 @@
+# Use position/velocity bounds from the pinned vendor URDF.
+joint_limits: {}

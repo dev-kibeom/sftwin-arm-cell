@@ -26,7 +26,6 @@ from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
-import xacro
 import yaml
 from arm_cell_bringup.runtime import load_profile
 
@@ -707,9 +706,12 @@ def compose(context):
         raise RuntimeError("HOME and arm joint counts must match")
     use_sim_time = config.get("use_sim_time", True)
     model = config['model_configuration']
-    robot_description = xacro.process_file(
-        model['urdf'], mappings={'mesh_root': model['mesh_root']},
-    ).toxml()
+    description_spec = importlib.util.spec_from_file_location(
+        'motion_robot_description',
+        Path(get_package_share_directory('arm_cell_motion')) / 'launch/robot_description.py')
+    description_module = importlib.util.module_from_spec(description_spec)
+    description_spec.loader.exec_module(description_module)
+    robot_description = description_module.load_robot_description(model['urdf'], model['mesh_root'])
     robot_description_semantic = Path(model['semantic']).read_text()
     kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())
     kinematics_parameters = {
