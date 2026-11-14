@@ -75,7 +75,7 @@ def merge_owned(destination, values, section):
 DEFAULT_PROFILES = {
     'robot': 'package://arm_cell_motion/config/robots/m0609.yaml',
     'tool': 'package://arm_cell_motion/config/tools/robotiq_2f85.yaml',
-    'cell': 'package://arm_cell_bringup/config/cells/isaac_m0609.yaml',
+    'cell': 'package://arm_cell_bringup/config/cells/isaac_pnp_cnc.yaml',
 }
 
 

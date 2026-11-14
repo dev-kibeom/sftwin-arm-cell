@@ -38,7 +38,7 @@ Camera Publisher는 **하나의 논리 RGB-D Sensor**의 원본 Frame Identity�
 
 ## 3. 논리 센서 정체성과 좌표계
 
-선택된 Cell Profile이 논리 Camera Prim·설치·센서 구성·Topic·Frame 및 Calibration 참조를 소유한다. Bringup이 조립한 Runtime Configuration을 Scene·Graph·Snapshot과 ROS Overlay가 함께 소비한다. 현재 M0609 Cell은 다음 단일 논리 Sensor Identity를 제공한다.
+선택된 Cell Profile이 논리 Camera Prim·설치·센서 구성·Topic·Frame 및 Calibration 참조를 소유한다. Bringup이 조립한 Runtime Configuration을 Scene·Graph·Snapshot과 ROS Overlay가 함께 소비한다. 현재 PnP_CNC Cell은 다음 단일 논리 Sensor Identity를 제공한다.
 
 ```text
 /World/SF_Twin_Cell/Vision/Camera_Sensor

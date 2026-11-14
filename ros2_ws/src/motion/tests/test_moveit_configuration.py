@@ -133,15 +133,15 @@ def test_validation_profile_selects_time_parameterization_and_acceleration_limit
 def test_static_scene_artifact_matches_canonical_manifest():
     share = Path(get_package_share_directory("arm_cell_motion"))
     repo_manifest = next(
-        parent / "config/m0609_static_environment.json"
+        parent / "config/pnp_cnc_static_environment.json"
         for parent in [Path.cwd(), *Path(__file__).resolve().parents]
-        if (parent / "config/m0609_static_environment.json").is_file()
+        if (parent / "config/pnp_cnc_static_environment.json").is_file()
     )
     manifest = json.loads(repo_manifest.read_text())
     selection = json.loads(
-        (share / "config/moveit/m0609_static_scene_selection.json").read_text()
+        (share / "config/moveit/pnp_cnc_static_scene_selection.json").read_text()
     )
-    artifact = json.loads((share / "config/moveit/m0609_static_scene.json").read_text())
+    artifact = json.loads((share / "config/moveit/pnp_cnc_static_scene.json").read_text())
     generator = load_generator()
     by_id = generator.validate(manifest, selection)
     assert [obj["id"] for obj in artifact["objects"]] == selection["selected_ids"]
@@ -165,14 +165,14 @@ def test_static_scene_artifact_matches_canonical_manifest():
 
 def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
     share = Path(get_package_share_directory("arm_cell_motion"))
-    artifact = json.loads((share / "config/moveit/m0609_pnp_static_scene.json").read_text())
+    artifact = json.loads((share / "config/moveit/pnp_cnc_validation_static_scene.json").read_text())
     selection = json.loads(
-        (share / "config/moveit/m0609_pnp_static_scene_selection.json").read_text()
+        (share / "config/moveit/pnp_cnc_validation_static_scene_selection.json").read_text()
     )
     repo_manifest = next(
-        parent / "config/m0609_static_environment.json"
+        parent / "config/pnp_cnc_static_environment.json"
         for parent in [Path.cwd(), *Path(__file__).resolve().parents]
-        if (parent / "config/m0609_static_environment.json").is_file()
+        if (parent / "config/pnp_cnc_static_environment.json").is_file()
     )
     manifest = json.loads(repo_manifest.read_text())
     by_id = load_generator().validate(manifest, selection)
@@ -209,7 +209,7 @@ def test_camera_drop_bracket_uses_canonical_static_geometry():
     resolver, repo_root = load_isaac_manifest_resolver()
     objects = resolver["load_canonical_static_geometry"](project_root=repo_root)
     manifest = json.loads(
-        (repo_root / "config/m0609_static_environment.json").read_text()
+        (repo_root / "config/pnp_cnc_static_environment.json").read_text()
     )
     bracket = next(
         obj for obj in manifest["objects"] if obj["id"] == "camera_drop_bracket"
@@ -221,7 +221,7 @@ def load_isaac_manifest_resolver():
     repo_root = Path(__file__).resolve().parents[4]
     source = (
         repo_root
-        / "infra/isaac_sim/scripts/m0609_cell/scene_builder/static_environment.py"
+        / "infra/isaac_sim/scripts/pnp_cnc_cell/scene_builder/static_environment.py"
     )
     tree = ast.parse(source.read_text())
     selected = [
@@ -255,9 +255,9 @@ def test_isaac_builder_resolves_manifest_from_repository_source_path():
     assert (
         resolver["canonical_manifest_path"](
             script_path=repo_root
-            / "infra/isaac_sim/scripts/m0609_cell/runtime_steps/setup_scene.py"
+            / "infra/isaac_sim/scripts/pnp_cnc_cell/runtime_steps/setup_scene.py"
         )
-        == repo_root / "config/m0609_static_environment.json"
+        == repo_root / "config/pnp_cnc_static_environment.json"
     )
 
 
@@ -271,7 +271,7 @@ def test_isaac_builder_script_editor_path_requires_and_accepts_explicit_root(
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(repo_root))
     assert (
         resolver["canonical_manifest_path"](script_path=temporary_script)
-        == repo_root / "config/m0609_static_environment.json"
+        == repo_root / "config/pnp_cnc_static_environment.json"
     )
 
 

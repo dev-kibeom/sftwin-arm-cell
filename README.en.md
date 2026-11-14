@@ -167,7 +167,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 **4. Start the cell.** Button labels currently appear in Korean.
 
 1. Select Robot, Tool, Cell, and Backend. The supported combination is M0609 +
-   Robotiq 2F-85 + the `isaac_m0609` Cell.
+   Robotiq 2F-85 + the `isaac_pnp_cnc` Cell.
 2. Click `Isaac 시작` (Start Isaac). Wait for the scene, Timeline, and After Playing initialization.
 3. Click `ROS 2 시작` (Start ROS 2). For detailed logs, select `ROS 2 디버그 모드` before starting.
 4. Check the camera/Vision views in Isaac Sim's UI Hub and errors in both run terminals.
@@ -292,8 +292,21 @@ and retained licenses and source information before redistribution.
 
 ### RB5-850E Robot selection
 
-The default remains the user-verified M0609 + Robotiq 2F-85 + `isaac_m0609` Cell.
+The default remains the user-verified M0609 + Robotiq 2F-85 + `isaac_pnp_cnc` Cell.
 The launcher also registers RB5-850E with the same Tool and Cell, explicitly marked
 **live validation pending**. See the [RB5 preparation and user validation guide](infra/isaac_sim/RB5_850.md).
 Model/profile, static USD and MoveIt checks do not certify live joint control, HOME,
 attachment, PICK/PLACE, PnP or recovery. Those live checks are performed by the user.
+
+### Plugins and Stage naming
+
+Robot Plugins own model-specific joints, HOME and drive settings. Tool Plugins own end-effector
+actuation and Capture. Cell Plugins own the environment, camera, material supply and device placement.
+Model Assemblies define physical Robot/Tool composition and model-internal bindings.
+The shared `PnP_CNC` Cell uses `config/cells/isaac_pnp_cnc.yaml`,
+`infra/isaac_sim/scripts/pnp_cnc_cell/` and `config/pnp_cnc_static_environment.json`;
+common execution remains in `isaac_runtime/`.
+Both supported Robots load their selected Assembly under `/World/SF_Twin_Cell/ARM`.
+`ARM` denotes an independently installed fixed robot arm; `robot_id` and `model_id` retain model identity.
+The Cell's `isaac.robot_prim_path` alone configures placement; Graph, Tool and Capture consume the same binding.
+Model assets, HOME and drive settings are preserved. Live PnP and recovery on this revision require user testing.

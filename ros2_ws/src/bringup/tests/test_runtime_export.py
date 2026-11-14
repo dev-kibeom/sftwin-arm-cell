@@ -10,7 +10,7 @@ import pytest
 from arm_cell_bringup.runtime import export_runtime_configuration
 
 ROOT = Path(__file__).resolve().parents[4]
-CELL = ROOT / 'infra/isaac_sim/scripts/m0609_cell'
+CELL = ROOT / 'infra/isaac_sim/scripts/pnp_cnc_cell'
 PROFILE = ROOT / 'ros2_ws/src/bringup/config/operational_profile.yaml'
 
 

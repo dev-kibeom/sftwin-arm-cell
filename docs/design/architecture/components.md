@@ -78,7 +78,8 @@ Task Execution → Motion은 단방향 C++ MotionPort 의존이며 그 경계에
 | Cell | 설비 Geometry·배치, Camera 설치·센서 구성과 Calibration 참조, Material Supply의 Stage 배치·공급 지지면, 작업 위치 및 설비에 따른 경로 공간 제약 |
 | Motion | IK·Planning·경로 탐색·실행 정책 및 계획용 시간 매개화 설정 |
 
-Model Assembly는 결합 모델의 Identity·Planning Group과 Backend에서 사용하는 모델 내부 Binding을 소유한다. Cell은 Stage 안의 Robot 배치를 소유하며 모델 내부 Binding과 구분한다.
+Model Assembly는 결합 모델의 Identity·Planning Group과 Backend에서 사용하는 모델 내부 Binding을 소유한다. Cell은 Stage 안의 Robot 배치를 소유하며 모델 내부 Binding과 구분한다. Stage Prim은 모델 식별자가 아니라 설치된 장치의 역할과 물리적 소속을 나타낸다. 독립 고정형 로봇팔은 `ARM`, 이동 로봇은 `AMR`, 다른 플랫폼에 탑재된 팔은 `Manipulator`, 휴머노이드 전체는 `Humanoid`, 말단 도구는 `Tool`, 작업 환경은 `Cell`로 구분한다. 현재 지원하는 고정형 Robot의 설치 경로는 Cell의 `cell.isaac.robot_prim_path`가 단독 소유하며, 모델 식별은 Robot의 `robot_id`와 Assembly의 `model_id`를 유지한다. 이 명명은 AMR·탑재형 팔·Humanoid의 실행 지원을 뜻하지 않는다.
+
 
 Robot·Tool의 논리 설정과 결합 URDF/SRDF 모델 자산의 선택은 구분한다. Bringup의 배포 설정이 두 논리 Profile과 호환되는 결합 모델을 선택하며, Robot이나 Tool이 특정 결합 모델을 역으로 소유하지 않는다. 기존 M0609+2F85 모델의 내부 분해는 요구하지 않는다. 배포는 실행 목적에 필요한 Profile 입력을 명시적으로 선택하며 공통 설정 조립은 자재 Fixture의 존재나 파라미터 이름으로 입력을 선택하지 않는다.
 

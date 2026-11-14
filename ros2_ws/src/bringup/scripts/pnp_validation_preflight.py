@@ -56,8 +56,8 @@ def validate_repository(root, *, environ=None):
         root.is_dir() and (root / ".git").exists(), "canonical repo path is invalid"
     )
     required_files = (
-        "infra/isaac_sim/scripts/m0609_cell/shared/environment_setup.py",
-        "infra/isaac_sim/scripts/m0609_cell/pnp_validation/entrypoints/start_validation.py",
+        "infra/isaac_sim/scripts/pnp_cnc_cell/shared/environment_setup.py",
+        "infra/isaac_sim/scripts/pnp_cnc_cell/pnp_validation/entrypoints/start_validation.py",
         "ros2_ws/src/bringup/launch/arm_cell_pnp_validation.launch.py",
         "ros2_ws/src/bringup/scripts/register_pnp_fixture.py",
         "ros2_ws/src/bringup/scripts/pnp_validation_preflight.py",

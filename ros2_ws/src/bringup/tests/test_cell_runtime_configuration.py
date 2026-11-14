@@ -13,7 +13,7 @@ CONFIG = Path(__file__).resolve().parents[1] / 'config'
 
 def test_export_preserves_selected_cell_and_sensor_consumers(tmp_path):
     profile = yaml.safe_load((CONFIG / 'operational_profile.yaml').read_text())
-    cell = yaml.safe_load((CONFIG / 'cells/isaac_m0609.yaml').read_text())
+    cell = yaml.safe_load((CONFIG / 'cells/isaac_pnp_cnc.yaml').read_text())
     cell['camera']['prim_path'] = '/World/Selected/Camera'
     cell['camera']['mount_prim_path'] = '/World/Selected/Mount'
     cell['camera']['rgb_topic'] = '/selected/rgb'
@@ -58,7 +58,7 @@ config = load_runtime_configuration()
 profile = MaterialSupplyProfile.from_mapping(config['cell']['material_supply']['profile'], config['vision'], config['material_definitions'])
 assert profile.spawn_height_above_shelf_m == 0.17
 """
-    cell_modules = CONFIG.parents[3] / 'infra/isaac_sim/scripts/m0609_cell'
+    cell_modules = CONFIG.parents[3] / 'infra/isaac_sim/scripts/pnp_cnc_cell'
     result = subprocess.run([sys.executable, '-I', '-c', code, str(cell_modules), str(path)],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
@@ -66,7 +66,7 @@ assert profile.spawn_height_above_shelf_m == 0.17
 
 def test_composition_rejects_camera_calibration_resolution_mismatch(tmp_path):
     profile = yaml.safe_load((CONFIG / 'operational_profile.yaml').read_text())
-    cell = yaml.safe_load((CONFIG / 'cells/isaac_m0609.yaml').read_text())
+    cell = yaml.safe_load((CONFIG / 'cells/isaac_pnp_cnc.yaml').read_text())
     cell['camera']['resolution'] = [640, 360]
     cell_path = tmp_path / 'cell.yaml'
     cell_path.write_text(yaml.safe_dump(cell))
@@ -86,3 +86,14 @@ def test_supply_profile_and_shared_support_dimensions_are_exported():
         assert detector['support_region_dimensions_m'] == support['geometry']['dimensions_m'][:2]
     expected = yaml.safe_load((CONFIG.parents[3] / 'infra/isaac_sim/config/material_supply.yaml').read_text())
     assert supply['profile'] == expected
+
+
+@pytest.mark.parametrize('profile_name', ['operational_profile.yaml', 'rb5_850_profile.yaml'])
+def test_supported_robots_share_role_based_stage_installation(tmp_path, profile_name):
+    path = export_runtime_configuration(CONFIG / profile_name, tmp_path / 'runtime.json')
+    config = load_profile(path)
+    assert config['cell']['isaac']['robot_prim_path'] == '/World/SF_Twin_Cell/ARM'
+    assert config['cell']['display_name'] == 'PnP_CNC'
+    assert config['cell']['world_to_base'] == {
+        'x': 0.15, 'y': -0.15, 'z': 0.68, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0,
+    }

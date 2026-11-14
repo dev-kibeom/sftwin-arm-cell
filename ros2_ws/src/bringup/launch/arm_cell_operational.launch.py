@@ -160,11 +160,11 @@ def project_checkout_root():
         candidate = candidate.resolve()
         for root in (candidate, *candidate.parents):
             if (root / "ros2_ws/src").is_dir() and (
-                root / "infra/isaac_sim/scripts/m0609_cell"
+                root / "infra/isaac_sim/scripts/pnp_cnc_cell"
             ).is_dir():
                 return root
             if (root / "src").is_dir() and (
-                root.parent / "infra/isaac_sim/scripts/m0609_cell"
+                root.parent / "infra/isaac_sim/scripts/pnp_cnc_cell"
             ).is_dir():
                 return root.parent
     return Path.cwd()
