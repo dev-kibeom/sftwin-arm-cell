@@ -213,12 +213,6 @@ Isaac·ROS가 기존 정책으로 생산하는 진단·디버깅 기록, Kit 로
 목록과 조합 판정은 GUI 위젯에 고정하지 않습니다. 새 조합에는 실제 어댑터 지원과
 production 배포 Profile이 필요하며, Isaac 지원을 확장할 때 Launcher의 지원 판정도
 함께 갱신합니다. 기존 CLI 및 Docker 실행 방법은 아래 안내를 그대로 사용할 수 있습니다.
-Isaac 없이 GUI 회귀 테스트를 실행하려면 같은 Python 환경에 `pytest`를 설치합니다.
-
-```bash
-python3 -m pip install pytest
-QT_QPA_PLATFORM=offscreen python3 -m pytest -q infra/launcher/tests
-```
 
 ### 설정 export와 Script Editor 실행
 
