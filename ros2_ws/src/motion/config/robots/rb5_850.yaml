@@ -25,3 +25,11 @@ joint_policy:
   - elbow
 isaac:
   joint_drive_stiffness_scales: {}
+  # Simulation tuning trial, not manufacturer rated torque. Live validation required.
+  joint_drive_max_forces:
+    base: 1000.0
+    shoulder: 1000.0
+    elbow: 1000.0
+    wrist1: 1000.0
+    wrist2: 1000.0
+    wrist3: 1000.0
