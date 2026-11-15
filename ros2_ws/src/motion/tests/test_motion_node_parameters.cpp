@@ -284,3 +284,22 @@ TEST(MotionNodeParameters, LoadsCellClearanceObjectSelectionAsStaticInput)
   node.reset();
   rclcpp::shutdown();
 }
+
+TEST(MotionNodeParameters, AcceptsReadOnlyGripForceStartupAndRejectsUpdates)
+{
+  if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
+  auto node = std::make_shared<arm_cell_motion::MotionNode>(
+    std::make_shared<arm_cell_motion::FakeMotionBackend>());
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  descriptor.read_only = true;
+  EXPECT_NO_THROW(node->declare_parameter<std::string>(
+      "grip_force.actuation", "physics", descriptor));
+  EXPECT_NO_THROW(node->declare_parameter<double>(
+      "grip_force.materials.TestCube.mass_kg", 0.4, descriptor));
+  EXPECT_FALSE(node->set_parameter(
+      rclcpp::Parameter("grip_force.actuation", "logical")).successful);
+  EXPECT_FALSE(node->set_parameter(
+      rclcpp::Parameter("grip_force.materials.TestCube.mass_kg", 0.5)).successful);
+  node.reset();
+  rclcpp::shutdown();
+}
