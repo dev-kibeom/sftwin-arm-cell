@@ -211,6 +211,11 @@ class StageCaptureQuery:
             "rejection_reason": str(reason),
         }
 
+    @property
+    def selected_object_path(self):
+        """Reference-associated identity resolved by query, never contact selection."""
+        return self._selected_object_path
+
     def reference_diagnostics(self):
         return self._last_reference_diagnostics
 

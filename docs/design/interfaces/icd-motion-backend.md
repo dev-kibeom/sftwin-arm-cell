@@ -40,7 +40,34 @@ Tool 작업 의도 GRASP는 자재 확보 요청, RELEASE는 자재 해제 요�
 
 Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction, force_setting을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
 
-Fixed Attach에서 Tool별 Qualification은 해당 접촉·확보 조건을 제공하고 기존 Capture 소유자가 Attach를 완료한 뒤에만 HELD를 발행한다. RELEASE도 Tool별 해제 완료와 소유 Attachment 제거가 모두 확인되어야 RELEASED다. 명시적으로 선택한 Physical Grasp는 Fixed Joint를 생성하지 않으며 물리적 접촉·마찰에 의존한다. 선택된 유효 Capture Reference의 예상 폭과 실제 관절 위치·속도·닫힘 목표·지속 정지 조건을 함께 사용해 HELD를 추정한다. 추정 이후에도 실제 관측을 계속 평가하며 근거가 소실되면 UNKNOWN을 전달한다. 정지 또는 접촉 하나만으로 보유를 확정하지 않으며 자재 Ground Truth를 뜻하지 않는다. ROS status의 grasp는 보유 관측이고 attached는 실제 Attachment 소유 여부이므로 Physical HELD는 attached=0과 양립한다. Physical OPEN 완료는 실제 관절 관측으로 확인한다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만 주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
+모드별 Qualification·보유·Attachment 의미는 아래 표를 따른다. ROS status의 grasp는 보유 관측이고
+attached는 실제 Fixed Joint 소유 여부다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만
+주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
+
+### Tool Grasp Mode와 Holding / Attachment
+
+모드는 기존 Actuator/Grasp 조합으로 고정되며 실행 중 전환·실패 시 Fallback을 하지 않는다.
+
+| Mode | 구동과 Qualification | HELD 의미 | Attachment |
+|---|---|---|---|
+| `logical_snap` | Logical 구동·기존 Capture Qualification | Fixed Joint Attach 완료 확인 | 있음 |
+| `physical_snap` | PhysX 구동·참조와 동일 대상의 좌우 접촉 반력·폭·위치 안정성 | Qualification 뒤 Fixed Joint Attach 완료 확인 | 있음 |
+| `physical_real` | PhysX 구동·Tool Object Detection·예상 폭 | 목표 미도달·지속 정지·폭에 근거한 보유 추정 | 없음 |
+
+Holding Observation(HELD/RELEASED/UNKNOWN)은 Attachment Ownership과 별개다. Fixed Joint가 없다는
+이유로 Real의 HELD를 무효화하지 않는다. Snap의 Qualification은 Attach 완료 관측을 대신하지 못한다.
+두 Snap은 OPEN/Detach 완료, Real은 실제 OPEN 완료 후 RELEASED다. Real의 CLOSE/OPEN 진행 중과
+보유 근거 상실은 UNKNOWN이며 관측만으로 낙하를 확정하여 RELEASED로 바꾸지 않는다.
+Real의 Object Detection은 순간 속도 진동만으로 정지를 거부하지 않고 지속적인 관절 위치 안정성과
+closing target 미도달을 해석한다. Moving, Stopped Opening, At Requested Position은 HELD 근거가 아니다.
+Simulation은 이 상태를 관절 관측으로 추정하고 Hardware는 제조사 Detection을 제공할 수 있다.
+좌우 Fingertip 반력이나 자재 World Pose는 Hardware/Real 공통 관측의 필수 필드가 아니다.
+
+STOP은 pending 구동·검출을 취소하고 소유 Attachment는 기존 owner 규칙을 따른다.
+Reset/Shutdown은 각 모드의 구동·Attachment·Holding을 정리한다. 기존 fresh HELD/RELEASED 조건과
+상태 인터페이스·Timeout·Retry·Mission Gate를 유지한다. 자동 테스트는 상태 전이와 소유권을 검증하며
+실제 마찰 파지·운반 성공의 검증을 대신하지 않는다.
+
 
 ## 4. 상호운용 조건
 

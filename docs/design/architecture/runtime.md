@@ -136,3 +136,11 @@ sequenceDiagram
 - [Mission Cycle FDS](../components/orchestration/fds-mission-cycle.md) — Mission 수량·작업·실패·반복 의미
 - [Controlled Recovery FDS](../components/orchestration/fds-controlled-recovery.md) — Safety 선점 후 업무 중단·복구 조정
 - [Safety Supervision FDS](../components/safety/fds-supervision.md) — 독립 Safety 판단과 직접 정지
+
+## Tool 파지 모드 실행 경계
+
+Tool Runtime은 실행 시작 시 기존 Actuator/Grasp 조합을 고정한다. Logical Snap과 Physical Snap은
+각각의 Qualification 뒤 같은 Attachment Owner를 사용하고, Physical Real은 Tool 관측으로 보유를
+추정하며 Attach 없이 유지한다. Session은 Detection을 재구현하지 않고 선택된 구현의 Holding과
+Attachment를 독립 전달한다. 구체적인 상태 의미는 [Motion Backend ICD](../interfaces/icd-motion-backend.md),
+역할 책임은 [Components](components.md)를 따른다. 실행 중 모드 교체나 다른 모드로의 Fallback은 없다.

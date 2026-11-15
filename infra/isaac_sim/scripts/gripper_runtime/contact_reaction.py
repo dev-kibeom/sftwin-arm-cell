@@ -2,7 +2,7 @@
 import math
 
 
-def finger_reactions(contacts, dt):
+def finger_reactions(contacts, dt, *, target_path=None, fingertip_paths=None):
     if contacts is None or not math.isfinite(dt) or dt <= 0:
         return None
     targets = {}
@@ -15,6 +15,10 @@ def finger_reactions(contacts, dt):
                 for side in ('left', 'right'):
                     suffix = '/gripper_robotiq_85_' + side + '_finger_tip_link'
                     if not path.endswith(suffix):
+                        continue
+                    if fingertip_paths is not None and path != fingertip_paths[0 if side == 'left' else 1]:
+                        continue
+                    if target_path is not None and contact[other] != target_path:
                         continue
                     root = path[:-len(suffix)]
                     if contact[other].startswith(root + '/'):

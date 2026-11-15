@@ -76,6 +76,7 @@ def tool_mode_choices(profile):
     runtime = profile['runtime']
     names = {tuple(mode['combination']): mode for mode in runtime.get('launcher_modes', [])}
     return [dict(combination=pair,
+                 id=names.get(tuple(pair), {}).get("id"),
                  label=names.get(tuple(pair), {}).get('label', ' / '.join(pair)),
                  description=names.get(tuple(pair), {}).get('description', ''))
             for pair in runtime.get('supported_combinations', [['logical', 'fixed_attach']])]

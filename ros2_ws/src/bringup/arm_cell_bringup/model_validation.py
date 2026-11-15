@@ -188,6 +188,9 @@ def tool_runtime_model(tool, joints, arm):
     combination = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
     if combination not in runtime.get('supported_combinations', [['logical', 'fixed_attach']]):
         raise ValueError(f'Unsupported Tool actuator/grasp combination: {combination}')
+    modes = [mode for mode in runtime.get('launcher_modes', []) if mode['combination'] == combination]
+    if modes and 'id' in modes[0]:
+        runtime['mode_id'] = modes[0]['id']  # Derived display identity, never an independent selector.
     if combination[0] != 'physics':
         return
     settings = runtime['physics']
@@ -226,8 +229,10 @@ def tool_runtime_model(tool, joints, arm):
             not all(finite_number(v) for v in torques) or not 0 < torques[0] <= torques[1] <= model[primary]['effort']):
         raise ValueError('Tool drive torque range must be positive and inside URDF limit')
 
-    for key in ('width_tolerance_mm', 'stopped_dwell_s', 'held_position_tolerance_rad',
-                'min_contact_force_per_finger_n'):
+    holding_keys = ['width_tolerance_mm', 'stopped_dwell_s', 'held_position_tolerance_rad']
+    if combination[1] == 'fixed_attach':
+        holding_keys.append('min_contact_force_per_finger_n')
+    for key in holding_keys:
         value = settings['holding'][key]
         if not finite_number(value) or value <= 0:
             raise ValueError(f'Tool holding {key} must be finite and positive')

@@ -75,9 +75,9 @@ def test_transient_stop_and_invalid_or_replaced_reference_drop_evidence():
     drive.pos = 0.4
     tick(result, gripper)
     drive.vel = 0.1
-    result._observer.snapshot = []
+    drive.pos += 0.03
     assert tick(result, gripper) is HoldingState.UNKNOWN
-    drive.vel = 0.
+    drive.vel, drive.pos = 0., 0.4
     result._observer = observer()
     for _ in range(10):
         tick(result, gripper)
@@ -110,7 +110,7 @@ def test_held_motion_loss_open_stop_reset_shutdown():
         tick(result, gripper)
     assert result.is_grasped
     drive.vel = 0.1
-    result._observer.snapshot = []
+    drive.pos += 0.03
     assert tick(result, gripper) is HoldingState.UNKNOWN
     drive.vel, drive.pos = 0., 0.43
     assert tick(result, gripper) is HoldingState.UNKNOWN
@@ -294,11 +294,11 @@ def test_repeated_reference_and_retirement_preserve_inference_identity_until_rea
     assert result.holding_observation().sequence == sequence
     assert result.diagnostics()['holding_inference']['execution_id'] == 'pick'
     drive.vel = 0.1
-    result._observer.snapshot = []
+    drive.pos += 0.03
     assert tick(result, gripper) is HoldingState.UNKNOWN
 
 
-def test_contact_reaction_and_stable_width_allow_solver_velocity_jitter():
+def test_real_contact_diagnostics_do_not_control_holding():
     result, gripper, drive = manager()
     close(result, gripper)
     for i in range(10):
@@ -308,7 +308,7 @@ def test_contact_reaction_and_stable_width_allow_solver_velocity_jitter():
     assert result.is_grasped
     result._observer.snapshot = [contact('left', (0.00001, 0., 0.)),
                                  contact('right', (-0.00001, 0., 0.))]
-    assert tick(result, gripper) is HoldingState.UNKNOWN
+    assert tick(result, gripper) is HoldingState.HELD
 
 
 def test_reaction_without_stable_aperture_never_confirms_held():
@@ -320,10 +320,11 @@ def test_reaction_without_stable_aperture_never_confirms_held():
         assert not result.is_grasped
 
 
-def test_missing_contact_observer_is_unknown_even_at_expected_width():
+def test_missing_contact_observer_does_not_block_real_detection():
     result, gripper, drive = manager()
     close(result, gripper)
     result._observer = None
     drive.pos = 0.4
     for _ in range(10):
-        assert tick(result, gripper) is HoldingState.UNKNOWN
+        tick(result, gripper)
+    assert result.is_grasped

@@ -11,9 +11,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class PhysicalGraspManager:
-    """Estimate holding from selected aperture and sustained fingertip reaction.
+    """Estimate holding from Tool object detection and the selected aperture.
 
-    This is simulation contact inference, never material ground truth.
+    This is Tool-state inference, never material ground truth.
     """
     def __init__(self, gripper, *, tool, stage=None, tcp_path=None, holding_settings=None, **unused):
         self.gripper, self.tool = gripper, tool
@@ -28,7 +28,6 @@ class PhysicalGraspManager:
         self._expected_width_mm = None
         self._reference_signature = None
         self._close_width_mm = None
-        self._stationary_position = None
         self._holding_dwell = 0.0
         self._finger_reactions_n = None
         self.holding_settings = holding_settings
@@ -126,16 +125,14 @@ class PhysicalGraspManager:
         if not self._close_reference_id or self._close_width_mm is None:
             return HoldingState.UNKNOWN
         try:
-            reactions = finger_reactions(self._observer.snapshot if self._observer else None, dt)
-            self._finger_reactions_n = reactions
             observation = self.gripper.observation()
-            pos, velocity = observation['actual_position_rad'], observation['actual_velocity_rad_s']
+            pos = observation['actual_position_rad']
             target = observation['target_position_rad']
             epsilon = observation['position_tolerance_rad']
             valid = (observation['command_direction'] == 'closing'
-                     and reactions is not None
-                     and min(reactions) >= self.holding_settings['min_contact_force_per_finger_n']
-                     and all(math.isfinite(v) for v in (pos, velocity, target))
+                     and observation['object_detection'] == 'stopped_closing'
+                     and observation['stopped_duration_s'] >= self.holding_settings['stopped_dwell_s']
+                     and all(math.isfinite(v) for v in (pos, target))
                      and target - pos > epsilon
                      and observation['lower_limit_rad'] + epsilon < pos < observation['upper_limit_rad'] - epsilon
                      and self.tool.capture.width_matches_reference(
@@ -144,13 +141,10 @@ class PhysicalGraspManager:
         except (KeyError, TypeError, ValueError, RuntimeError, ArithmeticError):
             valid = False
         if not valid:
-            self._holding_dwell, self._stationary_position = 0.0, None
+            self._holding_dwell = 0.0
             return HoldingState.UNKNOWN
-        if self._stationary_position is None or abs(pos - self._stationary_position) > self.holding_settings['held_position_tolerance_rad']:
-            self._stationary_position, self._holding_dwell = pos, 0.0
-        self._holding_dwell += max(0., float(dt))
-        return (HoldingState.HELD if self._holding_dwell >= self.holding_settings['stopped_dwell_s']
-                else HoldingState.UNKNOWN)
+        self._holding_dwell = observation['stopped_duration_s']
+        return HoldingState.HELD
 
     def note_open_release_command_applied(self, generation, width_mm):
         self.cancel_tool_transaction()
@@ -164,14 +158,23 @@ class PhysicalGraspManager:
         self._opening = False
         self._close_reference_id = None
         self._close_width_mm = None
-        self._stationary_position = None
         self._holding_dwell = 0.0
         self._finger_reactions_n = None
         self._record(HoldingState.UNKNOWN)
 
     def update(self, dt):
+        self._finger_reactions_n = None
         if self._observer is not None:
-            self._observer.advance()
+            try:
+                self._observer.advance()
+                self._finger_reactions_n = finger_reactions(self._observer.snapshot, dt)
+            except Exception:
+                # Optional contact diagnostics never gate Tool object detection.
+                try:
+                    self._observer.close()
+                except Exception as error:
+                    LOGGER.warning('Optional contact observer cleanup failed: %s', error)
+                self._observer = None
         if not self.ready:
             self._record(HoldingState.UNKNOWN)
         elif self._opening and self.tool.capture.release_complete(self.gripper, None):
@@ -229,10 +232,11 @@ class PhysicalGraspManager:
 
     def diagnostics(self):
         return dict(holding_state=self._holding.state.value, attach_joint_path=None,
-                    holding_inference=dict(source='fingertip_reaction_and_selected_aperture',
-                        finger_reactions_n=self._finger_reactions_n,
+                    holding_inference=dict(source='tool_object_detection_and_selected_aperture',
                         execution_id=self._close_reference_id,
                         expected_width_mm=self._close_width_mm,
                         stationary_duration_s=self._holding_dwell),
+                    contact_diagnostics=dict(source='physx_contact_report',
+                        finger_reactions_n=self._finger_reactions_n),
                     actuator=self.gripper.observation(),
                     contacts=self._observer.snapshot if self._observer else None)

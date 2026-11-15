@@ -5,6 +5,7 @@ Dynamic Control is deprecated, but shipped and supported in Isaac Sim 5.1.
 """
 import math
 
+from gripper_runtime.position_stability import PositionStability
 from gripper_runtime.robotiq_actuator import GripperState
 
 
@@ -19,6 +20,7 @@ class Robotiq2F85PhysicsActuator:
     MAX_WIDTH_MM = 85.0
 
     def __init__(self, *, settings, joint_model, binding=None, runtime=None):
+        self.robot_root_path = getattr(binding, 'robot_path', None)
         self.settings = settings
         self.model = joint_model[settings['primary_joint']]
         self.lower, self.upper = self.model['lower'], self.model['upper']
@@ -37,6 +39,7 @@ class Robotiq2F85PhysicsActuator:
         self._target = None
         self._direction = None
         self._dwell = 0.0
+        self._stability = PositionStability()
         self.object_detection = 'unknown'
         self.speed_fraction = fraction(settings['speed_fraction'], 'speed_fraction')
         self.force_setting = fraction(settings['force_setting'], 'force_setting')
@@ -84,6 +87,7 @@ class Robotiq2F85PhysicsActuator:
         current = self.get_position()
         self._target = self.lower + q * (self.upper - self.lower)
         self._dwell = 0.0
+        self._stability.reset()
         self.object_detection = 'in_motion'
         self._direction = GripperState.CLOSING if q >= current else GripperState.OPENING
         self.state = self._direction
@@ -98,20 +102,27 @@ class Robotiq2F85PhysicsActuator:
             return False
         actual = self._read()
         tolerance = self.settings['position_tolerance_rad']
-        stopped = abs(actual.vel) <= self.settings['stopped_velocity_rad_s']
-        if abs(actual.pos - self._target) <= tolerance and stopped:
-            self._dwell = 0.0
+        stable_tolerance = self.settings.get('holding', {}).get(
+            'held_position_tolerance_rad', tolerance)
+        self._dwell = self._stability.update(actual.pos, dt, stable_tolerance)
+        completion_tolerance = tolerance
+        if self._direction is GripperState.OPENING and self._target == self.lower:
+            # Full OPEN must not terminate before the existing 0.1 mm release
+            # aperture criterion. The drive still approaches its actual target.
+            completion_tolerance = min(tolerance, 0.1 * (self.upper - self.lower) / self.MAX_WIDTH_MM)
+        at_target = abs(actual.pos - self._target) <= completion_tolerance
+        self.state = self._direction
+        self.object_detection = 'in_motion'
+        if at_target:
+            # Reaching the command is not object detection. Velocity is not a
+            # hard prerequisite: contact solver velocities can jitter at rest.
             self.object_detection = 'at_requested_position'
             self.state = GripperState.HOLDING
-        else:
-            self.state = self._direction
-            self.object_detection = 'in_motion'
-            self._dwell = self._dwell + max(0., float(dt)) if stopped else 0.0
-            if self._dwell >= self.settings['blocked_dwell_s']:
-                # Obstruction inferred from motion only; not an object/force sensor.
-                self.object_detection = 'stopped_closing' if self.state is GripperState.CLOSING else 'stopped_opening'
-                self.state = GripperState.HOLDING
-                # Keep the force-limited closing target to maintain physical load.
+        elif self._dwell >= self.settings['blocked_dwell_s']:
+            self.object_detection = ('stopped_closing' if self._direction is GripperState.CLOSING
+                                     else 'stopped_opening')
+            self.state = GripperState.HOLDING
+        # The force-limited target remains active even when obstruction is inferred.
         return self.is_moving
 
     def stop(self):
@@ -124,12 +135,14 @@ class Robotiq2F85PhysicsActuator:
         self.state = GripperState.HOLDING
         self.object_detection = 'unknown'
         self._dwell = 0.0
+        self._stability.reset()
 
     def cancel_motion(self):
         # Lifecycle Stop may run after Physics handles have become invalid.
         self._target = None
         self._direction = None
         self._dwell = 0.0
+        self._stability.reset()
         self.state = GripperState.IDLE
         self.object_detection = 'unknown'
 
