@@ -36,7 +36,9 @@ disturbance_speed_fraction: 0.2
 planning_max_acceleration_rad_s2: 5.0
 place_candidate_planning_time_s: 2.0
 qualification_total_planning_time_s: 60.0
-holding_confirmation_timeout_ms: 2000
+# Wall-clock budget includes physical finger travel and simulation-time settling.
+# Return immediately on fresh Holding; this is not an added dwell.
+holding_confirmation_timeout_ms: 4000
 motion_progress_stall_timeout_s: 60.0
 cartesian_tcp_orientation_tolerance_rad: 0.08726646259971647
 trajectory_goal_tolerance_rad: 0.03
