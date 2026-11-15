@@ -214,3 +214,14 @@ URDF 연동 파생·configuration export, 두 Robot의 HOME·Profile 보존을 �
 - Physics + Fixed Attach의 실제 접촉 정지 이후 Capture Qualification 가능 여부는 별도 확인.
 
 실제 Isaac Physics tick을 실행한 파지/접촉/하중 유지 검증은 이번 자동 검증의 완료 주장에 포함하지 않는다.
+
+## Holding 대기 시간 예산
+
+운영 Motion 설정의 기존 `holding_confirmation_timeout_ms`는 **4000 ms wall clock**이다.
+CLOSE 이후 손가락 이동과 Physics Step dt로 누적하는 정지 관측이 모두 이 예산 안에 들어야 한다.
+시뮬레이션이 실제 시간보다 느리면 동일한 물리 이동·dwell에도 더 긴 wall time이 필요하다.
+이는 추가 dwell이 아니며 fresh HELD/RELEASED가 확인되면 즉시 진행한다. 같은 예산은 세 모드와
+OPEN 후 RELEASED 확인에도 적용되므로 실패 시 최대 대기도 늘어난다. Validation Profile의 별도
+예산은 변경하지 않는다. Object Detection·폭·반력·신선도 조건은 완화하지 않는다.
+4초는 관측된 실행을 위한 초기 운영 조정값이며 임의의 simulation slowdown을 보장하지 않는다.
+실제 라이브 테스트로 CLOSE→HELD와 OPEN→RELEASED, 보유·운반을 확인해야 한다.
