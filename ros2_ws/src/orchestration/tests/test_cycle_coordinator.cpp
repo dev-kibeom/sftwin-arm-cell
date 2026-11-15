@@ -1897,30 +1897,43 @@ TEST(CycleCoordinatorTest, CompletesExactlyTheRequestedQuantityWithoutDuplicateH
   EXPECT_EQ(fixture.motion_tasks[4], MotionTaskType::TASK_TYPE_PLACE);
 }
 
-TEST(CycleCoordinatorTest, UnresolvedPickReleaseDoesNotRequestHomeOrReacquisition)
+TEST(CycleCoordinatorTest, UnconfirmedReleaseRetriesWithHomeAndNewAcquisition)
 {
   Fixture fixture;
   int acquisitions = 0;
+  int pnp_calls = 0;
   fixture.vision = [&](const DetectTarget::Request &) {++acquisitions; return found_target();};
+  fixture.motion_status = []() {
+      Coordinator::MotionStatus status;
+      status.execution_state = Coordinator::MotionStatus::MOTION_STATE_IDLE;
+      status.holding_state = Coordinator::MotionStatus::HOLDING_UNKNOWN;
+      return std::optional<Coordinator::MotionStatus>{status};
+    };
   auto callbacks = fixture.make_callbacks();
-  callbacks.execute_pnp_with_feedback = [](
+  callbacks.execute_pnp_with_feedback = [&pnp_calls](
     const Fixture::PnpAction::Goal &, const Coordinator::PnpFeedbackFn &) {
       Coordinator::PnpResult result;
-      result.outcome = Fixture::PnpAction::Result::PNP_OUTCOME_FAILED;
-      result.material_placed = false;
-      result.detail_code.value = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
-      result.diagnostic_detail = "held_confirmation;release_confirmation_failed";
-      result.action_terminal = "ABORTED";
+      const bool retry = ++pnp_calls == 1;
+      result.outcome = retry ? Fixture::PnpAction::Result::PNP_OUTCOME_RETRYABLE :
+        Fixture::PnpAction::Result::PNP_OUTCOME_COMPLETED;
+      result.material_placed = !retry;
+      result.detail_code.value = retry ? MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE :
+        MotionTaskResultCode::TASK_RESULT_SUCCESS;
+      result.diagnostic_detail = retry ? "held_confirmation;release_confirmation_failed" : "";
+      result.goal_uuid = "pnp-" + std::to_string(pnp_calls);
+      result.action_terminal = "SUCCEEDED";
       result.result_code_available = true;
       return result;
     };
   Coordinator coordinator(std::move(callbacks));
   const auto result = coordinator.execute("target_fixture", 1U);
-  EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_MOTION_ERROR);
-  EXPECT_EQ(result.processed_count, 0U);
-  EXPECT_EQ(acquisitions, 1);
-  // The only HOME is Mission initialization, before this PnP failure.
-  EXPECT_EQ(fixture.motion_tasks, (std::vector<uint8_t>{MotionTaskType::TASK_TYPE_GO_HOME}));
+  EXPECT_EQ(result.exit_reason.value, MissionExitReason::MISSION_EXIT_QUANTITY_REACHED);
+  EXPECT_EQ(result.processed_count, 1U);
+  EXPECT_EQ(acquisitions, 2);
+  EXPECT_EQ(pnp_calls, 2);
+  EXPECT_EQ(
+    fixture.motion_tasks, (std::vector<uint8_t>{
+    MotionTaskType::TASK_TYPE_GO_HOME, MotionTaskType::TASK_TYPE_GO_HOME}));
 }
 
 TEST(CycleCoordinatorTest, FailedPnpFinalHomeKeepsPlacedCountAndMotionExitReason)

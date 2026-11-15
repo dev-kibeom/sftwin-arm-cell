@@ -225,6 +225,11 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
   {
     if (pick_code == MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED) {
       result.pnp_outcome = ExecutePnp::Result::PNP_OUTCOME_SAFETY_PREEMPTED;
+    } else if (last_report_.retry_after_unconfirmed_release &&
+      pick_code == MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE &&
+      result.object_disposition == ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN)
+    {
+      result.pnp_outcome = ExecutePnp::Result::PNP_OUTCOME_RETRYABLE;
     } else if (is_resolved_unplaced_disposition(result.object_disposition) &&
       (is_planning_failure(pick_code) ||
       pick_code == MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE ||

@@ -184,10 +184,13 @@ Gripper command·Holding 관측·복구는 기존 계약을 유지한다. 통신
 기다리고 필요한 상태가 도착하면 기존 흐름을 계속한다. 정상 통신에서 관측된 실제 `UNKNOWN`은
 지연과 구별해 기존 task-local 복구로 처리한다. 실제 파지 실패는 기존 RELEASE(병렬 그리퍼의 OPEN) 복구를 사용한다.
 PICK 삽입 뒤 상승 전 파지 확인 실패에는 Tool 종류·Mode·폭과 무관하게 현재 삽입 위치에서
-RELEASE를 한 번 요청하고 명령 이후 새로운 `RELEASED`를 확인한다. 해제 확인과 Scene 정리 뒤에만
-해제된 미배치 disposition과 원래 파지 실패를 보존해 `RETRYABLE`을 반환하며, 이후 HOME·새 Acquisition은
-기존 Mission 재시도 절차가 수행한다. RELEASE 명령 또는 해제 확인 실패는 `UNKNOWN`과 복구 실패로
-종료하고 자동 HOME·재시도로 진행하지 않는다. CLOSE 뒤 관측 미확정 상태를 `UNCHANGED`로 보고하지 않는다.
+RELEASE를 한 번 요청하고 명령 이후 새로운 `RELEASED`를 확인한다. 확인되면 Scene 정리와 해제된
+미배치 disposition을 확정한다. RELEASE 명령이 성공했으나 기존 대기 범위에서 해제 관측이
+`UNKNOWN`이거나 Timeout이면 disposition은 `UNKNOWN`으로 보존하고 원래 파지 실패·해제 미확정
+진단과 함께 `RETRYABLE`을 반환한다. 이때 해제·반환 또는 Scene 분리를 확인한 것으로 처리하지 않는다.
+이 재시도는 해당 RELEASE 명령 성공 근거가 있는 PICK 복구에만 허용하며 일반 `UNKNOWN`으로 확대하지 않는다.
+이후 HOME·새 Acquisition은 기존 Mission 재시도 절차가 수행한다. RELEASE 명령 실패, Backend 장애,
+Cancel·Safety 선점은 이 불확실 관측 재시도 대상이 아니다. CLOSE 뒤 관측 미확정 상태를 `UNCHANGED`로 보고하지 않는다.
 이 복구는 Cancel·Safety 선점·Backend 불가를 일반 파지 실패로 바꾸지 않으며 Retreat 이후 보유 상실이나
 PLACE 실패의 기존 복구를 대체하지 않는다. 구동·보유·해제의 장치별 판정은 Backend/Tool이,
 복구 순서와 공정 결과는 Task Execution이 소유한다.

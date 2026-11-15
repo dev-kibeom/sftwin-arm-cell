@@ -106,6 +106,10 @@ BT::NodeStatus PickRecovery::recover_unconfirmed_grasp()
       MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED :
       released == HoldingWaitResult::BACKEND_UNAVAILABLE ?
       MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE : original_result;
+    // A delivered RELEASE followed by uncertain observation can use the existing
+    // Mission retry. Preserve UNKNOWN; this is recovery evidence, not release proof.
+    report_->retry_after_unconfirmed_release = released == HoldingWaitResult::UNKNOWN ||
+      released == HoldingWaitResult::TIMEOUT;
     report_->failure_stage = original_stage + ";release_confirmation_failed";
     return BT::NodeStatus::FAILURE;
   }
