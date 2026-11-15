@@ -1,4 +1,4 @@
-"""Simulation-only contact diagnostics. These never certify HELD."""
+"""Per-physics-step simulation contact observations for inference and diagnostics."""
 
 
 class PhysicalContactObserver:

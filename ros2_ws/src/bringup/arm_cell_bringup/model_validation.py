@@ -226,7 +226,8 @@ def tool_runtime_model(tool, joints, arm):
             not all(finite_number(v) for v in torques) or not 0 < torques[0] <= torques[1] <= model[primary]['effort']):
         raise ValueError('Tool drive torque range must be positive and inside URDF limit')
 
-    for key in ('width_tolerance_mm', 'stopped_dwell_s', 'held_position_tolerance_rad'):
+    for key in ('width_tolerance_mm', 'stopped_dwell_s', 'held_position_tolerance_rad',
+                'min_contact_force_per_finger_n'):
         value = settings['holding'][key]
         if not finite_number(value) or value <= 0:
             raise ValueError(f'Tool holding {key} must be finite and positive')

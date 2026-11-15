@@ -76,6 +76,8 @@ runtime:
     blocked_dwell_s: 0.15
     holding:
       # Motor-state inference tuning; not calibrated payload retention proof.
+      # Initial simulation threshold; validate with payload trials.
+      min_contact_force_per_finger_n: 0.1
       width_tolerance_mm: 3.0
       stopped_dwell_s: 0.20
       held_position_tolerance_rad: 0.015

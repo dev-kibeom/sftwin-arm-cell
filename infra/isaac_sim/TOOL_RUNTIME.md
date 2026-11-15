@@ -99,18 +99,21 @@ STOP에는 추가 파라미터를 받지 않는다. Logical 구현은 추가 제
 추가 필드를 모든 Tool에 필수화하지 않는다. `ToolRuntime.observation()`은 제공하는 구현에서만 position/velocity,
 target, motion status, inferred object status와 설정을 반환한다.
 
-Physical Grasp는 실제 관절 관측으로 보유를 **추정**한다. 유효한 Motion Capture Reference와 일치하는 CLOSE를 수락한 뒤 다음 조건을 함께 확인한다.
+Physical Grasp는 유효한 Motion Capture Reference와 일치하는 CLOSE 뒤 접촉 반력과 폭 안정성으로 보유를 추정한다.
 
 - closing target이 실제 위치보다 더 닫힌 쪽에 있고 목표 오차가 position tolerance를 초과한다.
-- 실제 위치가 양쪽 joint limit에서 떨어져 있고, 실제 속도가 Tool의 정지 속도 이하다.
-- Actuator의 `stopped_closing`과 기대 폭 대비 실제 관절에서 계산한 개방 폭의 허용오차를 충족한다.
-- Tool Profile `runtime.physics.holding.stopped_dwell_s` 동안 이 조건과 위치 안정성이 지속된다.
+- 실제 위치가 양쪽 joint limit에서 떨어져 있고 기대 폭과 `width_tolerance_mm` 이내로 일치한다.
+- 같은 상대 rigid body에 대한 좌우 fingertip의 normal impulse를 각각 physics dt로 나눈 반력이
+  `runtime.physics.holding.min_contact_force_per_finger_n` 이상이다. 양쪽 힘을 벡터 합산하지 않는다.
+- `stopped_dwell_s` 동안 위 조건과 `held_position_tolerance_rad` 이내 위치 안정성이 지속된다.
 
-정지 하나, contact event 하나, 명령 Force Limit만으로 HELD를 확정하지 않는다.
-폭 허용오차와 위치 안정성은 `width_tolerance_mm`, `held_position_tolerance_rad`가 소유한다.
-폭 비교는 Parallel Tool의 폭 일치 predicate를 사용하며 Fixed Attach의 Stage 후보 선택·자재 Pose·Joint 생성은 사용하지 않는다.
-완전히 닫힌 빈 그리퍼, joint limit 또는 기대 폭과 다른 환경 걸림은 UNKNOWN이다.
-기대 폭과 우연히 일치하는 환경 걸림은 관절 관측만으로 완전히 구분할 수 없다.
+순간 관절 속도와 Actuator `stopped_closing`은 Physical Grasp HELD의 필수 조건이 아니다.
+Actuator 정지 판정과 Physics Snap/Logical Snap 부착 판정은 유지한다.
+접촉 관측 누락·무효·한쪽 반력 부족은 UNKNOWN이며 이전 반력을 재사용하지 않는다.
+최소 반력 기본값 0.1 N/finger는 초기 simulation 설정이며 payload 유지력 검증값이 아니다.
+접촉 상대는 PhysX body pair만으로 연결하며 자재 registry나 Ground Truth를 파지 승인에 사용하지 않는다.
+환경 물체를 양쪽으로 집는 상황은 여전히 구분하지 못하므로 기대 폭 검사와 별도 live 검증이 필요하다.
+
 현재 폭은 실제 관절에서 계산한 선형 추정이므로 실제 fingertip geometry 보정도 라이브 확인이 필요하다.
 
 HELD 이후에도 같은 closing target을 유지하면서 실제 위치·속도·폭을 매 tick 재평가한다.

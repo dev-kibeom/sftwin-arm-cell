@@ -3,6 +3,7 @@ import math
 import logging
 import time
 
+from gripper_runtime.contact_reaction import finger_reactions
 from gripper_runtime.grasp_attachment import GraspState, HoldingState, HoldingObservation
 
 
@@ -10,9 +11,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class PhysicalGraspManager:
-    """Estimate holding from selected aperture and sustained observed obstruction.
+    """Estimate holding from selected aperture and sustained fingertip reaction.
 
-    This is motor-state inference, never material ground truth or force sensing.
+    This is simulation contact inference, never material ground truth.
     """
     def __init__(self, gripper, *, tool, stage=None, tcp_path=None, holding_settings=None, **unused):
         self.gripper, self.tool = gripper, tool
@@ -29,6 +30,7 @@ class PhysicalGraspManager:
         self._close_width_mm = None
         self._stationary_position = None
         self._holding_dwell = 0.0
+        self._finger_reactions_n = None
         self.holding_settings = holding_settings
         self._close_transaction_failure_reason = None
         self._observer = None
@@ -124,16 +126,18 @@ class PhysicalGraspManager:
         if not self._close_reference_id or self._close_width_mm is None:
             return HoldingState.UNKNOWN
         try:
+            reactions = finger_reactions(self._observer.snapshot if self._observer else None, dt)
+            self._finger_reactions_n = reactions
             observation = self.gripper.observation()
             pos, velocity = observation['actual_position_rad'], observation['actual_velocity_rad_s']
             target = observation['target_position_rad']
             epsilon = observation['position_tolerance_rad']
             valid = (observation['command_direction'] == 'closing'
-                     and observation['object_detection'] == 'stopped_closing'
+                     and reactions is not None
+                     and min(reactions) >= self.holding_settings['min_contact_force_per_finger_n']
                      and all(math.isfinite(v) for v in (pos, velocity, target))
                      and target - pos > epsilon
                      and observation['lower_limit_rad'] + epsilon < pos < observation['upper_limit_rad'] - epsilon
-                     and abs(velocity) <= observation['stopped_velocity_rad_s']
                      and self.tool.capture.width_matches_reference(
                          observation['actual_width_mm'], self._close_width_mm,
                          self.holding_settings['width_tolerance_mm']))
@@ -162,6 +166,7 @@ class PhysicalGraspManager:
         self._close_width_mm = None
         self._stationary_position = None
         self._holding_dwell = 0.0
+        self._finger_reactions_n = None
         self._record(HoldingState.UNKNOWN)
 
     def update(self, dt):
@@ -224,7 +229,8 @@ class PhysicalGraspManager:
 
     def diagnostics(self):
         return dict(holding_state=self._holding.state.value, attach_joint_path=None,
-                    holding_inference=dict(source='joint_motion_and_selected_aperture',
+                    holding_inference=dict(source='fingertip_reaction_and_selected_aperture',
+                        finger_reactions_n=self._finger_reactions_n,
                         execution_id=self._close_reference_id,
                         expected_width_mm=self._close_width_mm,
                         stationary_duration_s=self._holding_dwell),
