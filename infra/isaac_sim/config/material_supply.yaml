@@ -3,6 +3,10 @@
 material_supply:
   material_type: TestCube
   mass_kg: 0.4
+  # Uncalibrated simulation contact material, explicit instead of engine defaults.
+  contact_material:
+    static_friction: 1.0
+    dynamic_friction: 0.8
   spawn_height_above_shelf_m: 0.35
   spawn_interval_s: 0.5
   # Centered Tray support fraction used to sample initial Physics Drop poses.

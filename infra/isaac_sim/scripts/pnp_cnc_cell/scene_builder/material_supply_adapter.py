@@ -687,6 +687,17 @@ class IsaacMaterialSupplyAdapter:
         color = Gf.Vec3f(*profile.display_color_rgb)
         UsdGeom.Gprim(shape.GetPrim()).CreateDisplayColorPrimvar().Set([color])
         UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        if profile.static_friction is not None:
+            from pxr import UsdShade
+            material = UsdShade.Material.Define(self.stage, f"{part_path}/PhysicsMaterial")
+            surface = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+            surface.CreateStaticFrictionAttr(profile.static_friction)
+            surface.CreateDynamicFrictionAttr(profile.dynamic_friction)
+            surface.CreateRestitutionAttr(0.0)
+            PhysxSchema.PhysxMaterialAPI.Apply(material.GetPrim()).CreateFrictionCombineModeAttr('average')
+            UsdShade.MaterialBindingAPI.Apply(shape.GetPrim()).Bind(material,
+                UsdShade.Tokens.strongerThanDescendants, 'physics')
+
         UsdPhysics.RigidBodyAPI.Apply(prim)
         mass_api = UsdPhysics.MassAPI.Apply(prim)
         mass_api.CreateMassAttr(mass)

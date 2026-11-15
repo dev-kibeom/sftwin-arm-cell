@@ -53,6 +53,7 @@ class Robotiq2F85PhysicsActuator:
         minimum, maximum = self.settings['drive_torque_range_nm']
         # A simulation torque budget, NOT a calibrated conversion from rFR to N.
         props.max_effort = min(self.model['effort'], minimum + self.force_setting * (maximum - minimum))
+        self.max_drive_effort_nm = props.max_effort
         props.max_velocity = self.model['velocity'] * self.speed_fraction
         if not self.dc.set_dof_properties(self.dof, props):
             raise RuntimeError('Failed to configure Tool drive properties')
@@ -175,7 +176,7 @@ class Robotiq2F85PhysicsActuator:
         # DC reports joint effort including gravity, not isolated motor/contact load.
         effort = getattr(actual, 'effort', None)
         effort = effort if effort is not None and math.isfinite(effort) else None
-        return dict(joint_effort_nm=effort, effort_source='dynamic_control_joint_effort_including_gravity', actual_position_rad=actual.pos, actual_velocity_rad_s=actual.vel,
+        return dict(max_drive_effort_nm=self.max_drive_effort_nm, joint_effort_nm=effort, effort_source='dynamic_control_joint_effort_including_gravity', actual_position_rad=actual.pos, actual_velocity_rad_s=actual.vel,
                     actual_width_mm=self.MAX_WIDTH_MM * (1. - (actual.pos - self.lower) / (self.upper - self.lower)),
                     target_position_rad=self._target,
                     command_direction=None if self._direction is None else self._direction.value,

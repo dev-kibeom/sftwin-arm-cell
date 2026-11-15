@@ -3,7 +3,7 @@ import math
 import logging
 import time
 
-from gripper_runtime.contact_reaction import finger_reactions
+from gripper_runtime.contact_reaction import finger_reactions, reaction_diagnostics
 from gripper_runtime.grasp_attachment import GraspState, HoldingState, HoldingObservation
 
 
@@ -30,6 +30,7 @@ class PhysicalGraspManager:
         self._close_width_mm = None
         self._holding_dwell = 0.0
         self._finger_reactions_n = None
+        self._physics_dt_s = 0.0
         self.holding_settings = holding_settings
         self._close_transaction_failure_reason = None
         self._observer = None
@@ -163,6 +164,7 @@ class PhysicalGraspManager:
         self._record(HoldingState.UNKNOWN)
 
     def update(self, dt):
+        self._physics_dt_s = dt
         self._finger_reactions_n = None
         if self._observer is not None:
             try:
@@ -237,6 +239,8 @@ class PhysicalGraspManager:
                         expected_width_mm=self._close_width_mm,
                         stationary_duration_s=self._holding_dwell),
                     contact_diagnostics=dict(source='physx_contact_report',
+                        physics_dt_s=getattr(self, '_physics_dt_s', None),
+                        per_body=reaction_diagnostics(self._observer.snapshot, self._physics_dt_s) if self._observer else None,
                         finger_reactions_n=self._finger_reactions_n),
                     actuator=self.gripper.observation(),
                     contacts=self._observer.snapshot if self._observer else None)
