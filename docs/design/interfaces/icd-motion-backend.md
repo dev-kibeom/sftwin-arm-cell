@@ -63,8 +63,9 @@ Tool은 제조사 사양과 적용 조건을, 자재는 손상 방지를 위한 
 동적 접촉 피크·닫힘 충격·패드와 접촉 면적·모델 오차에 대한 검증은 Backend별로 수행한다.
 파지력 명령의 성공은 기존과 같이 HELD나 공정 성공을 대신하지 않는다.
 
-Logical Snap은 동일한 목표 힘 입력을 검증·보존하지만 물리 압착력을 생성하거나 제한한다고 주장하지 않는다.
-실제 힘 실현은 Physics Actuator 또는 해당 Capability를 제공하는 Hardware Adapter의 책임이다.
+Logical Snap의 일반 PICK은 목표 파지력을 요구하거나 질량 기반 파지력 진입 검사를 적용하지 않고 기존 논리적 파지 경로를 사용한다.
+직접 제공된 선택적 힘 입력의 검증·보존은 물리 힘 실현 Capability나 PICK 진입 조건을 뜻하지 않는다.
+Physics Snap과 Physics Real은 동일한 힘 정책을 적용한다. 실제 힘 실현은 Physics Actuator 또는 해당 Capability를 제공하는 Hardware Adapter의 책임이다.
 
 ### Tool Grasp Mode와 Holding / Attachment
 
@@ -123,6 +124,3 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 - [Safety–Motion ICD](icd-safety-motion.md): 외부 정지 완료 및 Safety 권한 의미
 
 Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`는 해당 실행의 물리 보유 추정 근거도 무효화한다. 파지 승인 후 pending 참조의 정상 퇴역은 `invalidate:true, retire_pending:true`로 구별한다. 이 퇴역만 수락된 CLOSE의 실행 ID·예상 폭 근거를 유지하며 새 CLOSE를 허가하지 않는다. 유지된 근거도 실제 관절 관측과 계속 대조하며 STOP/OPEN/새 선택·Reset/Shutdown에서 폐기한다. 이는 자재 World Pose 추적이나 Attachment를 대신 생성하는 계약이 아니다.
-
-Logical Snap은 물리 압착력을 사용하지 않으므로 질량 기반 파지력 진입 검사를 적용하지 않는다.
-선택 Tool의 구동 의미에서 이 적용 범위를 결정하며, Physics Snap과 Physics Real에는 동일한 힘 정책을 적용한다.

@@ -294,6 +294,9 @@ Orchestration은 `RETURN_HELD` standalone task를 한 번 요청하며, Task Exe
 
 ## 자재 기반 파지력 정책
 
+Logical Snap은 물리 압착력을 사용하지 않으므로 질량 기반 파지력 진입 검사를 적용하지 않는다.
+선택 Tool의 구동 의미에서 이 적용 범위를 결정하며, Physics Snap과 Physics Real에는 동일한 힘 정책을 적용한다.
+
 Task Execution의 파지 정책은 Simulator Ground Truth 대신 작업에 지정된 자재 프로파일의 명목 질량을 사용한다.
 평행 두 손가락이 마찰로 하중을 지지하는 모델에서 목표 합계 법선력은
 `여유계수 × 질량 × (중력가속도 + 보수적 작업 가속도 한계) / 접촉 마찰계수 하한`으로 계산한다.
@@ -374,6 +377,3 @@ clearance 실패·경계 미충족, GO_HOME 실패, 사전 계산 결과 부재�
 - [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)
 - [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)
 - [Safety–Motion ICD](../../interfaces/icd-safety-motion.md)
-
-Logical Snap은 물리 압착력을 사용하지 않으므로 질량 기반 파지력 진입 검사를 적용하지 않는다.
-선택 Tool의 구동 의미에서 이 적용 범위를 결정하며, Physics Snap과 Physics Real에는 동일한 힘 정책을 적용한다.
