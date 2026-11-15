@@ -51,3 +51,11 @@ def test_unconsumed_steps_and_previous_snapshots_are_not_reused():
     assert observer.snapshot is None
     observer.advance()
     assert observer.snapshot==[]
+
+
+def test_diagnostics_preserve_one_sided_load_and_body_identity():
+    from gripper_runtime.contact_reaction import reaction_diagnostics
+    pairs=[contact('left',(0.01,0.,0.)),contact('right',(0.,0.,0.))]
+    assert reaction_diagnostics(pairs,0.01)==[
+        dict(target_path='/material',robot_path='/robot',finger_reactions_n=(1.,0.))]
+    assert reaction_diagnostics(None,0.01) is None

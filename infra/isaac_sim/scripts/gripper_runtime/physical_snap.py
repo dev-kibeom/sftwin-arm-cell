@@ -81,7 +81,7 @@ class PhysicalSnapCapture(ParallelGripperCapture):
             qualified = False
             reason = str(error)
         manager._diagnostic_append('decision', dict(phase='physical_snap_qualification',
-            qualified=qualified, reason=reason, finger_reactions_n=reactions,
+            qualified=qualified, reason=reason, physics_dt_s=self.dt, finger_reactions_n=reactions,
             stationary_duration_s=self.stability.duration,
             target_path=candidate.prim_path if candidate else None))
         if not qualified:

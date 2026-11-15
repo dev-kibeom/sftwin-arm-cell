@@ -22,6 +22,8 @@ class MaterialSupplyProfile:
     orientation_rpy_rad: tuple[tuple[float, float], ...]
 
     display_color_rgb: tuple[float, float, float] = (0.42, 0.30, 0.18)
+    static_friction: float | None = None
+    dynamic_friction: float | None = None
 
     @classmethod
     def from_mapping(
@@ -89,11 +91,19 @@ class MaterialSupplyProfile:
             or y_bounds[1] > support[1] / 2
         ):
             raise ValueError("receiving region must be inside the Tray support")
+        contact = supply.get('contact_material')
+        static = dynamic = None
+        if contact is not None:
+            static = _finite_positive(contact.get('static_friction'), 'static_friction')
+            dynamic = _finite_positive(contact.get('dynamic_friction'), 'dynamic_friction')
+            if dynamic > static:
+                raise ValueError('dynamic_friction must not exceed static_friction')
         return cls(
             material_type=material_type,
             shape=material["shape"],
             dimensions_m=dimensions,
             mass_kg=mass,
+            static_friction=static, dynamic_friction=dynamic,
             receiving_x_m=x_bounds,
             receiving_y_m=y_bounds,
             spawn_height_above_shelf_m=height,

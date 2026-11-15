@@ -82,7 +82,7 @@ position/speed/force request와 actual position, motor current, object status는
 | Drive stiffness/damping·토크 예산·정지 판정 허용오차/dwell | Tool Profile `runtime.physics` / 미보정 simulation tuning |
 | fingertip 물리 material·마찰·반발 | Tool Profile `runtime.physics.contact_material` / 실험 보정 필요 |
 
-Profile의 0.1–1.0 N·m 토크 예산과 0.8/0.6 마찰은 보정되지 않은 초기 시뮬레이션 값이다.
+Profile의 0.1–1.0 N·m 토크 예산과 1.0/0.8 마찰은 보정되지 않은 초기 시뮬레이션 값이다.
 제조사 force request를 이 토크 범위에 선형 대응하는 것은 **시뮬레이션 제어 추상화**이며 실물 rFR→토크/N 보정 곡선이 아니다.
 회전 joint의 Drive `maxForce`는 N·m 토크 한계이고 실제 손가락 접촉력(N)과 동일하지 않다.
 DC gain은 radian 기준, USD angular gain/velocity는 degree 기준으로 변환한다. Arm 관절은 Tool 설정 대상에서 제외한다.
@@ -225,3 +225,13 @@ OPEN 후 RELEASED 확인에도 적용되므로 실패 시 최대 대기도 늘�
 예산은 변경하지 않는다. Object Detection·폭·반력·신선도 조건은 완화하지 않는다.
 4초는 관측된 실행을 위한 초기 운영 조정값이며 임의의 simulation slowdown을 보장하지 않는다.
 실제 라이브 테스트로 CLOSE→HELD와 OPEN→RELEASED, 보유·운반을 확인해야 한다.
+
+## 물리 파지 하중 진단
+
+초기 Force 설정은 0.8로 주 관절 drive 토크 상한은 0.82 N·m다. 이는 손가락 파지력(N)이 아니다.
+Tool 접촉 정지/동마찰은 1.0/0.8로 조정했으며 미보정 simulation 값이다. Material Supply의 contact_material도 1.0/0.8로 명시하며 각 생성 자재의 Collider에 Physics Material을 바인딩한다.
+자재의 마찰 결합은 average다. 양쪽 설정이 일치할 때 유효 계수도 1.0/0.8이며 실물 재질 보정값이 아니다.
+Real 접촉 진단은 Physics dt와 robot/body별 좌우 반력을 남기며 한쪽 하중도 0으로 숨기지 않는다.
+기존 양손가락 Qualification과 별개이며 Real Held 조건을 강화하거나 완화하지 않는다.
+Actuator 진단의 max_drive_effort_nm은 구동 상한이고 joint_effort_nm은 중력 등을 포함한 관측값이다.
+실제 유지력·마찰·관통/진동은 라이브 검증이 필요하다.
