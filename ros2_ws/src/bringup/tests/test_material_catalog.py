@@ -111,3 +111,10 @@ def test_force_admission_follows_selected_actuation(actuator, grasp):
     config = load_profile(MATERIALS.parent / 'operational_profile.yaml', tool_actuator=actuator, tool_grasp=grasp)
     assert config['motion']['grip_force']['actuation'] == actuator
     assert ('materials' in config['motion']['grip_force']) == (actuator == 'physics')
+
+
+def test_physics_tool_without_parallel_force_policy_needs_no_finger_properties():
+    from arm_cell_bringup.runtime import configure_grip_force
+    config = {'tool': {'runtime': {'actuator': 'physics', 'capabilities': []}}, 'motion': {}}
+    configure_grip_force(config, MATERIALS.parent / 'operational_profile.yaml')
+    assert config['motion']['grip_force'] == {'actuation': 'none'}

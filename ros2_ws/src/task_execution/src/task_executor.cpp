@@ -215,6 +215,9 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
   result.result_code.value = pick_code;
   result.object_disposition = last_report_.object_disposition;
   result.diagnostic_detail = last_report_.failure_stage;
+  if (!last_report_.gripper_observation_detail.empty()) {
+    result.diagnostic_detail += ";" + last_report_.gripper_observation_detail;
+  }
   result.attempted_candidate_ids = attempted_material_candidate_ids_;
   result.selected_candidate_id = outcome_material_candidate_id_;
   if (pick_code != MotionTaskResultCode::TASK_RESULT_SUCCESS ||
@@ -222,6 +225,11 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
   {
     if (pick_code == MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED) {
       result.pnp_outcome = ExecutePnp::Result::PNP_OUTCOME_SAFETY_PREEMPTED;
+    } else if (last_report_.retry_after_unconfirmed_release &&
+      pick_code == MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE &&
+      result.object_disposition == ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN)
+    {
+      result.pnp_outcome = ExecutePnp::Result::PNP_OUTCOME_RETRYABLE;
     } else if (is_resolved_unplaced_disposition(result.object_disposition) &&
       (is_planning_failure(pick_code) ||
       pick_code == MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE ||

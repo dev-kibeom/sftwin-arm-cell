@@ -113,6 +113,7 @@ private:
     std::uint64_t holding_baseline{0};
   };
 
+  BT::NodeStatus recover_unconfirmed_grasp();
   void prepare();
   std::uint8_t open_return();
   std::uint8_t confirm_return();

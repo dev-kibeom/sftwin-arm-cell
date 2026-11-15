@@ -158,6 +158,8 @@ uint8_t PickExecution::execute_grasp_insertion(std::uint8_t result)
 
 uint8_t PickExecution::close_and_confirm_grasp()
 {
+  // A CLOSE may physically retain material even when its observation is uncertain.
+  report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
   auto result = support_.execute_gripper_close(state_.holding_baseline);
   if (result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
     support_.motion_port()->discardPendingGraspRelation();
@@ -167,6 +169,9 @@ uint8_t PickExecution::close_and_confirm_grasp()
     HoldingState::HELD,
     state_.holding_baseline);
   if (holding != HoldingWaitResult::CONFIRMED) {
+    report_->gripper_observation_detail = holding == HoldingWaitResult::UNKNOWN ?
+      "held_observation=unknown" : holding == HoldingWaitResult::TIMEOUT ?
+      "held_observation=confirmation_timeout" : "held_observation=interrupted_or_unavailable";
     if (holding == HoldingWaitResult::CANCELED) {
       result = MotionTaskResultCode::TASK_RESULT_CANCELED;
     } else if (holding == HoldingWaitResult::SAFETY_PREEMPTED) {
@@ -174,18 +179,6 @@ uint8_t PickExecution::close_and_confirm_grasp()
     } else if (holding == HoldingWaitResult::BACKEND_UNAVAILABLE) {
       result = MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
     } else {
-      const auto observed = support_.gripper()->holding();
-      constexpr double kFullyClosedWidthMm = 0.5;
-      if (observed.fresh() && observed.width_mm && std::isfinite(*observed.width_mm) &&
-        *observed.width_mm >= 0.0 && *observed.width_mm <= kFullyClosedWidthMm)
-      {
-        std::uint64_t release_baseline = observed.sequence;
-        if (support_.execute_gripper_open(release_baseline) ==
-          MotionTaskResultCode::TASK_RESULT_SUCCESS)
-        {
-          (void)support_.fresh_holding(HoldingState::RELEASED, release_baseline);
-        }
-      }
       result = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
     }
     support_.motion_port()->discardPendingGraspRelation();

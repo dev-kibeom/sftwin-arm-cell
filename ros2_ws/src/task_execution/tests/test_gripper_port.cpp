@@ -36,6 +36,9 @@ public:
     ++open_calls;
     if (open_calls == release_on_open_call || auto_observe_open) {
       publish(HoldingState::RELEASED);
+      if (stale_recovery_release && open_calls > 1) {
+        observation.observed_at -= std::chrono::milliseconds(501);
+      }
     } else if (unknown_on_open) {
       publish(HoldingState::UNKNOWN);
     }
@@ -71,6 +74,7 @@ public:
   int open_calls{0};
   int release_on_open_call{0};
   bool auto_observe_open{false};
+  bool stale_recovery_release{false};
   bool auto_observe_close{false};
   bool unknown_on_open{false};
   mutable bool waiting_for_close_observation{false};
@@ -485,6 +489,82 @@ TEST(GripperPortTaskTest, ActivePortCanBeStoppedWithoutLeakingActiveState)
   port->stop();
   EXPECT_FALSE(port->active());
   EXPECT_EQ(port->stop_calls, 1);
+}
+
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST(GripperPortTaskTest, WidthlessUncertainPickReleasesBeforeRetry)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  auto port = std::make_shared<FakeGripperPort>();
+  port->auto_observe_open = true;
+  TaskExecutor executor(
+    std::make_shared<test::LegacyBackendMotionPort>(backend, valid_geometry()), port,
+    valid_geometry());
+  EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
+  EXPECT_EQ(port->open_calls, 2);
+  EXPECT_FALSE(port->observation.width_mm.has_value());
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+  EXPECT_EQ(backend->phases.size(), 2U);
+  EXPECT_EQ(executor.last_failure_stage(), "held_confirmation:TASK_RESULT_GRASP_FAILURE");
+}
+
+TEST(GripperPortTaskTest, UncertainPickWithUnconfirmedReleaseRemainsUnknown)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  auto port = std::make_shared<FakeGripperPort>();
+  port->release_on_open_call = 1;
+  port->unknown_on_open = true;
+  TaskExecutor executor(
+    std::make_shared<test::LegacyBackendMotionPort>(backend, valid_geometry()), port,
+    valid_geometry());
+  EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
+  EXPECT_EQ(port->open_calls, 2);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+  EXPECT_EQ(backend->phases.size(), 2U);
+}
+
+TEST(GripperPortTaskTest, RecentUnknownIsObservableButDoesNotConfirmHolding)
+{
+  const auto recent = observation(HoldingState::UNKNOWN, std::chrono::milliseconds(10), 1);
+  EXPECT_TRUE(recent.recent());
+  EXPECT_FALSE(recent.fresh());
+  const auto stale = observation(HoldingState::UNKNOWN, std::chrono::milliseconds(501), 2);
+  EXPECT_FALSE(stale.recent());
+}
+
+TEST(GripperPortTaskTest, StaleRecoveryReleaseCannotResolveUncertainPick)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  auto port = std::make_shared<FakeGripperPort>();
+  port->auto_observe_open = true;
+  port->stale_recovery_release = true;
+  TaskExecutor executor(
+    std::make_shared<test::LegacyBackendMotionPort>(backend, valid_geometry()), port,
+    valid_geometry(), TaskExecutionSupport::InterruptionChecker{},
+    std::chrono::milliseconds(10));
+  EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
+  EXPECT_EQ(port->open_calls, 2);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+}
+
+TEST(GripperPortTaskTest, CancellationDuringRecoveryReleasePreventsRetry)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  auto port = std::make_shared<FakeGripperPort>();
+  port->auto_observe_open = true;
+  TaskExecutor executor(
+    std::make_shared<test::LegacyBackendMotionPort>(backend, valid_geometry()), port,
+    valid_geometry(), [port]() {
+      return port->open_calls >= 2 ? MotionTaskResultCode::TASK_RESULT_CANCELED :
+      MotionTaskResultCode::TASK_RESULT_SUCCESS;
+    }, std::chrono::milliseconds(10));
+  EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_CANCELED);
+  EXPECT_EQ(port->open_calls, 2);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+  EXPECT_EQ(backend->phases.size(), 2U);
 }
 
 }  // namespace arm_cell_motion

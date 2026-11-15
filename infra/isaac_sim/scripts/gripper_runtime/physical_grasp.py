@@ -11,9 +11,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class PhysicalGraspManager:
-    """Estimate holding from Tool object detection and the selected aperture.
+    """Estimate holding from Tool object detection for a correlated GRASP.
 
     This is Tool-state inference, never material ground truth.
+    The Tool owns the predicate; this manager owns transaction correlation.
     """
     def __init__(self, gripper, *, tool, stage=None, tcp_path=None, holding_settings=None, **unused):
         self.gripper, self.tool = gripper, tool
@@ -127,18 +128,8 @@ class PhysicalGraspManager:
             return HoldingState.UNKNOWN
         try:
             observation = self.gripper.observation()
-            pos = observation['actual_position_rad']
-            target = observation['target_position_rad']
-            epsilon = observation['position_tolerance_rad']
-            valid = (observation['command_direction'] == 'closing'
-                     and observation['object_detection'] == 'stopped_closing'
-                     and observation['stopped_duration_s'] >= self.holding_settings['stopped_dwell_s']
-                     and all(math.isfinite(v) for v in (pos, target))
-                     and target - pos > epsilon
-                     and observation['lower_limit_rad'] + epsilon < pos < observation['upper_limit_rad'] - epsilon
-                     and self.tool.capture.width_matches_reference(
-                         observation['actual_width_mm'], self._close_width_mm,
-                         self.holding_settings['width_tolerance_mm']))
+            valid = self.tool.capture.physical_holding_detected(
+                observation, self.holding_settings)
         except (KeyError, TypeError, ValueError, RuntimeError, ArithmeticError):
             valid = False
         if not valid:
@@ -234,7 +225,7 @@ class PhysicalGraspManager:
 
     def diagnostics(self):
         return dict(holding_state=self._holding.state.value, attach_joint_path=None,
-                    holding_inference=dict(source='tool_object_detection_and_selected_aperture',
+                    holding_inference=dict(source='tool_object_detection',
                         execution_id=self._close_reference_id,
                         expected_width_mm=self._close_width_mm,
                         stationary_duration_s=self._holding_dwell),

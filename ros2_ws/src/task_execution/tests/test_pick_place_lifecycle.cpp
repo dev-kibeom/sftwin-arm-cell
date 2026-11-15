@@ -460,11 +460,20 @@ public:
     backend_.gripper_widths.push_back(85.0F);
     backend_.record_gripper_command(true);
     mark_command_sent();
+    if (backend_.open_calls > 1 &&
+      recovery_open_result != MotionTaskResultCode::TASK_RESULT_SUCCESS)
+    {
+      return recovery_open_result;
+    }
     if (backend_.gripper_result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
       return backend_.gripper_result;
     }
-    if (open_auto_observe) {
+    if (open_auto_observe &&
+      (release_on_open_call == 0 || backend_.open_calls == release_on_open_call))
+    {
       publish(HoldingState::RELEASED);
+    } else if (unknown_on_recovery_release && backend_.open_calls > 1) {
+      publish(HoldingState::UNKNOWN);
     }
     return MotionTaskResultCode::TASK_RESULT_SUCCESS;
   }
@@ -512,6 +521,9 @@ public:
   }
 
   bool auto_observe{true};
+  uint8_t recovery_open_result{MotionTaskResultCode::TASK_RESULT_SUCCESS};
+  bool unknown_on_recovery_release{false};
+  int release_on_open_call{0};
   bool open_auto_observe{true};
   bool refresh_observation_on_read{false};
 
@@ -693,6 +705,107 @@ TEST(TaskExecutorPickPlaceTest, DirectPickPreplanningCancellationRecordsCandidat
   EXPECT_EQ(attempt.failure_stage, "gripper_open:TASK_RESULT_CANCELED");
   EXPECT_EQ(attempt.result_code, MotionTaskResultCode::TASK_RESULT_CANCELED);
   EXPECT_TRUE(backend->requests.empty());
+}
+
+TEST(TaskExecutorPickPlaceTest, UnconfirmedPickRetriesAfterReleaseCommandWithoutInventingRelease)
+{
+  using Pnp = arm_cell_interfaces::action::ExecutePnp;
+  for (const int observation : {0, 1, 2}) {
+    const bool release_confirmed = observation == 0;
+    auto backend = std::make_shared<RecordingBackend>();
+    auto port = std::make_shared<RecordingGripperPort>(*backend);
+    port->auto_observe = false;
+    if (!release_confirmed) {port->release_on_open_call = 1;}
+    port->unknown_on_recovery_release = observation == 2;
+    TaskExecutor executor(
+      backend, port,
+      valid_geometry(), TaskExecutionSupport::InterruptionChecker{},
+      std::chrono::milliseconds(10));
+    const auto result = executor.execute_pnp(execute_pnp_goal(), "uncertain-widthless-pick");
+    EXPECT_EQ(result.pnp_outcome, Pnp::Result::PNP_OUTCOME_RETRYABLE);
+    EXPECT_FALSE(result.material_placed);
+    EXPECT_EQ(
+      result.object_disposition, release_confirmed ?
+      ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED :
+      ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+    EXPECT_EQ(backend->open_calls, 2);
+    EXPECT_EQ(backend->release_relation_count, release_confirmed ? 1 : 0);
+    if (!release_confirmed) {
+      EXPECT_NE(result.diagnostic_detail.find("release_confirmation_failed"), std::string::npos);
+    }
+    EXPECT_EQ(backend->requests.size(), 2U);
+    for (const auto & request : backend->requests) {
+      EXPECT_EQ(request.task_type.value, MotionTaskType::TASK_TYPE_PICK);
+      EXPECT_NE(request.phase, arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING);
+    }
+  }
+}
+
+TEST(TaskExecutorPickPlaceTest, CloseBackendErrorDoesNotReleaseOrRetry)
+{
+  using Pnp = arm_cell_interfaces::action::ExecutePnp;
+  auto backend = std::make_shared<RecordingBackend>();
+  auto port = std::make_shared<RecordingGripperPort>(*backend);
+  TaskExecutor executor(backend, port, valid_geometry());
+  int gripper_phases = 0;
+  const auto result = executor.execute_pnp(
+    execute_pnp_goal(), "close-backend-error",
+    [backend, &gripper_phases](uint8_t phase, uint8_t, uint8_t, uint8_t) {
+      if (phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_GRIPPER &&
+      ++gripper_phases == 2)
+      {
+        backend->gripper_result = MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+      }
+    });
+  EXPECT_EQ(result.pnp_outcome, Pnp::Result::PNP_OUTCOME_FAILED);
+  EXPECT_EQ(result.result_code.value, MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR);
+  EXPECT_EQ(result.object_disposition, ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+  EXPECT_EQ(backend->open_calls, 1);
+  EXPECT_EQ(backend->requests.size(), 2U);
+}
+
+TEST(TaskExecutorPickPlaceTest, ReleaseCommandFailureCannotUseUnconfirmedReleaseRetry)
+{
+  using Pnp = arm_cell_interfaces::action::ExecutePnp;
+  for (const auto code : {MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE,
+      MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE})
+  {
+    auto backend = std::make_shared<RecordingBackend>();
+    auto port = std::make_shared<RecordingGripperPort>(*backend);
+    port->auto_observe = false;
+    port->recovery_open_result = code;
+    TaskExecutor executor(backend, port, valid_geometry(), {}, std::chrono::milliseconds(10));
+    const auto result = executor.execute_pnp(execute_pnp_goal(), "release-command-failure");
+    EXPECT_EQ(result.pnp_outcome, Pnp::Result::PNP_OUTCOME_FAILED);
+    EXPECT_EQ(result.object_disposition, ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+    EXPECT_EQ(backend->open_calls, 2);
+    EXPECT_EQ(backend->requests.size(), 2U);
+  }
+}
+
+TEST(TaskExecutorPickPlaceTest, ReleaseObservationInterruptionCannotBecomeRetryable)
+{
+  using Pnp = arm_cell_interfaces::action::ExecutePnp;
+  for (const auto code : {MotionTaskResultCode::TASK_RESULT_CANCELED,
+      MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED,
+      MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE})
+  {
+    auto backend = std::make_shared<RecordingBackend>();
+    auto port = std::make_shared<RecordingGripperPort>(*backend);
+    port->auto_observe = false;
+    port->release_on_open_call = 1;
+    TaskExecutor executor(backend, port, valid_geometry(), [backend, code]() {
+        return backend->open_calls >= 2 ? code : MotionTaskResultCode::TASK_RESULT_SUCCESS;
+      }, std::chrono::milliseconds(10));
+    const auto result = executor.execute_pnp(execute_pnp_goal(), "release-interruption");
+    EXPECT_EQ(
+      result.pnp_outcome, code == MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED ?
+      Pnp::Result::PNP_OUTCOME_SAFETY_PREEMPTED : Pnp::Result::PNP_OUTCOME_FAILED);
+    EXPECT_EQ(result.result_code.value, code);
+    EXPECT_EQ(result.object_disposition, ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+    EXPECT_EQ(backend->open_calls, 2);
+    EXPECT_EQ(backend->requests.size(), 2U);
+  }
 }
 
 TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturningCompleted)
@@ -1958,11 +2071,9 @@ TEST(TaskExecutorPickPlaceTest, GripperSuccessWithoutConfirmationCannotAttachOrS
   EXPECT_EQ(backend->events.back(), "gripper");
 }
 
-TEST(TaskExecutorPickPlaceTest, FullyClosedWidthBoundariesControlRetryReopen)
+TEST(TaskExecutorPickPlaceTest, UncertainPickReleasesRegardlessOfOptionalWidth)
 {
-  for (const auto & [width_mm, expect_reopen] :
-    std::vector<std::pair<double, bool>>{{-1.0, false}, {0.0, true}, {0.5, true}, {0.51, false}})
-  {
+  for (const double width_mm : {-1.0, 0.0, 0.5, 0.51, 66.24}) {
     auto backend = std::make_shared<RecordingBackend>();
     auto gripper = std::make_shared<RecordingGripperPort>(*backend);
     gripper->auto_observe = false;
@@ -1971,12 +2082,10 @@ TEST(TaskExecutorPickPlaceTest, FullyClosedWidthBoundariesControlRetryReopen)
     TaskExecutor executor(backend, gripper, valid_geometry(), {}, std::chrono::milliseconds(1));
 
     EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
-    EXPECT_EQ(backend->gripper_widths.size(), expect_reopen ? 2U : 1U) << "width_mm=" << width_mm;
-    if (expect_reopen) {
-      EXPECT_EQ(backend->gripper_widths.back(), 85.0F) << "width_mm=" << width_mm;
-      EXPECT_EQ(gripper->holding().state, HoldingState::RELEASED);
-      EXPECT_GT(gripper->holding().sequence, 1U);
-    }
+    EXPECT_EQ(backend->gripper_widths.size(), 2U) << "width_mm=" << width_mm;
+    EXPECT_EQ(backend->gripper_widths.back(), 85.0F);
+    EXPECT_EQ(gripper->holding().state, HoldingState::RELEASED);
+    EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
     EXPECT_EQ(executor.object_state(), MotionObjectState::NO_OBJECT);
   }
 }
@@ -2379,7 +2488,7 @@ TEST(TaskExecutorPickPlaceTest, LateHeldAfterConfirmationTimeoutCannotSucceed)
   EXPECT_EQ(executor.object_state(), MotionObjectState::NO_OBJECT);
   EXPECT_EQ(
     backend->events,
-    (std::vector<std::string>{"gripper", "motion:3", "motion:4", "gripper"}));
+    (std::vector<std::string>{"gripper", "motion:3", "motion:4", "gripper", "gripper"}));
 }
 
 TEST(TaskExecutorPickPlaceTest, PlaceRejectsCommandSuccessUntilNewReleasedObservationArrives)
