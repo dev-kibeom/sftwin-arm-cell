@@ -80,3 +80,34 @@ def test_compiled_material_grasp_reference_uses_material_offset(material_id):
     expected = [0.0, 0.0, 0.01 if material_id == 'TestCube' else 0.0]
     assert material['pick_offset']['translation_m'] == expected
     assert recipe['object_to_grasp_tcp']['translation_m'] == expected
+
+
+def test_runtime_routes_material_force_properties_to_task_execution():
+    from arm_cell_bringup.runtime import load_profile
+    for profile in ('operational_profile.yaml', 'pnp_validation_profile.yaml'):
+        config = load_profile(MATERIALS.parent / profile, tool_actuator='physics', tool_grasp='physical')
+        grip = config['motion']['grip_force']
+        assert grip['tool_min_force_n'] == 40.0
+        assert grip['tool_max_force_n'] == 470.0
+        assert grip['safety_factor'] > 1
+        for identity in grip['material_ids']:
+            material = grip['materials'][identity]
+            assert material['mass_kg'] == config['material_catalog'][identity]['mass_kg']
+            assert material['friction_coefficient_lower_bound'] == .5
+            assert material['damage_max_force_n'] == 235.0
+            assert material['provenance'] == 'simulation_assumption_unvalidated'
+
+
+def test_logical_force_admission_needs_no_material_force_properties():
+    from arm_cell_bringup.runtime import configure_grip_force
+    config = {'tool': {'runtime': {'actuator': 'logical'}}, 'motion': {}}
+    configure_grip_force(config, MATERIALS.parent / 'operational_profile.yaml')
+    assert config['motion']['grip_force'] == {'actuation': 'logical'}
+
+
+@pytest.mark.parametrize('actuator,grasp', [('logical', 'fixed_attach'), ('physics', 'fixed_attach'), ('physics', 'physical')])
+def test_force_admission_follows_selected_actuation(actuator, grasp):
+    from arm_cell_bringup.runtime import load_profile
+    config = load_profile(MATERIALS.parent / 'operational_profile.yaml', tool_actuator=actuator, tool_grasp=grasp)
+    assert config['motion']['grip_force']['actuation'] == actuator
+    assert ('materials' in config['motion']['grip_force']) == (actuator == 'physics')

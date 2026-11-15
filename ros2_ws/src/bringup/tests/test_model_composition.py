@@ -365,3 +365,17 @@ def test_physical_real_does_not_require_contact_force_configuration(selection):
         runtime.update(actuator='physics', grasp='physical')
         runtime['physics']['holding'].pop('min_contact_force_per_finger_n')
     assert selection(change)['tool']['runtime']['mode_id']=='physical_real'
+
+
+def test_force_transmission_comes_from_selected_urdf_geometry():
+    import xml.etree.ElementTree as ET
+    from arm_cell_bringup.model_validation import robotiq_force_transmission
+    root = ET.parse(ROOT / 'infra/isaac_sim/assets/urdf/generated/m0609_robotiq_2f85.urdf').getroot()
+    joints = {joint.get('name'): joint for joint in root.findall('joint')}
+    primary = 'gripper_robotiq_85_left_knuckle_joint'
+    transmission = robotiq_force_transmission(joints, primary)
+    assert transmission['finger_lever_x_m'] == pytest.approx(.0371575)
+    assert transmission['finger_lever_z_m'] == pytest.approx(.04342168)
+    joints['gripper_robotiq_85_right_finger_tip_joint'].find('mimic').set('multiplier', '-1')
+    with pytest.raises(ValueError, match='counter-rotating'):
+        robotiq_force_transmission(joints, primary)

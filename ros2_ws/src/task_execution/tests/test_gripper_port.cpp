@@ -26,6 +26,11 @@ public:
     }
     return close_result;
   }
+  uint8_t close(double force_n) override
+  {
+    requested_force_n = force_n;
+    return close();
+  }
   uint8_t open() override
   {
     ++open_calls;
@@ -62,6 +67,7 @@ public:
   mutable bool active_value{false};
   int stop_calls{0};
   int close_calls{0};
+  double requested_force_n{0.0};
   int open_calls{0};
   int release_on_open_call{0};
   bool auto_observe_open{false};
@@ -182,6 +188,45 @@ TEST(GripperPortTaskTest, MissingPortFailsClosedWithoutLegacyFallback)
 
   EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
   EXPECT_TRUE(backend->phases.empty());
+}
+
+TEST(GripperPortTaskTest, ConfiguredMaterialForceReachesPort)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  auto port = std::make_shared<FakeGripperPort>();
+  port->auto_observe_open = true;
+  port->auto_observe_close = true;
+  TaskExecutor executor(
+    std::make_shared<test::LegacyBackendMotionPort>(backend, valid_geometry()), port,
+    valid_geometry());
+  GripForcePolicy policy;
+  policy.materials.emplace("steel", MaterialGripProperties{2.0, .5, 235.0});
+  executor.set_grip_force_policy(policy);
+  auto goal = pick_goal();
+  goal.material_id = "steel";
+  EXPECT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_SUCCESS);
+  EXPECT_NEAR(port->requested_force_n, 86.4532, 1e-6);
+}
+
+TEST(GripperPortTaskTest, InfeasibleOrUnknownMaterialRejectsBeforeAnyMotion)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  auto port = std::make_shared<FakeGripperPort>();
+  TaskExecutor executor(
+    std::make_shared<test::LegacyBackendMotionPort>(backend, valid_geometry()), port,
+    valid_geometry());
+  GripForcePolicy policy;
+  policy.materials.emplace("fragile", MaterialGripProperties{2.0, .5, 80.0});
+  executor.set_grip_force_policy(policy);
+  for (const auto & identity : {"fragile", "unknown", ""}) {
+    auto goal = pick_goal();
+    goal.material_id = identity;
+    EXPECT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+    EXPECT_TRUE(backend->phases.empty());
+    EXPECT_EQ(port->open_calls, 0);
+    EXPECT_EQ(port->close_calls, 0);
+    EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_UNCHANGED);
+  }
 }
 
 TEST(GripperPortTaskTest, FailedApproachNeverClosesTheGripper)

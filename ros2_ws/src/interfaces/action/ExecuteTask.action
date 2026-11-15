@@ -1,3 +1,5 @@
+# Catalog material identity for mass, friction and damage force admission.
+string material_id
 # Goal. The ROS Action Goal UUID is the execution identity.
 MotionTaskType task_type
 arm_cell_interfaces/PickCandidate[] material_candidates

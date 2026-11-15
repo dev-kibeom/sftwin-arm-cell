@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -25,6 +26,15 @@ public:
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS;
   }
 
+  uint8_t close(double grip_force_n) override
+  {
+    if (!std::isfinite(grip_force_n) || grip_force_n <= 0.0) {
+      return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+    }
+    requested_grip_force_n_ = grip_force_n;
+    return close();  // Fake observation only; no physical force is generated.
+  }
+
   uint8_t open() override
   {
     observation_.state = HoldingState::RELEASED;
@@ -38,6 +48,7 @@ public:
   void stop() override {active_ = false;}
 
 private:
+  double requested_grip_force_n_{0.0};
   HoldingObservation observation_;
   bool active_{false};
 };

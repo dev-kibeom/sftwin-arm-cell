@@ -1022,6 +1022,7 @@ CycleCoordinator::ExecutePnp::Goal CycleCoordinator::pnp_goal(
   const DetectTarget::Response & response, const MissionRecipe & recipe)
 {
   ExecutePnp::Goal goal;
+  goal.material_id = recipe.target_id;
   goal.vision_acquisition_id = response.acquisition_id;
   goal.material_candidates = response.material_candidates;
   goal.place_target_pose = recipe.place_pose;

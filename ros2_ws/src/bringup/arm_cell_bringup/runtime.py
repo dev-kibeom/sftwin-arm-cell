@@ -312,6 +312,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=
     config['motion']['place_waypoint_approach_distance_m'] = place['approach']['distance_m']
     config['motion']['place_waypoint_approach_direction_object'] = place['approach']['direction_object']
     orchestration['recipe_directory'] = mission_directory(directory, overrides={key: {'tool_quaternion': tool_convention, 'work_locations': owners['cell']['work_locations']} for key in catalog})
+    configure_grip_force(config, path)
     return config
 
 
@@ -389,6 +390,7 @@ def validation_configuration(config, path, material_id=None, pick_offset_z_m=Non
     config['_mission_recipe'] = recipe
     config['material_catalog'] = {identity: material}
     config['material_definitions'] = {identity: material['geometry']}
+    configure_grip_force(config, path)
     return config
 
 
@@ -426,3 +428,27 @@ def validate_cell_configuration(cell, geometry):
     if (calibration['camera_optical_frame'] != camera['frame_id'] or
             calibration['camera_info_topic'] != camera['camera_info_topic']):
         raise ValueError('Calibration and Camera frame/topic must match')
+
+
+def configure_grip_force(config, path):
+    """Export catalog properties and Tool limits into Task Execution parameters."""
+    actuation = config['tool']['runtime']['actuator']
+    if actuation == 'logical':
+        config['motion']['grip_force'] = {'actuation': 'logical'}
+        return
+    policy = read(resolve('package://arm_cell_task_execution/config/grip_force_policy.yaml', path.parent))
+    limits = config['tool']['force_limits']
+    materials = {}
+    for identity, material in config['material_catalog'].items():
+        grip = material.get('grip_policy', {})
+        # Missing properties remain absent: Task Execution rejects the PICK rather
+        # than borrowing another material's damage limit or friction coefficient.
+        materials[identity] = {'mass_kg': material['mass_kg'], **grip}
+    config['motion']['grip_force'] = {
+        'actuation': actuation,
+        **policy,
+        'tool_min_force_n': limits['min_total_force_n'],
+        'tool_max_force_n': limits['max_total_force_n'],
+        'material_ids': sorted(materials),
+        'materials': materials,
+    }

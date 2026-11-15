@@ -6,6 +6,7 @@ Dynamic Control is deprecated, but shipped and supported in Isaac Sim 5.1.
 import math
 
 from gripper_runtime.position_stability import PositionStability
+from gripper_runtime.force_transmission import RobotiqForceTransmission, validate_grip_force_n
 from gripper_runtime.robotiq_actuator import GripperState
 
 
@@ -19,7 +20,7 @@ def fraction(value, label):
 class Robotiq2F85PhysicsActuator:
     MAX_WIDTH_MM = 85.0
 
-    def __init__(self, *, settings, joint_model, binding=None, runtime=None):
+    def __init__(self, *, settings, joint_model, force_transmission, binding=None, runtime=None):
         self.robot_root_path = getattr(binding, 'robot_path', None)
         self.settings = settings
         self.model = joint_model[settings['primary_joint']]
@@ -42,7 +43,9 @@ class Robotiq2F85PhysicsActuator:
         self._stability = PositionStability()
         self.object_detection = 'unknown'
         self.speed_fraction = fraction(settings['speed_fraction'], 'speed_fraction')
-        self.force_setting = fraction(settings['force_setting'], 'force_setting')
+        self.transmission = RobotiqForceTransmission(force_transmission)
+        self.grip_force_n = self._validate_force(settings['grip_force_n'])
+        self._validate_effort_range(self.grip_force_n)
         self._configure_drive()
 
     def _configure_drive(self):
@@ -50,25 +53,36 @@ class Robotiq2F85PhysicsActuator:
         props.drive_mode = self.api.DRIVE_FORCE
         props.stiffness = self.settings['drive_stiffness']
         props.damping = self.settings['drive_damping']
-        minimum, maximum = self.settings['drive_torque_range_nm']
-        # A simulation torque budget, NOT a calibrated conversion from rFR to N.
-        props.max_effort = min(self.model['effort'], minimum + self.force_setting * (maximum - minimum))
+        props.max_effort = self._drive_effort(self.grip_force_n, self._read().pos)
         self.max_drive_effort_nm = props.max_effort
         props.max_velocity = self.model['velocity'] * self.speed_fraction
         if not self.dc.set_dof_properties(self.dof, props):
             raise RuntimeError('Failed to configure Tool drive properties')
 
-    def configure_command(self, *, target_position=None, speed_fraction=None, force_setting=None):
+    def configure_command(self, *, target_position=None, speed_fraction=None, grip_force_n=None):
         # Validate atomically before changing any command/property.
         target = None if target_position is None else fraction(target_position, 'target_position')
         speed = self.speed_fraction if speed_fraction is None else fraction(speed_fraction, 'speed_fraction')
-        force = self.force_setting if force_setting is None else fraction(force_setting, 'force_setting')
+        force = self.grip_force_n if grip_force_n is None else self._validate_force(grip_force_n)
+        self._validate_effort_range(force)
         if speed <= 0.0:
             raise ValueError('speed_fraction must be positive; use STOP to stop')
-        self.speed_fraction, self.force_setting = speed, force
+        self.speed_fraction, self.grip_force_n = speed, force
         self._configure_drive()
         if target is not None:
             self.move_to(target)
+
+    _validate_force = staticmethod(validate_grip_force_n)
+
+    def _validate_effort_range(self, force):
+        if self.transmission.maximum_drive_torque_nm(force, self.lower, self.upper) > self.model['effort']:
+            raise ValueError('Requested grip force exceeds modeled primary joint effort over stroke')
+
+    def _drive_effort(self, force, angle):
+        effort = self.transmission.drive_torque_nm(force, angle)
+        if effort > self.model['effort']:
+            raise ValueError('Requested grip force exceeds modeled primary joint effort')
+        return effort
 
     def _read(self):
         state = self.dc.get_dof_state(self.dof, self.api.STATE_ALL)
@@ -99,7 +113,10 @@ class Robotiq2F85PhysicsActuator:
             raise RuntimeError('Failed to command Tool position target')
 
     def update(self, dt):
-        if self._target is None or self._direction is None:
+        if self._target is None:
+            return False
+        self._configure_drive()  # Refresh even while STOP holds the measured position.
+        if self._direction is None:
             return False
         actual = self._read()
         tolerance = self.settings['position_tolerance_rad']
@@ -185,4 +202,4 @@ class Robotiq2F85PhysicsActuator:
                     stopped_duration_s=self._dwell, lower_limit_rad=self.lower, upper_limit_rad=self.upper,
                     target_position=self.target_position, motion_status=self.state.value,
                     object_detection=self.object_detection, speed_fraction=self.speed_fraction,
-                    force_setting=self.force_setting)
+                    grip_force_n=self.grip_force_n, force_model='quasistatic_symmetric_mimic_virtual_work')

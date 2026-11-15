@@ -146,6 +146,7 @@ def test_selected_runtime_uses_existing_actuator_and_grasp_boundary(monkeypatch,
     from test_physical_holding import observer
     profile=copy.deepcopy(json.loads(exported_configuration.read_text())['configuration']['tool'])
     profile['runtime']['actuator'],profile['runtime']['grasp']=combination
+    profile['runtime']['force_transmission'] = dict(finger_lever_x_m=.0371575, finger_lever_z_m=.04342168)
     profile['runtime']['joint_model'] = {}  # Assembly-independent actuator test double.
     gripper,drive=actuator()
     monkeypatch.setattr(physics_actuator,'Robotiq2F85PhysicsActuator',lambda **kwargs:gripper)

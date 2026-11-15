@@ -46,6 +46,10 @@ public:
   uint8_t release() {return open();}
 
   virtual uint8_t close() = 0;
+  // Sum of opposing finger contact normal forces in N. Native adapters must
+  // explicitly implement their manufacturer-specific conversion; never ignore it.
+  virtual uint8_t close(double /* grip_force_n */)
+  {return ResultCode::TASK_RESULT_GRASP_FAILURE;}
   virtual uint8_t open() = 0;
   virtual HoldingObservation holding() const = 0;
   virtual bool active() const = 0;
