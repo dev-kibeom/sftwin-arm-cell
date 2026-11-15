@@ -1,3 +1,5 @@
+# Catalog material identity for mass, friction and damage force admission.
+string material_id
 # Goal UUID is the immutable PnP execution identity.
 string vision_acquisition_id
 arm_cell_interfaces/PickCandidate[] material_candidates

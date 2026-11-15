@@ -303,7 +303,8 @@ std::uint8_t TaskExecutionSupport::execute_gripper_close(std::uint64_t & baselin
   if (phase_callback_) {phase_callback_(Phase::TASK_PHASE_GRIPPER, 0, 0, 0);}
   if (!gripper_port_) {return Result::TASK_RESULT_GRASP_FAILURE;}
   baseline_sequence = holding_sequence();
-  const auto result = gripper_port_->grasp();
+  const auto result = grip_force_n_ ?
+    gripper_port_->close(*grip_force_n_) : gripper_port_->grasp();
   RCLCPP_DEBUG(rclcpp::get_logger("task_executor"), "gripper close command issued: result=%s", motion_console_result(result).c_str());
   if (result != Result::TASK_RESULT_SUCCESS && gripper_port_->active()) {gripper_port_->stop();}
   return map_object_operation_result(result);

@@ -152,12 +152,14 @@ public:
   bool measured_joint_state(sensor_msgs::msg::JointState & state) const override;
   bool command_normalized_gripper(double opening) override;
   bool command_gripper_close() override;
+  bool command_gripper_close(double grip_force_n) override;
   bool command_gripper_release() override;
   HoldingObservation holding_observation() const override;
   bool gripper_active() const override;
   void stop_gripper() override;
 
 private:
+  bool command_gripper_close_impl(const double * grip_force_n);
   static constexpr auto kStateFreshness = std::chrono::milliseconds(500);
   MotionCompletionOutcome wait_for_motion_completion_until(
     std::chrono::steady_clock::time_point deadline);

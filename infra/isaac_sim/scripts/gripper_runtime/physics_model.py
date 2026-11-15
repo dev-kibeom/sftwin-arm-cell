@@ -39,8 +39,12 @@ def prepare(*, configuration, stage):
                 drive.CreateTypeAttr('force')
                 drive.CreateStiffnessAttr(math.radians(physics['drive_stiffness']))
                 drive.CreateDampingAttr(math.radians(physics['drive_damping']))
-                low, high = physics['drive_torque_range_nm']
-                drive.CreateMaxForceAttr(low + physics['force_setting'] * (high - low))
+                from gripper_runtime.force_transmission import RobotiqForceTransmission
+                transmission = RobotiqForceTransmission(settings['force_transmission'])
+                effort = transmission.drive_torque_nm(physics['grip_force_n'], item['lower'])
+                if effort > item['effort']:
+                    raise ValueError('Requested grip force exceeds modeled primary joint effort')
+                drive.CreateMaxForceAttr(effort)
                 drive.CreateTargetPositionAttr(0.0)
                 drive.CreateTargetVelocityAttr(0.0)
             else:

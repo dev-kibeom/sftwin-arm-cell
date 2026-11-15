@@ -95,11 +95,11 @@ Physics 모드에서 Tool 접촉 링크에만 명시적인 material과 contact r
 Physics Tool의 `/tool/intent` JSON에는 선택적 `parameters`를 사용할 수 있다.
 
 ```json
-{"intent":"GRASP","execution_id":"<applied-motion-reference-id>","parameters":{"target_position":1.0,"speed_fraction":0.5,"force_setting":0.5}}
+{"intent":"GRASP","execution_id":"<applied-motion-reference-id>","parameters":{"target_position":1.0,"speed_fraction":0.5,"grip_force_n":100.0}}
 ```
 
-세 값은 normalized [0,1]이며 speed는 0보다 커야 한다. 파라미터 없는 GRASP/RELEASE는 현재 speed/force 설정으로 CLOSE/OPEN한다.
-STOP에는 추가 파라미터를 받지 않는다. Logical 구현은 추가 제어 Capability를 광고하지 않으며 파라미터 명령을 거부한다.
+target_position과 speed_fraction은 normalized [0,1]이며 speed는 0보다 커야 한다. grip_force_n은 양쪽 손가락 법선력 합계(N)이고 Tool 한계 안이어야 한다. 파라미터 없는 GRASP/RELEASE는 현재 speed/force 설정으로 CLOSE/OPEN한다.
+STOP에는 추가 파라미터를 받지 않는다. Logical 구현은 grip_force_n을 검증·보존하되 물리 힘을 실현하지 않는다. 다른 지원하지 않는 제어 파라미터는 거부한다.
 추가 필드를 모든 Tool에 필수화하지 않는다. `ToolRuntime.observation()`은 제공하는 구현에서만 position/velocity,
 target, motion status, inferred object status와 설정을 반환한다.
 

@@ -26,6 +26,7 @@ Goal은 하나의 Vision Acquisition과 Orchestration이 확정한 Recipe snapsh
 
 | 입력 | 의미·제약 |
 |---|---|
+| `material_id` | Recipe가 지정한 자재 프로파일 identity. Vision의 관측 후보 ID와 구별하며 Task Execution의 질량·마찰·손상 한계 조회에 사용 |
 | `vision_acquisition_id` | 전체 후보가 나온 하나의 Acquisition identity |
 | `material_candidates[]` | 동일 Acquisition의 SELECTED HIGH·MEDIUM 정상 PICK 적격 후보 전체와 후보별 관측 Pose·Geometry 근거를 담은 단일 목록. Mission은 전체 목록을 변경 없이 전달하며 내부 순위와 전환은 Task Execution 소유; Candidate Grade 필드는 추가하지 않음 |
 | `place_target_pose` + `has_place_target_pose` | Recipe destination pose. PICK candidate pose와 별도인 필수 입력 |

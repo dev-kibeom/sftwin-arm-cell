@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <future>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -77,6 +78,13 @@ public:
     ++close_command_calls;
     return gripper_value;
   }
+  bool command_gripper_close(double grip_force_n) override
+  {
+    if (!supports_force) {return false;}
+    ++force_command_calls;
+    last_grip_force_n = grip_force_n;
+    return gripper_value;
+  }
   bool gripper_active() const override {return gripper_active_value;}
   HoldingObservation holding_observation() const override
   {
@@ -85,6 +93,9 @@ public:
   }
   void stop_gripper() override {++stop_gripper_calls;}
 
+  bool supports_force{false};
+  int force_command_calls{0};
+  double last_grip_force_n{0.0};
   bool available_value{true};
   bool submit_value{true};
   bool active_value{false};
@@ -153,6 +164,44 @@ TEST(IsaacGripperPortTest, LogicalCloseDoesNotSendAWidthTarget)
   EXPECT_EQ(gripper.close(), arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS);
   EXPECT_EQ(transport->close_command_calls, 1);
   EXPECT_DOUBLE_EQ(transport->last_opening, -1.0);
+}
+
+TEST(IsaacGripperPortTest, ExplicitForceCannotFallBackToLegacyClose)
+{
+  auto transport = std::make_shared<RecordingIsaacTransport>();
+  IsaacGripperPort gripper(transport);
+  EXPECT_EQ(gripper.close(60.0),
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
+  EXPECT_EQ(transport->close_command_calls, 0);
+}
+
+TEST(IsaacGripperPortTest, ForwardsTotalForceUnchangedAndReportsAdapterFailure)
+{
+  auto transport = std::make_shared<RecordingIsaacTransport>();
+  transport->supports_force = true;
+  IsaacGripperPort gripper(transport);
+  EXPECT_EQ(gripper.close(62.5),
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS);
+  EXPECT_DOUBLE_EQ(transport->last_grip_force_n, 62.5);
+  EXPECT_EQ(transport->force_command_calls, 1);
+  EXPECT_EQ(transport->close_command_calls, 0);
+  transport->gripper_value = false;
+  EXPECT_EQ(gripper.close(62.5),
+    arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
+}
+
+TEST(IsaacGripperPortTest, InvalidForceDoesNotReachTransport)
+{
+  auto transport = std::make_shared<RecordingIsaacTransport>();
+  IsaacGripperPort gripper(transport);
+  for (double force : {0.0, -1.0, std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::quiet_NaN()})
+  {
+    EXPECT_EQ(gripper.close(force),
+      arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+  }
+  EXPECT_EQ(transport->close_command_calls, 0);
+  EXPECT_EQ(transport->force_command_calls, 0);
 }
 
 TEST(IsaacGripperPortTest, MissingTransportFailsClosed)

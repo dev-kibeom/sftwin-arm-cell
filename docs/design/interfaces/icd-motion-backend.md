@@ -38,11 +38,33 @@ Motion이 제공하는 선택된 TCP Grasp Pose와 Geometry에서 도출한 예�
 
 Tool 작업 의도 GRASP는 자재 확보 요청, RELEASE는 자재 해제 요청이다. 병렬 그리퍼는 CLOSE/OPEN으로, 흡착기 유형은 VACUUM_ON/OFF로 실현할 수 있다. 의도 수락·Tool 구동 완료·Qualification 통과·Attach/Detach 완료는 별개의 사실이다. 기존 close/open API와 폭 기반 ROS 명령은 병렬 그리퍼 호환 경로로 유지한다.
 
-Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction, force_setting을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
+Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction과 합계 파지력(N)인 grip_force_n을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
 
 모드별 Qualification·보유·Attachment 의미는 아래 표를 따른다. ROS status의 grasp는 보유 관측이고
 attached는 실제 Fixed Joint 소유 여부다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만
 주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
+
+### Backend 비종속 파지력 요청
+
+질량 기반 파지 정책을 사용하는 GRASP는 공통 정책이 Tool·자재 한계를 검사한 목표 파지력을 뉴턴(N)으로 전달한다.
+목표와 정책의 허용 최대값은 서로 마주 보는 두 손가락의 법선 압착력 합계이며, 손가락당 힘·관절 토크·제조사 정규화 명령과 혼용하지 않는다.
+Robotiq 2F-85의 제조사 파지력 범위 20–235 N은 손가락당 기준으로 정규화하여 합계 40–470 N으로 다룬다.
+근거는 [제조사 매뉴얼](https://s3.amazonaws.com/com-robotiq-website-prod-assets/website-assets/support_documents/document/2F-85_2F-140_TM-OMRON_20240402.pdf)의 Table 5-1과 §5.2.1의 양쪽 손가락 하중식이다. 해당 사양의 패드·결합부 적용 조건을 보존한다.
+공통 정책은 자재 명목 질량·접촉 마찰 하한·작업 가속도 한계·여유계수에서 목표를 결정한다.
+Tool은 제조사 사양과 적용 조건을, 자재는 손상 방지를 위한 허용 최대 압착력을 소유한다.
+목표는 두 한계 모두를 만족해야 하며, 여유를 포함한 필요 힘을 제공할 수 없으면 더 작은 값으로 잘라 성공으로 진행하지 않는다.
+
+장치별 명령 변환은 Backend/Tool Adapter의 책임이다. Isaac은 선택 Tool의 기구학과 mimic 전달 관계를 반영한 물리 모델로
+관절 구동값을 계산하고, 실물 Adapter는 제조사 힘 명령 의미를 적용한다. 시뮬레이션 토크 보정값을 실물 명령으로 재사용하지 않는다.
+명령 가능한 최소 힘을 적용하는 경우에도 자재 허용 최대 힘을 초과할 수 없다.
+필요 Capability·변환 모델·유효 입력이 없거나 장치 한계로 목표를 실현할 수 없으면 명시적으로 실패하며, 기존 무제한/기본 힘으로 대체하지 않는다.
+
+목표 파지력과 구동 토크 제한은 관측된 접촉력 또는 실제 무손상을 증명하지 않는다.
+동적 접촉 피크·닫힘 충격·패드와 접촉 면적·모델 오차에 대한 검증은 Backend별로 수행한다.
+파지력 명령의 성공은 기존과 같이 HELD나 공정 성공을 대신하지 않는다.
+
+Logical Snap은 동일한 목표 힘 입력을 검증·보존하지만 물리 압착력을 생성하거나 제한한다고 주장하지 않는다.
+실제 힘 실현은 Physics Actuator 또는 해당 Capability를 제공하는 Hardware Adapter의 책임이다.
 
 ### Tool Grasp Mode와 Holding / Attachment
 

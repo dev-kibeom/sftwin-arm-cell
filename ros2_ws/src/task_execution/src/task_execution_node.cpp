@@ -33,6 +33,30 @@ int main(int argc, char ** argv)
     motion->motion_core(), motion->gripper_port(), motion->motion_geometry(),
     arm_cell_task_execution::TaskExecutor::InterruptionChecker{},
     motion->holding_confirmation_timeout(), strategies);
+  arm_cell_task_execution::GripForcePolicy grip_policy;
+  grip_policy.acceleration_bound_m_s2 = motion->declare_parameter<double>(
+    "grip_force.acceleration_bound_m_s2", 1.0, strategy_descriptor);
+  grip_policy.safety_factor = motion->declare_parameter<double>(
+    "grip_force.safety_factor", 2.0, strategy_descriptor);
+  grip_policy.tool_min_force_n = motion->declare_parameter<double>(
+    "grip_force.tool_min_force_n", 0.0, strategy_descriptor);
+  grip_policy.tool_max_force_n = motion->declare_parameter<double>(
+    "grip_force.tool_max_force_n", 0.0, strategy_descriptor);
+  const auto material_ids = motion->declare_parameter<std::vector<std::string>>(
+    "grip_force.material_ids", std::vector<std::string>{}, strategy_descriptor);
+  for (const auto & identity : material_ids) {
+    const auto prefix = "grip_force.materials." + identity + ".";
+    arm_cell_task_execution::MaterialGripProperties material;
+    material.mass_kg = motion->declare_parameter<double>(prefix + "mass_kg", 0.0, strategy_descriptor);
+    material.friction_coefficient_lower_bound = motion->declare_parameter<double>(
+      prefix + "friction_coefficient_lower_bound", 0.0, strategy_descriptor);
+    material.damage_max_force_n = motion->declare_parameter<double>(
+      prefix + "damage_max_force_n", 0.0, strategy_descriptor);
+    grip_policy.materials.emplace(identity, material);
+  }
+  // The runtime always enables admission. Unconfigured legacy unit-test
+  // executors retain their parameterless port path, never the production node.
+  task_executor->set_grip_force_policy(std::move(grip_policy));
   auto pnp_action_server = std::make_shared<arm_cell_task_execution::ExecutePnpActionServer>(
     motion.get(), motion->motion_core(), task_executor);
   auto disturb_action_server =

@@ -25,3 +25,9 @@ display_color_rgb:
 - 0.3
 - 0.33
 - 0.36
+
+# Fixture assumptions only: neither measured friction nor a qualified damage limit.
+grip_policy:
+  friction_coefficient_lower_bound: 0.5
+  damage_max_force_n: 235.0
+  provenance: simulation_assumption_unvalidated

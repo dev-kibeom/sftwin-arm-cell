@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include <arm_cell_interfaces/msg/motion_task_type.hpp>
 
 #include "arm_cell_motion/candidate_occupancy.hpp"
+#include "arm_cell_task_execution/grip_force_policy.hpp"
 #include "arm_cell_task_execution/task_execution_support.hpp"
 #include "arm_cell_motion/motion_geometry.hpp"
 #include "arm_cell_motion/motion_port.hpp"
@@ -46,6 +48,7 @@ public:
     PickPlaceStrategies strategies = {});
   ~TaskExecutor();
 
+  void set_grip_force_policy(GripForcePolicy policy) {grip_force_policy_ = std::move(policy);}
   void set_interruption_checker(InterruptionChecker interruption_checker);
   void set_phase_callback(PhaseCallback phase_callback);
   void set_runtime_geometry(
@@ -75,6 +78,7 @@ public:
 private:
   std::shared_ptr<TaskExecutionSupport> support_;
   PickPlaceStrategies strategies_;
+  std::optional<GripForcePolicy> grip_force_policy_;
   std::unique_ptr<MotionBtExecutor> bt_executor_;
   TaskExecutionReport last_report_;
   std::vector<std::string> attempted_material_candidate_ids_;

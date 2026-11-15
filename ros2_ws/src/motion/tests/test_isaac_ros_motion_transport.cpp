@@ -2476,6 +2476,27 @@ TEST_F(IsaacRosMotionTransportTest, GripperCommandDoesNotInventHoldingState)
   EXPECT_FALSE(observation.fresh());
 }
 
+TEST_F(IsaacRosMotionTransportTest, ForceCloseUsesToolIntentForWidthCapableGripper)
+{
+  transport_->tool_width_control_ = true;
+  std::vector<nlohmann::json> intents;
+  auto subscription = observer_->create_subscription<String>(
+    "/tool/intent", 10, [&intents](const String::SharedPtr message) {
+      intents.push_back(nlohmann::json::parse(message->data));
+    });
+  publish_feedback(std::vector<double>(6, 0.0));
+  publish_status(true, false, false, false, 1);
+  ASSERT_TRUE(transport_->command_gripper_close(62.5));
+  pump_until([&]() {return !intents.empty();});
+  ASSERT_EQ(intents.size(), 1U);
+  EXPECT_EQ(intents.front().at("intent"), "GRASP");
+  EXPECT_EQ(intents.front().at("execution_id"), "");
+  EXPECT_DOUBLE_EQ(intents.front().at("parameters").at("grip_force_n"), 62.5);
+  EXPECT_TRUE(close_ids().empty());
+  EXPECT_FALSE(transport_->command_gripper_close(std::numeric_limits<double>::quiet_NaN()));
+  EXPECT_FALSE(transport_->command_gripper_close(0.0));
+}
+
 TEST_F(IsaacRosMotionTransportTest, WidthlessToolIntentsPreserveHoldingAndStopContract)
 {
   transport_->tool_width_control_ = false;

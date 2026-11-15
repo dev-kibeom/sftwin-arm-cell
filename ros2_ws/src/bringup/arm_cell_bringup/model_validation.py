@@ -185,6 +185,7 @@ def validate_model_configuration(config):
 def tool_runtime_model(tool, joints, arm):
     """Export Tool control selection and URDF-owned linkage without a second model."""
     runtime = tool['runtime']
+    runtime['capabilities'] = sorted(set(runtime['capabilities']) | {'grip_force_n'})
     combination = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
     if combination not in runtime.get('supported_combinations', [['logical', 'fixed_attach']]):
         raise ValueError(f'Unsupported Tool actuator/grasp combination: {combination}')
@@ -219,15 +220,13 @@ def tool_runtime_model(tool, joints, arm):
                 'stopped_velocity_rad_s', 'blocked_dwell_s'):
         if not finite_number(settings[key]) or settings[key] <= 0:
             raise ValueError(f'Tool physics {key} must be finite and positive')
-    for key in ('speed_fraction', 'force_setting'):
-        value = settings[key]
-        if (not finite_number(value) or not 0 <= value <= 1
-                or (key == 'speed_fraction' and value == 0)):
-            raise ValueError(f'Tool physics {key} must be normalized; speed must be positive')
-    torques = settings['drive_torque_range_nm']
-    if (not isinstance(torques, list) or len(torques) != 2 or
-            not all(finite_number(v) for v in torques) or not 0 < torques[0] <= torques[1] <= model[primary]['effort']):
-        raise ValueError('Tool drive torque range must be positive and inside URDF limit')
+    speed = settings['speed_fraction']
+    if not finite_number(speed) or not 0 < speed <= 1:
+        raise ValueError('Tool physics speed_fraction must be positive and normalized')
+    force = settings['grip_force_n']
+    if not finite_number(force) or not 40 <= force <= 470:
+        raise ValueError('Tool physics grip_force_n must be inside [40, 470] N total')
+    runtime['force_transmission'] = robotiq_force_transmission(joints, primary)
 
     holding_keys = ['width_tolerance_mm', 'stopped_dwell_s', 'held_position_tolerance_rad']
     if combination[1] == 'fixed_attach':
@@ -243,4 +242,58 @@ def tool_runtime_model(tool, joints, arm):
     if material['restitution'] > 1 or material['dynamic_friction'] > material['static_friction']:
         raise ValueError('Invalid Tool contact material coefficients')
     runtime['capabilities'] = sorted(set(runtime['capabilities']) | {
-        'position', 'speed_setting', 'force_setting', 'actuator_observation'})
+        'position', 'speed_setting', 'grip_force_n', 'actuator_observation'})
+
+
+def robotiq_force_transmission(joints, primary):
+    """Extract the symmetric parallel-pad lever from the selected expanded URDF.
+
+    Reject unsupported transmission geometry instead of silently applying a
+    2F-85 formula to another Tool or modified linkage.
+    """
+    prefix = primary.removesuffix('left_knuckle_joint')
+    if prefix == primary:
+        raise ValueError('Unsupported Tool force transmission primary joint')
+    def vector(text, length):
+        values = [float(value) for value in text.split()]
+        if len(values) != length or not all(math.isfinite(value) for value in values):
+            raise ValueError('Invalid Tool force transmission geometry vector')
+        return values
+
+    levers = []
+    for side, sign in (('left', 1), ('right', -1)):
+        knuckle = joints[prefix + side + '_knuckle_joint']
+        tip = joints[prefix + side + '_finger_tip_joint']
+        finger = joints[prefix + side + '_finger_joint']
+        if (finger.find('parent').get('link') != knuckle.find('child').get('link') or
+                tip.find('parent').get('link') != finger.find('child').get('link') or
+                knuckle.find('parent').get('link') != joints[primary].find('parent').get('link')):
+            raise ValueError('Unsupported Tool force transmission chain')
+        for joint in (knuckle, tip):
+            if vector(joint.find('axis').get('xyz'), 3) != [0., -1., 0.]:
+                raise ValueError('Unsupported Tool force transmission axis')
+        for joint in (knuckle, finger, tip):
+            origin = joint.find('origin')
+            if vector(origin.get('rpy', '0 0 0'), 3) != [0., 0., 0.]:
+                raise ValueError('Unsupported Tool force transmission origin rotation')
+        if finger.get('type') != 'fixed':
+            raise ValueError('Tool force transmission requires fixed finger joint')
+        relation = tip.find('mimic')
+        if (relation is None or relation.get('joint') != primary or
+                float(relation.get('multiplier', '1')) != -sign or
+                float(relation.get('offset', '0')) != 0):
+            raise ValueError('Tool force transmission requires parallel counter-rotating pads')
+        if side == 'right':
+            relation = knuckle.find('mimic')
+            if (relation is None or relation.get('joint') != primary or
+                    float(relation.get('multiplier', '1')) != -1 or
+                    float(relation.get('offset', '0')) != 0):
+                raise ValueError('Tool force transmission requires mirrored knuckle mimic')
+        offsets = [vector(joint.find('origin').get('xyz'), 3) for joint in (finger, tip)]
+        levers.append((sign * sum(v[0] for v in offsets), sum(v[2] for v in offsets)))
+    if any(not math.isclose(a, b, abs_tol=1e-9) for a, b in zip(*levers)):
+        raise ValueError('Tool force transmission requires symmetric finger levers')
+    x, z = levers[0]
+    if not all(math.isfinite(v) and v > 0 for v in (x, z)):
+        raise ValueError('Tool force transmission lever must be finite and positive')
+    return dict(finger_lever_x_m=x, finger_lever_z_m=z)

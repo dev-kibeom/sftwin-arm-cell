@@ -14,6 +14,12 @@ vision:
 capture: project://infra/isaac_sim/config/gripper_capture.yaml
 tool_id: robotiq_2f85
 tool_type: parallel_gripper
+# Manufacturer 20..235 N PER FINGER, normalized to bilateral total N.
+# 2024-04-02 Robotiq instruction manual table 5-1 and figure 5-11.
+force_limits:
+  min_total_force_n: 40.0
+  max_total_force_n: 470.0
+  source: https://s3.amazonaws.com/com-robotiq-website-prod-assets/website-assets/support_documents/document/2F-85_2F-140_TM-OMRON_20240402.pdf
 grasp_motion:
   finger_clearance_radius_m: 0.01
   finger_contact_span_m: 0.02
@@ -68,12 +74,11 @@ runtime:
   isaac_prepare: gripper_runtime.physics_model:prepare
   physics:
     primary_joint: gripper_robotiq_85_left_knuckle_joint
-    # Simulation tuning, NOT manufacturer torque/current calibration.
+    # Drive gains are simulation tuning; force uses the linkage model.
     drive_stiffness: 20.0
     drive_damping: 2.0
-    drive_torque_range_nm: [0.1, 1.0]
     speed_fraction: 0.5
-    force_setting: 0.8
+    grip_force_n: 40.0
     position_tolerance_rad: 0.01
     stopped_velocity_rad_s: 0.01
     blocked_dwell_s: 0.15

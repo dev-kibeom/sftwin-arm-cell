@@ -138,11 +138,11 @@ def _robotiq_runtime(profile, binding):
     if combination[0] == 'physics':
         from gripper_runtime.physics_actuator import Robotiq2F85PhysicsActuator
         actuator = Robotiq2F85PhysicsActuator(settings=settings['physics'],
-                    joint_model=settings['joint_model'], binding=binding)
+                    joint_model=settings['joint_model'], force_transmission=settings['force_transmission'], binding=binding)
         tool = parallel_tool_runtime(actuator, profile)
-        tool.capabilities = tool.capabilities | frozenset({'position', 'speed_setting', 'force_setting', 'actuator_observation'})
+        tool.capabilities = tool.capabilities | frozenset({'position', 'speed_setting', 'grip_force_n', 'actuator_observation'})
         def control(intent, parameters):
-            if intent is ToolIntent.STOP or set(parameters) - {'target_position', 'speed_fraction', 'force_setting'}:
+            if intent is ToolIntent.STOP or set(parameters) - {'target_position', 'speed_fraction', 'grip_force_n'}:
                 raise ValueError('Unsupported Tool command parameters')
             values = dict(parameters)
             values.setdefault('target_position', 0.0 if intent is ToolIntent.RELEASE else 1.0)
@@ -173,7 +173,19 @@ def _robotiq_runtime(profile, binding):
         articulation_base_path=binding.base_link_path,
         verbose=True,
     )
-    return parallel_tool_runtime(actuator, profile)
+    tool = parallel_tool_runtime(actuator, profile)
+    # Logical Snap retains the common request without claiming motor/contact
+    # force enforcement. Force remains policy input even when motion is logical.
+    tool.capabilities = tool.capabilities | frozenset({'grip_force_n'})
+    def control(intent, parameters):
+        from gripper_runtime.force_transmission import validate_grip_force_n
+        if intent is ToolIntent.STOP or set(parameters) != {'grip_force_n'}:
+            raise ValueError('Unsupported logical Tool command parameters')
+        force = validate_grip_force_n(parameters['grip_force_n'])
+        actuator.requested_grip_force_n = force
+        _parallel_command(actuator, intent, tool.move_duration)
+    tool.control = control
+    return tool
 
 
 def select_tool_runtime(profile, binding, *, implementations=None):

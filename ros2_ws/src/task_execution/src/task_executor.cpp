@@ -114,6 +114,18 @@ std::uint8_t TaskExecutor::execute(
       0, 0);
   }
 
+  support_->set_grip_force(std::nullopt);
+  if (goal.task_type.value == MotionTaskType::TASK_TYPE_PICK && grip_force_policy_) {
+    try {
+      support_->set_grip_force(grip_force_policy_->required_force(goal.material_id));
+    } catch (const std::invalid_argument & error) {
+      last_report_.result_code = MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+      last_report_.object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNCHANGED;
+      last_report_.failure_stage = std::string("grip_force_admission:") + error.what();
+      return last_report_.result_code;
+    }
+  }
+
   try {
     auto execution = bt_executor_->execute(goal, motion_execution_id, last_report_, strategies_);
     attempted_material_candidate_ids_ = std::move(execution.attempted_material_candidate_ids);
@@ -185,6 +197,7 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
 
   ExecuteTask::Goal pick;
   pick.task_type.value = MotionTaskType::TASK_TYPE_PICK;
+  pick.material_id = goal.material_id;
   pick.material_candidates = goal.material_candidates;
   pick.vision_acquisition_id = goal.vision_acquisition_id;
   pick.pick_approach_translation_direction = goal.pick_approach_translation_direction;

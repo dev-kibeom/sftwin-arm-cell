@@ -8390,6 +8390,17 @@ bool IsaacRosMotionTransport::command_normalized_gripper(double opening)
 
 bool IsaacRosMotionTransport::command_gripper_close()
 {
+  return command_gripper_close_impl(nullptr);
+}
+
+bool IsaacRosMotionTransport::command_gripper_close(double grip_force_n)
+{
+  if (!std::isfinite(grip_force_n) || grip_force_n <= 0.0) {return false;}
+  return command_gripper_close_impl(&grip_force_n);
+}
+
+bool IsaacRosMotionTransport::command_gripper_close_impl(const double * grip_force_n)
+{
   if (!available()) {
     return false;
   }
@@ -8402,7 +8413,8 @@ bool IsaacRosMotionTransport::command_gripper_close()
       return false;
     }
   }
-  if (!gripper_close_publisher_) {
+  const bool use_width_close = tool_width_control_ && grip_force_n == nullptr;
+  if (use_width_close ? !gripper_close_publisher_ : !tool_intent_publisher_) {
     return false;
   }
   std::string reference_id;
@@ -8421,10 +8433,12 @@ bool IsaacRosMotionTransport::command_gripper_close()
   }
   std_msgs::msg::String command;
   command.data = reference_id;
-  if (tool_width_control_) {
+  if (use_width_close) {
     gripper_close_publisher_->publish(command);
   } else {
-    command.data = "{\"intent\":\"GRASP\",\"execution_id\":\"" + reference_id + "\"}";
+    nlohmann::json intent = {{"intent", "GRASP"}, {"execution_id", reference_id}};
+    if (grip_force_n) {intent["parameters"]["grip_force_n"] = *grip_force_n;}
+    command.data = intent.dump();
     tool_intent_publisher_->publish(command);
   }
   std::lock_guard<std::mutex> lock(mutex_);

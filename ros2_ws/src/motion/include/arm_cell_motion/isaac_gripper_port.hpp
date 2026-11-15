@@ -14,6 +14,7 @@ public:
   explicit IsaacGripperPort(std::shared_ptr<IsaacMotionTransport> transport);
 
   uint8_t close() override;
+  uint8_t close(double grip_force_n) override;
   uint8_t open() override;
   HoldingObservation holding() const override;
   bool active() const override;

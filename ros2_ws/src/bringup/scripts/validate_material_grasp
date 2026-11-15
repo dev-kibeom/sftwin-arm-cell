@@ -55,6 +55,7 @@ try:
         raise RuntimeError(f'Detection failed: {response}')
     print('Fixed target candidate accepted.', flush=True)
     goal = ExecutePnp.Goal()
+    goal.material_id = recipe['target_id']
     goal.vision_acquisition_id = response.acquisition_id
     goal.material_candidates = response.material_candidates
     goal.has_place_target_pose = True
