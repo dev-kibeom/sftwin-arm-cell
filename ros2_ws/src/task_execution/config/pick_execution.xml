@@ -12,7 +12,10 @@
         </Sequence>
         <AdvancePickPlanningCandidate/>
       </RetryWhileAllowed>
-      <CloseAndConfirmPickGrasp/>
+      <RecoverOnFailure name="PickGraspConfirmationRecovery">
+        <CloseAndConfirmPickGrasp/>
+        <RecoverUnconfirmedPickGrasp/>
+      </RecoverOnFailure>
       <RunAndFinalize name="PickRetractAndRecord">
         <RecoverOnFailure name="PickRetractFailureHandling">
           <Sequence name="PlanAndExecutePickRetract">

@@ -36,7 +36,9 @@ int main(int argc, char ** argv)
   // Derived from the selected Tool execution semantics, not a force-policy bypass.
   const auto force_actuation = motion->declare_parameter<std::string>(
     "grip_force.actuation", "physics", strategy_descriptor);
-  if (force_actuation != "logical" && force_actuation != "physics") {
+  if (force_actuation != "logical" && force_actuation != "physics" &&
+    force_actuation != "none")
+  {
     throw std::invalid_argument("Unsupported Tool force actuation");
   }
   if (force_actuation == "physics") {

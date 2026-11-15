@@ -24,15 +24,22 @@ struct HoldingObservation
   std::uint64_t sequence{0};
   std::optional<double> width_mm;
 
-  bool fresh(
+  // Recency is independent of whether the device could establish possession.
+  bool recent(
     Clock::time_point now = Clock::now(),
     std::chrono::milliseconds max_age = std::chrono::milliseconds(500)) const
   {
-    if (state == HoldingState::UNKNOWN || sequence == 0 || now < observed_at) {
+    if (sequence == 0 || now < observed_at) {
       return false;
     }
     return now - observed_at <= max_age;
   }
+
+  bool fresh(
+    Clock::time_point now = Clock::now(),
+    std::chrono::milliseconds max_age = std::chrono::milliseconds(500)) const
+  {return state != HoldingState::UNKNOWN && recent(now, max_age);}
+
 };
 
 class GripperPort

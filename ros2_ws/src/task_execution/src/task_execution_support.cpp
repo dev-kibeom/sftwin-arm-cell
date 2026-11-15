@@ -375,7 +375,7 @@ HoldingWaitResult TaskExecutionSupport::fresh_holding(
       return HoldingWaitResult::CONFIRMED;
     }
     saw_unknown = saw_unknown || (observation.sequence > baseline_sequence &&
-      observation.state == HoldingState::UNKNOWN);
+      observation.recent() && observation.state == HoldingState::UNKNOWN);
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
   if (interruption_checker_) {

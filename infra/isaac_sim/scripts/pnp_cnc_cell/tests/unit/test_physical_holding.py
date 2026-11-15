@@ -59,8 +59,8 @@ def test_sustained_stop_at_expected_width_estimates_held_without_attachment():
     assert result.holding_observation().observed_at >= held.observed_at
 
 
-@pytest.mark.parametrize('position', [0., 0.1, 0.7, 0.8])
-def test_empty_close_limits_or_wrong_aperture_do_not_confirm_held(position):
+@pytest.mark.parametrize('position', [0., 0.8])
+def test_empty_close_limits_do_not_confirm_held(position):
     result, gripper, drive = manager()
     close(result, gripper)
     drive.pos = position
@@ -328,3 +328,13 @@ def test_missing_contact_observer_does_not_block_real_detection():
     for _ in range(10):
         tick(result, gripper)
     assert result.is_grasped
+
+@pytest.mark.parametrize('position', [0.1, 0.7])
+def test_motor_obstruction_does_not_use_uncalibrated_width_as_gate(position):
+    result, gripper, drive = manager()
+    close(result, gripper)
+    drive.pos = position
+    for _ in range(12):
+        tick(result, gripper)
+    assert result.holding_observation().state is HoldingState.HELD
+    assert result.attach_joint_path is None

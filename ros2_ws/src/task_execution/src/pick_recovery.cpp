@@ -80,10 +80,49 @@ std::uint8_t PickRecovery::confirm_return()
   return report_->result_code;
 }
 
+BT::NodeStatus PickRecovery::recover_unconfirmed_grasp()
+{
+  // Only recover an actual grasp failure at the insertion pose. Never issue
+  // RELEASE during cancellation, Safety preemption or backend unavailability.
+  if (report_->result_code != MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE) {
+    return BT::NodeStatus::FAILURE;
+  }
+  const auto original_stage = report_->failure_stage;
+  const auto original_result = report_->result_code;
+  report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
+  const auto opened = support_.execute_gripper_open(state_.holding_baseline);
+  if (opened != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+    report_->result_code = opened;
+    report_->failure_stage = original_stage + ";release_command:" +
+      std::to_string(opened);
+    return BT::NodeStatus::FAILURE;
+  }
+  const auto released = support_.fresh_holding(
+    HoldingState::RELEASED, state_.holding_baseline);
+  if (released != HoldingWaitResult::CONFIRMED) {
+    report_->result_code = released == HoldingWaitResult::CANCELED ?
+      MotionTaskResultCode::TASK_RESULT_CANCELED :
+      released == HoldingWaitResult::SAFETY_PREEMPTED ?
+      MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED :
+      released == HoldingWaitResult::BACKEND_UNAVAILABLE ?
+      MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE : original_result;
+    report_->failure_stage = original_stage + ";release_confirmation_failed";
+    return BT::NodeStatus::FAILURE;
+  }
+  support_.motion_port()->clearGraspRelationAfterRelease();
+  support_.object_state_tracker().mark_detached();
+  report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED;
+  report_->result_code = original_result;
+  report_->failure_stage = original_stage;
+  return BT::NodeStatus::SUCCESS;
+}
+
 void PickRecovery::register_nodes(
   BT::BehaviorTreeFactory & factory, TaskExecutionReport & report)
 {
   report_ = &report;
+  register_callback_action(
+    factory, "RecoverUnconfirmedPickGrasp", [this]() {return recover_unconfirmed_grasp();});
   register_callback_action(
     factory, "PreparePickRetractRecovery", [this]() {
       prepare();

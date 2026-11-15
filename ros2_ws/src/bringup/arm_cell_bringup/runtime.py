@@ -436,6 +436,10 @@ def configure_grip_force(config, path):
     if actuation == 'logical':
         config['motion']['grip_force'] = {'actuation': 'logical'}
         return
+    capabilities = config['tool']['runtime'].get('capabilities', [])
+    if not {'parallel_grasp', 'grip_force_n'}.issubset(capabilities):
+        config['motion']['grip_force'] = {'actuation': 'none'}
+        return
     policy = read(resolve('package://arm_cell_task_execution/config/grip_force_policy.yaml', path.parent))
     limits = config['tool']['force_limits']
     materials = {}

@@ -94,6 +94,24 @@ class ParallelGripperCapture:
             return False
 
     @staticmethod
+    def physical_holding_detected(observation, settings):
+        """Parallel Tool obstruction inference, without uncalibrated aperture gating.
+
+        This is device-level possession evidence, not target identification.
+        The physical actuator's width is compatibility telemetry; Snap's
+        geometric qualification retains its separate width requirement.
+        """
+        pos, target = observation['actual_position_rad'], observation['target_position_rad']
+        epsilon = observation['position_tolerance_rad']
+        return (observation['command_direction'] == 'closing'
+                and observation['object_detection'] == 'stopped_closing'
+                and observation['stopped_duration_s'] >= settings['stopped_dwell_s']
+                and all(math.isfinite(v) for v in (pos, target, epsilon))
+                and target - pos > epsilon
+                and observation['lower_limit_rad'] + epsilon < pos
+                < observation['upper_limit_rad'] - epsilon)
+
+    @staticmethod
     def width_matches_reference(measured, expected, tolerance):
         return (all(math.isfinite(v) for v in (measured, expected, tolerance))
                 and measured >= 0.0 and expected > 0.0 and tolerance >= 0.0

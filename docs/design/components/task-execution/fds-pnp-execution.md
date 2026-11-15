@@ -182,7 +182,15 @@ Vision symmetry order `1`, `2`, `4`의 관측 방향 class는 후보 evidence와
 
 Gripper command·Holding 관측·복구는 기존 계약을 유지한다. 통신 지연/STALE은 동일 단계에서
 기다리고 필요한 상태가 도착하면 기존 흐름을 계속한다. 정상 통신에서 관측된 실제 `UNKNOWN`은
-지연과 구별해 기존 task-local 복구로 처리한다. 실제 파지 실패는 기존 OPEN 복구를 사용한다.
+지연과 구별해 기존 task-local 복구로 처리한다. 실제 파지 실패는 기존 RELEASE(병렬 그리퍼의 OPEN) 복구를 사용한다.
+PICK 삽입 뒤 상승 전 파지 확인 실패에는 Tool 종류·Mode·폭과 무관하게 현재 삽입 위치에서
+RELEASE를 한 번 요청하고 명령 이후 새로운 `RELEASED`를 확인한다. 해제 확인과 Scene 정리 뒤에만
+해제된 미배치 disposition과 원래 파지 실패를 보존해 `RETRYABLE`을 반환하며, 이후 HOME·새 Acquisition은
+기존 Mission 재시도 절차가 수행한다. RELEASE 명령 또는 해제 확인 실패는 `UNKNOWN`과 복구 실패로
+종료하고 자동 HOME·재시도로 진행하지 않는다. CLOSE 뒤 관측 미확정 상태를 `UNCHANGED`로 보고하지 않는다.
+이 복구는 Cancel·Safety 선점·Backend 불가를 일반 파지 실패로 바꾸지 않으며 Retreat 이후 보유 상실이나
+PLACE 실패의 기존 복구를 대체하지 않는다. 구동·보유·해제의 장치별 판정은 Backend/Tool이,
+복구 순서와 공정 결과는 Task Execution이 소유한다.
 이미 완료한 OPEN을 중복 실행하거나 동일 Holding 사실을 중복 검증하지 않으며, 신규 Gripper timeout,
 명령 완료 확인 또는 추가 승인 Gate를 만들지 않는다. 세부 Motion 실행·Holding 관측 계약은
 [Motion Execution FDS](../motion/fds-motion-execution.md)와 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)를 따른다.

@@ -32,6 +32,7 @@ Backend는 Controller·Prim·서비스명·Joint 토폴로지와 무관하게 �
 | `HoldingObservation.state` | `HELD`, `RELEASED`, `UNKNOWN` | 이전 관측·장치 내부 Capture 성공을 현재 보유 증거로 승격 금지 |
 | `HoldingObservation` 메타데이터 | 단조 관측 시각과 Sequence를 포함한 관측 신선도 근거 | 결측·오래됨·모호함·Adapter 소실을 확정 상태로 취급 금지 |
 
+관측의 시간상 유효성과 보유 상태 확정은 구분한다. 최근 수신한 `UNKNOWN`은 유효한 불확실 관측이며 `HELD` 또는 `RELEASED` 확인을 충족하지 않는다.
 관측은 Validation 프로파일에서 **500ms**의 유효기간을 갖는다. 결측·오래된 관측·Adapter 연결 소실·모호한 후보·예기치 않은 Joint/Prim 소실은 `UNKNOWN`이다. PICK 후퇴·성공에는 새로운 `HELD`, PLACE 후퇴·성공에는 `open()` 성공과 새로운 `RELEASED`가 필요하다.
 
 Motion이 제공하는 선택된 TCP Grasp Pose와 Geometry에서 도출한 예상 접촉 폭은 Simulator Capture가 같은 계획된 파지점을 평가하도록 하는 논리 입력이다. 예상 접촉 폭은 `close()`의 구동 목표가 아니다. Simulator별 Capture Volume/위치·방향·폭 허용 조건과 단계 실행은 [Motion Execution FDS](../components/motion/fds-motion-execution.md) 및 [Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md)가 소유한다. Backend는 이 기준을 무시할 수 있는 실물 Holding 센서를 사용할 수 있으며 최종 보유 근거는 유효한 `HoldingObservation`이다.
@@ -50,6 +51,7 @@ attached는 실제 Fixed Joint 소유 여부다. 현재 지원 Profile은 Roboti
 목표와 정책의 허용 최대값은 서로 마주 보는 두 손가락의 법선 압착력 합계이며, 손가락당 힘·관절 토크·제조사 정규화 명령과 혼용하지 않는다.
 Robotiq 2F-85의 제조사 파지력 범위 20–235 N은 손가락당 기준으로 정규화하여 합계 40–470 N으로 다룬다.
 근거는 [제조사 매뉴얼](https://s3.amazonaws.com/com-robotiq-website-prod-assets/website-assets/support_documents/document/2F-85_2F-140_TM-OMRON_20240402.pdf)의 Table 5-1과 §5.2.1의 양쪽 손가락 하중식이다. 해당 사양의 패드·결합부 적용 조건을 보존한다.
+해당 두 손가락 힘 정책은 물리 구동이면서 병렬 파지와 뉴턴 단위 파지력 Capability를 제공하는 Tool에만 적용한다. 다른 Tool의 물리 구동만으로 이 정책을 선택하지 않는다.
 공통 정책은 자재 명목 질량·접촉 마찰 하한·작업 가속도 한계·여유계수에서 목표를 결정한다.
 Tool은 제조사 사양과 적용 조건을, 자재는 손상 방지를 위한 허용 최대 압착력을 소유한다.
 목표는 두 한계 모두를 만족해야 하며, 여유를 포함한 필요 힘을 제공할 수 없으면 더 작은 값으로 잘라 성공으로 진행하지 않는다.
@@ -75,7 +77,7 @@ Physics Snap과 Physics Real은 동일한 힘 정책을 적용한다. 실제 힘
 |---|---|---|---|
 | `logical_snap` | Logical 구동·기존 Capture Qualification | Fixed Joint Attach 완료 확인 | 있음 |
 | `physical_snap` | PhysX 구동·참조와 동일 대상의 좌우 접촉 반력·폭·위치 안정성 | Qualification 뒤 Fixed Joint Attach 완료 확인 | 있음 |
-| `physical_real` | PhysX 구동·Tool Object Detection·예상 폭 | 목표 미도달·지속 정지·폭에 근거한 보유 추정 | 없음 |
+| `physical_real` | PhysX 구동·Tool Object Detection | 목표 미도달·지속 정지·관절 한계 안쪽 위치에 근거한 보유 추정 | 없음 |
 
 Holding Observation(HELD/RELEASED/UNKNOWN)은 Attachment Ownership과 별개다. Fixed Joint가 없다는
 이유로 Real의 HELD를 무효화하지 않는다. Snap의 Qualification은 Attach 완료 관측을 대신하지 못한다.
@@ -84,6 +86,7 @@ Holding Observation(HELD/RELEASED/UNKNOWN)은 Attachment Ownership과 별개다.
 Real의 Object Detection은 순간 속도 진동만으로 정지를 거부하지 않고 지속적인 관절 위치 안정성과
 closing target 미도달을 해석한다. Moving, Stopped Opening, At Requested Position은 HELD 근거가 아니다.
 Simulation은 이 상태를 관절 관측으로 추정하고 Hardware는 제조사 Detection을 제공할 수 있다.
+보유·해제 판정은 선택 Tool 구현이 소유한다. Physical Real의 교정되지 않은 선형 폭 환산은 진단용이며 예상 접촉 폭과의 정밀 비교로 보유를 거부하지 않는다. Object Detection은 선택 자재의 동일성을 증명하지 않는다. Snap의 기하·접촉 Qualification은 별도로 유지한다.
 좌우 Fingertip 반력이나 자재 World Pose는 Hardware/Real 공통 관측의 필수 필드가 아니다.
 
 STOP은 pending 구동·검출을 취소하고 소유 Attachment는 기존 owner 규칙을 따른다.

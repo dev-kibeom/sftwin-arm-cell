@@ -215,6 +215,9 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
   result.result_code.value = pick_code;
   result.object_disposition = last_report_.object_disposition;
   result.diagnostic_detail = last_report_.failure_stage;
+  if (!last_report_.gripper_observation_detail.empty()) {
+    result.diagnostic_detail += ";" + last_report_.gripper_observation_detail;
+  }
   result.attempted_candidate_ids = attempted_material_candidate_ids_;
   result.selected_candidate_id = outcome_material_candidate_id_;
   if (pick_code != MotionTaskResultCode::TASK_RESULT_SUCCESS ||
