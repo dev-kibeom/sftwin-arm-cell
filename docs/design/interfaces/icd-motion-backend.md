@@ -123,3 +123,6 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 - [Safety–Motion ICD](icd-safety-motion.md): 외부 정지 완료 및 Safety 권한 의미
 
 Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`는 해당 실행의 물리 보유 추정 근거도 무효화한다. 파지 승인 후 pending 참조의 정상 퇴역은 `invalidate:true, retire_pending:true`로 구별한다. 이 퇴역만 수락된 CLOSE의 실행 ID·예상 폭 근거를 유지하며 새 CLOSE를 허가하지 않는다. 유지된 근거도 실제 관절 관측과 계속 대조하며 STOP/OPEN/새 선택·Reset/Shutdown에서 폐기한다. 이는 자재 World Pose 추적이나 Attachment를 대신 생성하는 계약이 아니다.
+
+Logical Snap은 물리 압착력을 사용하지 않으므로 질량 기반 파지력 진입 검사를 적용하지 않는다.
+선택 Tool의 구동 의미에서 이 적용 범위를 결정하며, Physics Snap과 Physics Real에는 동일한 힘 정책을 적용한다.

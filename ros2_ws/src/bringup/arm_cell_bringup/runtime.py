@@ -432,6 +432,10 @@ def validate_cell_configuration(cell, geometry):
 
 def configure_grip_force(config, path):
     """Export catalog properties and Tool limits into Task Execution parameters."""
+    actuation = config['tool']['runtime']['actuator']
+    if actuation == 'logical':
+        config['motion']['grip_force'] = {'actuation': 'logical'}
+        return
     policy = read(resolve('package://arm_cell_task_execution/config/grip_force_policy.yaml', path.parent))
     limits = config['tool']['force_limits']
     materials = {}
@@ -441,6 +445,7 @@ def configure_grip_force(config, path):
         # than borrowing another material's damage limit or friction coefficient.
         materials[identity] = {'mass_kg': material['mass_kg'], **grip}
     config['motion']['grip_force'] = {
+        'actuation': actuation,
         **policy,
         'tool_min_force_n': limits['min_total_force_n'],
         'tool_max_force_n': limits['max_total_force_n'],
