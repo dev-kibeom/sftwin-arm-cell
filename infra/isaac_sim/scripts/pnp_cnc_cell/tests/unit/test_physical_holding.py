@@ -5,6 +5,12 @@ from gripper_runtime.grasp_attachment import HoldingState
 from gripper_runtime.physical_grasp import PhysicalGraspManager
 from gripper_runtime.tool_plugin import ParallelGripperCapture
 from test_physics_tool import actuator
+from test_contact_reaction import contact
+
+def observer():
+    return SimpleNamespace(snapshot=[contact("left", (0.1, 0., 0.)),
+                                     contact("right", (-0.1, 0., 0.))],
+                           advance=lambda: None, clear=lambda: None, close=lambda: None)
 
 
 def manager():
@@ -12,8 +18,9 @@ def manager():
     tool = SimpleNamespace(cancel_motion=gripper.cancel_motion,
                            capture=ParallelGripperCapture(max_width_mm=85.))
     result = PhysicalGraspManager(gripper, tool=tool, holding_settings={
-        'width_tolerance_mm': 3., 'stopped_dwell_s': 0.2,
+        'min_contact_force_per_finger_n': 0.1, 'width_tolerance_mm': 3., 'stopped_dwell_s': 0.2,
         'held_position_tolerance_rad': 0.015})
+    result._observer = observer()
     return result, gripper, drive
 
 
@@ -68,8 +75,10 @@ def test_transient_stop_and_invalid_or_replaced_reference_drop_evidence():
     drive.pos = 0.4
     tick(result, gripper)
     drive.vel = 0.1
+    drive.pos += 0.03
     assert tick(result, gripper) is HoldingState.UNKNOWN
-    drive.vel = 0.
+    drive.vel, drive.pos = 0., 0.4
+    result._observer = observer()
     for _ in range(10):
         tick(result, gripper)
     assert result.is_grasped
@@ -101,6 +110,7 @@ def test_held_motion_loss_open_stop_reset_shutdown():
         tick(result, gripper)
     assert result.is_grasped
     drive.vel = 0.1
+    drive.pos += 0.03
     assert tick(result, gripper) is HoldingState.UNKNOWN
     drive.vel, drive.pos = 0., 0.43
     assert tick(result, gripper) is HoldingState.UNKNOWN
@@ -180,10 +190,11 @@ def runtime_session(initial_sequence=0):
     tool = parallel_tool_runtime(gripper, {'runtime':dict(
         capabilities=['width'], max_width_mm=85., move_duration_s=0.4, supported_shapes=['box'])})
     tool.grasp_factory = lambda **services: PhysicalGraspManager(**services, holding_settings=dict(
-        width_tolerance_mm=3., stopped_dwell_s=0.2, held_position_tolerance_rad=0.015))
+        min_contact_force_per_finger_n=0.1, width_tolerance_mm=3., stopped_dwell_s=0.2, held_position_tolerance_rad=0.015))
     result = GripperRuntimeSession(SimpleNamespace(), tool=tool, adapter_cls=IntentAdapter,
         initial_status_sequence=initial_sequence,
         diagnostic_writer=SimpleNamespace(submit=lambda record: True))
+    result.grasp_manager._observer = observer()
     return result, drive
 
 
@@ -283,4 +294,37 @@ def test_repeated_reference_and_retirement_preserve_inference_identity_until_rea
     assert result.holding_observation().sequence == sequence
     assert result.diagnostics()['holding_inference']['execution_id'] == 'pick'
     drive.vel = 0.1
+    drive.pos += 0.03
     assert tick(result, gripper) is HoldingState.UNKNOWN
+
+
+def test_real_contact_diagnostics_do_not_control_holding():
+    result, gripper, drive = manager()
+    close(result, gripper)
+    for i in range(10):
+        drive.pos = 0.4 + (i % 2) * 0.0002
+        drive.vel = (-1 if i % 2 else 1) * 0.07
+        tick(result, gripper)
+    assert result.is_grasped
+    result._observer.snapshot = [contact('left', (0.00001, 0., 0.)),
+                                 contact('right', (-0.00001, 0., 0.))]
+    assert tick(result, gripper) is HoldingState.HELD
+
+
+def test_reaction_without_stable_aperture_never_confirms_held():
+    result, gripper, drive = manager()
+    close(result, gripper)
+    for i in range(20):
+        drive.pos = 0.39 if i % 2 else 0.41
+        tick(result, gripper)
+        assert not result.is_grasped
+
+
+def test_missing_contact_observer_does_not_block_real_detection():
+    result, gripper, drive = manager()
+    close(result, gripper)
+    result._observer = None
+    drive.pos = 0.4
+    for _ in range(10):
+        tick(result, gripper)
+    assert result.is_grasped

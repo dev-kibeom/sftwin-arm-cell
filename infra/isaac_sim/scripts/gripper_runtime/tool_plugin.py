@@ -148,6 +148,13 @@ def _robotiq_runtime(profile, binding):
             values.setdefault('target_position', 0.0 if intent is ToolIntent.RELEASE else 1.0)
             actuator.configure_command(**values)
         tool.control = control
+        if combination[1] == 'fixed_attach':
+            from gripper_runtime.physical_snap import PhysicalSnapCapture
+            from gripper_runtime.physical_contacts import PhysicalContactObserver
+            tool.capture = PhysicalSnapCapture(settings=settings['physics']['holding'],
+                observer=PhysicalContactObserver(), fingertip_paths=tuple(
+                    binding.robot_path.rstrip('/') + '/gripper_robotiq_85_' + side + '_finger_tip_link'
+                    for side in ('left', 'right')))
         if combination[1] == 'physical':
             from gripper_runtime.physical_grasp import PhysicalGraspManager
             import omni.usd

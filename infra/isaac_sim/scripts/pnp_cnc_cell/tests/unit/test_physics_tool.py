@@ -142,7 +142,8 @@ def test_optional_tool_parameters_do_not_become_required_for_logical_tools():
 def test_obstruction_status_is_reobserved_when_physical_object_moves_away():
     gripper, drive = actuator()
     gripper.close()
-    gripper.update(0.2)
+    for _ in range(5):
+        gripper.update(0.05)
     assert gripper.object_detection == 'stopped_closing'
     drive.pos, drive.vel = 0.6, 0.1
     gripper.update(0.01)

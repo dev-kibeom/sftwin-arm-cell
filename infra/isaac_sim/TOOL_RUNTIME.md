@@ -8,17 +8,20 @@ Physics 모드는 명시적 실험 선택이다. 물리 접촉·자재 유지를
 Tool Profile의 `runtime`은 모델 구현, `actuator`, `grasp`, Capability와 제어 설정을 소유한다.
 Bringup은 선택을 Runtime Configuration에 고정하고 지원 조합을 검사한다. 실행 중 전환·실패 시 자동 fallback은 없다.
 
-| Actuator | Grasp | 동작 |
-|---|---|---|
-| logical | fixed_attach | 기존 시간 보간·DOF 상태 쓰기, Capture Qualification과 Fixed Joint Attach/Detach |
-| physics | fixed_attach | 물리 Drive로 손가락 구동, 기존 Qualification과 논리 Attach/Detach |
-| physics | physical | 물리 Drive·접촉·마찰만 사용, 자재 이동/충돌 예외/Attach 없음 |
+| Mode ID | Actuator + Grasp | Qualification | 유지와 HELD | Release |
+|---|---|---|---|---|
+| `logical_snap` | logical + fixed_attach | 기존 Capture Qualification | Fixed Joint Attach 완료 뒤 HELD | OPEN·Detach 완료 뒤 RELEASED |
+| `physical_snap` | physics + fixed_attach | 같은 참조 대상의 양손가락 반력·예상 폭·위치 안정성 | Qualification 뒤 Fixed Joint Attach 완료를 확인하여 HELD | Fixed Joint 제거 및 실제 OPEN 완료 뒤 RELEASED |
+| `physical_real` | physics + physical | Tool Object Detection·예상 폭 | Fixed Joint 없이 접촉·마찰로 유지; 지속 정지 관측 시 HELD 추정 | 실제 OPEN 완료 뒤 RELEASED |
+
+Mode ID는 기존 `actuator`/`grasp` 조합에서 파생한 표시 identity다. 독립된 모드 선택 설정은 추가하지 않는다.
+`runtime.launcher_modes`의 id/label은 같은 조합을 명명하며 export의 `runtime.mode_id`는 조립 시 파생된다.
 
 `logical + physical`과 알 수 없는 구현은 설정 오류다. Physics Actuator만 선택했다고 Physical Grasp가 되는 것은 아니다.
 
 `gripper_runtime/`은 Cell 밖 `scripts/`의 재사용 Tool 구현이다. `tool_plugin.py`의 기존 선택 경계가
 Actuator와 파지 구현을 조립한다. `GraspManager`는 기존 Fixed Attach를, `PhysicalGraspManager`는
-접촉 진단과 보수적인 물리 상태를 소유한다. 새 Tool은 이 선택 경계에 구현과 Tool Profile을 등록한다.
+선택적 접촉 진단과 Object Detection 기반 보유 추정을 소유한다. Physical Snap은 Tool Capture 전략만 교체하고 기존 GraspManager를 재사용한다. 새 Tool은 이 선택 경계에 구현과 Tool Profile을 등록한다.
 공통 Session은 주입된 Tool의 command/update/관측·파지 계약을 소비한다. 장치 전용 Cell·Robot·Motion·Orchestration 분기는 추가하지 않는다.
 현재 실제 지원 Tool은 2F-85뿐이다.
 
@@ -37,6 +40,7 @@ Physics는 Isaac Sim 5.1에 포함된 Dynamic Control의 `get_dof_properties`, `
 이 API는 deprecated이지만 5.1에서 제공된다. 주 관절에 force drive의 Position Target을 주고
 속도·최대 토크를 제한한다. 정상 명령이나 tick에서 DOF 상태를 쓰지 않는다. tick은 실제 Position/Velocity를 읽는다.
 CLOSE가 막혀도 제한된 closing target을 유지해 물리적 하중을 가한다. STOP은 측정 위치를 새 target으로 hold한다.
+Full OPEN의 구동 완료는 기존 Release의 0.1 mm 개방 폭 조건보다 먼저 보고하지 않는다.
 Timeline Stop은 유효하지 않을 수 있는 PhysX handle에 쓰지 않고 로컬 명령/관측·접촉 버퍼를 비운다.
 재시작은 새 runtime handle과 새 관측 sequence를 사용한다.
 
@@ -66,7 +70,7 @@ Physics의 속도는 이 URDF 상한에 대한 비율로 제한해 보수적으�
 position/speed/force request와 actual position, motor current, object status는 서로 다르다.
 제조사 [Force register 설명](https://s3.amazonaws.com/com-robotiq-website-prod-assets/website-assets/support_documents/document/2F-85_2F-140_TM_InstructionManual_20240402.pdf)에서 rFR은 모터에 공급하는 최대 전류를 제한하고, 전류 한계 초과 시 정지·object detection을 유발한다. 실제 접촉력을 측정하는 정밀 Force Sensor 값이 아니다.
 `gOBJ`의 moving / stopped opening / stopped closing / requested position은 보유 증거와 구분해야 한다.
-현재 시뮬레이션은 position error·저속 지속 시간으로 유사한 obstruction 상태를 추정하고 원시 `gOBJ`나 모터 전류를 합성하지 않는다.
+현재 시뮬레이션은 position error·지속적인 위치 안정성으로 유사한 obstruction 상태를 추정하고 원시 `gOBJ`나 모터 전류를 합성하지 않는다.
 
 ## 설정 소유권과 단위
 
@@ -99,18 +103,49 @@ STOP에는 추가 파라미터를 받지 않는다. Logical 구현은 추가 제
 추가 필드를 모든 Tool에 필수화하지 않는다. `ToolRuntime.observation()`은 제공하는 구현에서만 position/velocity,
 target, motion status, inferred object status와 설정을 반환한다.
 
-Physical Grasp는 실제 관절 관측으로 보유를 **추정**한다. 유효한 Motion Capture Reference와 일치하는 CLOSE를 수락한 뒤 다음 조건을 함께 확인한다.
+### Physical Snap Qualification
 
-- closing target이 실제 위치보다 더 닫힌 쪽에 있고 목표 오차가 position tolerance를 초과한다.
-- 실제 위치가 양쪽 joint limit에서 떨어져 있고, 실제 속도가 Tool의 정지 속도 이하다.
-- Actuator의 `stopped_closing`과 기대 폭 대비 실제 관절에서 계산한 개방 폭의 허용오차를 충족한다.
-- Tool Profile `runtime.physics.holding.stopped_dwell_s` 동안 이 조건과 위치 안정성이 지속된다.
+Physics Actuator를 사용하되 Qualification과 Attachment를 분리한다. 기존 Capture Reference의
+object observation을 이용한 유일 후보 association을 재사용하며, 그 대상과 **동일한 Rigid Body**에
+대한 좌우 fingertip 접촉만 인정한다. 기존 Logical Capture Qualification을 중복 적용하지 않는다.
 
-정지 하나, contact event 하나, 명령 Force Limit만으로 HELD를 확정하지 않는다.
-폭 허용오차와 위치 안정성은 `width_tolerance_mm`, `held_position_tolerance_rad`가 소유한다.
-폭 비교는 Parallel Tool의 폭 일치 predicate를 사용하며 Fixed Attach의 Stage 후보 선택·자재 Pose·Joint 생성은 사용하지 않는다.
-완전히 닫힌 빈 그리퍼, joint limit 또는 기대 폭과 다른 환경 걸림은 UNKNOWN이다.
-기대 폭과 우연히 일치하는 환경 걸림은 관절 관측만으로 완전히 구분할 수 없다.
+- 유효한 CLOSE의 execution identity와 현재 Capture Reference가 일치해야 한다.
+- 실제 관절 위치가 양쪽 joint limit에서 떨어지고 closing target에 미도달해야 한다.
+- 실제 관절에서 계산한 폭이 선택 Reference의 기대 폭과 `width_tolerance_mm` 이내로 일치해야 한다.
+- 같은 상대 body에 대한 좌우 fingertip의 normal impulse를 각각 Physics Step dt로 나눈 반력이
+  `runtime.physics.holding.min_contact_force_per_finger_n` 이상이어야 한다.
+- 위 조건과 `held_position_tolerance_rad` 이내 위치 안정성이 `stopped_dwell_s` 동안 지속돼야 한다.
+
+Qualification 자체는 HELD가 아니다. 기존 GraspManager/Fixed Joint Owner가 Attach 생성과 소유권을
+확인한 이후에만 HELD다. Attach 실패는 HELD를 발행하지 않는다. 운반 중 유지는 Fixed Attach가 담당한다.
+최소 반력 0.1 N/finger는 미보정 초기값이며 제조사 force 사양이나 실제 유지력 증거가 아니다.
+
+### Physical Real Object Detection
+
+Actuator가 실제 관절 위치 변화 범위와 목표 오차로 `in_motion`, `stopped_closing`,
+`stopped_opening`, `at_requested_position`을 계산한다. 순간 속도는 진단이며 정지 승인 조건이 아니다.
+위치가 안정 허용 범위를 벗어나면 정지 시간을 초기화한다. Detection은 Actuator에서 한 번 계산하며
+PhysicalGraspManager는 그 관측과 기대 폭을 소비한다. 기존 `blocked_dwell_s`와 Holding의
+`stopped_dwell_s`는 같은 안정 관측 구간에 적용하며 직렬 대기 시간을 추가하지 않는다.
+
+CLOSE target 미도달·관절 한계 배제·지속 `stopped_closing`·예상 폭 일치 시 HELD를 추정한다.
+Moving/Stopped Opening/At Requested Position은 HELD 근거가 아니다. HELD 이후 정지·폭 근거가
+사라지면 UNKNOWN이며, 낙하를 임의로 RELEASED로 분류하지 않는다. OPEN 진행 중 UNKNOWN,
+실제 OPEN 완료 후 RELEASED다. Fixed Joint 부재는 HELD 추정을 무효화하지 않는다.
+자재 World Pose나 좌우 반력 센서를 Real의 공통 보유 계약에 요구하지 않는다. 실제 Hardware Backend는
+제조사 Object Detection을 관측으로 제공할 수 있으며 simulator 전용 추정 알고리즘을 요구받지 않는다.
+
+### 접촉 관측과 생명주기
+
+두 Physics 모드는 기존 Tool 링크에 Contact Report를 활성화한다. actor 경로는 Rigid Body link,
+collider 경로는 그 하위 collision prim이다. 로컬 USD/PhysX API와 링크 구성은 자동 검사 대상이다.
+좌우 힘은 벡터 합산하지 않고 body pair별로 계산한다. Snap은 선택된 Robot의 정확한 fingertip body와
+참조 대상만 사용한다. 여러 Step의 미소비 batch, 유효하지 않은 dt, 누락·무효·이전 접촉은 성공 근거로 재사용하지 않는다.
+Real에서는 접촉·반력은 선택적 진단이며 Object Detection 기록과 구분된다. 진단 장애는 Real Held를 차단하지 않는다.
+STOP은 pending 검출을 취소하고, Snap의 이미 소유한 Attachment는 기존 owner가 유지한다.
+Timeline Stop/Reset/Shutdown은 각 구현의 pending 검출·구동·소유 Attachment와 Holding을 정리한다.
+Motion/Orchestration의 fresh Held 계약, Timeout, Mission Gate, Retry 정책은 변경하지 않는다.
+
 현재 폭은 실제 관절에서 계산한 선형 추정이므로 실제 fingertip geometry 보정도 라이브 확인이 필요하다.
 
 HELD 이후에도 같은 closing target을 유지하면서 실제 위치·속도·폭을 매 tick 재평가한다.
@@ -141,8 +176,8 @@ Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick
 ## 실행
 
 GUI 런처는 선택한 Tool에 연동된 단일 `Tool Mode`를 표시한다.
-병렬 그리퍼의 `Logical Snap`은 Logical + Fixed Attach(기본), `Physics Snap`은 Physics + Fixed Attach,
-`Physics Real`은 Physics + Physical이다. `Real`은 접촉·마찰 기반 시뮬레이션을 의미한다.
+병렬 그리퍼의 `Logical Snap`은 Logical + Fixed Attach(기본), `Physical Snap`은 Physics + Fixed Attach,
+`Physical Real`은 Physics + Physical이다. `Real`은 접촉·마찰 기반 시뮬레이션을 의미한다.
 Tool Profile의 `runtime.launcher_modes`가 표시 이름·설명을 제공하며, 실제 지원 범위는 기존 `supported_combinations`가 소유한다.
 표시용 메타데이터가 미지원 조합을 추가하지 않는다. 내부 Actuator·Grasp 분리는 유지하고 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
 Isaac과 ROS에 같은 Runtime Configuration을 전달한다. 원본 Tool/Deployment YAML을 수정하거나 복사하지 않는다.

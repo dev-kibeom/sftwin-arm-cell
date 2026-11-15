@@ -158,6 +158,7 @@ class GraspManager:
         self.capture_diagnostic_target_path = None
         self._attachment_diagnostics = AttachmentPhysicsDiagnostics(self)
         self._close_command_generation = None
+        self._capture_execution_id = None
         self.released_material_handler = ReleasedMaterialHandler(
             lambda path: enable_material_gravity(self.stage, path),
             self._observe_released_material,
@@ -505,6 +506,9 @@ class GraspManager:
         return bool(configure(reference_config))
 
     def configure_selected_grasp_reference(self, values):
+        reset = getattr(self.capture, 'reset', None)
+        if callable(reset):
+            reset()
         packet = values
         reference_id = None
         frame_id = None
@@ -662,6 +666,9 @@ class GraspManager:
 
     def cancel_tool_transaction(self):
         """Cancel pending actuation/capture; attachment cleanup retains its existing owner."""
+        reset = getattr(self.capture, 'reset', None)
+        if callable(reset):
+            reset()
         self._capture_transaction_armed = False
         self._pending_release_command = None
         if self._holding.state is not HoldingState.HELD:
@@ -723,6 +730,15 @@ class GraspManager:
     def arm_close_transaction(self, execution_id=None, command_generation=None):
         """Arm capture for a newly accepted close command."""
         self._close_transaction_failure_reason = None
+        reset = getattr(self.capture, 'reset', None)
+        if callable(reset):
+            reset()
+        if getattr(self.capture, 'requires_reference', False) and (
+                not self.capture_reference_id or execution_id != self.capture_reference_id):
+            self._close_transaction_failure_reason = 'capture_reference_mismatch'
+            self._capture_transaction_armed = False
+            return False
+        self._capture_execution_id = execution_id
         self._ensure_capture_diagnostic_record(
             self.capture_reference_id or execution_id
         )
@@ -793,6 +809,16 @@ class GraspManager:
         return result
 
     def shutdown(self):
+        close = getattr(self.capture, 'shutdown', None)
+        if callable(close):
+            close()
+        else:
+            reset = getattr(self.capture, 'reset', None)
+            if callable(reset):
+                reset()
+        cancel = getattr(self.tool, 'cancel_motion', None) if self.tool is not None else getattr(self.gripper, 'cancel_motion', None)
+        if callable(cancel):
+            cancel()
         self.released_material_handler.reset()
         self._capture_transaction_armed = False
         cleanup_ok = True
@@ -813,6 +839,9 @@ class GraspManager:
 
     def reset_for_simulation_stop(self):
         """Drop only Isaac-owned grasp state before the Stage clears material."""
+        reset = getattr(self.capture, 'reset', None)
+        if callable(reset):
+            reset()
         self.released_material_handler.reset()
         self._capture_transaction_armed = False
         self._close_command_generation = None
@@ -1107,6 +1136,10 @@ class GraspManager:
         ):
             return False
 
+        evaluate = getattr(self.capture, 'evaluate_transaction', None)
+        if callable(evaluate):
+            return evaluate(self, actuator_state)
+
         try:
             runtime_available, candidates = self.candidate_source.query()
         except Exception as error:
@@ -1385,6 +1418,9 @@ class GraspManager:
                     self._mark_unknown("release_not_confirmed_" + result)
 
     def update(self, dt):
+        advance = getattr(self.capture, 'advance', None)
+        if callable(advance):
+            advance(dt)
         self.released_material_handler.on_physics_step(dt)
         if not self.ready:
             self._capture_transaction_armed = False

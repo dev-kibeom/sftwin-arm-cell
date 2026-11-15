@@ -325,8 +325,8 @@ def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
 
 @pytest.mark.parametrize('label,pair', [
     ('Logical Snap', ['logical', 'fixed_attach']),
-    ('Physics Snap', ['physics', 'fixed_attach']),
-    ('Physics Real', ['physics', 'physical']),
+    ('Physical Snap', ['physics', 'fixed_attach']),
+    ('Physical Real', ['physics', 'physical']),
 ])
 def test_tool_mode_presets_export_one_shared_selection(window, monkeypatch, label, pair):
     combo = window.tool_mode

@@ -315,14 +315,18 @@ def test_tool_grasp_collision_links_preserve_robotiq_geometry_selection():
 
 
 @pytest.mark.parametrize('profile_name', ['operational_profile.yaml', 'rb5_850_profile.yaml'])
-def test_physics_tool_export_preserves_robot_and_derives_linkage(tmp_path, profile_name):
+@pytest.mark.parametrize('actuator,grasp,mode_id', [
+    ('logical','fixed_attach','logical_snap'),
+    ('physics','fixed_attach','physical_snap'),
+    ('physics','physical','physical_real')])
+def test_physics_tool_export_preserves_robot_and_derives_linkage(tmp_path, profile_name, actuator, grasp, mode_id):
     from arm_cell_bringup.runtime import load_profile, export_runtime_configuration
     import json
     config_root = Path(__file__).resolve().parents[1] / 'config'
     baseline = load_profile(config_root / profile_name)
     tool = yaml.safe_load((config_root.parents[1] / 'motion/config/tools/robotiq_2f85.yaml').read_text())
-    tool['runtime']['actuator'] = 'physics'
-    tool['runtime']['grasp'] = 'physical'
+    tool['runtime']['actuator'] = actuator
+    tool['runtime']['grasp'] = grasp
     selected_tool = tmp_path / 'tool.yaml'
     selected_tool.write_text(yaml.safe_dump(tool))
     profile = yaml.safe_load((config_root / profile_name).read_text())
@@ -332,10 +336,32 @@ def test_physics_tool_export_preserves_robot_and_derives_linkage(tmp_path, profi
     selected = load_profile(path)
     assert selected['robot'] == baseline['robot']
     assert selected['home_joint_positions'] == baseline['home_joint_positions']
+    assert selected['tool']['runtime']['mode_id'] == mode_id
+    exported = export_runtime_configuration(path, tmp_path / 'runtime.json')
+    assert json.loads(exported.read_text())['configuration']['tool']['runtime'] == selected['tool']['runtime']
+    if actuator == 'logical':
+        assert selected['tool']['runtime']['actuator'] == baseline['tool']['runtime']['actuator']
+        return
     joints = selected['tool']['runtime']['joint_model']
     primary = selected['tool']['runtime']['physics']['primary_joint']
     assert all(name not in selected['robot']['motion']['arm_joint_names'] for name in joints)
     assert {value['mimic']['joint'] for value in joints.values() if 'mimic' in value} == {primary}
     assert sum('mimic' not in value for value in joints.values()) == 1
-    exported = export_runtime_configuration(path, tmp_path / 'runtime.json')
-    assert json.loads(exported.read_text())['configuration']['tool']['runtime'] == selected['tool']['runtime']
+
+
+@pytest.mark.parametrize('value', [0., -1., float('nan'), float('inf'), True])
+def test_physical_snap_minimum_reaction_is_finite_and_positive(selection, value):
+    def change(documents):
+        runtime=documents['tool']['runtime']
+        runtime.update(actuator='physics', grasp='fixed_attach')
+        runtime['physics']['holding']['min_contact_force_per_finger_n']=value
+    with pytest.raises(ValueError, match='min_contact_force_per_finger_n'):
+        selection(change)
+
+
+def test_physical_real_does_not_require_contact_force_configuration(selection):
+    def change(documents):
+        runtime=documents['tool']['runtime']
+        runtime.update(actuator='physics', grasp='physical')
+        runtime['physics']['holding'].pop('min_contact_force_per_finger_n')
+    assert selection(change)['tool']['runtime']['mode_id']=='physical_real'
