@@ -186,7 +186,20 @@ Grasp Relation 계약을 따르며, Task Execution이 fresh `RELEASED`를 확인
 
 ### Grasp Occupancy 전략
 
-Grasp endpoint의 전체 Robot 검사에서는 고정 설치 접촉인 `base_link`–`robot_riser` 쌍만 요청 로컬 Scene에서 허용한다. 다른 Robot Link와 Riser의 충돌 및 공유 Scene의 ACM은 변경하지 않는다.
+#### 설치 접촉 예외
+
+선언의 소유권은 [Components Architecture](../../architecture/components.md)를 따른다. Grasp endpoint의 전체 Robot 검사는 아래 조건으로 고정 설치 접촉을 처리한다.
+
+| 항목·조건 | 처리·결과 |
+|---|---|
+| 설치 Link의 적격성 | 실제 충돌 형상을 가지며 canonical `base_link` 자체이거나 그 Link와 고정 연결되어야 한다. 좌표계 이름만으로 충돌 Link를 대체하거나 고정 연결된 모든 Link를 자동 허용하지 않는다. |
+| 원본 설정 조립 | Bringup은 설치 Link의 적격성과 Cell의 원본 Geometry·정적 Scene에 설치 객체가 존재하는지 확인한다. 유효하지 않은 선언은 설정 조립에서 거부한다. |
+| Motion에 직접 전달된 잘못된 선언 | 없는 Link·충돌 형상 부재·가동 연결·중복 Link 또는 Link와 객체 선언 중 한쪽만 있는 입력은 충돌 검증을 무효로 반환하며 통과시키지 않는다. |
+| 유효한 선언·요청 Scene에 객체 존재 | 선언된 설치 Link와 설치 객체의 쌍만 요청 로컬 Scene에서 접촉을 허용한다. |
+| 선언된 객체가 요청 Scene에 없음 | 해당 접촉 예외를 적용하지 않는다. 이를 원본 설정 검증 실패와 동일하게 취급하거나 Scene 무결성 검증을 대체하지 않는다. |
+| 다른 충돌·적용 구간 | 다른 Robot Link·환경 객체 및 공유 Scene의 ACM은 변경하지 않는다. Approach·Descent·Retract로 이 예외를 확대하지 않는다. |
+
+#### Grasp 형상과 Occupancy 검사
 
 Grasp endpoint 충돌 검증에서는 선택 후보의 Closing Axis에 대응하는 자재 치수(예상 접촉 폭)까지 닫힌 Gripper 관절 형상을 사용한다. 이 상태는 검증용이며 실제 Gripper Close 명령이나 Holding 성공 조건을 바꾸지 않는다. Robot Self Collision, 정적 Tray·Fixture 및 기존 고정 객체 충돌을 검사한 뒤 운영 Profile의 `grasp_occupancy_mode`로 선택된 Occupancy 전략을 적용한다.
 
@@ -333,6 +346,9 @@ Motion Result는 Gripper `HELD/RELEASED`나 PnP `PLACED`를 확정하지 않는�
 | Snapshot 내용 | Candidate attempt Snapshot은 동일 target의 실제 planning map 객체 집합을 표시해야 한다. |
 | Snapshot 연결 | Vision Acquisition과 연결된 Motion Occupancy Snapshot은 해당 Acquisition의 Vision Snapshot 및 Metadata와 같은 numbered 폴더에 `occupancy-NN.png`로 저장하고 Motion Diagnostic Record에 acquisition·candidate·goal 식별자와 상대 이미지 경로를 남긴다. |
 | 요청 격리 | 요청별 점유·Scene 정책이 다른 요청에 남거나 종료 뒤 늦은 계산 결과가 새 요청에 반영되어서는 안 된다. |
+| 설치 접촉 적용 | [설치 접촉 예외](#설치-접촉-예외)에 따라 선언된 쌍만 Grasp endpoint에서 허용하며 다른 Link·객체의 충돌 판정과 공유 Scene의 ACM은 보존해야 한다. Approach·Descent·Retract에 이 예외가 전파되어서는 안 된다. |
+| 설치 접촉 선언 오류 | 원본 설정 조립과 직접 Motion 입력은 위 규칙표의 오류 조건에서 각각 조립 거부와 충돌 검증 무효를 반환해야 한다. |
+| 요청 Scene의 설치 객체 부재 | 접촉 예외가 적용되지 않아야 하며 기존 Scene 무결성·다른 충돌 검사는 유지해야 한다. |
 | 실패·예산 | 단계별 실패 원인과 누적 예산을 구분해야 한다. |
 
 ### VR-MOT-EXEC-06 — PICK/PLACE Trajectory 완료와 Gate 배제

@@ -13,6 +13,12 @@ enum class GraspOccupancyMode {NONE, FULL_COLLISION, FINGER_CLEARANCE};
 GraspOccupancyMode parse_grasp_occupancy_mode(const std::string & value);
 const char * grasp_occupancy_mode_name(GraspOccupancyMode mode);
 
+struct GraspMountContact
+{
+  std::vector<std::string> links;
+  std::string object_id;
+};
+
 struct FingerOccupancyIntrusion
 {
   std::size_t finger_index;
@@ -49,5 +55,6 @@ GraspCollisionValidationResult validate_grasp_collision(
   const Eigen::Vector3d & insertion_axis_tcp,
   const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy,
   const FingerClearanceParameters & parameters, const std::string & planning_group,
-  const std::optional<Eigen::Vector3d> & target_dimensions = std::nullopt);
+  const std::optional<Eigen::Vector3d> & target_dimensions = std::nullopt,
+  const GraspMountContact & mount_contact = {});
 }  // namespace arm_cell_motion

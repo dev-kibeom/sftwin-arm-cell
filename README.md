@@ -316,6 +316,10 @@ Model Assembly는 Robot·Tool의 물리적 결합과 모델 내부 Binding을 �
 두 Robot 모두 `/World/SF_Twin_Cell/ARM` 아래 선택한 Assembly를 로드합니다.
 Stage의 `ARM`은 독립 고정형 로봇팔의 설치 역할이며 모델명은 `robot_id`·`model_id`로 구분합니다.
 설치 경로는 Cell의 `isaac.robot_prim_path`에서만 설정하고 Graph·Tool·Capture는 같은 Robot Binding을 소비합니다.
+설치 베이스의 실제 충돌 Link는 Model Assembly의 `mount_collision_links`, 받침대는
+Cell의 `contact_objects.robot_mount`가 선언합니다. 공통 Motion은 이 쌍만 Grasp endpoint의
+로컬 Scene에서 허용합니다. 원본 설정 조립 시 Link의 충돌 형상·베이스 고정 연결과 Cell
+객체 참조를 검사하며, 설정 변경 후에는 Runtime Configuration을 다시 export하고 ROS를 재시작합니다.
 기존 URDF/SRDF·USD·Mesh와 모델별 HOME·Drive 설정은 유지합니다.
 이 변경 코드의 라이브 PnP·Stop/Reset·E-Stop 회귀는 사용자가 별도로 확인해야 합니다.
 

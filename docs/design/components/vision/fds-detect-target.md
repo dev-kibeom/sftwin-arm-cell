@@ -226,7 +226,7 @@ Optical→Base Transform이 없거나 유효하지 않으면 Vision 실패 결�
 |---|---|
 | 불안정·미관측 Yaw | Object Geometry의 Yaw가 불안정하거나 관측 불가능하면 성공 결과에 임의의 Orientation을 유효한 Yaw처럼 포함해서는 안 된다. |
 | 유효 위치 | Vision은 유효한 관측 위치를 보존하면서 Orientation Order 0을 보고할 수 있다. |
-| Recipe Fallback | Orchestration은 필수 명시 정책이 허용할 때에만 별도 Recipe Fallback Direction을 사용할 수 있으며 `target_pose.orientation`은 사용하지 않는다. |
+| Recipe Fallback | [Task Execution](../task-execution/fds-pnp-execution.md)은 Recipe의 명시 정책이 허용할 때에만 별도 Recipe Fallback Direction을 사용할 수 있으며 `target_pose.orientation`은 사용하지 않는다. Orchestration은 Recipe snapshot과 후보 정보를 변경 없이 전달한다. |
 | Order 2·4 | TestCube Order 2는 측정 장축의 180도 Modulo Class, Order 4는 정사각형 측정 Edge의 90도 Modulo Class다. |
 | Orientation Search | 어느 쪽도 임의 Orientation Search를 허용하지 않는다. |
 | 보정 권한 | Vision의 Robot/Tool/TCP 보정 권한도 생기지 않는다. |

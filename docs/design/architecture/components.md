@@ -75,14 +75,17 @@ Task Execution → Motion은 단방향 C++ MotionPort 의존이며 그 경계에
 |---|---|
 | Robot | 논리적 관절 구성·Joint Limits, 로봇별 HOME·Retract·Return 자세, 관절별 동치각 허용과 IK Seed 대상 |
 | Tool | Capability·구동 구현·치수·접촉 Geometry, TCP 축 관례와 도구별 접촉·부착 Link 및 Grasp Pose 충돌 검사 Link |
-| Cell | 설비 Geometry·배치, Camera 설치·센서 구성과 Calibration 참조, Material Supply의 Stage 배치·공급 지지면, 작업 위치 및 설비에 따른 경로 공간 제약 |
+| Cell | 설비 Geometry·배치, Camera 설치·센서 구성과 Calibration 참조, Material Supply의 Stage 배치·공급 지지면, 작업 위치 및 설비에 따른 경로 공간 제약, 고정 설치 접촉의 상대 객체 |
+| Model Assembly | 결합 모델의 Identity·Planning Group, Backend의 모델 내부 Binding 및 고정 설치 접촉의 모델 내부 충돌 Link |
 | Motion | IK·Planning·경로 탐색·실행 정책 및 계획용 시간 매개화 설정 |
 
-Model Assembly는 결합 모델의 Identity·Planning Group과 Backend에서 사용하는 모델 내부 Binding을 소유한다. Cell은 Stage 안의 Robot 배치를 소유하며 모델 내부 Binding과 구분한다. Stage 역할과 설치 Binding의 상세 의미는 [Simulation Environment Semantics](../components/simulation-environment-semantics.md#cellstage-binding과-소비-일관성)가 소유한다.
+Cell은 Stage 안의 Robot 배치를 소유하며 모델 내부 Binding과 구분한다. Stage 역할과 설치 Binding의 상세 의미는 [Simulation Environment Semantics](../components/simulation-environment-semantics.md#cellstage-binding과-소비-일관성)가 소유한다.
 
 Robot·Tool의 논리 설정과 결합 URDF/SRDF 모델 자산의 선택은 구분한다. Bringup의 배포 설정이 두 논리 Profile과 호환되는 결합 모델을 선택하며, Robot이나 Tool이 특정 결합 모델을 역으로 소유하지 않는다. 기존 M0609+2F85 모델의 내부 분해는 요구하지 않는다. 배포는 실행 목적에 필요한 Profile 입력을 명시적으로 선택하며 공통 설정 조립은 자재 Fixture의 존재나 파라미터 이름으로 입력을 선택하지 않는다.
 
 Bringup은 원본 설정을 조립할 때 Robot의 관절·Limits·HOME과 선택 Assembly의 관절 체인·Identity·Planning Group, Tool의 접촉 Link 및 Cell 참조의 정합성을 확인한다. 이 검사는 실행 중 관측이나 USD Topology 검증을 대신하지 않으며, export된 Runtime Configuration을 읽을 때 원본 자산을 재검증하는 Runtime Gate를 추가하지 않는다.
+
+Bringup은 설치 접촉 선언을 조립해 Motion에 전달한다. 선언의 검증 조건과 접촉 예외의 적용 범위는 [Motion Execution FDS](../components/motion/fds-motion-execution.md#설치-접촉-예외)를 따른다.
 
 Bringup은 선택된 Cell의 Camera·Material Supply Binding을 Runtime Configuration으로 조립·검증·전달한다. 여러 소비자가 같은 Cell 선택을 사용하는 불변조건은 [Simulation Environment Semantics](../components/simulation-environment-semantics.md#cellstage-binding과-소비-일관성)를 따른다. Launcher는 Profile 선택과 프로세스 실행을 담당한다.
 

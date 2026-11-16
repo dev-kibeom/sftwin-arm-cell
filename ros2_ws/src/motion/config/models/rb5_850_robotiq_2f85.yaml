@@ -5,6 +5,7 @@ robot_id: rb5_850
 tool_id: robotiq_2f85
 model_id: rb5_850_robotiq_2f85
 planning_group: arm
+mount_collision_links: [link0]
 isaac:
   articulation_root: root_joint
   articulation_base: base_link

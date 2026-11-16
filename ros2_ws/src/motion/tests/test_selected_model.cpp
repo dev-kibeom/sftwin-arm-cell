@@ -165,6 +165,9 @@ TEST(SelectedModel, LoadsSolverAndValidatesConfiguredPoses)
     Eigen::AngleAxisd(base["pitch"], Eigen::Vector3d::UnitY()) *
     Eigen::AngleAxisd(base["roll"], Eigen::Vector3d::UnitX()))
     .toRotationMatrix();
+  const arm_cell_motion::GraspMountContact mount_contact{
+    config["motion"]["grasp_mount_contact_links"].get<std::vector<std::string>>(),
+    config["motion"]["grasp_mount_contact_object"].get<std::string>()};
   for (const auto & object : geometry["objects"]) {
     moveit_msgs::msg::CollisionObject collision;
     collision.header.frame_id = "base_link";
@@ -195,6 +198,33 @@ TEST(SelectedModel, LoadsSolverAndValidatesConfiguredPoses)
     collision.primitive_poses.push_back(message);
     collision.operation = moveit_msgs::msg::CollisionObject::ADD;
     ASSERT_TRUE(scene.processCollisionObjectMsg(collision));
+    if (collision.id == mount_contact.object_id) {
+      // Isolate the actual installation geometry from unrelated Cell contacts.
+      // The real models differ: M0609 carries its mesh on base_link, RB5 on
+      // fixed child link0. Both must retain raw contact in the shared scene.
+      planning_scene::PlanningScene mount_scene(model);
+      ASSERT_TRUE(mount_scene.processCollisionObjectMsg(collision));
+      moveit::core::RobotState mounted_state(model);
+      mounted_state.setToDefaultValues();
+      mounted_state.setJointGroupPositions(
+        group, config["home_joint_positions"].get<std::vector<double>>());
+      mounted_state.update();
+      ASSERT_TRUE(arm_cell_motion::validate_pick_state_collision(
+        mount_scene, mounted_state, "").collision);
+      for (auto mode : {arm_cell_motion::GraspOccupancyMode::NONE,
+          arm_cell_motion::GraspOccupancyMode::FULL_COLLISION})
+      {
+        const auto endpoint = arm_cell_motion::validate_grasp_collision(
+          mode, mount_scene, mount_scene, mounted_state,
+          Eigen::Isometry3d::Identity(), Eigen::Vector3d::Zero(),
+          Eigen::Quaterniond::Identity(), std::nullopt, Eigen::Vector3d::UnitZ(),
+          {}, {}, "", std::nullopt, mount_contact);
+        EXPECT_TRUE(endpoint.valid);
+        EXPECT_TRUE(endpoint.allowed) << config["model_configuration"]["model_id"];
+      }
+      EXPECT_TRUE(arm_cell_motion::validate_pick_state_collision(
+        mount_scene, mounted_state, "").collision);
+    }
   }
   state.setToDefaultValues();
   state.setJointGroupPositions(

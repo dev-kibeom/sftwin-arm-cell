@@ -6,6 +6,7 @@ tool_id: robotiq_2f85
 # Assembly identity matches the canonical URDF/SRDF robot name.
 model_id: m0609_robotiq_2f85
 planning_group: arm
+mount_collision_links: [base_link]
 # Imported-model-relative bindings; Cell owns the placement in the stage.
 isaac:
   articulation_root: root_joint
