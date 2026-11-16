@@ -3,9 +3,16 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 project_root="$(cd -- "$script_dir/../../../.." && pwd -P)"
 if [[ $# -lt 2 ]]; then
-    echo 'Usage: tape_roll_cell/run.sh MODEL_EXPERIMENT_PROFILE TASK_FIXTURE_LIBRARY [--headless] [--cycles N]' >&2
+    echo 'Usage: tape_roll_cell/run.sh CELL_EXECUTION_OR_MODEL_EXPERIMENT_PROFILE TASK_FIXTURE_LIBRARY [--headless] [--cycles N]' >&2
     exit 2
 fi
+# Prepare source-export dependencies without discarding a caller's native test overlay.
+set +u
+source /opt/ros/humble/local_setup.bash
+if [[ -f "$project_root/ros2_ws/install/local_setup.bash" ]]; then
+    source "$project_root/ros2_ws/install/local_setup.bash"
+fi
+set -u
 profile="$1"
 library="$2"
 shift 2

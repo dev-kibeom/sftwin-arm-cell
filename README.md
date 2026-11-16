@@ -97,6 +97,10 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 이 흐름은 현재 공개 구현의 역할과 연결을 요약합니다. 전체 시나리오가 실시간 Isaac Sim 환경에서 최종 acceptance를 통과했다는 의미는 아닙니다.
 
+## Tape Handling Cell
+
+M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Cell Profile로 배치·티칭·공급 상태를 분리하며, 지원 실행은 native 공통 Task BT fixture입니다. ROS Mission 연결은 지원하지 않습니다.
+
 ## 설계 기록과 Sim-to-Real 방향
 
 Geometry-first Vision, Vision/Motion Occupancy 소유권, 재사용 Motion BT, Orchestration·Safety Recovery 및 Sim-to-Real 경계를 다룬 [Engineering Story](docs/record/engineering-story/)와 [아키텍처·알고리즘 결정 기록](docs/record/)을 제공합니다. 이 기록은 현재 계약을 대체하지 않으며 실물 로봇 지원이나 성능 우위를 입증하지 않습니다.

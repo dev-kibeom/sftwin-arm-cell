@@ -47,8 +47,10 @@ def main():
     if args.cycles < 0 or (args.headless and args.cycles == 0):
         parser.error('Headless execution requires --cycles N with N > 0')
     config = json.loads(Path(args.configuration).read_text())
-    if config.get('execution_scope') != 'model_only':
-        parser.error('A model-only configuration is required')
+    if config.get('execution_scope') not in ('model_only', 'cell_physical_fixture'):
+        parser.error('A model or physical Cell fixture configuration is required')
+    if config.get('execution_scope') == 'cell_physical_fixture' and not args.experiment:
+        parser.error('Physical Cell fixture requires its selected experiment plugin')
     if args.task_execution_library and not (args.internal_grasp or args.experiment):
         parser.error('--task-execution-library requires --internal-grasp or --experiment')
     if args.internal_grasp and args.experiment:
@@ -67,7 +69,7 @@ def main():
     try:
         import numpy as np
         import omni.usd
-        from pxr import Usd, UsdGeom, UsdLux, UsdPhysics
+        from pxr import Usd, UsdGeom, UsdLux, UsdPhysics, PhysxSchema
         from isaacsim.core.api import World
         from isaacsim.core.prims import SingleArticulation
         from isaac_runtime.model_build_configuration import ModelBuildConfiguration
@@ -89,7 +91,7 @@ def main():
                                if link.get('name').startswith('gripper_') and link.findall('collision')}
         world = World(stage_units_in_meters=1., physics_dt=1/120, rendering_dt=1/60)
         stage = omni.usd.get_context().get_stage()
-        robot_path = '/World/Robot'
+        robot_path = config.get('cell', {}).get('isaac', {}).get('robot_prim_path', '/World/Robot')
         stage.DefinePrim(robot_path, 'Xform').GetReferences().AddReference(str(model.usd))
         assembly = config['model_configuration']['isaac']
         articulation_path = robot_path + '/' + assembly['articulation_root']
@@ -129,6 +131,9 @@ def main():
             if not (math.isclose(schema.GetLowerLimitAttr().Get(), joint['lower'], abs_tol=1e-7)
                     and math.isclose(schema.GetUpperLimitAttr().Get(), joint['upper'], abs_tol=1e-7)):
                 raise RuntimeError(f'Imported limits differ from URDF: {name}')
+            # Position targets alone do not constrain contact-driven DOF velocity.
+            PhysxSchema.PhysxJointAPI.Apply(prim).CreateMaxJointVelocityAttr(
+                joint['velocity'] * settings.get('max_velocity_fraction', 1.))
             drive = UsdPhysics.DriveAPI.Apply(prim, 'linear')
             drive.CreateTypeAttr('force')
             drive.CreateStiffnessAttr(settings['drive_stiffness'])
@@ -228,7 +233,10 @@ def main():
                           arm_indices=arm_indices, finger_indices=indices, step=step,
                           command=command, report=report, cycles=args.cycles,
                           task_execution_library=args.task_execution_library)
-            report.update(status='PASS', sample_count=sample_count, model_id=model.model_id)
+            report.update(status='PASS', sample_count=sample_count, model_id=model.model_id,
+                          max_abs_velocity_m_s=max_velocity.tolist(),
+                          prismatic_velocity_limits_m_s={name: linkage[name]['velocity'] *
+                              settings.get('max_velocity_fraction', 1.) for name in names})
             return
         if args.internal_grasp:
             from internal_grasp_experiment import run_internal_grasp

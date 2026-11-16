@@ -7,7 +7,6 @@ import numpy as np
 from gripper_runtime.grasp_attachment import HoldingState
 from gripper_runtime.tool_plugin import select_tool_runtime, ToolIntent
 from gripper_runtime.radial_physical import radial_physical_runtime
-from internal_grasp_geometry import link_transforms
 from scene_entrypoint import run_scene_build
 
 
@@ -21,7 +20,7 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
     if not task_execution_library:
         raise ValueError('Tape roll requires the common native Task Execution fixture library')
     if cycles != 1:
-        raise ValueError('Tape-roll validation requires --cycles 1; multiple-roll processing is out of scope')
+        raise ValueError('--cycles 1 executes one complete cartridge until exhaustion')
     report['experiment_source_sha256'] = {str(p.relative_to(Path(__file__).parents[1])): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in list(Path(__file__).parent.glob('*.py')) + [Path(__file__).parents[1]/'gripper_runtime/radial_physical.py']}
     task_execution_library=str(Path(task_execution_library).resolve(strict=True))
@@ -37,12 +36,14 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
     # Fail before creating a scene if the selected Tool cannot enter this bore.
     geometry.solve_bore(requirement['insertion_depth_m'],requirement['thickness_m'],requirement['inner_radius_m'])
     context = run_scene_build(configuration=configuration, stage=stage)
-    roll_path = context['roll_path']
+    supply = context['supply']
+    roll_paths = context['roll_paths']
+    roll_path = roll_paths[0]
+    slot = config['slots'][0]
     tcp = prims['sf_grasp_tcp']
     arm_names = configuration['robot']['motion']['arm_joint_names']
     fingers = np.array(finger_indices)
     arms = np.array(arm_indices)
-    primary_index = list(settings['joint_model']).index(settings['primary_joint'])
 
     def transform(prim):
         return np.array(UsdGeom.XformCache().GetLocalToWorldTransform(prim)).T
@@ -58,7 +59,7 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
     # Contact reports are requested without disabling any collision pair.
     robot_bodies = set()
     for prim in stage.Traverse():
-        if str(prim.GetPath()).startswith('/World/Robot/') and prim.HasAPI(UsdPhysics.RigidBodyAPI):
+        if str(prim.GetPath()).startswith(configuration['cell']['isaac']['robot_prim_path']+'/') and prim.HasAPI(UsdPhysics.RigidBodyAPI):
             robot_bodies.add(str(prim.GetPath()))
             PhysxSchema.PhysxContactReportAPI.Apply(prim).CreateThresholdAttr(0.)
     finger_bodies = []
@@ -77,14 +78,18 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
     initial_arm=np.array(config['teaching']['approach'])
     robot.set_joint_positions(initial_arm,joint_indices=arms)
     robot.apply_action(ArticulationAction(joint_positions=initial_arm,joint_indices=arms))
-    roll = SingleRigidPrim(prim_path=roll_path,name='tape_roll')
-    roll.initialize()
+    rolls = [SingleRigidPrim(prim_path=path, name=f'tape_roll_{index}')
+             for index, path in enumerate(roll_paths)]
+    for body in rolls:
+        body.initialize()
+    roll = rolls[0]
     observer = PhysicalContactObserver()
     current = dict(phases=[], samples=[], relation_committed=False)
-    report.update(scope='horizontal physical tape roll, native Task BT fixture; no Mission/vision',
+    report['initial_tool_check'] = current
+    report.update(scope='horizontal multi-roll Tape Cell, native Task BT fixture; no ROS Mission/vision',
                   execution_mode='common_task_bt_physical_fixture', material=roll_config,
                   teaching=config['teaching'], finger_bodies=finger_bodies,
-                  cycles=[current], gravity_m_s2=9.81,
+                  cycles=[], gravity_m_s2=9.81,
                   collision_policy='all existing pairs enabled; unexpected robot/fixture contact fails')
     relation = None
     sampling_elapsed = 0.
@@ -94,7 +99,8 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
         print(f'Tape roll phase: {phase}',flush=True)
         current['phases'].append(dict(phase=phase, simulation_time_s=world.current_time,
             roll_world=transform(stage.GetPrimAtPath(roll_path)).tolist(),
-            tcp_world=transform(tcp).tolist(), tool=actuator.observation()))
+            tcp_world=transform(tcp).tolist(), tool=actuator.observation(),
+            all_roll_positions_m=[transform(stage.GetPrimAtPath(path))[:3, 3].tolist() for path in roll_paths]))
 
     def advance():
         nonlocal sampling_elapsed
@@ -111,15 +117,19 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
             if contact['lost']:
                 continue
             actors = (contact['actor0'],contact['actor1'])
-            if roll_path in actors:
-                other = actors[1] if actors[0] == roll_path else actors[0]
-                if other in finger_bodies:
+            contacted_rolls = set(actors) & set(roll_paths)
+            if contacted_rolls:
+                contacted_roll = next(iter(contacted_rolls))
+                other = actors[1] if actors[0] == contacted_roll else actors[0]
+                if contacted_roll != roll_path and other in robot_bodies:
+                    raise RuntimeError(f'Robot contacted unselected roll: {contacted_roll}')
+                if contacted_roll == roll_path and other in finger_bodies:
                     forces[finger_bodies.index(other)] += sum(
                         float(np.linalg.norm(point['impulse']))*120 for point in contact['points'])
                 elif other in robot_bodies:
                     raise RuntimeError(f'Non-finger Robot/roll contact: {other}')
             if (any(a in robot_bodies for a in actors)
-                    and any(a.startswith(context['root_path']+'/') and a != roll_path for a in actors)):
+                    and any(a.startswith(context['root_path']+'/') and a not in roll_paths for a in actors)):
                 raise RuntimeError(f'Robot/fixture collision: {actors}')
         actuator.update(1/120, forces)
         sampling_elapsed += 1/120
@@ -138,17 +148,24 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
             advance()
 
     def move(name):
-        start = np.array(robot.get_joint_positions(joint_indices=arms))
-        destination = np.array(config['teaching'][name])
+        knots = np.array(slot['trajectories'][name])
+        actual = np.array(robot.get_joint_positions(joint_indices=arms))
+        if np.max(np.abs(actual-knots[0])) > .003:
+            raise RuntimeError(f'Robot is not at the taught Cartesian segment start: {name}')
+        destination = knots[-1]
         duration = config['move_duration_s']
-        for joint,delta in zip(arm_names,np.abs(destination-start)):
+        peak_derivative = np.max(np.abs(np.diff(knots, axis=0)), axis=0)*(len(knots)-1)
+        for joint, derivative in zip(arm_names, peak_derivative):
             velocity = float(geometry.urdf.find(f"joint[@name='{joint}']/limit").get('velocity'))
-            if 1.5*delta/duration > velocity:
-                raise ValueError('Teaching segment exceeds selected joint velocity')
+            if 1.5*derivative/duration > velocity:
+                raise ValueError('Cartesian teaching segment exceeds selected joint velocity')
         frames = math.ceil(duration*120)
         for frame in range(1,frames+1):
-            t=frame/frames
-            robot.apply_action(ArticulationAction(joint_positions=start+(destination-start)*(3*t*t-2*t*t*t),joint_indices=arms))
+            t = frame/frames
+            coordinate = (3*t*t-2*t*t*t)*(len(knots)-1)
+            index = min(int(coordinate),len(knots)-2)
+            target = knots[index]+(knots[index+1]-knots[index])*(coordinate-index)
+            robot.apply_action(ArticulationAction(joint_positions=target,joint_indices=arms))
             advance()
         dwell(.3)
         actual=np.array(robot.get_joint_positions(joint_indices=arms))
@@ -170,21 +187,23 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
         if event == 0:
             if name == 'transfer':
                 require_held=True
+                move('lift')
                 move('extract')
                 move('transfer_clearance')
                 move('transfer')
-                displacement=np.linalg.norm(roll.get_world_pose()[0]-np.array(config['supply_center_m']))
+                displacement=np.linalg.norm(roll.get_world_pose()[0]-np.array(slot['supply_center_m']))
                 current['transferred_distance_m']=float(displacement)
                 if displacement < .1:
                     raise RuntimeError('Physical roll did not transfer')
-                expected=np.array(config['receiver_center_m'])
+                expected=np.array(slot['receiver_center_m'])
                 if np.linalg.norm(roll.get_world_pose()[0]-expected) > .01:
                     raise RuntimeError('Roll missed receiver before release')
+                current['physically_transferred'] = True
             else:
                 move(name)
             if name == 'retreat':
                 dwell(1.)
-                error=float(np.linalg.norm(roll.get_world_pose()[0]-np.array(config['receiver_center_m'])))
+                error=float(np.linalg.norm(roll.get_world_pose()[0]-np.array(slot['receiver_center_m'])))
                 current['receiver_position_error_m']=error
                 current['receiver_speed_m_s']=float(np.linalg.norm(roll.get_linear_velocity()))
                 current['receiver_angular_speed_rad_s']=float(np.linalg.norm(roll.get_angular_velocity()))
@@ -194,6 +213,7 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
                         or current['receiver_angular_speed_rad_s'] > .2
                         or current['receiver_axis_error_rad'] > .05):
                     raise RuntimeError('Released roll is not resting in receiver')
+                current['physically_released'] = True
         elif event == 1:
             await_state(ToolIntent.GRASP,HoldingState.HELD)
             record('EXPAND/GRASP')
@@ -240,13 +260,54 @@ def run(*, configuration, geometry, stage, world, robot, prims, arm_indices,
         record('STOP_CHECK')
         await_state(ToolIntent.RELEASE,HoldingState.RELEASED)
         dwell(.5)
-        current['task_execution']=run_task_grasp_cycle(task_execution_library,tool.capture.name,
-            tool.capture.solution,callback)
-        if relation is not None:
-            raise RuntimeError('Grasp Relation remains after confirmed release')
-        current['final_roll_pose']=transform(stage.GetPrimAtPath(roll_path)).tolist()
+        while supply.select() is not None:
+            index = supply.select()
+            slot = config['slots'][index]
+            roll_path, roll = roll_paths[index], rolls[index]
+            current = dict(slot=index, phases=[], samples=[], relation_committed=False)
+            report['cycles'].append(current)
+            if index:
+                move('return_clearance')
+                move('supply_clearance')
+            current['task_execution'] = run_task_grasp_cycle(task_execution_library,tool.capture.name,
+                tool.capture.solution,callback)
+            if relation is not None:
+                raise RuntimeError('Grasp Relation remains after confirmed release')
+            current['final_roll_pose'] = transform(stage.GetPrimAtPath(roll_path)).tolist()
+            supply.complete(index, transferred=current.get('physically_transferred', False),
+                            released=current.get('physically_released', False))
+            current['supply_after'] = supply.snapshot()
+
     finally:
         require_held=False
-        tool.command(ToolIntent.STOP)
-        record('FINAL')
+        if world.is_playing():
+            tool.command(ToolIntent.STOP)
+            record('FINAL')
         observer.close()
+        if not supply.snapshot()['exhausted']:
+            supply.fail()
+        report['supply_final'] = supply.snapshot()
+        report['supply_before_stop'] = supply.snapshot()
+        report['roll_states_before_stop'] = [dict(
+            position_m=body.get_world_pose()[0].tolist(),
+            linear_velocity_m_s=body.get_linear_velocity().tolist(),
+            angular_velocity_rad_s=body.get_angular_velocity().tolist()) for body in rolls]
+        world.stop()
+        import omni.kit.app
+        omni.kit.app.get_app().update()
+        report['supply_after_stop'] = supply.snapshot()
+        report['roll_centers_after_stop'] = [transform(stage.GetPrimAtPath(path))[:3, 3].tolist()
+                                             for path in roll_paths]
+        if supply.snapshot()['completed'] != 0 or not all(supply.snapshot()['occupied']):
+            raise RuntimeError('Timeline Stop did not reset cartridge inventory')
+        for position, initial in zip(report['roll_centers_after_stop'], config['slots']):
+            if not np.allclose(position, initial['supply_center_m'], atol=1e-6):
+                raise RuntimeError('Timeline Stop did not restore cartridge material')
+        report['roll_velocities_after_stop'] = [list(UsdPhysics.RigidBodyAPI(
+            stage.GetPrimAtPath(path)).GetVelocityAttr().Get()) for path in roll_paths]
+        report['roll_angular_velocities_after_stop'] = [list(UsdPhysics.RigidBodyAPI(
+            stage.GetPrimAtPath(path)).GetAngularVelocityAttr().Get()) for path in roll_paths]
+        if (not np.allclose(report['roll_velocities_after_stop'], 0., atol=1e-8)
+                or not np.allclose(report['roll_angular_velocities_after_stop'], 0., atol=1e-8)):
+            raise RuntimeError('Timeline Stop did not clear material velocity')
+        report['stop_reset_verified'] = True

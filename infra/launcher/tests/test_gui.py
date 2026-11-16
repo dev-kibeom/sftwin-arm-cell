@@ -412,3 +412,22 @@ def test_model_experiment_cannot_start_ros(app, window, monkeypatch):
     window.begin_stop()
     until(app, window, lambda: not window.stopping)
     assert all(button.isEnabled() for button in window.experiment_buttons)
+
+
+def test_cell_fixture_runs_one_cartridge_and_cannot_start_ros(app, window, monkeypatch, tmp_path):
+    entry = launcher.cell_fixtures()[0]
+    library = tmp_path / 'ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so'
+    library.parent.mkdir(parents=True)
+    library.touch()
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    monkeypatch.setattr(launcher, 'ROOT', tmp_path)
+    window.start_cell_fixture(entry)
+    assert len(calls) == 1
+    assert calls[0][1][1].endswith('tape_roll_cell/run.sh')
+    assert calls[0][1][-2:] == ['--cycles', '1']
+    assert not window.ros.isEnabled()
+    assert '물리 이송' in window.status.text()
+    window.start_ros()
+    assert len(calls) == 1
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)

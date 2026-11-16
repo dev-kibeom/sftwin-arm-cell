@@ -1,0 +1,4 @@
+# Physical fixture limits; model-only Tool defaults remain unchanged.
+drive_stiffness: 10000.0
+drive_damping: 100.0
+max_velocity_fraction: 0.5
