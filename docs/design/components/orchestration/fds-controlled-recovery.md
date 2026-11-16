@@ -248,14 +248,3 @@ Task Execution Goal 수락·terminal이 미확정일 때에도 Orchestration은 
 ### VR-ORCH-REC-CANCEL — Handoff와 후속 복구 Action
 
 기존 Motion 정지 근거와 Safety 복구 조건이 충족된 handoff에 중단 Action terminal을 필수로 요구해서는 안 된다(SHALL NOT). 늦은 수락·Feedback·terminal과 취소는 원래 Action에만 귀속하고 후속 복구 Action의 취소로 적용해서는 안 된다(SHALL NOT). 재차 Safety 선점에도 같은 경계를 유지해야 한다(SHALL). 검증 근거는 각 Goal identity, handoff 근거, 늦은 응답 및 후속 Action의 취소·결과다.
-
-### Physical Real 반환 완료에 대한 한정
-
-위 fresh `RELEASED` 계속 실행 조건에는 Task Execution의 모드별 공정 반환 완료를 적용한다.
-E-Stop Reset 뒤 승인된 RETURN_HELD가 SUCCESS 및 `RETURNED`로 종료된 해당 recovery episode에
-한해, 센서 Holding이 `UNKNOWN`이어도 공정 반환 완료를 근거로 HOME을 허가할 수 있다.
-이는 UNKNOWN 자체에서 RELEASED를 추론하는 것이 아니며 MotionStatus를 변경하지 않는다.
-새 `HELD` 관측, 반환 실패·선점, 다음 recovery episode에는 적용하지 않는다.
-fresh MotionStatus·정지/비활성·Backend inactivity·정상 Safety 권한 및 Calibration/Delivery 준비
-조건은 그대로 필요하다. 해제 완료의 모드별 의미와 대기 중 선점은
-[Task Execution PnP FDS](../task-execution/fds-pnp-execution.md)가 소유한다.

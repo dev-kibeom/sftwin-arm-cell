@@ -5,6 +5,7 @@
 #include <arm_cell_interfaces/msg/motion_task_phase.hpp>
 
 #include "arm_cell_task_execution/bt_callback_node.hpp"
+#include "arm_cell_task_execution/release_wait_action.hpp"
 #include "arm_cell_task_execution/motion_plan_execute_action.hpp"
 #include "arm_cell_task_execution/task_execution_validation.hpp"
 
@@ -169,9 +170,10 @@ uint8_t PlaceExecution::execute_release_attempt()
   ++state_.release_attempt;
   const auto last_failure = state_.release_attempt == 1 ?
     Feedback::RELEASE_FAILURE_NONE : Feedback::RELEASE_FAILURE_CONFIRMATION_TIMEOUT;
-  std::uint64_t baseline = 0;
+  state_.release_baseline = 0;
+  state_.holding_result = HoldingWaitResult::TIMEOUT;
   report_->result_code = support_.execute_gripper_open(
-    baseline, state_.release_attempt, kPlaceReleaseMaxRetries,
+    state_.release_baseline, state_.release_attempt, kPlaceReleaseMaxRetries,
     last_failure);
   if (report_->result_code != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
     report_->failure_stage = "gripper:place_open_command";
@@ -179,19 +181,8 @@ uint8_t PlaceExecution::execute_release_attempt()
     return report_->result_code;
   }
   report_->failure_stage = "holding:released_confirmation";
-  if (support_.command_settle_release()) {
-    // Completion is a process assumption after the BT dwell, not a sensor update.
-    state_.holding_result = HoldingWaitResult::CONFIRMED;
-    return report_->result_code;
-  }
-  state_.holding_result = support_.fresh_holding(
-    HoldingState::RELEASED,
-    baseline);
   return report_->result_code;
 }
-
-bool PlaceExecution::release_confirmed() const
-{return state_.holding_result == HoldingWaitResult::CONFIRMED;}
 
 bool PlaceExecution::continue_release_retries() const
 {
@@ -258,9 +249,8 @@ void PlaceExecution::register_nodes(
   const auto set_result = [this](std::uint8_t result) {
       report_->result_code = result; return result;
     };
-  register_callback_action(factory, "UseCommandSettleRelease", [this]() {
-    return support_.command_settle_release() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-  });
+  register_release_wait_action(factory, "WaitForPlaceRelease", support_,
+    state_.release_baseline, state_.holding_result, report);
   register_callback_action(
     factory, "ValidatePlaceGoal", [this, set_result]() {
       state_.goal = blackboard_->get<ExecuteTask::Goal>("goal");
@@ -380,12 +370,7 @@ void PlaceExecution::register_nodes(
     });
   register_callback_action(
     factory, "ExecutePlaceReleaseAttempt", [this, set_result]() {
-      set_result(execute_release_attempt());
-      return BT::NodeStatus::SUCCESS;
-    });
-  register_callback_action(
-    factory, "PlaceReleaseConfirmed", [this]() {
-      return release_confirmed() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+      return domain_status(set_result(execute_release_attempt()));
     });
   register_callback_action(
     factory, "ContinuePlaceReleaseRetries", [this]() {

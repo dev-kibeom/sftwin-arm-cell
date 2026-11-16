@@ -292,10 +292,6 @@ TEST(MotionNodeParameters, AcceptsReadOnlyGripForceStartupAndRejectsUpdates)
     std::make_shared<arm_cell_motion::FakeMotionBackend>());
   rcl_interfaces::msg::ParameterDescriptor descriptor;
   descriptor.read_only = true;
-  EXPECT_NO_THROW(node->declare_parameter<bool>(
-      "command_settle_release", true, descriptor));
-  EXPECT_FALSE(node->set_parameter(
-      rclcpp::Parameter("command_settle_release", false)).successful);
   EXPECT_NO_THROW(node->declare_parameter<std::string>(
       "grip_force.actuation", "physics", descriptor));
   EXPECT_NO_THROW(node->declare_parameter<double>(

@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "arm_cell_task_execution/bt_callback_node.hpp"
+#include "arm_cell_task_execution/release_wait_action.hpp"
 
 namespace arm_cell_task_execution
 {
@@ -32,6 +33,7 @@ std::uint8_t HeldObjectReturn::prepare()
   }
 
   holding_baseline_ = 0;
+  holding_result_ = HoldingWaitResult::TIMEOUT;
   report_->failure_stage = stage_prefix_ + ":gripper_open";
   report_->result_code = support_.execute_gripper_open(holding_baseline_);
   if (report_->result_code != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
@@ -51,8 +53,7 @@ std::uint8_t HeldObjectReturn::finalize()
     }
   }
   report_->failure_stage = stage_prefix_ + ":release_confirmation";
-  const auto released = support_.command_settle_release() ? HoldingWaitResult::CONFIRMED :
-    support_.fresh_holding(HoldingState::RELEASED, holding_baseline_);
+  const auto released = holding_result_;
   if (released != HoldingWaitResult::CONFIRMED) {
     report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
     report_->result_code = released == HoldingWaitResult::CANCELED ?
@@ -88,16 +89,15 @@ void HeldObjectReturn::register_nodes(
     return finalize() == MotionTaskResultCode::TASK_RESULT_SUCCESS ?
       BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
   });
-  register_callback_action(factory, "UseRealReturnDwell", [this]() {
-    return support_.command_settle_release() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-  });
+  register_release_wait_action(factory, "WaitForReturnedRelease", support_, holding_baseline_,
+    holding_result_, report, [this]() {
+      report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
+      report_->failure_stage = stage_prefix_ + ":release_confirmation";
+    });
   factory.registerBehaviorTreeFromText(R"(
     <root><BehaviorTree ID="ReturnHeldToTray"><Sequence>
       <PrepareHeldTrayReturn/>
-      <Fallback>
-        <Sequence><UseRealReturnDwell/><Wait duration_ms="2000"/></Sequence>
-        <Sequence><Inverter><UseRealReturnDwell/></Inverter><Wait duration_ms="3000"/></Sequence>
-      </Fallback>
+      <WaitForReturnedRelease/>
       <FinalizeHeldTrayReturn/>
     </Sequence></BehaviorTree></root>)");
 }

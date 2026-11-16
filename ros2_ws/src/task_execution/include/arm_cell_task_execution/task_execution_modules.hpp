@@ -138,6 +138,7 @@ private:
     ExecuteTask::Goal goal;
     MotionPlan pending_motion_plan;
     std::uint8_t release_attempt{0};
+    std::uint64_t release_baseline{0};
     HoldingWaitResult holding_result{HoldingWaitResult::TIMEOUT};
     bool waypoint_strategy{false};
     bool waypoint_clearance_needed{false};
@@ -153,7 +154,6 @@ private:
   bool advance_planning_candidate();
   void begin_release_retries();
   std::uint8_t execute_release_attempt();
-  bool release_confirmed() const;
   bool continue_release_retries() const;
   std::uint8_t finalize_release();
   std::uint8_t execute_retreat(std::uint8_t motion_result);
@@ -217,6 +217,7 @@ private:
   std::uint8_t prepare();
   std::uint8_t finalize();
   std::uint64_t holding_baseline_{0};
+  HoldingWaitResult holding_result_{HoldingWaitResult::TIMEOUT};
 
   TaskExecutionSupport & support_;
   std::string stage_prefix_;

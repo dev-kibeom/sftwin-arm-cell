@@ -214,7 +214,7 @@ public:
   using WaitForRecoveryFn = std::function<RecoveryObservation()>;
   using WaitForRecoveryCancellableFn = std::function<bool (
         const CancelPredicateFn &, RecoveryObservation &)>;
-  using WaitForBatchContinuationFn = std::function<bool (const CancelPredicateFn &, bool)>;
+  using WaitForBatchContinuationFn = std::function<bool (const CancelPredicateFn &)>;
   using ReadRecoveryEntryFn = std::function<std::optional<SafetyObservation>()>;
   using RecordRecoveryResultFn = std::function<void (const MotionResult &)>;
   using MotionFeedbackFn = std::function<void (uint8_t)>;

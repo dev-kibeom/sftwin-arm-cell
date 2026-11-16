@@ -591,10 +591,9 @@ MotionNode::MotionNode(
       for (const auto & parameter : parameters) {
         const auto & name = parameter.get_name();
         if (name == "pick_strategy" || name == "place_strategy" ||
-          (name == "command_settle_release" && !has_parameter(name)) ||
           (name.rfind("grip_force.", 0) == 0 && !has_parameter(name)))
         {
-          // Task Execution declares read-only strategy, release and grip-force parameters after
+          // Task Execution declares read-only strategy and grip-force parameters after
           // MotionNode construction. Accept their initial declaration here;
           // the descriptor rejects subsequent runtime updates.
           strategy_declaration = true;

@@ -186,33 +186,3 @@ TEST(RecoveryEntryLatchTest, RecordedEventRemainsAvailableAfterReceiptAgeExpires
     recorded->state.selected_stop_mode.value,
     StopMode::STOP_MODE_CONTROLLED);
 }
-
-TEST(RecoveryContinuation, CachedHeldBeforeReturnCannotDiscardProcessReturn)
-{
-  using arm_cell_orchestration::process_return_invalidated;
-  const auto normal = safety(
-    true, true, MotionCapability::MOTION_NORMAL,
-    StopMode::STOP_MODE_CONTROLLED);
-  arm_cell_interfaces::msg::MotionStatus motion;
-  motion.holding_state = MotionStatus::HOLDING_HELD;
-  EXPECT_FALSE(process_return_invalidated(normal, motion, true, false));
-  EXPECT_FALSE(process_return_invalidated(normal, motion, false, true));
-  EXPECT_TRUE(process_return_invalidated(normal, motion, true, true));
-  motion.holding_state = MotionStatus::HOLDING_UNKNOWN;
-  EXPECT_FALSE(process_return_invalidated(normal, motion, true, true));
-  const auto stopped = safety(
-    true, true, MotionCapability::MOTION_NONE,
-    StopMode::STOP_MODE_EMERGENCY);
-  EXPECT_TRUE(process_return_invalidated(stopped, motion, true, true));
-}
-
-TEST(RecoveryContinuation, UnknownRequiresSuccessfulProcessReturnAndHeldStillDenies)
-{
-  using arm_cell_orchestration::material_release_allows_continuation;
-  arm_cell_interfaces::msg::MotionStatus motion;
-  motion.holding_state = MotionStatus::HOLDING_UNKNOWN;
-  EXPECT_FALSE(material_release_allows_continuation(motion, false));
-  EXPECT_TRUE(material_release_allows_continuation(motion, true));
-  motion.holding_state = MotionStatus::HOLDING_HELD;
-  EXPECT_FALSE(material_release_allows_continuation(motion, true));
-}

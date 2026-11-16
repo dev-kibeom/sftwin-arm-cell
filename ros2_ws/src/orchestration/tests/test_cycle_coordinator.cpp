@@ -452,7 +452,7 @@ void allow_normal_batch_recovery(Fixture & fixture, Coordinator::Callbacks & cal
       return true;
     };
   callbacks.wait_for_batch_continuation = [](
-    const Coordinator::CancelPredicateFn &, bool) {return true;};
+    const Coordinator::CancelPredicateFn &) {return true;};
 }
 
 static std::shared_ptr<arm_cell_orchestration::CancellationRegistry::ActionSubmission>
@@ -674,7 +674,7 @@ TEST(CycleCoordinatorTest, SignalLossRecoveryContinuesSameUnprocessedTargetEpiso
       return recovery_observations == 1;
     };
   callbacks.wait_for_batch_continuation = [](
-    const Coordinator::CancelPredicateFn &, bool) {return true;};
+    const Coordinator::CancelPredicateFn &) {return true;};
   Coordinator coordinator(std::move(callbacks));
 
   const auto result = coordinator.execute("target_fixture");
@@ -726,7 +726,7 @@ TEST(CycleCoordinatorTest, EmergencyResetResumesOnlyAfterNormalCapabilityReturns
       return true;
     };
   callbacks.wait_for_batch_continuation = [&fixture](
-    const Coordinator::CancelPredicateFn &, bool) {
+    const Coordinator::CancelPredicateFn &) {
       fixture.safety = normal_safety();  // Safety publishes NORMAL only after Clear/Reset.
       return true;
     };
@@ -800,8 +800,7 @@ TEST(CycleCoordinatorTest, EmergencyResetReturnsHeldMaterialBeforeHome)
       return true;
     };
   callbacks.wait_for_batch_continuation = [&fixture](
-    const Coordinator::CancelPredicateFn &, bool material_returned) {
-      EXPECT_TRUE(material_returned);
+    const Coordinator::CancelPredicateFn &) {
       fixture.safety = normal_safety();
       return true;
     };

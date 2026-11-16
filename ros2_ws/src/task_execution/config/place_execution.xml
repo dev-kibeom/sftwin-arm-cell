@@ -47,16 +47,12 @@
         <RetryWhileAllowed name="PlaceReleaseRetries">
           <Sequence name="OpenAndConfirmPlaceRelease">
             <ExecutePlaceReleaseAttempt />
-            <PlaceReleaseConfirmed />
+            <WaitForPlaceRelease />
           </Sequence>
           <ContinuePlaceReleaseRetries />
         </RetryWhileAllowed>
         <FinalizePlaceRelease />
       </RecoverOnFailure>
-      <Fallback name="PhysicalReleaseDwell">
-        <Sequence><UseCommandSettleRelease/><Wait duration_ms="2000"/></Sequence>
-        <Inverter><UseCommandSettleRelease/></Inverter>
-      </Fallback>
       <ReleasePlacedObject />
       <SubTree ID="PlaceRetreatRecovery" />
     </Sequence>

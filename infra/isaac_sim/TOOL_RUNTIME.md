@@ -40,7 +40,8 @@ Physics는 Isaac Sim 5.1에 포함된 Dynamic Control의 `get_dof_properties`, `
 이 API는 deprecated이지만 5.1에서 제공된다. 주 관절에 force drive의 Position Target을 주고
 속도·최대 토크를 제한한다. 정상 명령이나 tick에서 DOF 상태를 쓰지 않는다. tick은 실제 Position/Velocity를 읽는다.
 CLOSE가 막혀도 제한된 closing target을 유지해 물리적 하중을 가한다. STOP은 측정 위치를 새 target으로 hold한다.
-Full OPEN의 구동 완료는 기존 Release의 0.1 mm 개방 폭 조건보다 먼저 보고하지 않는다.
+Snap에서 사용하는 Full OPEN 구동·Release의 기존 0.1 mm 개방 폭 조건은 유지한다.
+Physical Real의 RELEASED는 아래 독립적인 Tool 목표 접근·위치 안정 관측으로 판정한다.
 Timeline Stop은 유효하지 않을 수 있는 PhysX handle에 쓰지 않고 로컬 명령/관측·접촉 버퍼를 비운다.
 재시작은 새 runtime handle과 새 관측 sequence를 사용한다.
 
@@ -131,7 +132,14 @@ PhysicalGraspManager는 그 관측과 기대 폭을 소비한다. 기존 `blocke
 CLOSE target 미도달·관절 한계 배제·지속 `stopped_closing`·예상 폭 일치 시 HELD를 추정한다.
 Moving/Stopped Opening/At Requested Position은 HELD 근거가 아니다. HELD 이후 정지·폭 근거가
 사라지면 UNKNOWN이며, 낙하를 임의로 RELEASED로 분류하지 않는다. OPEN 진행 중 UNKNOWN,
-실제 OPEN 완료 후 RELEASED다. Fixed Joint 부재는 HELD 추정을 무효화하지 않는다.
+적용된 full OPEN 목표 접근과 연속 위치 안정 관측 후 RELEASED다.
+`physics.release`의 초기 설정은 `open_tolerance_mm=0.5`,
+`position_stability_tolerance_rad=0.001`, `stable_duration_s=0.20`이다. 이는 미보정 초기 시뮬레이션
+설정이며 제조사 실물 정밀도나 자재 배치 성공을 보증하지 않는다. 실제 관절의 목표 오차를 개방 폭
+등가값으로 환산하여 접근을 확인하고, 접근 조건 안에서만 `PositionStability`를 누적한다.
+목표 이탈·새 명령·STOP·취소 시 초기화하며, 순간 관절 속도는 안정 판정의 필수 Gate가 아니다.
+이미 열린 위치에서 OPEN을 다시 요청해도 새 안정 관측을 기다린다. Task Execution은 별도 모드
+우회 없이 fresh `RELEASED`를 소비하며 시간 소진은 성공이 아닌 실패다. Fixed Joint 부재는 HELD 추정을 무효화하지 않는다.
 자재 World Pose나 좌우 반력 센서를 Real의 공통 보유 계약에 요구하지 않는다. 실제 Hardware Backend는
 제조사 Object Detection을 관측으로 제공할 수 있으며 simulator 전용 추정 알고리즘을 요구받지 않는다.
 
@@ -235,8 +243,3 @@ Real 접촉 진단은 Physics dt와 robot/body별 좌우 반력을 남기며 한
 기존 양손가락 Qualification과 별개이며 Real Held 조건을 강화하거나 완화하지 않는다.
 Actuator 진단의 max_drive_effort_nm은 구동 상한이고 joint_effort_nm은 중력 등을 포함한 관측값이다.
 실제 유지력·마찰·관통/진동은 라이브 검증이 필요하다.
-
-Physical Real 정상 PLACE와 Tray 반환의 Task Execution 완료 정책은 OPEN 명령 성공 후
-2초 비차단 BT 대기다. 이 공정 가정은 Tool의 실제 `RELEASED` 관측을 대체하거나 합성하지
-않는다. 최대 개방 폭에 못 미쳐 Holding이 `UNKNOWN`이어도 진단에는 그대로 남는다.
-PICK 준비·PICK 전용 복구 및 Snap attachment 확인은 기존 정책을 유지한다.

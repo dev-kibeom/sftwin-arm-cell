@@ -37,8 +37,6 @@ public:
   void set_phase_callback(PhaseCallback callback);
   void set_runtime_geometry(
     MotionGeometry geometry, std::chrono::milliseconds holding_confirmation_timeout);
-  void set_command_settle_release(bool enabled) {command_settle_release_ = enabled;}
-  bool command_settle_release() const {return command_settle_release_;}
   void set_grip_force(std::optional<double> force_n) {grip_force_n_ = force_n;}
   void set_execution_identity(std::string execution_id) {execution_id_ = std::move(execution_id);}
   const std::string & execution_identity() const {return execution_id_;}
@@ -67,6 +65,8 @@ public:
     std::uint64_t & baseline_sequence, std::uint8_t release_attempt = 0,
     std::uint8_t retry_budget = 0, std::uint8_t last_failure = 0);
   std::uint8_t wait_interruptibly(std::chrono::milliseconds duration) const;
+  std::chrono::milliseconds holding_confirmation_timeout() const
+  {return holding_confirmation_timeout_;}
   std::uint64_t holding_sequence() const;
   HoldingWaitResult fresh_holding(HoldingState expected, std::uint64_t baseline_sequence) const;
 
@@ -83,7 +83,6 @@ private:
   ObjectStateTracker object_state_tracker_;
   std::string execution_id_;
   std::optional<double> grip_force_n_;
-  bool command_settle_release_{false};
   mutable std::mutex movement_mutex_;
   unique_identifier_msgs::msg::UUID active_execution_id_{};
   std::string active_movement_id_;

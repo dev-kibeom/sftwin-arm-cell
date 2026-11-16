@@ -11,19 +11,26 @@ namespace arm_cell_task_execution
 class WaitAction final : public BT::StatefulActionNode
 {
 public:
+  using Completion = std::function<bool ()>;
+  using Timeout = std::function<void ()>;
   using Checker = std::function<std::uint8_t()>;
   WaitAction(
     const std::string & name, const BT::NodeConfiguration & config,
-    Checker checker, TaskExecutionReport & report)
-  : BT::StatefulActionNode(name, config), checker_(std::move(checker)), report_(report) {}
+    Checker checker, TaskExecutionReport & report, Completion completion = {},
+    Timeout timeout = {},
+    std::chrono::milliseconds default_duration = std::chrono::milliseconds(2000))
+  : BT::StatefulActionNode(name, config), checker_(std::move(checker)),
+    completion_(std::move(completion)), timeout_(std::move(timeout)), default_duration_(
+      default_duration),
+    report_(report) {}
   static BT::PortsList providedPorts()
-  {return {BT::InputPort<unsigned>("duration_ms", 2000U, "Dwell duration")};}
+  {return {BT::InputPort<unsigned>("duration_ms")};}
 
 private:
   BT::NodeStatus onStart() override
   {
-    unsigned duration;
-    if (!getInput("duration_ms", duration)) {
+    unsigned duration = static_cast<unsigned>(default_duration_.count());
+    if (config().input_ports.count("duration_ms") && !getInput("duration_ms", duration)) {
       report_.result_code = MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
       return BT::NodeStatus::FAILURE;
     }
@@ -38,11 +45,19 @@ private:
       report_.failure_stage = "gripper:settle_wait_interrupted";
       return BT::NodeStatus::FAILURE;
     }
-    return std::chrono::steady_clock::now() >= deadline_ ?
-           BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
+    if (completion_ && completion_()) {return BT::NodeStatus::SUCCESS;}
+    if (std::chrono::steady_clock::now() < deadline_) {return BT::NodeStatus::RUNNING;}
+    if (completion_) {
+      if (timeout_) {timeout_();}
+      return BT::NodeStatus::FAILURE;
+    }
+    return BT::NodeStatus::SUCCESS;
   }
   void onHalted() override {deadline_ = {};}
   Checker checker_;
+  Completion completion_;
+  Timeout timeout_;
+  std::chrono::milliseconds default_duration_;
   TaskExecutionReport & report_;
   std::chrono::steady_clock::time_point deadline_{};
 };

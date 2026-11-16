@@ -10,7 +10,9 @@ def settings():
                 speed_fraction=0.5, grip_force_n=40.,
                 drive_stiffness=20., drive_damping=2.,
                 position_tolerance_rad=0.01, stopped_velocity_rad_s=0.01,
-                blocked_dwell_s=0.15)
+                blocked_dwell_s=0.15,
+                release=dict(open_tolerance_mm=0.5,
+                             position_stability_tolerance_rad=0.001, stable_duration_s=0.2))
 
 
 class Drive:
@@ -102,6 +104,9 @@ def test_physical_grasp_never_attaches_or_confirms_held_from_stall():
     gripper.open()
     drive.pos = 0.
     manager.update(0.01)
+    assert manager.holding_observation().state is HoldingState.UNKNOWN
+    for _ in range(25):
+        manager.update(0.01)
     assert manager.holding_observation().state is HoldingState.RELEASED
     manager.reset_for_simulation_stop()
     assert manager.holding_observation().state is HoldingState.UNKNOWN

@@ -86,6 +86,14 @@ Holding Observation(HELD/RELEASED/UNKNOWN)은 Attachment Ownership과 별개다.
 Real의 Object Detection은 순간 속도 진동만으로 정지를 거부하지 않고 지속적인 관절 위치 안정성과
 closing target 미도달을 해석한다. Moving, Stopped Opening, At Requested Position은 HELD 근거가 아니다.
 Simulation은 이 상태를 관절 관측으로 추정하고 Hardware는 제조사 Detection을 제공할 수 있다.
+보유·해제 판정은 선택 Tool 구현이 소유한다. Physical Real의 `RELEASED`는 적용된 OPEN 목표에
+실제 관절이 접근하고 연속 위치 안정 관측이 충족된 상태다. 초기 OPEN 접근 허용치는 Tool 설정의
+0.5 mm이며 위치 안정 허용치와 지속 시간도 Tool 설정에서 제공한다. OPEN 명령 수락·경과 시간만으로
+`RELEASED`를 만들지 않는다. 새 명령·STOP·취소·목표 이탈은 이전 안정 관측을 초기화한다.
+실제 Hardware Adapter는 제조사 위치·동작/물체감지 상태를 해석해 같은 HoldingObservation을 제공할
+수 있으며, simulator의 관절 모델이나 허용치를 그대로 재사용할 의무가 없다. 실제 Hardware Adapter
+구현과 실물 해제 검증은 이번 범위에 포함하지 않는다.
+
 보유·해제 판정은 선택 Tool 구현이 소유한다. Physical Real의 교정되지 않은 선형 폭 환산은 진단용이며 예상 접촉 폭과의 정밀 비교로 보유를 거부하지 않는다. Object Detection은 선택 자재의 동일성을 증명하지 않는다. Snap의 기하·접촉 Qualification은 별도로 유지한다.
 좌우 Fingertip 반력이나 자재 World Pose는 Hardware/Real 공통 관측의 필수 필드가 아니다.
 
@@ -127,11 +135,3 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 - [Safety–Motion ICD](icd-safety-motion.md): 외부 정지 완료 및 Safety 권한 의미
 
 Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`는 해당 실행의 물리 보유 추정 근거도 무효화한다. 파지 승인 후 pending 참조의 정상 퇴역은 `invalidate:true, retire_pending:true`로 구별한다. 이 퇴역만 수락된 CLOSE의 실행 ID·예상 폭 근거를 유지하며 새 CLOSE를 허가하지 않는다. 유지된 근거도 실제 관절 관측과 계속 대조하며 STOP/OPEN/새 선택·Reset/Shutdown에서 폐기한다. 이는 자재 World Pose 추적이나 Attachment를 대신 생성하는 계약이 아니다.
-
-### Physical Real 공정 대기와 관측 분리
-
-Physical Real의 Holding `RELEASED`는 계속 실제 Tool 관측이며 경과 시간으로 합성하지 않는다.
-Task Execution은 정상 PLACE 및 Tray 반환에서 OPEN 명령 성공 뒤 2초 BT 대기를 공정 해제 완료로
-사용할 수 있다. 이는 명령 수락을 물리 개방 완료나 센서 확인으로 재분류하지 않으며,
-관측이 `UNKNOWN`이어도 그대로 유지한다. 공정 결과·Scene 정리와 대기 중 선점은
-[Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md)를 따른다.

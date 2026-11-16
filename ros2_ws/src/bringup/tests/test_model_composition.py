@@ -337,7 +337,6 @@ def test_physics_tool_export_preserves_robot_and_derives_linkage(tmp_path, profi
     assert selected['robot'] == baseline['robot']
     assert selected['home_joint_positions'] == baseline['home_joint_positions']
     assert selected['tool']['runtime']['mode_id'] == mode_id
-    assert selected['motion']['command_settle_release'] == (mode_id == 'physical_real')
     exported = export_runtime_configuration(path, tmp_path / 'runtime.json')
     assert json.loads(exported.read_text())['configuration']['tool']['runtime'] == selected['tool']['runtime']
     if actuator == 'logical':
@@ -380,3 +379,16 @@ def test_force_transmission_comes_from_selected_urdf_geometry():
     joints['gripper_robotiq_85_right_finger_tip_joint'].find('mimic').set('multiplier', '-1')
     with pytest.raises(ValueError, match='counter-rotating'):
         robotiq_force_transmission(joints, primary)
+
+
+@pytest.mark.parametrize('key,value', [
+    ('open_tolerance_mm', 0.), ('open_tolerance_mm', 85.),
+    ('open_tolerance_mm', float('nan')), ('open_tolerance_mm', True),
+    ('position_stability_tolerance_rad', -0.1), ('stable_duration_s', 0.)])
+def test_physical_real_release_settings_reject_invalid_observation_thresholds(selection, key, value):
+    def change(documents):
+        runtime = documents['tool']['runtime']
+        runtime.update(actuator='physics', grasp='physical')
+        runtime['physics']['release'][key] = value
+    with pytest.raises(ValueError, match=key):
+        selection(change)
