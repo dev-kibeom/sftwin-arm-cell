@@ -840,6 +840,55 @@ TEST(TaskExecutorPickPlaceTest, ExecutePnpCompletesPickPlaceAndHomeBeforeReturni
   EXPECT_EQ(backend->events.back(), "home");
 }
 
+TEST(TaskExecutorPickPlaceTest, RealReleaseSettlesWithoutInventingReleasedObservation)
+{
+  auto backend = std::make_shared<RecordingBackend>();
+  auto port = std::make_shared<RecordingGripperPort>(*backend);
+  port->release_on_open_call = 1;
+  port->unknown_on_recovery_release = true;
+  TaskExecutor executor(backend, port, valid_geometry());
+  executor.set_command_settle_release(true);
+  const auto start = std::chrono::steady_clock::now();
+  const auto result = executor.execute_pnp(execute_pnp_goal(), "real-release");
+  EXPECT_TRUE(result.material_placed);
+  EXPECT_EQ(result.pnp_outcome,
+    arm_cell_interfaces::action::ExecutePnp::Result::PNP_OUTCOME_COMPLETED);
+  EXPECT_GE(std::chrono::steady_clock::now() - start, std::chrono::seconds(2));
+  EXPECT_EQ(port->holding().state, HoldingState::UNKNOWN);
+  EXPECT_EQ(backend->events.back(), "home");
+}
+
+TEST(TaskExecutorPickPlaceTest, RealReleaseWaitPreemptionDoesNotDetachRetreatOrHome)
+{
+  for (const auto code : {MotionTaskResultCode::TASK_RESULT_CANCELED,
+      MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED})
+  {
+    auto backend = std::make_shared<RecordingBackend>();
+    auto port = std::make_shared<RecordingGripperPort>(*backend);
+    port->release_on_open_call = 1;
+    port->unknown_on_recovery_release = true;
+    std::chrono::steady_clock::time_point opened{};
+    TaskExecutor executor(backend, port, valid_geometry(), [&]() {
+      if (backend->open_calls >= 2) {
+        if (opened == std::chrono::steady_clock::time_point{}) {
+          opened = std::chrono::steady_clock::now();
+        }
+        if (std::chrono::steady_clock::now() - opened > std::chrono::milliseconds(50)) {
+          return code;
+        }
+      }
+      return MotionTaskResultCode::TASK_RESULT_SUCCESS;
+    });
+    executor.set_command_settle_release(true);
+    const auto result = executor.execute_pnp(execute_pnp_goal(), "real-release-interrupted");
+    EXPECT_FALSE(result.material_placed);
+    EXPECT_EQ(result.result_code.value, code);
+    EXPECT_EQ(backend->release_relation_count, 0);
+    EXPECT_NE(backend->events.back(), "home");
+    EXPECT_LT(std::chrono::steady_clock::now() - opened, std::chrono::seconds(1));
+  }
+}
+
 TEST(TaskExecutorPickPlaceTest, FailedFinalHomeDoesNotCompletePlacedPnp)
 {
   auto backend = std::make_shared<RecordingBackend>();
@@ -2123,6 +2172,31 @@ TEST(TaskExecutorPickPlaceTest, AttachmentFailureCannotReportSuccessOrMarkHeld)
   EXPECT_EQ(executor.execute(pick_goal()), MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE);
   EXPECT_EQ(executor.object_state(), MotionObjectState::NO_OBJECT);
   EXPECT_EQ(backend->events.back(), "gripper");
+}
+
+TEST(TaskExecutorPickPlaceTest, RealTrayReturnSettlesAndSafetyCanInterruptBeforeReturnConfirmation)
+{
+  for (const bool interrupt : {false, true}) {
+    auto backend = std::make_shared<RecordingBackend>();
+    auto port = std::make_shared<RecordingGripperPort>(*backend);
+    port->set_observation(HoldingState::HELD, 1U);
+    port->open_auto_observe = false;
+    port->unknown_on_recovery_release = true;
+    TaskExecutor executor(backend, port, valid_geometry(), [&, interrupt]() {
+      return interrupt && backend->open_calls > 0 ?
+        MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED :
+        MotionTaskResultCode::TASK_RESULT_SUCCESS;
+    });
+    executor.set_command_settle_release(true);
+    auto goal = place_goal();
+    goal.task_type.value = MotionTaskType::TASK_TYPE_RETURN_HELD;
+    EXPECT_EQ(executor.execute(goal), interrupt ?
+      MotionTaskResultCode::TASK_RESULT_SAFETY_PREEMPTED : MotionTaskResultCode::TASK_RESULT_SUCCESS);
+    EXPECT_EQ(executor.object_disposition(), interrupt ?
+      ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN : ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+    EXPECT_EQ(backend->release_relation_count, interrupt ? 0 : 1);
+    EXPECT_EQ(backend->open_calls, 1);
+  }
 }
 
 TEST(TaskExecutorPickPlaceTest, PlaceOrdersReleaseDetachRetreatAndClearsOwnership)

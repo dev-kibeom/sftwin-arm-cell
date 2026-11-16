@@ -53,6 +53,10 @@
         </RetryWhileAllowed>
         <FinalizePlaceRelease />
       </RecoverOnFailure>
+      <Fallback name="PhysicalReleaseDwell">
+        <Sequence><UseCommandSettleRelease/><Wait duration_ms="2000"/></Sequence>
+        <Inverter><UseCommandSettleRelease/></Inverter>
+      </Fallback>
       <ReleasePlacedObject />
       <SubTree ID="PlaceRetreatRecovery" />
     </Sequence>

@@ -337,6 +337,7 @@ def test_physics_tool_export_preserves_robot_and_derives_linkage(tmp_path, profi
     assert selected['robot'] == baseline['robot']
     assert selected['home_joint_positions'] == baseline['home_joint_positions']
     assert selected['tool']['runtime']['mode_id'] == mode_id
+    assert selected['motion']['command_settle_release'] == (mode_id == 'physical_real')
     exported = export_runtime_configuration(path, tmp_path / 'runtime.json')
     assert json.loads(exported.read_text())['configuration']['tool']['runtime'] == selected['tool']['runtime']
     if actuator == 'logical':

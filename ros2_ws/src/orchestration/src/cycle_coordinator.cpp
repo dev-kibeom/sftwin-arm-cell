@@ -656,6 +656,7 @@ CycleCoordinator::Result CycleCoordinator::safety_preempted(
 
 void CycleCoordinator::coordinate_recovery(const SafetyObservation & entry_safety)
 {
+  recovery_held_return_result_.reset();
   if (!callbacks_.wait_for_recovery && !callbacks_.wait_for_recovery_cancellable) {
     return;
   }
@@ -1612,7 +1613,10 @@ CycleCoordinator::Result CycleCoordinator::execute(
   factory.registerSimpleAction(
     "ContinueBatch", [this, &state](BT::TreeNode &) {
       if (!callbacks_.wait_for_batch_continuation ||
-        !callbacks_.wait_for_batch_continuation([this]() {return cancel_requested_.load();}))
+        !callbacks_.wait_for_batch_continuation([this]() {return cancel_requested_.load();},
+          recovery_held_return_result_ && successful(*recovery_held_return_result_) &&
+          recovery_held_return_result_->object_disposition ==
+          ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED))
       {
         return BT::NodeStatus::FAILURE;
       }

@@ -4,6 +4,7 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
@@ -14,6 +15,7 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include "arm_cell_task_execution/bt_callback_node.hpp"
+#include "arm_cell_task_execution/wait_action.hpp"
 #include "arm_cell_task_execution/candidate_search_control.hpp"
 #include "arm_cell_task_execution/disturbance_execution.hpp"
 #include "arm_cell_task_execution/task_execution_modules.hpp"
@@ -140,6 +142,7 @@ MotionBtExecutionResult MotionBtExecutor::execute(
   BT::BehaviorTreeFactory factory;
   register_candidate_search_control(factory);
   register_task_selector(factory);
+  register_wait_action(factory, support_.interruption_checker(), report);
   factory.registerBuilder<UnsupportedWaypointNode>(
     "UnsupportedWaypoint",
     [&report](const std::string & name, const BT::NodeConfiguration & config) {
@@ -193,7 +196,9 @@ MotionBtExecutionResult MotionBtExecutor::execute(
       "Groot MotionTask monitor unavailable; task will continue: %s", error.what());
   }
   try {
-    (void)tree.tickRoot();
+    while (tree.tickRoot() == BT::NodeStatus::RUNNING) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
   } catch (...) {
     report.result_code = MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
     report.failure_stage = "execution_worker:exception";

@@ -23,7 +23,7 @@
       </Sequence>
       <Sequence name="ReturnHeldTask">
         <IsTask type="RETURN_HELD"/>
-        <ReturnHeldToTray/>
+        <SubTree ID="ReturnHeldToTray"/>
       </Sequence>
       <Sequence name="PayloadHomeTask">
         <IsTask type="PAYLOAD_HOME"/>

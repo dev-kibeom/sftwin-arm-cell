@@ -179,6 +179,11 @@ uint8_t PlaceExecution::execute_release_attempt()
     return report_->result_code;
   }
   report_->failure_stage = "holding:released_confirmation";
+  if (support_.command_settle_release()) {
+    // Completion is a process assumption after the BT dwell, not a sensor update.
+    state_.holding_result = HoldingWaitResult::CONFIRMED;
+    return report_->result_code;
+  }
   state_.holding_result = support_.fresh_holding(
     HoldingState::RELEASED,
     baseline);
@@ -196,6 +201,12 @@ bool PlaceExecution::continue_release_retries() const
 
 uint8_t PlaceExecution::finalize_release()
 {
+  if (support_.interruption_checker()) {
+    const auto interrupted = support_.interruption_checker()();
+    if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+      report_->result_code = interrupted;
+    }
+  }
   if (report_->result_code != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
     report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
     return report_->result_code;
@@ -247,6 +258,9 @@ void PlaceExecution::register_nodes(
   const auto set_result = [this](std::uint8_t result) {
       report_->result_code = result; return result;
     };
+  register_callback_action(factory, "UseCommandSettleRelease", [this]() {
+    return support_.command_settle_release() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+  });
   register_callback_action(
     factory, "ValidatePlaceGoal", [this, set_result]() {
       state_.goal = blackboard_->get<ExecuteTask::Goal>("goal");

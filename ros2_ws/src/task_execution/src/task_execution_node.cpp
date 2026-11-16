@@ -33,6 +33,8 @@ int main(int argc, char ** argv)
     motion->motion_core(), motion->gripper_port(), motion->motion_geometry(),
     arm_cell_task_execution::TaskExecutor::InterruptionChecker{},
     motion->holding_confirmation_timeout(), strategies);
+  task_executor->set_command_settle_release(motion->declare_parameter<bool>(
+    "command_settle_release", false, strategy_descriptor));
   // Derived from the selected Tool execution semantics, not a force-policy bypass.
   const auto force_actuation = motion->declare_parameter<std::string>(
     "grip_force.actuation", "physics", strategy_descriptor);

@@ -10,6 +10,26 @@
 namespace arm_cell_orchestration
 {
 
+inline bool process_return_invalidated(
+  const SafetyObservation & safety,
+  const arm_cell_interfaces::msg::MotionStatus & motion,
+  bool motion_fresh, bool observed_after_return)
+{
+  return !safety.normal_motion_allowed() ||
+         (motion_fresh && observed_after_return && motion.holding_state ==
+         arm_cell_interfaces::msg::MotionStatus::HOLDING_HELD);
+}
+
+// A process-confirmed return may complete without a sensor RELEASED sample.
+// A positive HELD observation still denies continuation.
+inline bool material_release_allows_continuation(
+  const arm_cell_interfaces::msg::MotionStatus & motion, bool material_returned)
+{
+  using Status = arm_cell_interfaces::msg::MotionStatus;
+  return motion.holding_state == Status::HOLDING_RELEASED ||
+         (material_returned && motion.holding_state == Status::HOLDING_UNKNOWN);
+}
+
 inline bool recovery_ready_for_immediate_return(
   const SafetyObservation & safety,
   const arm_cell_interfaces::msg::MotionStatus & motion)

@@ -99,7 +99,7 @@ bool batch_continuation_ready(
   const SafetyObservation & safety, bool delivery_admitted, bool calibration_fresh,
   std::uint8_t calibration_state,
   const arm_cell_interfaces::msg::MotionStatus & motion,
-  bool motion_fresh)
+  bool motion_fresh, bool material_returned = false)
 {
   return safety.normal_motion_allowed() && delivery_admitted && calibration_fresh &&
          calibration_state == arm_cell_interfaces::msg::VisionCalibration::STATE_READY &&
@@ -108,7 +108,7 @@ bool batch_continuation_ready(
          motion.execution_state == arm_cell_interfaces::msg::MotionStatus::MOTION_STATE_STOPPED) &&
          !motion.execution_active && !motion.has_active_execution &&
          motion.backend_inactivity_confirmed &&
-         motion.holding_state == arm_cell_interfaces::msg::MotionStatus::HOLDING_RELEASED;
+         material_release_allows_continuation(motion, material_returned);
 }
 
 using detail::QueuedOrchestrationRecord;
@@ -1173,10 +1173,11 @@ private:
           handle, previous_recovery_diagnostic_signature, canceled, observation);
       };
     callbacks.wait_for_batch_continuation = [this, handle](
-      const CycleCoordinator::CancelPredicateFn & canceled) {
+      const CycleCoordinator::CancelPredicateFn & canceled, bool material_returned) {
         std::unique_lock<std::mutex> lock(recovery_mutex_);
         const auto & mission_goal = *handle->get_goal();
-        const auto ready = [this, &mission_goal]() {
+        const auto return_completed_receipt = latest_motion_receipt_;
+        const auto ready = [this, &mission_goal, &material_returned, return_completed_receipt]() {
             const auto now = std::chrono::steady_clock::now();
             const auto safety = safety_observation_locked(MaterialAdmissionGate::Clock::now());
             const bool calibration_fresh = vision_calibration_received_ &&
@@ -1187,9 +1188,14 @@ private:
             const bool motion_fresh = latest_motion_receipt_ !=
               std::chrono::steady_clock::time_point{} && now >= latest_motion_receipt_ &&
               now - latest_motion_receipt_ <= kMotionStatusFreshnessTimeout;
+            if (process_return_invalidated(safety, latest_motion_, motion_fresh,
+              latest_motion_receipt_ > return_completed_receipt))
+            {
+              material_returned = false;
+            }
             return batch_continuation_ready(
               safety, delivery_admitted, calibration_fresh,
-              latest_vision_calibration_.state, latest_motion_, motion_fresh);
+              latest_vision_calibration_.state, latest_motion_, motion_fresh, material_returned);
           };
         while (!(canceled && canceled())) {
           if (ready()) {

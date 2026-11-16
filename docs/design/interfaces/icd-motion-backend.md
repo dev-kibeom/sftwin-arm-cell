@@ -127,3 +127,11 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 - [Safety–Motion ICD](icd-safety-motion.md): 외부 정지 완료 및 Safety 권한 의미
 
 Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`는 해당 실행의 물리 보유 추정 근거도 무효화한다. 파지 승인 후 pending 참조의 정상 퇴역은 `invalidate:true, retire_pending:true`로 구별한다. 이 퇴역만 수락된 CLOSE의 실행 ID·예상 폭 근거를 유지하며 새 CLOSE를 허가하지 않는다. 유지된 근거도 실제 관절 관측과 계속 대조하며 STOP/OPEN/새 선택·Reset/Shutdown에서 폐기한다. 이는 자재 World Pose 추적이나 Attachment를 대신 생성하는 계약이 아니다.
+
+### Physical Real 공정 대기와 관측 분리
+
+Physical Real의 Holding `RELEASED`는 계속 실제 Tool 관측이며 경과 시간으로 합성하지 않는다.
+Task Execution은 정상 PLACE 및 Tray 반환에서 OPEN 명령 성공 뒤 2초 BT 대기를 공정 해제 완료로
+사용할 수 있다. 이는 명령 수락을 물리 개방 완료나 센서 확인으로 재분류하지 않으며,
+관측이 `UNKNOWN`이어도 그대로 유지한다. 공정 결과·Scene 정리와 대기 중 선점은
+[Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md)를 따른다.

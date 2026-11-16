@@ -48,6 +48,7 @@ public:
     PickPlaceStrategies strategies = {});
   ~TaskExecutor();
 
+  void set_command_settle_release(bool enabled) {support_->set_command_settle_release(enabled);}
   void set_grip_force_policy(GripForcePolicy policy) {grip_force_policy_ = std::move(policy);}
   void set_interruption_checker(InterruptionChecker interruption_checker);
   void set_phase_callback(PhaseCallback phase_callback);

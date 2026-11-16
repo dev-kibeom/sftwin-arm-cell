@@ -295,13 +295,37 @@ Retry/Recovery GO_HOME 및 Safety 승인 standalone RETRACT는 호환 adapter의
 E-Stop Reset으로 정상 Safety 권한이 복원된 뒤에도 MotionStatus의 fresh Holding이 `HELD`이면
 Orchestration은 `RETURN_HELD` standalone task를 한 번 요청하며, Task Execution은 재사용 가능한
 `ReturnHeldToTray` BT Action Node를 실행한다. Node는 진입 시 fresh `HELD`를 확인하고, 현재 정지
-관절 상태에서 설정된 Tray 반환 관절 목표로 직접 이동·OPEN·3초 interruptible wait·새
-`RELEASED` 관측 확인을 한 반환 동작으로 수행한다. 대기 중 취소나 Safety 선점이 발생하면 확인
+관절 상태에서 설정된 Tray 반환 관절 목표로 직접 이동·OPEN·BT 대기·모드별 해제 완료를
+한 반환 동작으로 수행한다. Physical Real의 2초 공정 대기와 Snap의 3초 및 새 `RELEASED`
+관측 확인은 아래 Physical Real 해제 절을 따른다. 대기 중 취소나 Safety 선점이 발생하면 확인
 단계로 진행하지 않는다. 초기 Holding이 fresh `HELD`가 아니면 이동하지 않으며, 이동·OPEN·대기·확인
 실패나 Safety 선점 시 자동 재시도하지 않는다. PLACE 삽입 실패 복구도 HOME 이동 뒤 같은 Node를
 조합하며, 반환 성공 시 원래 PLACE 실패 결과를 보존한다. 확인된 E-Stop 반환은 GO_HOME 결과와
-독립적으로 `RETURNED`로 보존한다. Orchestration은 이 task 뒤 fresh `RELEASED`와 정지·비활성 상태를
+독립적으로 `RETURNED`로 보존한다. Orchestration은 이 task 뒤 모드별 반환 완료 근거와 fresh 정지·비활성 상태를
 확인하고 GO_HOME 후 batch를 잇는다.
+
+## Physical Real 해제 완료와 BT 대기
+
+선택된 Tool runtime이 `physical_real`이면 Task Execution은 정상 PLACE 및 Tray 반환에서
+OPEN 명령 성공 후 BT `Wait(duration_ms=2000)`를 완료한 것을 공정 해제 완료로 사용한다.
+최대 개방 폭 또는 fresh `RELEASED` 관측은 이 두 경로의 필수 완료 조건이 아니다.
+이 절의 공정 해제 완료는 이 문서의 confirmed release에 포함되며, 센서로 실제 자재 배치를
+확인했다는 의미가 아니다. 센서 Holding은 변경하지 않고 `UNKNOWN`도 그대로 보존한다.
+Scene 정리 이후 정상 PLACE는 `PLACED`/`material_placed=true`, Tray 반환은 `RETURNED`를 확정한다.
+PICK 준비 OPEN과 PICK 전용 실패 복구는 기존 관측 정책을 유지한다.
+Logical Snap 및 Physics Snap은 기존 release/attachment 확인 정책을 유지하며 Tray 반환의
+기존 3초 대기도 같은 `Wait` 노드로 실행한다.
+
+`Wait`는 입력 밀리초 동안 BT tick에 `RUNNING`을 반환하고 완료 시 `SUCCESS`를 반환하는
+재사용 가능한 비차단 Action이다. 각 tick은 시간 완료보다 Cancel·Safety·Backend 중단을 먼저
+확인한다. halt는 대기를 폐기하며 재진입 시 새 시간을 시작한다. 대기 중 E-Stop은 기존 Safety
+수신·정지 경로로 처리되며 중단 결과 뒤 Scene 해제 확정·후퇴·HOME을 실행하지 않는다.
+대기는 OPEN 직후 팔 이동 전에 배치하며, 자재를 잡은 채 수행하는 HOME에는 추가하지 않는다.
+
+E-Stop 복구에서 성공한 RETURN_HELD의 `RETURNED`는 해당 recovery episode의 공정 반환
+완료 근거다. Orchestration은 이를 사용해 센서 `UNKNOWN`인 경우에도 기존 fresh 정지·비활성,
+Safety 정상 권한·준비 조건을 확인한 뒤 HOME을 요청할 수 있다. 새로운 `HELD` 관측은 계속
+실행을 허가하지 않으며, 반환 실패·선점이나 다음 recovery episode에는 이 근거를 재사용하지 않는다.
 
 ## 자재 기반 파지력 정책
 

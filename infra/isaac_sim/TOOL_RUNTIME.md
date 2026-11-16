@@ -235,3 +235,8 @@ Real 접촉 진단은 Physics dt와 robot/body별 좌우 반력을 남기며 한
 기존 양손가락 Qualification과 별개이며 Real Held 조건을 강화하거나 완화하지 않는다.
 Actuator 진단의 max_drive_effort_nm은 구동 상한이고 joint_effort_nm은 중력 등을 포함한 관측값이다.
 실제 유지력·마찰·관통/진동은 라이브 검증이 필요하다.
+
+Physical Real 정상 PLACE와 Tray 반환의 Task Execution 완료 정책은 OPEN 명령 성공 후
+2초 비차단 BT 대기다. 이 공정 가정은 Tool의 실제 `RELEASED` 관측을 대체하거나 합성하지
+않는다. 최대 개방 폭에 못 미쳐 Holding이 `UNKNOWN`이어도 진단에는 그대로 남는다.
+PICK 준비·PICK 전용 복구 및 Snap attachment 확인은 기존 정책을 유지한다.

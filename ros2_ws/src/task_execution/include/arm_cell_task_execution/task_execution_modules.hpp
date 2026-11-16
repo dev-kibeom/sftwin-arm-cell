@@ -214,7 +214,9 @@ public:
     TaskExecutionReport & report);
 
 private:
-  std::uint8_t execute();
+  std::uint8_t prepare();
+  std::uint8_t finalize();
+  std::uint64_t holding_baseline_{0};
 
   TaskExecutionSupport & support_;
   std::string stage_prefix_;

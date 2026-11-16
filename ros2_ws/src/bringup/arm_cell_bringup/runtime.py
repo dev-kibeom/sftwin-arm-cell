@@ -432,6 +432,8 @@ def validate_cell_configuration(cell, geometry):
 
 def configure_grip_force(config, path):
     """Export catalog properties and Tool limits into Task Execution parameters."""
+    config['motion']['command_settle_release'] = (
+        config['tool']['runtime']['mode_id'] == 'physical_real')
     actuation = config['tool']['runtime']['actuator']
     if actuation == 'logical':
         config['motion']['grip_force'] = {'actuation': 'logical'}
