@@ -170,3 +170,12 @@ def test_c10_model_experiment_is_separate_from_grasp_deployments(robot_id, suffi
     assert config['execution_scope'] == 'model_only'
     assert not config['tool']['runtime']['supported_combinations']
     assert all('hand_e_c10' not in str(entry['tool']) for entry in deployments(ROOT))
+
+
+def test_tape_cell_registers_only_native_physical_fixture_execution():
+    from launcher import cell_fixtures
+    entries = cell_fixtures(ROOT)
+    assert {entry['profile'].stem for entry in entries} == {
+        'm0609_hand_e_c10_tape', 'm0609_hand_e_c10_long_tape'}
+    assert all(entry['execution'] == 'native_task_bt_physical_fixture' for entry in entries)
+    assert all(Path(entry['cell']).stem != 'tape_roll_cell' for entry in deployments(ROOT))

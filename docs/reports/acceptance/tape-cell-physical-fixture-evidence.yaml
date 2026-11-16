@@ -1,0 +1,330 @@
+manifest_version: '1'
+evidence_id: tape-cell-physical-fixture-20261117
+repository:
+  commit_sha: ae3b65153fa964d4960fe0c978d65e3a0dd23a11
+  baseline_identity: 'origin/main at PR #105 merge'
+  working_tree:
+    included: true
+    dirty: true
+    paths:
+    - README.md
+    - infra/isaac_sim/scripts/model_joint_experiment.py
+    - infra/isaac_sim/scripts/tape_roll_cell/README.md
+    - infra/isaac_sim/scripts/tape_roll_cell/configuration.py
+    - infra/isaac_sim/scripts/tape_roll_cell/experiment.py
+    - infra/isaac_sim/scripts/tape_roll_cell/experiment.yaml
+    - infra/isaac_sim/scripts/tape_roll_cell/run.sh
+    - infra/isaac_sim/scripts/tape_roll_cell/scene.py
+    - infra/isaac_sim/scripts/tests/test_tape_roll_configuration.py
+    - infra/launcher/launcher.py
+    - infra/launcher/tests/test_gui.py
+    - infra/launcher/tests/test_launcher.py
+    - ros2_ws/src/bringup/arm_cell_bringup/runtime.py
+    - docs/design/components/simulation/fds-tape-cell-supply.md
+    - infra/isaac_sim/scripts/tape_roll_cell/lifecycle.py
+    - infra/isaac_sim/scripts/tape_roll_cell/supply.py
+    - infra/isaac_sim/scripts/tape_roll_cell/teaching.py
+    - infra/isaac_sim/scripts/tests/test_tape_supply.py
+    - ros2_ws/src/bringup/config/cell_executions/m0609_hand_e_c10_long_tape.yaml
+    - ros2_ws/src/bringup/config/cell_executions/m0609_hand_e_c10_tape.yaml
+    - ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml
+    - ros2_ws/src/bringup/config/materials/tape_roll/17mm.yaml
+    - ros2_ws/src/motion/config/tools/physical_fixture/hand_e_c10_drive.yaml
+timestamp: '2026-11-16T17:50:25.932870+00:00'
+environment:
+  runtime_versions:
+    isaac_sim: 5.1.0
+    ros: Humble
+  tool_versions:
+    gpu: NVIDIA GeForce RTX 4060 Laptop GPU
+  profile_config_reference: ros2_ws/src/bringup/config/cell_executions/
+  physics_dt_s: 0.008333333333333333
+  gravity_m_s2:
+  - 0
+  - 0
+  - -9.81
+claim:
+  reference: docs/design/components/simulation/fds-tape-cell-supply.md#verification-requirements
+  statement: 'M0609 C10/Long native Task BT fixture: three physical transfers/releases, exhaustion, no-contact failure inventory
+    preservation and Timeline Stop reset'
+evidence_layer: Live Simulation
+result: PASS
+check_results:
+- check: long_three_rolls
+  result: PASS
+  raw_execution_result: PASS
+  metrics:
+    completion_sequence:
+    - 1
+    - 2
+    - 3
+    receiver_position_errors_m:
+    - 0.0009514497182888689
+    - 0.0009297317620009816
+    - 0.0019968720090586052
+    final_receiver_position_errors_m:
+    - 0.0009621690693799452
+    - 0.0009323933475950818
+    - 0.0019968720090586052
+    max_measured_finger_velocity_m_s: 0.027222877368330956
+  supply_before_stop:
+    occupied:
+    - false
+    - false
+    - false
+    completed: 3
+    selected: null
+    exhausted: true
+  supply_after_stop:
+    occupied:
+    - true
+    - true
+    - true
+    completed: 0
+    selected: null
+    exhausted: false
+  stop_reset_verified: true
+  profile_config_reference: m0609_hand_e_c10_long
+  source_hashes:
+    tape_roll_cell/teaching.py: 22296f71891e0abaea0cae417a134e4d62a7e61b561b0f97cb6103117339760d
+    tape_roll_cell/__init__.py: 7eac856a6040b0738a95a1d2270e161b3df313cf90ccbb847763f6215bd02711
+    tape_roll_cell/material.py: b31fb645c6f3fe9710add83892d0ec48e98a25f9c319cd38fa8c1eb93b64ac7e
+    tape_roll_cell/scene.py: 54b12f169932a3c3564c82513cbd119975dcd310f3916edd5619f6d03ad3f747
+    tape_roll_cell/experiment.py: 320c2edc8fb174b12070d6cc3918246cb18ad18aeddc3f95abc34236ae4243da
+    tape_roll_cell/configuration.py: e6c21321fa59532222b0a23557d3f0ad269f0eee383294e2fcf01502a6b01baf
+    tape_roll_cell/supply.py: c0ddc177d8d74a03ef1aa8d70ce57156565b4767a7d56f3950a6988d77610507
+    tape_roll_cell/lifecycle.py: d1781943934551c91d53013cecd97dc80c96684ff27f54b8df28d27e667f30b3
+    gripper_runtime/radial_physical.py: 51829fe7f0c50b2abd0890b5863704b0b497dff5cdabb98fa7b514c21e5e1af7
+  runner_sha256: e40a077a1d1c64a72e5615e6fef03ad4035362b514acf9dc678cc4944de2a144
+  generated_urdf_sha256: 0008613626719449cc30a5a15bded2fd75f946e4b3e3f25fea6d073800ff6dff
+  task_bt:
+    library: /tmp/tape-roll-build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so
+    library_sha256: f13884d9624867c7df287d45203409f9dc1d9b3b913ffa770e879f7551550230
+    execution_id: 35875c20937d4c439c0e1fd9c6c013d8
+    result_code: 0
+    bt_sha256:
+      disturbance_execution.xml: 4c3a0add9020128300d5ab67af0f1f5cf93e474fb217367525e278183c65761e
+      grasp_cycle.xml: ba17cefb71ca9a958b165ff42f0b80bcf6e2620b9950844121028464b76cffa8
+      held_object_return.xml: 68a62c6f67e7cbb2f17f69002c72705f20c0dec4d5d11c6969ee074bd539dcd8
+      motion_tasks.xml: 1a311a4bea6c775c2cd84009b541adc084e8e257e3964e85671eafc3cee79a06
+      pick_candidate_search.xml: 808816525a2b38f865e99b35089886f8974b500742138ab642499d88768d4614
+      pick_execution.xml: 77c53d95fb748174ca66d961c53e7abe45875d9f2e79d669daa4dbcfbc41534b
+      pick_recovery.xml: 77f5ed32ca50a3c85ff59abe9157acb51eaff6b3c0c6c6161ad8424cbacd9041
+      place_execution.xml: 89ef7e546e0215cf94dddf49ffee543c9ac5e11de3b238c2531d76827c67bc89
+      place_recovery.xml: a22aa630feaa1fb0ad5c35cdbc5e1e64de3cf9c39a1cb1f64de7fccf667d5af1
+- check: base_three_rolls
+  result: PASS
+  raw_execution_result: PASS
+  metrics:
+    completion_sequence:
+    - 1
+    - 2
+    - 3
+    receiver_position_errors_m:
+    - 0.002275072218780877
+    - 0.0028159963459770793
+    - 0.0028667471035467053
+    final_receiver_position_errors_m:
+    - 0.0022708028993146797
+    - 0.0028157590310995
+    - 0.0028667471035467053
+    max_measured_finger_velocity_m_s: 0.027008123695850372
+  supply_before_stop:
+    occupied:
+    - false
+    - false
+    - false
+    completed: 3
+    selected: null
+    exhausted: true
+  supply_after_stop:
+    occupied:
+    - true
+    - true
+    - true
+    completed: 0
+    selected: null
+    exhausted: false
+  stop_reset_verified: true
+  profile_config_reference: m0609_hand_e_c10
+  source_hashes:
+    tape_roll_cell/teaching.py: 22296f71891e0abaea0cae417a134e4d62a7e61b561b0f97cb6103117339760d
+    tape_roll_cell/__init__.py: 7eac856a6040b0738a95a1d2270e161b3df313cf90ccbb847763f6215bd02711
+    tape_roll_cell/material.py: b31fb645c6f3fe9710add83892d0ec48e98a25f9c319cd38fa8c1eb93b64ac7e
+    tape_roll_cell/scene.py: 54b12f169932a3c3564c82513cbd119975dcd310f3916edd5619f6d03ad3f747
+    tape_roll_cell/experiment.py: 320c2edc8fb174b12070d6cc3918246cb18ad18aeddc3f95abc34236ae4243da
+    tape_roll_cell/configuration.py: e6c21321fa59532222b0a23557d3f0ad269f0eee383294e2fcf01502a6b01baf
+    tape_roll_cell/supply.py: c0ddc177d8d74a03ef1aa8d70ce57156565b4767a7d56f3950a6988d77610507
+    tape_roll_cell/lifecycle.py: d1781943934551c91d53013cecd97dc80c96684ff27f54b8df28d27e667f30b3
+    gripper_runtime/radial_physical.py: 51829fe7f0c50b2abd0890b5863704b0b497dff5cdabb98fa7b514c21e5e1af7
+  runner_sha256: e40a077a1d1c64a72e5615e6fef03ad4035362b514acf9dc678cc4944de2a144
+  generated_urdf_sha256: b4f4d2477e6512fd489192f547f7c29338938e334c23a3a8f89fcae333a57383
+  task_bt:
+    library: /tmp/tape-roll-build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so
+    library_sha256: f13884d9624867c7df287d45203409f9dc1d9b3b913ffa770e879f7551550230
+    execution_id: ec9e0515a08b49aaa22c8c45d73969a9
+    result_code: 0
+    bt_sha256:
+      disturbance_execution.xml: 4c3a0add9020128300d5ab67af0f1f5cf93e474fb217367525e278183c65761e
+      grasp_cycle.xml: ba17cefb71ca9a958b165ff42f0b80bcf6e2620b9950844121028464b76cffa8
+      held_object_return.xml: 68a62c6f67e7cbb2f17f69002c72705f20c0dec4d5d11c6969ee074bd539dcd8
+      motion_tasks.xml: 1a311a4bea6c775c2cd84009b541adc084e8e257e3964e85671eafc3cee79a06
+      pick_candidate_search.xml: 808816525a2b38f865e99b35089886f8974b500742138ab642499d88768d4614
+      pick_execution.xml: 77c53d95fb748174ca66d961c53e7abe45875d9f2e79d669daa4dbcfbc41534b
+      pick_recovery.xml: 77f5ed32ca50a3c85ff59abe9157acb51eaff6b3c0c6c6161ad8424cbacd9041
+      place_execution.xml: 89ef7e546e0215cf94dddf49ffee543c9ac5e11de3b238c2531d76827c67bc89
+      place_recovery.xml: a22aa630feaa1fb0ad5c35cdbc5e1e64de3cf9c39a1cb1f64de7fccf667d5af1
+- check: no_contact_failure_preserves_inventory
+  result: PASS
+  raw_execution_result: FAIL
+  metrics:
+    failed_slot: 1
+    failed_material_displacement_m: 1.1710985547748539e-05
+    raw_failure: 'Physical GRASP did not yield held: {''positions_m'': (0.003517076838761568, 0.003551627742126584, 0.0034844635520130396),
+      ''target_m'': 0.0035177337735978658, ''finger_forces_n'': [0.0, 0.0, 0.0], ''holding'': ''unknown'', ''intent'': ''GRASP''}'
+  supply_before_stop:
+    occupied:
+    - false
+    - true
+    - true
+    completed: 1
+    selected: null
+    exhausted: false
+  supply_after_stop:
+    occupied:
+    - true
+    - true
+    - true
+    completed: 0
+    selected: null
+    exhausted: false
+  stop_reset_verified: true
+  profile_config_reference: m0609_hand_e_c10_long
+  source_hashes:
+    tape_roll_cell/teaching.py: 22296f71891e0abaea0cae417a134e4d62a7e61b561b0f97cb6103117339760d
+    tape_roll_cell/__init__.py: 7eac856a6040b0738a95a1d2270e161b3df313cf90ccbb847763f6215bd02711
+    tape_roll_cell/material.py: b31fb645c6f3fe9710add83892d0ec48e98a25f9c319cd38fa8c1eb93b64ac7e
+    tape_roll_cell/scene.py: 54b12f169932a3c3564c82513cbd119975dcd310f3916edd5619f6d03ad3f747
+    tape_roll_cell/experiment.py: 8b96fea33d413ff7f325c4103aefe66424ca65ae08f24aa83b3cc72e13789cd8
+    tape_roll_cell/configuration.py: e5ca7692d170d1d81deec378bea8bd9716a43cb48036f948f9f46835c9b14e8d
+    tape_roll_cell/supply.py: c0ddc177d8d74a03ef1aa8d70ce57156565b4767a7d56f3950a6988d77610507
+    tape_roll_cell/lifecycle.py: d1781943934551c91d53013cecd97dc80c96684ff27f54b8df28d27e667f30b3
+    gripper_runtime/radial_physical.py: 51829fe7f0c50b2abd0890b5863704b0b497dff5cdabb98fa7b514c21e5e1af7
+  runner_sha256: e40a077a1d1c64a72e5615e6fef03ad4035362b514acf9dc678cc4944de2a144
+  generated_urdf_sha256: 0008613626719449cc30a5a15bded2fd75f946e4b3e3f25fea6d073800ff6dff
+  task_bt:
+    library: /tmp/tape-roll-build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so
+    library_sha256: f13884d9624867c7df287d45203409f9dc1d9b3b913ffa770e879f7551550230
+    execution_id: d3d2085809d1428dafea3b0e624b8fab
+    result_code: 0
+    bt_sha256:
+      disturbance_execution.xml: 4c3a0add9020128300d5ab67af0f1f5cf93e474fb217367525e278183c65761e
+      grasp_cycle.xml: ba17cefb71ca9a958b165ff42f0b80bcf6e2620b9950844121028464b76cffa8
+      held_object_return.xml: 68a62c6f67e7cbb2f17f69002c72705f20c0dec4d5d11c6969ee074bd539dcd8
+      motion_tasks.xml: 1a311a4bea6c775c2cd84009b541adc084e8e257e3964e85671eafc3cee79a06
+      pick_candidate_search.xml: 808816525a2b38f865e99b35089886f8974b500742138ab642499d88768d4614
+      pick_execution.xml: 77c53d95fb748174ca66d961c53e7abe45875d9f2e79d669daa4dbcfbc41534b
+      pick_recovery.xml: 77f5ed32ca50a3c85ff59abe9157acb51eaff6b3c0c6c6161ad8424cbacd9041
+      place_execution.xml: 89ef7e546e0215cf94dddf49ffee543c9ac5e11de3b238c2531d76827c67bc89
+      place_recovery.xml: a22aa630feaa1fb0ad5c35cdbc5e1e64de3cf9c39a1cb1f64de7fccf667d5af1
+prior_observations:
+- result: FAIL
+  reason: 'Measured velocity limit exceeded: gripper_hande_c10_finger_2_joint=-0.05371304228901863'
+  completed: 2
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-xTq6UqiN/result.json
+  digest: sha256:ea65934d9ad0ee968407fd805bed9d156b5b01a490cb31f56532ecbcc73ffa87
+  disposition: Cartesian path/clearance and physical joint velocity limit corrections; superseded for final success claim,
+    raw failure preserved
+- result: FAIL
+  reason: 'Measured velocity limit exceeded: gripper_hande_c10_finger_1_joint=0.0535811223089695'
+  completed: 1
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-ikagpYhF/result.json
+  digest: sha256:f8900291e7ac2cd1c0682575cdfc7482e4ff1eb039707f135d1a5dc44070b6c0
+  disposition: Cartesian path/clearance and physical joint velocity limit corrections; superseded for final success claim,
+    raw failure preserved
+- result: FAIL
+  reason: 'Measured velocity limit exceeded: gripper_hande_c10_finger_2_joint=-0.05383307486772537'
+  completed: 0
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-GQQXdzn4/result.json
+  digest: sha256:2d3cc2e0033133499efdaaeb0072f6cf0755ba437c12b0e970dca2d0a6c57dea
+  disposition: Cartesian path/clearance and physical joint velocity limit corrections; superseded for final success claim,
+    raw failure preserved
+- result: FAIL
+  reason: Physical contact Holding lost during extract/transfer
+  completed: 2
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-eE6zyfOo/result.json
+  digest: sha256:c03936906f57dcf091ac2374354cbb1bb99fe6b44da96f2a9d7bb5e199c83ef7
+  disposition: Cartesian path/clearance and physical joint velocity limit corrections; superseded for final success claim,
+    raw failure preserved
+- result: FAIL
+  reason: 'Robot contacted unselected roll: /World/TapeRollCell/Roll001'
+  completed: 2
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-yIJc1oMs/result.json
+  digest: sha256:b162d4bdca245b477d6787a14cf41cd90aae539f9c2f9d3908e57e5653dd1626
+  disposition: Cartesian path/clearance and physical joint velocity limit corrections; superseded for final success claim,
+    raw failure preserved
+artifact_references:
+- check: long_three_rolls
+  scope: change
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-Cy7ExWe5/configuration.json
+  type: configuration
+  digest: sha256:c16c6b30371d93111f1d10d19cd1cc0f1ad1dee1772dc98e5cb0f7c063565b39
+- check: long_three_rolls
+  scope: change
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-Cy7ExWe5/result.json
+  type: result
+  digest: sha256:6fa050f1fb36f8014e5bceec01c6b2afb9cf459bf694c8b764f09d8d3d88fe17
+- check: long_three_rolls
+  scope: change
+  reference: /tmp/tape-cell-live-long-cartesian.log
+  type: log
+  digest: sha256:289c53482733de3214a37d477ae00c5a6741ca0c6fd9208092d5560c658171d9
+- check: base_three_rolls
+  scope: change
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-R61WUfSd/configuration.json
+  type: configuration
+  digest: sha256:b25a19eb25cfda5e1d8a734205142163c8ca30dfe5a0b39532a117b2a8569127
+- check: base_three_rolls
+  scope: change
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-roll-R61WUfSd/result.json
+  type: result
+  digest: sha256:a2d8e069d02c07e4de4b555a8de86d07a894e3c5410223c39220d146fe2e8706
+- check: base_three_rolls
+  scope: change
+  reference: /tmp/tape-cell-live-basic-cartesian.log
+  type: log
+  digest: sha256:f42a9210a140e812e55acbd9a18a29fdb1237982b88620bffd01f0018b7321a4
+- check: no_contact_failure_preserves_inventory
+  scope: change
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-cell-negative-no-contact/configuration.json
+  type: configuration
+  digest: sha256:1c0e85ea74b5632b59c5b8775cd9bc35696c04a31afc8bf2679f8a86953118ff
+- check: no_contact_failure_preserves_inventory
+  scope: change
+  reference: /tmp/arm-cell-tape-handling/.run_records/tape-cell-negative-no-contact/result.json
+  type: result
+  digest: sha256:f0d913f872cbc485a470ecb0206c7683b262c9560c787bb38b7159c5b2fa1c2f
+- check: no_contact_failure_preserves_inventory
+  scope: change
+  reference: /tmp/tape-cell-live-negative.log
+  type: log
+  digest: sha256:03e3fdc1cc8ae54211daf151d26859155664c823e567f6376a54a79168522494
+dependency_invalidation_surfaces:
+- infra/isaac_sim/scripts/tape_roll_cell/
+- infra/isaac_sim/scripts/gripper_runtime/
+- infra/isaac_sim/scripts/model_joint_experiment.py
+- ros2_ws/src/task_execution/
+- ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml
+- ros2_ws/src/bringup/config/cell_executions/
+- ros2_ws/src/motion/config/tools/physical_fixture/
+- assets/tools/hand_e_c10/
+- assets/robots/m0609_hand_e_c10/
+- Isaac/PhysX runtime
+limitations_scope:
+  scope: 선택된 3롤 배치의 native Task BT 물리 시험; 정식 ROS Mission 인수 결과가 아님
+  limitations:
+  - 운영 ROS Motion Backend·Mission·Vision·Safety 통합, HCR-14, HOME-to-cell 및 동적 컨베이어 구동은 미검증/미지원.
+  - 원본 로그·구성·결과는 명시된 로컬 경로에 보존; manifest는 원본을 대체하지 않음.
+  - 공개 native fixture library와 BT는 변경 없는 기준선 빌드를 사용하며 바이너리/BT hash를 각 실행에 보존.
+  - 실행 당시 미커밋 소스 hash를 보존. 이후 변경은 설정 검증 확대·미사용 심볼 정리·Stop 각속도 진단 추가이며, 각속도 진단은 실패 시험에서 검증.
+  - 수량·간격·설비 배치 변경에는 새 기구학 및 라이브 충돌 검증이 필요.

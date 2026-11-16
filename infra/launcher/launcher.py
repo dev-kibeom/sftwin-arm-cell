@@ -68,6 +68,19 @@ def model_experiments(root=ROOT):
     return entries
 
 
+def cell_fixtures(root=ROOT):
+    """Cell physical fixtures never become ROS Mission deployments."""
+    entries = []
+    for path in sorted((root / 'ros2_ws/src/bringup/config/cell_executions').glob('*.yaml')):
+        data = read(path)
+        if (data.get('kind') == 'arm-cell-physical-fixture' and data.get('schema_version') == 1
+                and data.get('execution') == 'native_task_bt_physical_fixture'):
+            cell = read(resolve(data['cell'], path.parent))
+            if cell.get('execution_support', {}).get(data['execution']):
+                entries.append(dict(profile=path, label=data['display_name'], execution=data['execution']))
+    return entries
+
+
 def profile_choices(root=ROOT):
     result = {key: [str(path.resolve()) for path in sorted((root / directory).glob('*.yaml'))]
               for key, directory in OWNERS.items()}
@@ -143,6 +156,7 @@ class Launcher(QMainWindow):
         self.phase = 0
         self.run = None
         self.model_experiment_active = False
+        self.isolated_execution_description = ''
         self.error = ''
         # One host simulation uses fixed ports even across repository checkouts.
         self.lock = QLockFile(str(Path(tempfile.gettempdir()) / f'arm-cell-launcher-{os.getuid()}.lock'))
@@ -200,6 +214,12 @@ class Launcher(QMainWindow):
             button = QPushButton(entry['label'])
             button.setToolTip('별도 모델에서 세 손가락을 왕복 구동합니다. ROS Mission·파지 미지원.')
             button.clicked.connect(lambda checked=False, entry=entry: self.start_model_experiment(entry))
+            layout.addWidget(button)
+            self.experiment_buttons.append(button)
+        for entry in cell_fixtures():
+            button = QPushButton(entry['label'])
+            button.setToolTip('카트리지 소진까지 물리 이송합니다. native Task BT 시험; ROS Mission 미지원.')
+            button.clicked.connect(lambda checked=False, entry=entry: self.start_cell_fixture(entry))
             layout.addWidget(button)
             self.experiment_buttons.append(button)
         self.timer = QTimer(self)
@@ -303,7 +323,7 @@ class Launcher(QMainWindow):
         for button in self.experiment_buttons:
             button.setEnabled(not active)
         if self.model_experiment_active and active:
-            message = 'C10 모델·관절 실험 실행 중 — ROS Mission·파지 미지원'
+            message = self.isolated_execution_description
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
@@ -338,6 +358,7 @@ class Launcher(QMainWindow):
             return
         self.error = ''
         self.model_experiment_active = False
+        self.isolated_execution_description = ''
         if not self.lock.tryLock(0):
             self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
             self.validate()
@@ -367,8 +388,31 @@ class Launcher(QMainWindow):
             return
         try:
             self.model_experiment_active = True
+            self.isolated_execution_description = 'C10 모델·관절 실험 실행 중 — ROS Mission·파지 미지원'
             self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/run_model_experiment.sh'),
                                  str(entry['profile'])], dict(os.environ, PYTHONUNBUFFERED='1'))
+        except Exception as exc:
+            self.error = str(exc)
+            self.begin_stop()
+        self.validate()
+
+    def start_cell_fixture(self, entry):
+        if self.processes or self.terminals or self.stopping:
+            return
+        self.error = ''
+        if not self.lock.tryLock(0):
+            self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
+            self.validate()
+            return
+        try:
+            self.model_experiment_active = True
+            self.isolated_execution_description = 'Tape Cell 물리 이송 실행 중 — native Task BT 시험 · ROS Mission 미지원'
+            library = ROOT / 'ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so'
+            if not library.is_file():
+                raise FileNotFoundError('Task Execution을 BUILD_TESTING=ON으로 빌드하세요: ' + str(library))
+            self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/tape_roll_cell/run.sh'),
+                                 str(entry['profile']), str(library), '--cycles', '1'],
+                       dict(os.environ, PYTHONUNBUFFERED='1'))
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()

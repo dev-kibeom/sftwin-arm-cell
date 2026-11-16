@@ -1,0 +1,6 @@
+inner_radius_m: 0.06
+outer_radius_m: 0.075
+width_m: 0.017
+mass_kg: 0.08
+static_friction: 0.8
+dynamic_friction: 0.6
