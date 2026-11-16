@@ -5,7 +5,7 @@ import math
 FIELDS = [
     ('move_duration_s', '논리 구동 시간 (s)', 0.001, 60., False, ('logical',)),
     ('physics.speed_fraction', '구동 속도 비율', 0.001, 1., False, ('physics',)),
-    ('physics.grip_force_n', '기본 파지력 합계 (N)', 40., 470., False, ('physics',)),
+    ('physics.grip_force_n', '초기 기본 파지력 합계 (N)', 40., 470., False, ('physics',)),
     ('physics.drive_stiffness', 'Drive 강성 (N·m/rad)', 0.000001, 1e6, True, ('physics',)),
     ('physics.drive_damping', 'Drive 감쇠 (N·m·s/rad)', 0.000001, 1e6, True, ('physics',)),
     ('physics.position_tolerance_rad', '위치 허용오차 (rad)', 0.000001, 1., True, ('physics',)),

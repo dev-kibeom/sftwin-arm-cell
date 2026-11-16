@@ -229,6 +229,13 @@ class Launcher(QMainWindow):
             forms[int(is_advanced)].addRow(label, edit)
             self.parameter_edits[path] = edit
         self.parameter_layout.addWidget(basic)
+        if 'physics.grip_force_n' in self.parameter_edits:
+            force_hint = QLabel(
+                '실행 시작 시 파지력 기본값을 초기화합니다. '
+                '일반 PICK에서는 자재별 GripForcePolicy가 계산한 작업 명령의 파지력이 우선합니다. '
+                '이 값으로 작업 파지력을 고정할 수는 없습니다.')
+            force_hint.setWordWrap(True)
+            self.parameter_layout.addWidget(force_hint)
         self.parameter_layout.addWidget(advanced)
         # Collapsed advanced fields remain active settings, but are hidden.
         def show_advanced(checked):
