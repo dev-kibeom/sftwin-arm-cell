@@ -15,7 +15,8 @@ from launcher import deployments, profile_choices, selected_deployment, export_s
 def test_default_matches_cli_and_preserves_sources(tmp_path):
     before = {p: p.read_bytes() for p in (ROOT / 'ros2_ws/src').rglob('*.yaml')}
     entries = deployments(ROOT)
-    assert len(entries) == 2
+    assert {e["profile"].name for e in entries} >= {
+        "operational_profile.yaml", "rb5_850_profile.yaml", "hcr14_profile.yaml"}
     assert entries[0]["profile"].name == "operational_profile.yaml"
     entry = entries[0]
     choices = profile_choices(ROOT)
@@ -146,3 +147,13 @@ def test_tool_display_metadata_cannot_add_unsupported_runtime_combination():
     choices = tool_mode_choices(profile)
     assert [choice['combination'] for choice in choices] == [['logical', 'fixed_attach']]
     assert all(choice['label'] != 'Unsupported mode' for choice in choices)
+
+
+def test_experimental_hcr14_is_selectable_without_replacing_default(tmp_path):
+    entries = deployments(ROOT)
+    assert entries[0]['profile'].name == 'operational_profile.yaml'
+    entry = next(e for e in entries if e['profile'].name == 'hcr14_profile.yaml')
+    assert entry['validation_status'] == 'experimental'
+    exported = json.loads(export_selection(entry, tmp_path / 'hcr14.json').read_text())
+    assert exported['configuration']['robot']['robot_id'] == 'hcr14'
+    assert exported['configuration']['tool']['tool_id'] == 'robotiq_2f85'

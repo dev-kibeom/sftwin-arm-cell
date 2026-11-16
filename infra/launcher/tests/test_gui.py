@@ -85,13 +85,15 @@ def terminal_text(widget, name):
 WAIT = [sys.executable, '-c', 'import time; print("started", flush=True); time.sleep(100)']
 
 
-@pytest.mark.parametrize('robot', ['m0609', 'rb5_850'])
+@pytest.mark.parametrize('robot', ['m0609', 'rb5_850', 'hcr14'])
 def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, monkeypatch, robot):
     selector = window.selectors['robot']
     selected = str(launcher.ROOT / f'ros2_ws/src/motion/config/robots/{robot}.yaml')
     selector.setCurrentIndex(selector.findData(selected))
     if robot == 'rb5_850':
         assert '라이브 검증 전' in window.status.text()
+    if robot == 'hcr14':
+        assert '실험적 모델' in window.status.text()
     calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
     exports = []
     original_export = launcher.export_selection
@@ -137,6 +139,8 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
     assert isaac['configuration']['robot']['robot_id'] == robot
     if robot == 'rb5_850':
         assert '라이브 검증 전' in window.status.text()
+    if robot == 'hcr14':
+        assert '실험적 모델' in window.status.text()
     processes = list(window.processes.values())
     window.show()
     window.close()

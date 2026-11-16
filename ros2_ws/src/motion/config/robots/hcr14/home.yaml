@@ -1,0 +1,8 @@
+# Simulation HOME/Return, radians; not manufacturer/controller teaching data.
+home_joint_positions:
+- 0
+- 0
+- -1.5707963267948966
+- 0
+- 1.5707963267948966
+- 0

@@ -27,6 +27,7 @@
   <depend>python3-yaml</depend>
   <depend>xacro</depend>
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>python3-numpy</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>
   <test_depend>rclpy</test_depend>
   <test_depend>std_srvs</test_depend>
