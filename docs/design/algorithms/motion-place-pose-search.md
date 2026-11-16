@@ -14,7 +14,7 @@ Recipe의 PLACE Object Pose와 허용 Orientation Mode에 맞는 유한·결정�
 |---|---|---|
 | 입력 | Recipe PLACE Object Pose·`fixed`/`bounded`/`free`, 자세·위치 허용오차, 선택적 선호 TCP Orientation | 허용 자세 집합과 순서 |
 | 입력 | PICK에서 수락된 Object-to-TCP 관계, 최신 관절·부착 Geometry·Planning Scene, IK/FK·Planner | TCP 목표와 실행 가능성 |
-| 입력 | Motion Profile의 후보·Seed·Planning 시간 예산 | 유계 탐색 |
+| 입력 | Motion Profile의 후보·Seed·Planning 요청 수와 개별 호출 시간 한도 | 유계 탐색 |
 | 출력 | 결정적 PLACE 자세 후보, 검증된 첫 궤적 또는 후보 소진 근거 | FDS의 실행·결과 판단에 제공 |
 
 ## 알고리즘 흐름
@@ -49,7 +49,13 @@ flowchart TD
 
 각 그룹 안의 비교 순서는 해당되는 경우 **Tool Orientation 선호 → Pose 편차 → IK Seed 순서**다. 6D IK, 관절 범위·연속성, Planning Scene 끝점 충돌, Global Planning, Trajectory Time Parameterization 순으로 평가한다. 처음 유효한 궤적이 나오면 즉시 선택하고 후속 후보의 IK를 미리 계산하거나 성공한 경로 사이의 시간·Joint Delta를 비교해 다시 고르지 않는다. IK 이후 Joint Delta는 진단값이지 Recipe 우선순위가 아니다.
 
-Recipe 위치·Orientation 허용오차 및 `fixed`/`bounded`/`free`의 의미는 기존 Owner를 따른다. 후보별·전체 탐색 횟수·계획 시간은 Motion 운영 Profile에서 가져오며 소진한 예산을 새 후보마다 임의로 초기화하지 않는다. 실행한 TCP 목표의 최종 측정 정확도는 FDS에서 진단하되 그 초과만으로 OPEN 또는 RELEASED를 차단하지 않는다.
+Recipe 위치·Orientation 허용오차 및 `fixed`/`bounded`/`free`의 의미는 기존 Owner를 따른다.
+운영 PLACE는 전체 경과시간으로 탐색을 중단하지 않는다. Motion 운영 Profile의 Pose 수,
+Pose별 IK Seed 수 및 후보별 Global Planning 요청 수를 소진하거나 첫 실행 가능 경로를
+찾으면 종료하며, 개별 IK·Planning 호출 시간 한도는 유지한다. Pose 수의 전체 상한과 Pose별 IK Seed·후보별 Planning 요청 한도를 구별한다.
+새 후보에는 그 후보의 설정 한도를 적용하고, 같은 후보의 재시도는 이미 사용한 횟수를 유지한다. HOME 경유 후 새 탐색의 허가와 예산 재시작은
+[Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md)의 내부 복구 계약을 따른다.
+실행한 TCP 목표의 최종 측정 정확도는 Motion FDS에서 진단하되 그 초과만으로 OPEN 또는 RELEASED를 차단하지 않는다.
 
 ## 예외·불확실성·종료
 
@@ -62,8 +68,16 @@ Recipe 위치·Orientation 허용오차 및 `fixed`/`bounded`/`free`의 의미�
 
 ## 검증 요구사항
 
-- **기존 `VR-MOT-TASK-10`의 계산 검증:** Recipe의 `FIXED`/`BOUNDED`/`FREE` 제약, `BOUNDED`의 공칭 우선·Position Fallback 그룹과 그룹 내 Tool Orientation 선호도 → Pose 편차 → IK Seed 순서를 유지한다. IK·관절·Planning Scene 유효성·Global Planning·Trajectory Time Parameterization을 순서대로 평가하고, 처음 실행 가능한 궤적에서 중단해 후속 IK/Planning을 호출하지 않는다. IK Joint Delta는 진단에만 사용하고 순위를 변경하지 않는다. Primary/Fallback의 실제 Recipe Pose Candidate × IK Seed 평가 수는 FDS가 소유한 후보·시간 예산 안에서 계산한다.
-- **기존 `VR-MOT-TASK-11`:** 원래 Recipe 목표·수락된 Object-to-TCP를 보존한다. 해당 movement의 물리 실행은 Motion FDS가 소유한다.
+**`VR-MOT-TASK-10` — PLACE 후보 계산 검증**
+
+| 판정 항목 | 요구사항 |
+|---|---|
+| Recipe·우선순위 | Recipe의 `FIXED`/`BOUNDED`/`FREE` 제약, `BOUNDED`의 공칭 우선·Position Fallback 그룹과 그룹 내 Tool Orientation 선호도 → Pose 편차 → IK Seed 순서를 유지한다. |
+| 평가·종료 | IK·관절·Planning Scene 유효성·Global Planning·Trajectory Time Parameterization을 순서대로 평가하고, 처음 실행 가능한 궤적에서 중단해 후속 IK/Planning을 호출하지 않는다. |
+| 진단과 순위 | IK Joint Delta는 진단에만 사용하고 순위를 변경하지 않는다. |
+| 탐색 한도 | Primary/Fallback의 실제 Recipe Pose Candidate × IK Seed 평가 수는 운영 Profile의 후보·Seed·Planning 요청 한도와 개별 호출 timeout 안에서 계산한다. |
+
+- **`VR-MOT-TASK-11` — 목표 보존:** 원래 Recipe 목표·수락된 Object-to-TCP를 보존한다. 해당 movement의 물리 실행은 Motion FDS가 소유한다.
 - **PnP recovery:** HOME 경유와 Recovery 진입은 Task Execution FDS가 소유하며 이 알고리즘은 복구 승인이나 PLACE 공정 재진입을 정의하지 않는다.
 
 ## 참조

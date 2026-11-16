@@ -23,6 +23,9 @@ classDiagram
     class MotionPlanning {
         <<design role>>
     }
+    class NamedJointMotion {
+        <<design role>>
+    }
     class TrajectoryExecutor {
         <<design role>>
     }
@@ -52,83 +55,13 @@ Motion의 작업 환경은 고정 equipment/Tray/Rail과 이동 RawPart를 다�
 
 Vision-derived PICK에서 Motion은 Task Execution이 선택한 Candidate의 운동학적 실현과 단일 movement를 소유한다. Target별 관측 Occupancy 계산은 [Motion PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 공유 입력·결과 의미는 [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)가 정의한다. 직접 지정 PICK의 기존 호환 점유 입력은 [Orchestration–Motion ICD](../../interfaces/icd-orchestration-motion.md)를 따른다. PICK/PLACE 전략 선택과 Candidate 순서는 Task Execution이 소유한다.
 
-## 상위 책임 연동 흐름
+## 역할별 책임과 동작 계약
 
-```mermaid
-flowchart TD
-    A[MotionPort operation 수신] --> B{runtime·Safety·state 조건 유효?}
-    B -- 아니오 --> X[movement 요청 거부]
-    B -- 예 --> C[Motion target·constraints 준비]
-    C --> D{계획 환경 유효?}
-    D -- 아니오 --> Y[Scene 무결성 실패]
-    D -- 예 --> E{유효한 경로 계획?}
-    E -- 아니오 --> Z[단일 movement 계획 실패 반환]
-    E -- 예 --> G{제출 직전 Safety 허용?}
-    G -- 아니오 --> W[허용 거부 결과]
-    G -- 예 --> H[경로 실행 및 완료 확인]
-    H --> I{실행·후속 계획 결과}
-    I -- 실행 성공 --> K[movement 성공 반환]
-    I -- 실행 실패·중단·상태 불확실 --> V[Terminal movement failure]
-    X --> N[MotionPort result·MotionStatus 관측]
-    Y --> N
-    Z --> N
-    W --> N
-    V --> N
-    K --> N
-```
+MotionPlanner·MotionPlanning은 선택된 target의 Grasp Pose 후보 평가, 상태·충돌 검증 및 접근 경로 계획을 담당한다. Planning result는 개별 target/segment의 결과이며 실제 trajectory 실행 실패와 구별한다. Candidate 우선순위·전환 횟수·PnP-level candidate-exhausted result와 PnP recovery는 [Task Execution PnP FDS](../task-execution/fds-pnp-execution.md)가 소유한다. PICK 후보 생성과 실패별 방문 순서는 [Motion PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), movement 수락·요청별 Scene 적용·계획·실행·결과 전이는 [Motion Execution FDS](fds-motion-execution.md)가 정의한다.
 
-위 그림은 Motion이 소유하는 단일 movement의 수락·계획·실행·결과 흐름이다. PICK candidate transition 및 PnP recovery는 [Task Execution PnP FDS](../task-execution/fds-pnp-execution.md)가 소유한다. 실제 trajectory 실행 실패와 계획 실패는 구별하며 Motion은 기존 result classification을 보존한다.
+TrajectoryExecutor는 작업별 실행 완료를 확정한다. Motion Progress는 수행 중 비정상 진행 정체, Trajectory Clock은 시간 진행 이상을 감시하며 완료 승인자가 아니다. 정확도·관절 변화량 관측은 진단 책임이다. PICK/PLACE Trajectory의 계획 시간·명령 시퀀스에 따른 완료와 감시 종료는 [Motion Execution FDS](fds-motion-execution.md#pickplace-trajectory-실행-완료)가 소유하며 GO_HOME의 목표 도달과 Stop의 정지 확인은 독립 계약으로 유지한다.
 
-## 주요 역할별 책임 흐름
-
-### 단일 movement의 Planning·실행 결과
-
-```mermaid
-flowchart TD
-    A[Motion command 수신] --> B[IK·scene·collision·path 평가]
-    B --> C{계획 결과}
-    C -- 불가 --> D[Planning result 반환]
-    C -- 유효 --> E[Trajectory 실행]
-    E --> F{작업별 실행 완료·실패·선점}
-    F -- 실행 완료 --> G[Movement success 반환]
-    F -- 실패/선점 --> H[Movement failure 반환]
-```
-
-Planning result는 개별 target/segment 결과다. candidate 우선순위·전환 횟수·PnP-level candidate-exhausted result는 Task Execution이 소유한다.
-
-### Planning Scene 유효성
-
-공유 Planning Scene은 고정 환경과 현재 attached object를 제공한다. Motion은 필요한 planning 검증에 그 Scene과 해당 target의 관측 Occupancy를 사용하며 공유 Scene 자체를 변경하지 않는다. Robot State는 canonical 최신 측정 상태를 사용한다. 동적 적용 범위와 수명은 [Motion Execution FDS](fds-motion-execution.md)가 소유한다.
-
-### Planning 책임
-
-Motion의 planning 책임은 Grasp Pose 후보 평가, 상태·충돌 검증 및 접근 경로 계획으로 나뉜다. PICK 후보 생성과 실패별 방문 순서는 [Motion PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 해당 단계의 동적 상호작용과 종료는 [Motion Execution FDS](fds-motion-execution.md)가 정의한다.
-
-### 실행, Safety Stop 및 결과 확정
-
-```mermaid
-flowchart TD
-    A[실행 진행 및 Safety Stop 관측] --> B{확인된 사실}
-    B -- 실행 완료 --> C[개별 움직임 성공 근거]
-    B -- 실제 실행 실패 --> D[실패 근거]
-    B -- Safety Stop 요청 --> E[실제 정지 상태 확인]
-    E --> F{정지 확인됐는가?}
-    F -- 아니오 --> G[정지 미확정 상태 유지]
-    F -- 예 --> H[정지 근거 확정]
-    C --> I[실행 lifecycle에서 최종 결과 판단]
-    D --> I
-    H --> I
-    G --> I
-    I --> J[MotionPort result 및 MotionStatus 각각 반영]
-```
-
-Safety가 Stop 권한과 원인·severity를 소유하며 Motion은 Stop을 집행하고 **실제 정지의 증거**를 보고한다. Safety Stop 요청 수락·명령 전송 또는 MotionPort 종료만으로 physical inactivity를 확정하지 않는다. Task Execution PnP Result는 전체 작업 종료 결과, MotionStatus는 현재 movement·정지 관측이며 서로를 추론하지 않는다. Stop/Completion 경합의 우선순위와 동적 전이는 [Stop and Recovery FDS](fds-stop-recovery.md), [Safety–Motion ICD](../../interfaces/icd-safety-motion.md)가 소유한다.
-
-TrajectoryExecutor는 PICK/PLACE에서 계획 시간 및 명령 시퀀스 정상 수행을 근거로 완료를 확정한다.
-Motion Progress는 수행 중 비정상 진행 정체, Trajectory Clock은 시간 진행 이상을 감시하며 완료 승인자가
-아니다. 완료 이후 감시는 종료하고, 정확도·관절 변화량 관측은 진단 책임에 둔다. 세부 완료·오류·중단
-경계는 [Motion Execution FDS](fds-motion-execution.md)가 소유한다. GO_HOME과 Stop의 기존 목표 도달·
-정지 확인 책임은 분리해 유지한다.
+Safety가 Stop 권한과 원인·severity를 소유하며 Motion은 Stop 집행과 실제 정지 증거 보고를 담당한다. Safety Stop 요청 수락·명령 전송 또는 MotionPort 종료만으로 physical inactivity를 확정하지 않는다. Task Execution PnP Result는 전체 작업 종료 결과, MotionStatus는 현재 movement·정지 관측이며 서로를 추론하지 않는다. Stop/Completion 경합의 우선순위와 동적 전이는 [Stop and Recovery FDS](fds-stop-recovery.md), [Safety–Motion ICD](../../interfaces/icd-safety-motion.md)가 소유한다.
 
 ## 소유권과 상태
 

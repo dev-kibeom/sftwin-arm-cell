@@ -71,6 +71,8 @@ Delay Duration은 해당 테스트 자극의 Profile 설정이며 중간 단계�
 
 ## 4. 검증 요구사항
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-VDA-FAULT-01 — 실제 통신 억제
 Communication Loss 자극은 관련 Heartbeat Publisher를 실제로 억제해야 한다.
 
@@ -84,7 +86,20 @@ Mock E-Stop Clear가 독립적인 Safety Latch/Reset 정책을 직접 해제해�
 Premature Undock으로 `UNDOCKED`가 발행된 후 자극을 Clear하더라도 `DOCKED`를 임의로 만들어서는 안 된다. Undock Event가 없을 때의 정상 초기 상태는 `DOCKED`로 유지한다.
 
 ### VR-VDA-FAULT-05 — 지연 Warning과 필수 입력 손실의 구분
-유한 Transient Delay Stimulus는 필수 입력을 Safety Freshness Limit 안의 유효 상태로 유지하고 지연만으로 허용 Motion Envelope를 줄이거나 StopMotion을 발행해서는 안 된다. 필수 Safety-HW/Motion 경로의 Communication Loss는 그 Freshness 경계를 넘어서 Safety의 Fail-closed Capability/Stop 동작을 유지해야 한다. Oracle은 Source Sample Age·Validity, Safety Envelope/Capability 및 StopMotion 결과다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 유한 지연 | 유한 Transient Delay Stimulus는 필수 입력을 Safety Freshness Limit 안의 유효 상태로 유지하고 지연만으로 허용 Motion Envelope를 줄이거나 StopMotion을 발행해서는 안 된다. |
+| 필수 입력 손실 | 필수 Safety-HW/Motion 경로의 Communication Loss는 그 Freshness 경계를 넘어서 Safety의 Fail-closed Capability/Stop 동작을 유지해야 한다. |
+| 관찰 근거 | Oracle은 Source Sample Age·Validity, Safety Envelope/Capability 및 StopMotion 결과다. |
 
 ### VR-VDA-FAULT-06 — 선택적 Safety-HW 손실 및 Fresh 복원
-Safety Signal Loss 활성 요청을 수락하면 `/safety/hardware_state`만 Steady Clock 5초간 발행 억제하고 AMR·PackML은 계속 발행해야 한다. 기존 Safety Watchdog은 필수 입력 Freshness 손실을 관측하고 Motion 활성 중 Safety는 직접 `StopMotion(IMMEDIATE)`를 보내야 한다. Stimulus Window를 Stop 완료 Deadline으로 해석해서는 안 된다. 만료 또는 명시적 Cleanup에서는 즉시 유효하고 Fresh한 Safety-HW 상태를 발행해야 한다. 일시적 Freshness 손실만으로 영구 Latch나 Operator Reset을 요구해서는 안 된다. Oracle은 Safety-HW Source/Receipt Freshness, 동시 AMR/PackML Sample, Safety State/Capability/Cause, StopMotion Request/Result, Motion의 확정 정지 상태 및 Fresh Safety-HW 복원이다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 억제 범위·시간 | Safety Signal Loss 활성 요청을 수락하면 `/safety/hardware_state`만 Steady Clock 5초간 발행 억제하고 AMR·PackML은 계속 발행해야 한다. |
+| Safety 관측·직접 정지 | 기존 Safety Watchdog은 필수 입력 Freshness 손실을 관측하고 Motion 활성 중 Safety는 직접 `StopMotion(IMMEDIATE)`를 보내야 한다. |
+| Stimulus Window 의미 | Stimulus Window를 Stop 완료 Deadline으로 해석해서는 안 된다. |
+| 만료·Cleanup | 만료 또는 명시적 Cleanup에서는 즉시 유효하고 Fresh한 Safety-HW 상태를 발행해야 한다. |
+| 일시 손실의 비보장 | 일시적 Freshness 손실만으로 영구 Latch나 Operator Reset을 요구해서는 안 된다. |
+| 관찰 근거 | Oracle은 Safety-HW Source/Receipt Freshness, 동시 AMR/PackML Sample, Safety State/Capability/Cause, StopMotion Request/Result, Motion의 확정 정지 상태 및 Fresh Safety-HW 복원이다. |

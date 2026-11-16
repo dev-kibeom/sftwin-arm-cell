@@ -46,6 +46,6 @@ remain owned by Product, Motion, Orchestration FDS, and their ICDs.
 ## References
 
 - [`docs/product/definition.md`](../../product/definition.md)
-- [`docs/design/components/motion/fds-task-execution.md`](../../design/components/motion/fds-task-execution.md)
+- [현행 Task Execution PnP FDS](../../design/components/task-execution/fds-pnp-execution.md)
 - PR #227
 - PR #103

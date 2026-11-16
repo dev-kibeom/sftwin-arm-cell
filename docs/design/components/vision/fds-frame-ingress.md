@@ -121,8 +121,16 @@ Ingress는 다음 원인으로 실패할 수 있다.
 
 ## 8. 검증 요구사항
 
+각 표의 행은 해당 기존 VR의 조건별 확인 항목이며, 행 전체가 원래 식별자의 검증 범위를 유지한다. 행 분리는 새 VR이나 기존 Evidence의 적용 범위를 추가하지 않는다.
+
 ### VR-VIS-INGRESS-01 — 선택적 최신 Snapshot RGB
-Detector 완료 후 Snapshot은 선택 시점에 공간적으로 호환되는 최신 RGB 이미지를 타임스탬프·수신 시간 Gate 없이 사용해야 한다(SHALL). 선택한 이미지는 해당 Snapshot에서 고정돼야 한다(SHALL). 명시적 Calibration은 별도의 `sync_slop_ms` 연결을 유지해야 한다(SHALL). RGB 부재·비호환성으로 Depth 검출을 거부해서는 안 된다(SHALL NOT).
+
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Snapshot RGB 선택 | Detector 완료 후 Snapshot은 선택 시점에 공간적으로 호환되는 최신 RGB 이미지를 타임스탬프·수신 시간 Gate 없이 사용해야 한다(SHALL). |
+| 선택 이미지 고정 | 선택한 이미지는 해당 Snapshot에서 고정돼야 한다(SHALL). |
+| 명시적 Calibration | 명시적 Calibration은 별도의 `sync_slop_ms` 연결을 유지해야 한다(SHALL). |
+| Depth 검출 독립성 | RGB 부재·비호환성으로 Depth 검출을 거부해서는 안 된다(SHALL NOT). |
 
 ### VR-VIS-INGRESS-02 — 정확한 타임스탬프 일치 불필요
 일반 Vision 동작은 실제 센서 RGB와 Depth의 정수 나노초 단위 완전 일치를 요구해서는 안 된다(SHALL NOT).
@@ -143,4 +151,9 @@ DetectTarget Acquisition 활성 중 요청이 적합한 결과를 기다려도 D
 Vision은 무효 시간 샘플을 거부해야 하며(SHALL), Simulation Runtime의 세션 생명주기 권한을 가져서는 안 된다.
 
 ### VR-VIS-INGRESS-08 — Depth 전용 진단 관측
-진단용 장면 평가기가 활성화되면 호환되는 최신 Depth 샘플을 RGB/Depth Pairing과 독립적으로 평가해야 한다(SHALL). CameraInfo 누락, Calibration 비호환, 무효 Source Time, 오래된 수신, 유효한 Depth 픽셀 부재, 시간 비교 중 어느 한쪽의 비교 가능 픽셀 부재는 계속 관측 불가로 처리하고 안정 상태로 판단해서는 안 된다(SHALL NOT). Tray 가시성과 Coverage는 Depth Scene Stability의 Gate가 아니다.
+
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 진단 평가 입력 | 진단용 장면 평가기가 활성화되면 호환되는 최신 Depth 샘플을 RGB/Depth Pairing과 독립적으로 평가해야 한다(SHALL). |
+| 관측 불가 조건 | CameraInfo 누락, Calibration 비호환, 무효 Source Time, 오래된 수신, 유효한 Depth 픽셀 부재, 시간 비교 중 어느 한쪽의 비교 가능 픽셀 부재는 계속 관측 불가로 처리하고 안정 상태로 판단해서는 안 된다(SHALL NOT). |
+| Tray 가시성·Coverage | Tray 가시성과 Coverage는 Depth Scene Stability의 Gate가 아니다. |

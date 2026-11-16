@@ -70,7 +70,7 @@ flowchart LR
 | 정지가 실제로 집행되었는가? | Safety 권한 및 Motion 실제 정지 관측 | Stop 요청 성공과 실제 정지 증거를 별도로 확인 |
 | 이번 실험 근거로 무엇을 주장할 수 있는가? | 세션 기준선·환경·인과관계·결과 | 관련 증거의 적용 가능성과 충분성은 검증 Owner가 판정 |
 
-사람이 읽는 운영 Log는 의미 있는 사건·결과 중심으로 유지하고, 상세 식별자·측정값·원인 추적은 적합한 구조화 기록에 둔다. 기록 분류와 과거 기준 구현·생산자/소비자 감사는 [Observability Record Inventory](../components/observability-record-inventory.md)를 참고한다. 실제 현행 기록의 의미·생성·소비 계약은 각 FDS/ICD가 소유하고, Log 표현은 Logging Policy가 소유한다. 디렉터리·파일명·JSONL 필드·샘플링·보존 기간은 이 HLD의 새 규칙이 아니다.
+사람이 읽는 운영 Log는 의미 있는 사건·결과 중심으로 유지하고, 상세 식별자·측정값·원인 추적은 적합한 구조화 기록에 둔다. 기록 분류와 연결 의미는 [Observability Records ICD](../interfaces/icd-observability-records.md)를 따른다. 실제 현행 기록의 의미·생성·소비 계약은 각 FDS/ICD가 소유하고, Log 표현은 Logging Policy가 소유한다. 디렉터리·파일명·JSONL 필드·샘플링·보존 기간은 이 HLD의 새 규칙이 아니다.
 
 ## 6. 횡단 구조적 불변조건
 

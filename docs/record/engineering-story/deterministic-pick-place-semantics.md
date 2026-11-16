@@ -42,4 +42,4 @@ not when it reports command intent as physical fact.
 - PR #70, PR #72, PR #73
 - PR #92, PR #93, PR #94
 - PR #101, PR #103, PR #227
-- [`Motion task execution FDS`](../../design/components/motion/fds-task-execution.md)
+- [현행 Task Execution PnP FDS](../../design/components/task-execution/fds-pnp-execution.md)

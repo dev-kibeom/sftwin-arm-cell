@@ -196,6 +196,8 @@ RawPart의 Observation Pose·자체 두께·점유 증거 생성은 Vision이 �
 
 ## 8. 검증 요구사항
 
+각 표의 행은 해당 기존 VR의 조건별 확인 항목이며, 행 전체가 원래 식별자의 검증 범위를 유지한다. 행 분리는 새 VR이나 기존 Evidence의 적용 범위를 추가하지 않는다.
+
 ### VR-VIS-STACK-01 — Profile 동작 검증
 [TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-01` 식별자를 유지한다.
 
@@ -203,7 +205,7 @@ RawPart의 Observation Pose·자체 두께·점유 증거 생성은 Vision이 �
 [TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-STACK-02` 식별자를 유지한다.
 
 ### VR-VIS-STACK-03 — 적층을 고려한 Target 적격성
-위에 놓인 RawPart에 가려진 아래 RawPart는 PICK Target으로 인계해서는 안 된다(SHALL NOT). 독립적으로 노출된 상판 후보는 계속 적격하다.
+상부 가림 자체로 확정 후보를 LOW로 강등하거나 제외해서는 안 된다(SHALL NOT). [Cuboid Algorithm](../../algorithms/cuboid-top-face-grasp-selection.md)의 형상·관측 근거 판정을 통과한 선택 HIGH·MEDIUM 후보는 PICK 후보로 인계해야 한다(SHALL). 미확정 형상·LOW·REJECTED는 일반 PICK 후보로 인계하지 않는다.
 
 ### VR-VIS-STACK-04 — 부분 관측의 무결성
 Detector는 합쳐지거나 분리된 것으로 보이는 불확실한 객체 인스턴스를 거부해야 하며(SHALL), 가려지거나 무효인 Depth 영역을 확정된 형상이나 빈 공간으로 주장해서는 안 된다(SHALL NOT).
@@ -224,7 +226,12 @@ Deployment가 소유하는 TestCube 검출 ROI는 설정된 최대 적층 높이
 Vision은 `vision.calibration_file`이 선택한 파일이 존재하고 유효하며 현재 Camera·CameraInfo·센서 설정과 호환될 때만 해당 파일을 사용해야 한다(SHALL).
 
 ### VR-VIS-OWN-09 — Calibration 생명주기
-Vision은 Production에서 `vision.calibration_file`이 선택한 파일을 로드해야 하며(SHALL), 프로세스·시뮬레이터·Mission 재시작 시 또는 Production 중 주기적으로 자동 보정해서는 안 된다(SHALL NOT). 초기 Calibration과 재보정에는 명시적인 운영자 요청이 필요하다(SHALL). 생성된 파일은 운영자가 운영 Profile에서 선택하고 Vision을 재시작한 이후에만 활성화된다.
+
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Production 로드·자동 보정 금지 | Vision은 Production에서 `vision.calibration_file`이 선택한 파일을 로드해야 하며(SHALL), 프로세스·시뮬레이터·Mission 재시작 시 또는 Production 중 주기적으로 자동 보정해서는 안 된다(SHALL NOT). |
+| 명시적 보정 요청 | 초기 Calibration과 재보정에는 명시적인 운영자 요청이 필요하다(SHALL). |
+| 운영 활성화 | 생성된 파일은 운영자가 운영 Profile에서 선택하고 Vision을 재시작한 이후에만 활성화된다. |
 
 ### VR-VIS-OWN-03 — Motion 권한 없음
 Vision은 로봇 동작 권한을 부여해서는 안 된다(SHALL NOT).
@@ -248,6 +255,10 @@ Production 센서 관측 가능성과 시뮬레이터 Ground Truth 독립성에 
 구체적인 요청 선택 판정 기준은 [TestCube FDS](fds-rawpart-depth-perception.md)가 소유하며 `VR-VIS-OWN-10`을 유지한다.
 
 
-### Depth 프로필 처리의 구현 경계
+### Depth 프로필 처리의 책임 경계
 
-`depth_profile_processor.cpp`는 요청 대상 프로필 선택, 입력 검증의 적용, Calibration 준비 상태 확인 및 `cuboid_top_face` 호출을 연결한다. `depth_profile_validation.cpp`는 자재 ID 일치·box 형상·치수·ROI·센서 입력 조건을 검사하며 특정 자재 이름을 요구하지 않는다. `support_calibration.cpp`는 Support 기준 변환의 명시적 보정과 캐시 상태를 소유하고, `depth_observation.cpp`는 Depth 읽기·변환 및 현재 Tray 관측 범위를 계산한다. 공통 내부 선언은 `depth_profile_support.hpp`에 둔다. 도달할 수 없던 과거 Rectangle 검출 경로는 제거하며 실제 후보 생성은 기존 `cuboid_top_face` 구현이 소유한다.
+Profile 선택·입력 검증·Calibration 준비와 선택 Detector 호출을 연결하는 역할은 Vision이
+소유한다. 요청 수명은 [DetectTarget FDS](fds-detect-target.md), 입력 호환성은
+[Frame Ingress FDS](fds-frame-ingress.md), 명시적 보정은
+[Installation Calibration FDS](fds-installation-calibration.md), 후보 계산은
+[Cuboid Algorithm](../../algorithms/cuboid-top-face-grasp-selection.md)을 따른다.

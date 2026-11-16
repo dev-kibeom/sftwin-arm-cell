@@ -369,24 +369,47 @@ Safety 중단 및 Controlled Recovery는 Safety Recovery 계약을 따른다. Re
 
 ## 6. 검증 요구사항
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-ORCH-MISSION-DISTURB — 교란 분기·무제한 재관측
 
-잔여 수량 3개 이상, HIGH/MEDIUM 후보 모두 없음, 동일 Acquisition의 유효 관측 및 실제 교란 근거가 있을 때만 ExecuteDisturb로 진입해야 한다(SHALL). 동일 높이 복합 외곽선의 미해결 영역은 기존 `OTHER_UNRESOLVED` 근거로 포함할 수 있으며, HIGH/MEDIUM로 PICK에 전달된 객체를 중복 교란해서는 안 된다(SHALL NOT). 유효 수평 후보가 없다는 이유만으로 관측 근거 없는 교란 후보를 만들거나 실행해서는 안 된다(SHALL NOT). 교란 `COMPLETED` 뒤에는 처리 수량을 바꾸지 않고 새 Acquisition을 요청하며, 조건이 계속 성립해도 반복 횟수만으로 종료해서는 안 된다(SHALL NOT). SELECTED HIGH·MEDIUM 전체를 단일 목록으로 기존 ExecutePnp로 전달해야 한다(SHALL). 교란 반복은 기존 Vision 오류 Retry 최대 3회를 소비하거나 초기화하지 않아야 한다(SHALL NOT).
-
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 교란 진입 | 잔여 수량 3개 이상, HIGH/MEDIUM 후보 모두 없음, 동일 Acquisition의 유효 관측 및 실제 교란 근거가 있을 때만 ExecuteDisturb로 진입해야 한다(SHALL). |
+| 미해결 영역·중복 금지 | 동일 높이 복합 외곽선의 미해결 영역은 기존 `OTHER_UNRESOLVED` 근거로 포함할 수 있으며, HIGH/MEDIUM로 PICK에 전달된 객체를 중복 교란해서는 안 된다(SHALL NOT). |
+| 관측 근거 없는 후보 | 유효 수평 후보가 없다는 이유만으로 관측 근거 없는 교란 후보를 만들거나 실행해서는 안 된다(SHALL NOT). |
+| 교란 완료·반복 | 교란 `COMPLETED` 뒤에는 처리 수량을 바꾸지 않고 새 Acquisition을 요청하며, 조건이 계속 성립해도 반복 횟수만으로 종료해서는 안 된다(SHALL NOT). |
+| 정상 PICK 인계 | SELECTED HIGH·MEDIUM 전체를 단일 목록으로 기존 ExecutePnp로 전달해야 한다(SHALL). |
+| Vision Retry 예산 | 교란 반복은 기존 Vision 오류 Retry 최대 3회를 소비하거나 초기화하지 않아야 한다(SHALL NOT). |
 
 과거 M10의 `VR-ORCH-MISSION-01`, `VR-ORCH-MISSION-07`, `VR-ORCH-MISSION-09`는 M09/M10 기록에서 기존 자재 소진 기반 의미와 증거를 유지한다. 현재 Final Demo에서는 아래의 수량 기반 VR이 이를 대체하며 과거 기록이나 증거를 수정·승격하지 않는다.
 
 ### VR-ORCH-MISSION-11 — 수량 기반 정상 완료
 
-목표 수량 N인 배치에서 Orchestration은 ExecutePnp terminal 결과의 `material_placed=true`를 Goal당 한 번 반영해야 한다(SHALL). 정상 완료 PnP의 terminal은 Task Execution이 PLACE 뒤 마지막 GO_HOME까지 성공한 경우에만 `COMPLETED`다. 마지막 PnP가 이미 HOME 복귀했으므로 Orchestration은 Mission FinalHome을 중복 요청하지 않고, 수량 회계·Mission/Safety 진행 결정 뒤 정상 종료해야 한다(SHALL). `processed_count == N` 이후에는 자재가 남아 있어도 다른 Target을 요청해서는 안 된다(SHALL NOT). GO_HOME 실패는 성공으로 바꾸지 않고 PnP/Mission 실패로 보존한다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 수량 반영 | 목표 수량 N인 배치에서 Orchestration은 ExecutePnp terminal 결과의 `material_placed=true`를 Goal당 한 번 반영해야 한다(SHALL). |
+| PnP 정상 terminal | 정상 완료 PnP의 terminal은 Task Execution이 PLACE 뒤 마지막 GO_HOME까지 성공한 경우에만 `COMPLETED`다. |
+| 마지막 HOME 이후 종료 | 마지막 PnP가 이미 HOME 복귀했으므로 Orchestration은 Mission FinalHome을 중복 요청하지 않고, 수량 회계·Mission/Safety 진행 결정 뒤 정상 종료해야 한다(SHALL). |
+| 목표 수량 달성 | `processed_count == N` 이후에는 자재가 남아 있어도 다른 Target을 요청해서는 안 된다(SHALL NOT). |
+| HOME 실패 | GO_HOME 실패는 성공으로 바꾸지 않고 PnP/Mission 실패로 보존한다. |
 
 ### VR-ORCH-MISSION-02 — 실패 근거 보존
 
-실패나 Safety 중단으로 시도·작업이 종료되면 해당 결과는 독립적으로 관찰 가능해야 한다(SHALL). Recovery 성공이 중단된 Task·Iteration을 성공으로 표시해서는 안 된다(SHALL NOT). 이후 배치는 새 작업 식별자와 새로운 Vision 관측에 의해서만 완료될 수 있으며 원래 중단 근거를 보존해야 한다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 실패·Safety 중단 | 실패나 Safety 중단으로 시도·작업이 종료되면 해당 결과는 독립적으로 관찰 가능해야 한다(SHALL). |
+| Recovery 성공 | Recovery 성공이 중단된 Task·Iteration을 성공으로 표시해서는 안 된다(SHALL NOT). |
+| 이후 배치 완료 | 이후 배치는 새 작업 식별자와 새로운 Vision 관측에 의해서만 완료될 수 있으며 원래 중단 근거를 보존해야 한다. |
 
 ### VR-ORCH-MISSION-04 — Mission Recipe snapshot 전달
 
-Orchestration은 target별 Mission Recipe snapshot과 선택된 Vision Algorithm을 정상 Acquisition·허용된 재관측에 일관되게 제공해야 한다(SHALL). Vision Algorithm 선택이 누락·무효면 기존 Configuration/Vision 분류로 처리한다. 유효한 Recipe snapshot과 Vision Acquisition의 전체 후보·증거를 변경 없이 단일 ExecutePnp Goal로 전달해야 한다(SHALL). 후보별 pose/yaw 해석, Grasp/PLACE 제약 적용, PnP 실행 적격성 판단은 Task Execution/Motion FDS가 소유하며 Orchestration이 복제해서는 안 된다(SHALL NOT).
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Acquisition 입력 | Orchestration은 target별 Mission Recipe snapshot과 선택된 Vision Algorithm을 정상 Acquisition·허용된 재관측에 일관되게 제공해야 한다(SHALL). |
+| Algorithm 누락·무효 | Vision Algorithm 선택이 누락·무효면 기존 Configuration/Vision 분류로 처리한다. |
+| 단일 Goal 인계 | 유효한 Recipe snapshot과 Vision Acquisition의 전체 후보·증거를 변경 없이 단일 ExecutePnp Goal로 전달해야 한다(SHALL). |
+| 실행 판단 Owner | 후보별 pose/yaw 해석, Grasp/PLACE 제약 적용, PnP 실행 적격성 판단은 Task Execution/Motion FDS가 소유하며 Orchestration이 복제해서는 안 된다(SHALL NOT). |
 
 ### VR-ORCH-MISSION-05 — Terminal 결과의 Safety 우선순위
 
@@ -406,55 +429,149 @@ Task Execution Action이 취소 terminal status를 반환하면 Orchestration이
 
 ### VR-ORCH-MISSION-13 — Cycle 수량과 전체 미처리 공급량
 
-전체 미처리 작업량 N을 가진 ExecuteCycle이 수락되면 Orchestration은 첫 Acquisition 전에 Mission-level 초기 GO_HOME을 수행해야 한다(SHALL). 승인된 작업 Retry 및 Recovery에서 기존 GO_HOME 정책을 유지한다. 정상 PnP 반복 사이 별도 HOME 요청은 두지 않는다. 마지막 배치의 PnP terminal은 PnP 내부 마지막 GO_HOME 성공을 포함해야 하며, GO_HOME 실패는 Motion 실패로 보존되어 정상 Cycle 완료가 될 수 없다. Mission은 terminal·회계·Safety 진행 결정 뒤 종료하고 Mission FinalHome을 중복 호출하지 않는다. 실행 중 추가 공급은 다음 순차 Cycle에 Pending으로 보존한다(SHALL). `material_placed=true`는 Goal UUID당 한 번만 공급 누계에 반영하고, 다음 Cycle 수량은 전체 성공 공급량에서 반영한 배치 수를 빼서 계산해야 한다(SHALL). 내부 PnP 단계·복구 결과를 Mission이 검사하지 않는다(SHALL NOT). 검증 근거는 Delivery ID, 공급 수량, Cycle identity·수량, `processed_count`, ExecutePnp terminal outcome/배치 사실 및 Cycle terminal result다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Cycle 수락 | 전체 미처리 작업량 N을 가진 ExecuteCycle이 수락되면 Orchestration은 첫 Acquisition 전에 Mission-level 초기 GO_HOME을 수행해야 한다(SHALL). |
+| Retry·Recovery | 승인된 작업 Retry 및 Recovery에서 기존 GO_HOME 정책을 유지한다. |
+| 정상 반복 사이 | 정상 PnP 반복 사이 별도 HOME 요청은 두지 않는다. |
+| 마지막 PnP terminal | 마지막 배치의 PnP terminal은 PnP 내부 마지막 GO_HOME 성공을 포함해야 하며, GO_HOME 실패는 Motion 실패로 보존되어 정상 Cycle 완료가 될 수 없다. |
+| Mission 종료 | Mission은 terminal·회계·Safety 진행 결정 뒤 종료하고 Mission FinalHome을 중복 호출하지 않는다. |
+| 실행 중 추가 공급 | 실행 중 추가 공급은 다음 순차 Cycle에 Pending으로 보존한다(SHALL). |
+| 공급 누계·다음 Cycle | `material_placed=true`는 Goal UUID당 한 번만 공급 누계에 반영하고, 다음 Cycle 수량은 전체 성공 공급량에서 반영한 배치 수를 빼서 계산해야 한다(SHALL). |
+| 내부 단계 비소비 | 내부 PnP 단계·복구 결과를 Mission이 검사하지 않는다(SHALL NOT). |
+| 관찰 근거 | 검증 근거는 Delivery ID, 공급 수량, Cycle identity·수량, `processed_count`, ExecutePnp terminal outcome/배치 사실 및 Cycle terminal result다. |
 
 ### VR-ORCH-MISSION-14 — 전체 Vision 후보의 단일 인계
 
-Target Episode에서 Orchestration은 성공한 DetectTarget 결과의 HIGH·MEDIUM 단일 목록, Acquisition ID, Geometry·Occupancy evidence를 변경 없이 보존해야 한다(SHALL). 동일 Acquisition의 SELECTED HIGH·MEDIUM 정상 PICK 적격 후보 전체를 단일 `material_candidates` 목록 그대로 하나의 ExecutePnp Goal에 전달해야 한다(SHALL). PICK 실행 우선순위는 Task Execution이 소유하며 Confidence를 비교 기준으로 사용하지 않는다. Vision은 관측·Profile 적격성·열거 안정성·Scene Stability·단일 deadline·관측 내부 retry를 소유한다. Orchestration은 별도 Stability Signal, Generation 일치 또는 Source Age TTL을 요구하거나 등급·Geometry를 재계산해서는 안 된다(SHALL NOT). Mission은 후보를 재정렬·평가·분할하거나 개별 후보 실행을 요청해서는 안 된다(SHALL NOT). 새 자재 및 승인한 PnP 재시도에는 새 Acquisition을 사용한다. 다음 Target Acquisition은 이전 PnP terminal·배치 회계·현재 Mission/Safety 권한 뒤에만 시작한다. `OBJECT_NOT_FOUND`는 안정된 부재에만 해당하며 관측 부족·무효는 기존 오류/Timeout으로 남긴다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Vision 결과 보존 | Target Episode에서 Orchestration은 성공한 DetectTarget 결과의 HIGH·MEDIUM 단일 목록, Acquisition ID, Geometry·Occupancy evidence를 변경 없이 보존해야 한다(SHALL). |
+| 후보 전체 인계 | 동일 Acquisition의 SELECTED HIGH·MEDIUM 정상 PICK 적격 후보 전체를 단일 `material_candidates` 목록 그대로 하나의 ExecutePnp Goal에 전달해야 한다(SHALL). |
+| PICK 우선순위 | PICK 실행 우선순위는 Task Execution이 소유하며 Confidence를 비교 기준으로 사용하지 않는다. |
+| Vision 책임 | Vision은 관측·Profile 적격성·열거 안정성·Scene Stability·단일 deadline·관측 내부 retry를 소유한다. |
+| 추가 Gate·재계산 금지 | Orchestration은 별도 Stability Signal, Generation 일치 또는 Source Age TTL을 요구하거나 등급·Geometry를 재계산해서는 안 된다(SHALL NOT). |
+| 후보 처리 금지 | Mission은 후보를 재정렬·평가·분할하거나 개별 후보 실행을 요청해서는 안 된다(SHALL NOT). |
+| 새 자재·PnP 재시도 | 새 자재 및 승인한 PnP 재시도에는 새 Acquisition을 사용한다. |
+| 다음 Acquisition 순서 | 다음 Target Acquisition은 이전 PnP terminal·배치 회계·현재 Mission/Safety 권한 뒤에만 시작한다. |
+| 유효 부재·오류 구분 | `OBJECT_NOT_FOUND`는 안정된 부재에만 해당하며 관측 부족·무효는 기존 오류/Timeout으로 남긴다. |
 
 ### VR-ORCH-MISSION-22 — PnP terminal outcome 소비
 
-Orchestration은 하나의 Acquisition 전체 후보와 Recipe snapshot을 단일 ExecutePnp Goal에 제출하고 해당 Goal의 terminal `pnp_outcome`, `material_placed`, Action terminal status만 Mission 분기 입력으로 사용해야 한다(SHALL). `material_placed=true`는 다른 terminal outcome·Cancel·Safety 결과와 독립적으로 Goal UUID당 한 번 수량 반영해야 한다(SHALL). Mission은 내부 result code, 자재 disposition 세부값, candidate provenance, Feedback, MotionStatus, Holding 또는 diagnostic detail을 재검사·재승인 근거로 사용해서는 안 된다(SHALL NOT). 검증 근거는 Goal·Acquisition identity, terminal 상위 결과, `processed_count` 및 Mission 결과다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Mission 분기 입력 | Orchestration은 하나의 Acquisition 전체 후보와 Recipe snapshot을 단일 ExecutePnp Goal에 제출하고 해당 Goal의 terminal `pnp_outcome`, `material_placed`, Action terminal status만 Mission 분기 입력으로 사용해야 한다(SHALL). |
+| 배치 사실 회계 | `material_placed=true`는 다른 terminal outcome·Cancel·Safety 결과와 독립적으로 Goal UUID당 한 번 수량 반영해야 한다(SHALL). |
+| 재검사·재승인 금지 | Mission은 내부 result code, 자재 disposition 세부값, candidate provenance, Feedback, MotionStatus, Holding 또는 diagnostic detail을 재검사·재승인 근거로 사용해서는 안 된다(SHALL NOT). |
+| 관찰 근거 | 검증 근거는 Goal·Acquisition identity, terminal 상위 결과, `processed_count` 및 Mission 결과다. |
 
 ### VR-ORCH-MISSION-23 — 상위 재관측·재시도 정책
 
-Task Execution이 `RETRYABLE`을 반환하면 Orchestration은 기존 Mission Retry admission, Safety·Cancel 우선순위 및 현재 ExecuteCycle 정책으로 새 Acquisition 재시도 또는 종료를 결정해야 한다(SHALL). 재시도를 승인한 경우 이전 후보·Acquisition을 재사용하지 않고 새 Acquisition과 ExecutePnp Goal을 사용해야 하며 Vision 관측 Retry 예산은 소비하거나 초기화하지 않는다(SHALL). `FAILED`, `SAFETY_PREEMPTED`, 명시적 Cancel은 기존 Mission·Controlled Recovery 정책을 따라야 한다. Mission은 내부 공정·Gripper·반환·Retreat 원인을 열거하지 않고 동일 상위 결과 의미를 처리해야 한다. Mission 수준 초기 GO_HOME과 기존 Retry/Recovery GO_HOME은 명시적 movement 요청으로 유지한다. 정상 PnP의 마지막 GO_HOME은 Task Execution이 완료·보고하므로 Mission FinalHome은 실행하지 않는다. PnP HOME/Tray 내부 복구와 Mission Retry/Recovery 정책은 구별한다. 검증 근거는 outcome, Mission retry admission, 새 Acquisition/Goal identity, 필요한 외부 GO_HOME 요청, 수량 및 Mission terminal result다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| RETRYABLE 처리 | Task Execution이 `RETRYABLE`을 반환하면 Orchestration은 기존 Mission Retry admission, Safety·Cancel 우선순위 및 현재 ExecuteCycle 정책으로 새 Acquisition 재시도 또는 종료를 결정해야 한다(SHALL). |
+| 승인된 재시도 | 재시도를 승인한 경우 이전 후보·Acquisition을 재사용하지 않고 새 Acquisition과 ExecutePnp Goal을 사용해야 하며 Vision 관측 Retry 예산은 소비하거나 초기화하지 않는다(SHALL). |
+| 실패·선점·취소 | `FAILED`, `SAFETY_PREEMPTED`, 명시적 Cancel은 기존 Mission·Controlled Recovery 정책을 따라야 한다. |
+| 내부 원인 비소비 | Mission은 내부 공정·Gripper·반환·Retreat 원인을 열거하지 않고 동일 상위 결과 의미를 처리해야 한다. |
+| Mission HOME 요청 | Mission 수준 초기 GO_HOME과 기존 Retry/Recovery GO_HOME은 명시적 movement 요청으로 유지한다. |
+| 정상 PnP 마지막 HOME | 정상 PnP의 마지막 GO_HOME은 Task Execution이 완료·보고하므로 Mission FinalHome은 실행하지 않는다. |
+| 내부 복구·Mission 정책 | PnP HOME/Tray 내부 복구와 Mission Retry/Recovery 정책은 구별한다. |
+| 관찰 근거 | 검증 근거는 outcome, Mission retry admission, 새 Acquisition/Goal identity, 필요한 외부 GO_HOME 요청, 수량 및 Mission terminal result다. |
 
 ### VR-ORCH-MISSION-03 — Vision 관측 Retry 한도 유지
 
-일시적인 관측 실패에 대한 Vision 관측 Retry는 초기 Acquisition에 최대 3회의 기존 Retry를 더한 제한을 유지해야 한다(SHALL). `retry_count`는 이 제한적 관측 실패 복구에만 증가하고 새 Target Episode에서만 초기화해야 한다(SHALL). HIGH/MEDIUM 목록 전달과 교란 `COMPLETED` 후 새 Acquisition은 이 한도를 소비하지 않는다(SHALL NOT). Task Execution의 `RETRYABLE` 결과 뒤 새 Acquisition도 이 한도를 소비하거나 초기화해서는 안 된다(SHALL NOT). 승인된 PnP 상위 재시도는 이전 후보 목록을 폐기하고 새 Acquisition 및 새 ExecutePnp Goal을 사용해야 한다(SHALL). 방향 미관측만을 위한 Mission 재취득 분기를 두지 않는다. Recipe의 yaw fallback 허용 여부와 금지 시 기존 PnP 실패 결과는 Task Execution이 소유하며 Mission이 이를 재판정하거나 우회해서는 안 된다(SHALL NOT). PnP 내부 후보 전환·복구 절차는 Task Execution FDS가 소유한다. 실패한 Action·Acquisition을 재전송해서는 안 된다(SHALL NOT).
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 관측 실패 Retry 한도 | 일시적인 관측 실패에 대한 Vision 관측 Retry는 초기 Acquisition에 최대 3회의 기존 Retry를 더한 제한을 유지해야 한다(SHALL). |
+| 관측 Retry 회계 | `retry_count`는 이 제한적 관측 실패 복구에만 증가하고 새 Target Episode에서만 초기화해야 한다(SHALL). |
+| 후보 인계·교란 완료 | HIGH/MEDIUM 목록 전달과 교란 `COMPLETED` 후 새 Acquisition은 이 한도를 소비하지 않는다(SHALL NOT). |
+| RETRYABLE 뒤 재관측 | Task Execution의 `RETRYABLE` 결과 뒤 새 Acquisition도 이 한도를 소비하거나 초기화해서는 안 된다(SHALL NOT). |
+| 승인된 PnP 재시도 | 승인된 PnP 상위 재시도는 이전 후보 목록을 폐기하고 새 Acquisition 및 새 ExecutePnp Goal을 사용해야 한다(SHALL). |
+| 방향 미관측 | 방향 미관측만을 위한 Mission 재취득 분기를 두지 않는다. |
+| Yaw fallback Owner | Recipe의 yaw fallback 허용 여부와 금지 시 기존 PnP 실패 결과는 Task Execution이 소유하며 Mission이 이를 재판정하거나 우회해서는 안 된다(SHALL NOT). |
+| PnP 내부 복구 Owner | PnP 내부 후보 전환·복구 절차는 Task Execution FDS가 소유한다. |
+| 실패 요청 재전송 금지 | 실패한 Action·Acquisition을 재전송해서는 안 된다(SHALL NOT). |
 
 ### VR-ORCH-MISSION-10 — 안전 경계와 작업 복구 구분
 
-Safety 선점·명시적 취소·구성/계약 오류·실제 Backend Fault·필수 로봇 실행 상태 상실·승인된 복구 불가 실패는 기존 Action 및 Controlled Recovery 계약을 따라야 한다(SHALL). Task Execution 내부 관측 지연은 해당 PnP lifecycle 안에서 처리하며 Mission의 별도 상태 조회나 새 차단 Gate를 만들지 않는다. `RETRYABLE` 작업 결과는 Vision 관측 Retry 소진 사유가 아니며 작업 재시도 횟수만으로 현재 ExecuteCycle을 종료해서는 안 된다(SHALL NOT). 재시도 여부는 Mission policy가 승인한다. Safety Recovery는 중단된 Task를 Replay하지 않으며 종료 시 동일 Delivery ID를 재발행하거나 새 ExecuteCycle을 만들어서는 안 된다(SHALL NOT).
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Safety·시스템 실패 | Safety 선점·명시적 취소·구성/계약 오류·실제 Backend Fault·필수 로봇 실행 상태 상실·승인된 복구 불가 실패는 기존 Action 및 Controlled Recovery 계약을 따라야 한다(SHALL). |
+| 내부 관측 지연 | Task Execution 내부 관측 지연은 해당 PnP lifecycle 안에서 처리하며 Mission의 별도 상태 조회나 새 차단 Gate를 만들지 않는다. |
+| RETRYABLE·횟수 제한 | `RETRYABLE` 작업 결과는 Vision 관측 Retry 소진 사유가 아니며 작업 재시도 횟수만으로 현재 ExecuteCycle을 종료해서는 안 된다(SHALL NOT). |
+| Mission 재시도 승인 | 재시도 여부는 Mission policy가 승인한다. |
+| Safety Recovery·종료 | Safety Recovery는 중단된 Task를 Replay하지 않으며 종료 시 동일 Delivery ID를 재발행하거나 새 ExecuteCycle을 만들어서는 안 된다(SHALL NOT). |
 
 ### VR-ORCH-MISSION-20 — Retry 가능한 Vision 및 관측 전용 시도
 
-Source 유효성 회복 이후 Terminal `DETECT_RESULT_TEMPORARY_INVALID_TARGET` 또는 기존 계약상 적격한 `DETECT_RESULT_TIMEOUT`·Freshness 실패가 있으면 Orchestration은 현재 Retry Admission과 Episode 예산이 허가할 때만 새 DetectTarget Acquisition을 요청할 수 있다(MAY). 이 예산은 일시적인 관측 실패 복구 전용이며 목록 전달·유효 교란 후보 처리·교란 완료 뒤 재관측에는 적용하지 않는다. 유효 최종 관측에서 발생한 `DETECT_RESULT_GEOMETRY_ERROR`, 지속적인 Sensor·TF·Backend·구성·형식 오류 및 복구되지 않은 Stale/Invalid 실패는 원본 근거를 가진 기존 Terminal 실패로 남아야 한다(SHALL). 방향 미관측만을 위한 재취득 분기는 두지 않는다. Recipe fallback 금지·누락·무효에 따른 기존 PnP 실패는 Task Execution 결과를 따른다. 잔여 수량이 있는 `OBJECT_NOT_FOUND`는 수량 부족이며(SHALL), Mission을 완료하거나 Retry를 소비해서는 안 된다(SHALL NOT). 허용된 관측 전용 Retry는 새 Acquisition을 사용해야 한다(SHALL). Motion `IDLE`·활성 Flag로 관측 전용 Retry의 수락 여부를 결정해서는 안 된다(SHALL NOT). 검증 근거는 시도 수, Acquisition ID, 변경되지 않은 Batch 처리량, ExecutePnp Action ID·Result 및 보존된 Terminal 실패 분류다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 관측 Retry 허용 조건 | Source 유효성 회복 이후 Terminal `DETECT_RESULT_TEMPORARY_INVALID_TARGET` 또는 기존 계약상 적격한 `DETECT_RESULT_TIMEOUT`·Freshness 실패가 있으면 Orchestration은 현재 Retry Admission과 Episode 예산이 허가할 때만 새 DetectTarget Acquisition을 요청할 수 있다(MAY). |
+| 관측 예산의 범위 | 이 예산은 일시적인 관측 실패 복구 전용이며 목록 전달·유효 교란 후보 처리·교란 완료 뒤 재관측에는 적용하지 않는다. |
+| 지속적·미복구 실패 | 유효 최종 관측에서 발생한 `DETECT_RESULT_GEOMETRY_ERROR`, 지속적인 Sensor·TF·Backend·구성·형식 오류 및 복구되지 않은 Stale/Invalid 실패는 원본 근거를 가진 기존 Terminal 실패로 남아야 한다(SHALL). |
+| 방향 미관측 | 방향 미관측만을 위한 재취득 분기는 두지 않는다. |
+| Recipe fallback 실패 | Recipe fallback 금지·누락·무효에 따른 기존 PnP 실패는 Task Execution 결과를 따른다. |
+| 잔여 수량·유효 부재 | 잔여 수량이 있는 `OBJECT_NOT_FOUND`는 수량 부족이며(SHALL), Mission을 완료하거나 Retry를 소비해서는 안 된다(SHALL NOT). |
+| 관측 Retry identity | 허용된 관측 전용 Retry는 새 Acquisition을 사용해야 한다(SHALL). |
+| Motion 상태 비소비 | Motion `IDLE`·활성 Flag로 관측 전용 Retry의 수락 여부를 결정해서는 안 된다(SHALL NOT). |
+| 관찰 근거 | 검증 근거는 시도 수, Acquisition ID, 변경되지 않은 Batch 처리량, ExecutePnp Action ID·Result 및 보존된 Terminal 실패 분류다. |
 
 ### VR-ORCH-MISSION-15 — 준비 상태와 Safety Interlock 분리
 
-AMR/PackML 또는 자재 근거가 Unknown·Invalid·Stale이거나 Timestamp가 비현실적인 경우에도 Orchestration은 현재 작업이 해당 근거를 필요로 할 때만 Not Ready를 적용해야 하며(SHALL), 모든 PnP에 공통 Gate를 강제해서는 안 된다(SHALL NOT). 활성 실행에서는 작업 맥락의 진행 정책을 적용한다. AMR/PackML 상태·통신만으로 Safety Interlock이나 StopMotion을 유발해서는 안 된다(SHALL NOT). 실제 Safety 위험과 필수 Safety-HW/Motion 근거는 Safety가 소유한다. 검증 근거는 작업 맥락, 준비·진행 상태, SafetyState 및 StopMotion이다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 작업별 준비 조건 | AMR/PackML 또는 자재 근거가 Unknown·Invalid·Stale이거나 Timestamp가 비현실적인 경우에도 Orchestration은 현재 작업이 해당 근거를 필요로 할 때만 Not Ready를 적용해야 하며(SHALL), 모든 PnP에 공통 Gate를 강제해서는 안 된다(SHALL NOT). |
+| 활성 실행 | 활성 실행에서는 작업 맥락의 진행 정책을 적용한다. |
+| Safety 원인 승격 금지 | AMR/PackML 상태·통신만으로 Safety Interlock이나 StopMotion을 유발해서는 안 된다(SHALL NOT). |
+| Safety 책임 | 실제 Safety 위험과 필수 Safety-HW/Motion 근거는 Safety가 소유한다. |
+| 관찰 근거 | 검증 근거는 작업 맥락, 준비·진행 상태, SafetyState 및 StopMotion이다. |
 
 ### VR-ORCH-MISSION-18 — 새 실험에서 Mission 상태 비승계
 
-새 ROS Bringup 프로세스의 Orchestration은 이전 프로세스의 Readiness·Delivery 소비·잔여 작업량·Retry 회계를 자동 승계해서는 안 된다(SHALL NOT). 이전 ExecuteCycle·Action을 재제출하지 않고 정상 준비 상태와 최신 Safety 관측을 확인한 뒤 새 요청을 받아야 한다(SHALL). Pause→Play는 기존 프로세스의 실행 문맥을 유지한다. Timeline Stop·Bringup 교체·Safety 재시작의 절차와 Safety Latch 소유권은 [Simulation Session FDS](../simulation/fds-sim-session.md) 및 Safety 설계가 소유하며 Mission은 이를 재규정하지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 새 Bringup 프로세스 | 새 ROS Bringup 프로세스의 Orchestration은 이전 프로세스의 Readiness·Delivery 소비·잔여 작업량·Retry 회계를 자동 승계해서는 안 된다(SHALL NOT). |
+| 이전 Action·새 요청 | 이전 ExecuteCycle·Action을 재제출하지 않고 정상 준비 상태와 최신 Safety 관측을 확인한 뒤 새 요청을 받아야 한다(SHALL). |
+| Pause→Play | Pause→Play는 기존 프로세스의 실행 문맥을 유지한다. |
+| Session·Safety Owner | Timeline Stop·Bringup 교체·Safety 재시작의 절차와 Safety Latch 소유권은 [Simulation Session FDS](../simulation/fds-sim-session.md) 및 Safety 설계가 소유하며 Mission은 이를 재규정하지 않는다. |
 
 ### VR-ORCH-MISSION-24 — Vision BUSY 이후 IDLE 재진입
 
-DetectTarget이 `DETECT_RESULT_BUSY`를 반환하면 Mission은 해당 응답 시점의 Diagnostic Generation을 기준으로 그보다 새로운 `VisionDiagnostic.IDLE`을 관측한 뒤 다음 요청을 정확히 한 번 제출해야 한다(SHALL). BUSY 이전 IDLE 또는 현재 `DETECTING`은 슬롯 해제 근거가 아니다. Diagnostic 누락·Stale, BUSY 이후 유효 IDLE 미관측 또는 기존 유한 대기 한계 초과는 Vision 실패로 보존하며 BUSY 자체는 Vision Retry 예산을 소비하지 않는다. Mission Cancel과 Safety Preemption은 대기를 중단한다. 검증 근거는 BUSY·Diagnostic Generation/상태·요청 횟수·Acquisition ID와 최종 Mission 결과다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| BUSY 이후 재요청 | DetectTarget이 `DETECT_RESULT_BUSY`를 반환하면 Mission은 해당 응답 시점의 Diagnostic Generation을 기준으로 그보다 새로운 `VisionDiagnostic.IDLE`을 관측한 뒤 다음 요청을 정확히 한 번 제출해야 한다(SHALL). |
+| 슬롯 해제 불충분 근거 | BUSY 이전 IDLE 또는 현재 `DETECTING`은 슬롯 해제 근거가 아니다. |
+| 대기 실패·Retry 예산 | Diagnostic 누락·Stale, BUSY 이후 유효 IDLE 미관측 또는 기존 유한 대기 한계 초과는 Vision 실패로 보존하며 BUSY 자체는 Vision Retry 예산을 소비하지 않는다. |
+| 취소·선점 | Mission Cancel과 Safety Preemption은 대기를 중단한다. |
+| 관찰 근거 | 검증 근거는 BUSY·Diagnostic Generation/상태·요청 횟수·Acquisition ID와 최종 Mission 결과다. |
 
 ### VR-ORCH-MISSION-25 — Calibration 상태에 따른 Admission
 
-Orchestration은 Admission 및 새 DetectTarget 진행 시 현재 `/vision/calibration_status`를 확인해야 한다(SHALL). Fresh `READY`는 새로운 Calibration 대기 없이 진행을 허용한다. `NEEDS_CALIBRATION`·`CALIBRATING`은 상태와 원인을 보존해 Admission/진행을 보류하고 Pending Delivery를 유지한다. Missing/Stale은 기존 1초 Freshness 계약에 따른 Vision-status Communication Unavailable이며 Calibration 부재의 증거가 아니다. Mission 안에서 Calibration을 자동 요청하거나 완료를 기다리지 않으며 이 검사는 DetectTarget Timeout·Retry 예산을 소비하지 않는다. 검증 근거는 Calibration Status·Receipt Freshness·Pending Delivery·ExecuteCycle Admission 및 DetectTarget 요청 여부다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Calibration 확인 시점 | Orchestration은 Admission 및 새 DetectTarget 진행 시 현재 `/vision/calibration_status`를 확인해야 한다(SHALL). |
+| Fresh READY | Fresh `READY`는 새로운 Calibration 대기 없이 진행을 허용한다. |
+| Calibration 필요·진행 중 | `NEEDS_CALIBRATION`·`CALIBRATING`은 상태와 원인을 보존해 Admission/진행을 보류하고 Pending Delivery를 유지한다. |
+| Missing·Stale | Missing/Stale은 기존 1초 Freshness 계약에 따른 Vision-status Communication Unavailable이며 Calibration 부재의 증거가 아니다. |
+| 자동 Calibration·예산 | Mission 안에서 Calibration을 자동 요청하거나 완료를 기다리지 않으며 이 검사는 DetectTarget Timeout·Retry 예산을 소비하지 않는다. |
+| 관찰 근거 | 검증 근거는 Calibration Status·Receipt Freshness·Pending Delivery·ExecuteCycle Admission 및 DetectTarget 요청 여부다. |
 
 ### VR-ORCH-MISSION-26 — Task Execution Action의 미확정 lifecycle
 
-`ExecutePnp` 또는 `ExecuteDisturb`를 제출한 뒤 수락 응답 미확정·Action server 연결 상실 중에는 Orchestration이 같은 작업을 재제출하거나 완료 처리해서는 안 된다(SHALL NOT). 해당 Action에 대한 Cancel 의도는 같은 Submission에 유지해 늦은 수락 뒤 전달해야 하며(SHALL), Safety direct Stop은 Orchestration Cancel과 독립적으로 기존 경로를 사용해야 한다(SHALL). Goal 명시적 거부, 단일 Action terminal 또는 기존 Controlled Recovery handoff만 활성 lifecycle 책임을 정리할 수 있다(SHALL). terminal 이후 늦은 응답은 Mission 결과·회계를 변경해서는 안 된다(SHALL NOT). 검증 근거는 Submission ID, 관측된 Goal UUID, 제출·수락·거부·Cancel·Safety·terminal 순서, 재제출 횟수, Motion stop evidence 및 Mission terminal 결과다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 미확정 Action | `ExecutePnp` 또는 `ExecuteDisturb`를 제출한 뒤 수락 응답 미확정·Action server 연결 상실 중에는 Orchestration이 같은 작업을 재제출하거나 완료 처리해서는 안 된다(SHALL NOT). |
+| 같은 Submission 취소·직접 정지 | 해당 Action에 대한 Cancel 의도는 같은 Submission에 유지해 늦은 수락 뒤 전달해야 하며(SHALL), Safety direct Stop은 Orchestration Cancel과 독립적으로 기존 경로를 사용해야 한다(SHALL). |
+| Lifecycle 책임 종료 | Goal 명시적 거부, 단일 Action terminal 또는 기존 Controlled Recovery handoff만 활성 lifecycle 책임을 정리할 수 있다(SHALL). |
+| 늦은 응답 | terminal 이후 늦은 응답은 Mission 결과·회계를 변경해서는 안 된다(SHALL NOT). |
+| 관찰 근거 | 검증 근거는 Submission ID, 관측된 Goal UUID, 제출·수락·거부·Cancel·Safety·terminal 순서, 재제출 횟수, Motion stop evidence 및 Mission terminal 결과다. |
 
 ### VR-ORCH-MISSION-CANCEL-IDENTITY — 개별 취소와 후속 제출
 
-수락 지연 중 개별 Action 취소는 같은 제출에 전달되어야 하며(SHALL), terminal 또는 Safety handoff로 분리된 Action의 취소가 후속 GO_HOME·RETRACT 또는 다른 Action에 적용되어서는 안 된다(SHALL NOT). 요청자 Cycle Cancel은 기존 Mission 정책에 따라 처리한다. 검증 근거는 Cycle과 각 Goal identity, 제출·취소·handoff·늦은 응답 및 후속 Goal 결과다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 개별 취소의 귀속 | 수락 지연 중 개별 Action 취소는 같은 제출에 전달되어야 하며(SHALL), terminal 또는 Safety handoff로 분리된 Action의 취소가 후속 GO_HOME·RETRACT 또는 다른 Action에 적용되어서는 안 된다(SHALL NOT). |
+| Cycle Cancel | 요청자 Cycle Cancel은 기존 Mission 정책에 따라 처리한다. |
+| 관찰 근거 | 검증 근거는 Cycle과 각 Goal identity, 제출·취소·handoff·늦은 응답 및 후속 Goal 결과다. |
 
 ## 참조
 

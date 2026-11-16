@@ -22,7 +22,7 @@
 
 **Material Candidate**는 한 Acquisition의 최종 STABLE Depth 관측에서 Vision이 Geometry를 검증한 물리적 자재다. `cuboid_top_face`는 SELECTED HIGH·MEDIUM 정상 PICK 적격 후보 전체를 단일 `material_candidates` 목록으로 인계하고 LOW·REJECTED 및 미해결 근거는 진단에 보존한다. **Grasp Pose Candidate**는 Motion이 Material Candidate 하나에 대해 생성한 TCP Pose이며, **Planning Attempt**는 해당 Pose에 대한 IK 및 Path Planning 평가다. Vision은 Material Candidate 검출·관측/Geometry Qualification·단일 목록의 안정적인 열거를 소유한다. Orchestration은 Vision 등급을 재계산하지 않고 전체 목록을 변경 없이 전달하며 Mission Progress/Retry를 소유한다. Task Execution은 전달받은 전체 목록 안에서 Material Candidate 우선순위·후보 전환과 PnP 내 작업 실행을 소유한다. Motion은 선택된 Material Candidate의 Grasp Pose Candidate 생성·Planning Attempt 및 단일 movement 실현을 소유한다.
 
-요청은 `target_id`, 상대 `timeout`, 대소문자를 구분하는 `algorithm` 문자열을 포함한다. Recipe `vision.algorithm`이 알고리즘 선택의 SSOT이고, 생략 시 기본 선택은 현재 Recipe/Service 계약에서 정한다. 지원 가능한 알고리즘 집합과 실행 설정은 Vision의 운영 Profile 및 연결된 Algorithm 설계가 소유하며 이 ICD는 특정 알고리즘으로 선택 범위를 제한하지 않는다. 명시적으로 비어 있거나 미지원인 값은 Acquisition 수락 전에 `DETECT_RESULT_INVALID_RESULT`로 거부한다. Orchestration은 일반 요청·Retry·새 Acquisition·PLACE Lookahead에 선택을 전달하고 Vision은 Acquisition 안에서 다른 Algorithm Strategy로 재선택·혼합·실패 Fallback을 수행하지 않는다. 선택 Strategy 내부 복구 절차의 허용 여부는 해당 기능 FDS가 소유한다. 이 공유 계약은 새 알고리즘을 추가해도 변경할 필요가 없으며 실행 가능한 Service 기본값과 생성된 ROS 타입은 코드 선언을 따른다.
+요청은 `target_id`, 상대 `timeout`, 대소문자를 구분하는 `algorithm` 문자열을 포함한다. Recipe `vision.algorithm`이 알고리즘 선택의 SSOT이고, 생략 시 기본 선택은 현재 Recipe/Service 계약에서 정한다. 지원 가능한 알고리즘 집합과 실행 설정은 Vision의 운영 Profile 및 연결된 Algorithm 설계가 소유하며 이 ICD는 특정 알고리즘으로 선택 범위를 제한하지 않는다. 명시적으로 비어 있거나 미지원인 값은 Acquisition 수락 전에 `DETECT_RESULT_INVALID_RESULT`로 거부한다. Orchestration은 일반 요청·Retry·새 Acquisition에 선택을 전달하고 Vision은 Acquisition 안에서 다른 Algorithm Strategy로 재선택·혼합·실패 Fallback을 수행하지 않는다. 선택 Strategy 내부 복구 절차의 허용 여부는 해당 기능 FDS가 소유한다. 이 공유 계약은 새 알고리즘을 추가해도 변경할 필요가 없으며 실행 가능한 Service 기본값과 생성된 ROS 타입은 코드 선언을 따른다.
 
 Development Hub는 Recipe를 소유하지 않으며 현재 Service/개발 설정의 기본 알고리즘 선택을 사용한다. Fixed Validation의 Fixed Target 계약과 지원 여부는 해당 검증 Adapter의 독립된 기능 계약을 따르며, 개발용 선택이 Production 알고리즘의 지원 범위를 변경하지는 않는다.
 
@@ -88,6 +88,8 @@ Snapshot Message의 Payload·Metadata와 소비자가 해석하는 보장·비�
 | Diagnostic 비간섭 | Topic/Content는 Read-only이며 Safety·Motion·Orchestration·DetectTarget Result·Mission Decision의 Admission 입력이 아니다 |
 | 전송 | Reliable/Transient-local 및 Keep-last-one으로 최신 Complete Snapshot을 전달한다. Hub 부재에도 Vision의 발행 계약은 유효하며 Hub는 다음 Snapshot이 올 때까지 마지막 수신 내용을 보존한다 |
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-ICD-VIS-ORCH-18 — Snapshot Payload와 Source 상관관계
 Snapshot은 고유 Identity, 해당 Event에 맞는 Acquisition/Calibration Identity, 실제 Source Observation Provenance 및 Image/Metadata의 의미상 대응 관계를 보존해야 한다(SHALL). Snapshot Payload는 생성·발행 후 변경되지 않으며, 관측 부재·Image Encoding 불가·선택적 필드 미계산은 성공 근거를 꾸며내지 않고 명시적으로 해석한다. 저장·발행 실패의 처리 순서는 Diagnostic Snapshot FDS가 소유한다.
 
@@ -102,8 +104,12 @@ DetectTarget Request마다 비어 있지 않은 불변 `acquisition_id` 하나�
 Hub의 Development Retry Detection도 기존 `/vision/detect_target`을 사용하며 Vision Result·Snapshot은 새 `acquisition_id`에 연결한다. 이 읽기 전용 요청은 Delivery·Mission을 만들거나 Motion·Gripper·Material Supply를 호출하지 않는다. 동일 Acquisition이 점유 중이면 `BUSY` 의미를 따르며 진행 중 요청을 취소·교체하지 않는다. Hub의 버튼 활성 조건, Caller Timeout 및 지연 응답 처리는 [UI Hub FDS](../components/ui-hub/fds.md)의 `VR-INT-UI-07`을, Mission의 BUSY 대기와 Calibration 준비 판정은 Mission Cycle FDS의 `VR-ORCH-MISSION-24` 및 `VR-ORCH-MISSION-25`를 따른다.
 
 ### VR-ICD-VIS-ORCH-25 — Calibration 결과의 공유 의미
-`/orchestration/calibrate_vision`의 Terminal `success/message`는 새로운 Calibration 산출 파일의 생성 결과와 경로를 나타낸다. 성공은 선택된 `vision.calibration_file`을 변경·활성화하거나 `/vision/calibration_status`를 `READY`로 만드는 뜻이 아니다. 요청·거부·생성 순서는 [Installation Calibration FDS](../components/vision/fds-installation-calibration.md)가 소유한다.
 
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Calibration terminal | `/orchestration/calibrate_vision`의 Terminal `success/message`는 새로운 Calibration 산출 파일의 생성 결과와 경로를 나타낸다. |
+| 성공의 비보장 | 성공은 선택된 `vision.calibration_file`을 변경·활성화하거나 `/vision/calibration_status`를 `READY`로 만드는 뜻이 아니다. |
+| 처리 순서 Owner | 요청·거부·생성 순서는 [Installation Calibration FDS](../components/vision/fds-installation-calibration.md)가 소유한다. |
 
 ## 1.4 요청별 Stable Material Acquisition 공유 경계
 
@@ -145,7 +151,7 @@ Producer별 필수 출력은 TestCube FDS가 소유한다. Vision은 Stable 단�
 
 Vision–Orchestration 경계는 검출된 Candidate의 관측 Pose·Geometry·Acquisition provenance를 전달한다. LOW·미해결 가설 및 `disturbance_candidates`는 별도 진단/교란 근거이며 Material Candidate Geometry로 승격되지 않는다.
 
-Orchestration은 Vision 등급을 재계산하거나 개별 Geometry를 재판정하지 않는다. 단일 `material_candidates` 전체를 검증한 뒤 변경 없이 기존 `ExecutePnp.material_candidates`에 담아 한 Action으로 전달한다. Confidence 또는 위치로 재정렬하거나 개별 후보를 선택하지 않는다. Task Execution은 전체 목록의 PICK 우선순위·후보 전환을 소유하며 [Task Execution FDS](../components/task-execution/fds-pnp-execution.md)의 기존 거리 우선 정책을 적용한다. Confidence는 PICK 비교 기준이 아니다. Task Execution은 Motion에 선택된 후보의 Grasp Pose 생성·계획·movement를 요청한다. 별도 Vision Candidate Service는 없다. PLACE Lookahead Result는 PLACE 성공 및 Fresh `RELEASED` 전까지 격리 상태를 유지한다.
+Orchestration은 Vision 등급을 재계산하거나 개별 Geometry를 재판정하지 않는다. 단일 `material_candidates` 전체를 검증한 뒤 변경 없이 기존 `ExecutePnp.material_candidates`에 담아 한 Action으로 전달한다. Confidence 또는 위치로 재정렬하거나 개별 후보를 선택하지 않는다. Task Execution은 전체 목록의 PICK 우선순위·후보 전환을 소유하며 [Task Execution FDS](../components/task-execution/fds-pnp-execution.md)의 기존 거리 우선 정책을 적용한다. Confidence는 PICK 비교 기준이 아니다. Task Execution은 Motion에 선택된 후보의 Grasp Pose 생성·계획·movement를 요청한다. 별도 Vision Candidate Service는 없다. 다음 Acquisition의 요청 시점은 [Mission Cycle FDS](../components/orchestration/fds-mission-cycle.md)를 따르며 사전 PLACE Lookahead는 사용하지 않는다.
 
 ### 교란 후보의 공유 데이터
 
@@ -166,7 +172,7 @@ Orchestration은 Vision 등급을 재계산하거나 개별 Geometry를 재판�
 
 ## 3. Freshness 및 인계 경계
 
-DetectTarget Response의 `acquisition_id`, 결과·후보 목록·Source Identity는 하나의 요청에 고정된다. 추가 관측이나 경과 시간만으로 이미 반환된 후보 목록을 수정하지 않으며, 공유 계약은 Handoff 이후 별도의 Source Age TTL을 정의하지 않는다. 그 결과를 새 Request나 Mission에 재사용하는 것은 허용되지 않고 새 요청은 새 Acquisition Identity를 갖는다. Request Deadline, Caller 취소 후 결과의 사용 가능성, PLACE Lookahead와 폐기 조건은 DetectTarget 및 Mission Cycle FDS가 소유한다.
+DetectTarget Response의 `acquisition_id`, 결과·후보 목록·Source Identity는 하나의 요청에 고정된다. 추가 관측이나 경과 시간만으로 이미 반환된 후보 목록을 수정하지 않으며, 공유 계약은 Handoff 이후 별도의 Source Age TTL을 정의하지 않는다. 그 결과를 새 Request나 Mission에 재사용하는 것은 허용되지 않고 새 요청은 새 Acquisition Identity를 갖는다. Request Deadline, Caller 취소 후 결과의 사용 가능성과 폐기 조건은 DetectTarget 및 Mission Cycle FDS가 소유한다.
 
 ## 4. Scene Stability 공유 의미
 
@@ -189,10 +195,25 @@ Vision Acquisition·Calibration·Snapshot 내부 처리는 각 Vision FDS가 소
 Orchestration은 Vision Observation Pose의 Detector Profile 기준 Geometry Reference를 재해석하거나 TCP/Tool Correction을 적용하지 않고 Motion으로 전달해야 한다.
 
 ### VR-ICD-VIS-ORCH-04 — Orientation Class 인계
-Order 0은 `target_pose.orientation`을 사용 불가로 해야 한다. Order 1은 유효한 Zero를 포함한 고유 Object Orientation을 제공해야 한다. Order 2는 정사각형이 아닌 Rectangle의 Long Axis를 180° Modulo 대표값으로 제공해야 하고 Order 4는 정사각형 Edge를 90° Modulo 대표값으로 제공해야 한다. Orchestration은 Order를 보존하고 0에서 Orientation을 무시한다. Missing/Unsupported Value는 Fail-closed다. Generated Service Type 변경에는 Vision·Orchestration 쌍의 갱신이 필요하며 Mixed Binary는 지원하지 않는다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Order 0 | Order 0은 `target_pose.orientation`을 사용 불가로 해야 한다. |
+| Order 1 | Order 1은 유효한 Zero를 포함한 고유 Object Orientation을 제공해야 한다. |
+| Order 2·4 | Order 2는 정사각형이 아닌 Rectangle의 Long Axis를 180° Modulo 대표값으로 제공해야 하고 Order 4는 정사각형 Edge를 90° Modulo 대표값으로 제공해야 한다. |
+| Orchestration 소비 | Orchestration은 Order를 보존하고 0에서 Orientation을 무시한다. |
+| Missing·Unsupported | Missing/Unsupported Value는 Fail-closed다. |
+| Generated Type 호환성 | Generated Service Type 변경에는 Vision·Orchestration 쌍의 갱신이 필요하며 Mixed Binary는 지원하지 않는다. |
 
 ### VR-ICD-VIS-ORCH-05 — Observation Position 및 Estimated-height Authority
-Orchestration은 Vision Observation Pose Position을 PICK Motion Goal에 변경 없이 전달하고 `estimated_height_m`/`has_estimated_height`를 `estimated_object_height_m`/`has_estimated_object_height`로 변경 없이 매핑해야 한다. `estimated_height_m`는 관측된 Top Reference Position을 변경해서는 안 된다. Motion은 이 자체 두께의 절반만큼 보이는 Top Normal을 따라 안쪽으로 Geometry Center Offset을 계산해야 한다. 적층 Fixture에서 Top Elevation 0.16m, 자체 두께 0.08m라면 Center Elevation 0.12m여야 한다. 적층 높이를 두께로 반환하거나 Target XYZ를 이동해서는 안 된다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Position·두께 인계 | Orchestration은 Vision Observation Pose Position을 PICK Motion Goal에 변경 없이 전달하고 `estimated_height_m`/`has_estimated_height`를 `estimated_object_height_m`/`has_estimated_object_height`로 변경 없이 매핑해야 한다. |
+| Top Reference Position | `estimated_height_m`는 관측된 Top Reference Position을 변경해서는 안 된다. |
+| Geometry Center Offset | Motion은 이 자체 두께의 절반만큼 보이는 Top Normal을 따라 안쪽으로 Geometry Center Offset을 계산해야 한다. |
+| 적층 Fixture 예 | 적층 Fixture에서 Top Elevation 0.16m, 자체 두께 0.08m라면 Center Elevation 0.12m여야 한다. |
+| 높이·좌표 변경 금지 | 적층 높이를 두께로 반환하거나 Target XYZ를 이동해서는 안 된다. |
 
 ### VR-ICD-VIS-ORCH-02 — Depletion 구분
 Object Not Found는 Vision Failure와 구분되어야 한다.
@@ -219,10 +240,23 @@ Unknown/Unconfigured `target_id`는 `DETECT_RESULT_INVALID_RESULT`를 반환해�
 부분 형상 TestCube 성공 응답은 Recipe에서 추정한 양수 Side Length와 선택한 추정 자체 두께를 기존 필드에 전달해야 한다. 이 경우 `has_observed_rectangle=false`는 외곽선 실측이 없다는 provenance를 유지하며 값이 제공되지 않았다는 의미로 해석해서는 안 된다. 일반 Cuboid의 실측 치수와 기존 외부 메시지 스키마는 변경하지 않는다.
 
 ### VR-ICD-VIS-ORCH-11 — Validation Provenance 격리
-Validation-only Fixed Vision Result는 Public ROS Shape·Result/Frame/Object Reference 의미·Fixture Registration Stamp를 유지하면서 Production Operational Profile에서 선택할 수 없어야 한다. 그 Evidence를 RGB-D Perception Validation으로 나타내서는 안 된다. Fixed Registration의 `dimensions_m`은 등록 Top Surface 좌표계 기준의 알려진 양수 자재 치수이며 Z가 자체 두께다. 등록 helper는 Fixture 치수를 전달하고 Fixed Vision은 Z를 후보 자체 두께로, X/Y를 상판 치수로 전달한다. 이 경로에서도 고정 중심 오프셋을 사용하지 않는다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Fixed Vision 격리 | Validation-only Fixed Vision Result는 Public ROS Shape·Result/Frame/Object Reference 의미·Fixture Registration Stamp를 유지하면서 Production Operational Profile에서 선택할 수 없어야 한다. |
+| Evidence 범위 | 그 Evidence를 RGB-D Perception Validation으로 나타내서는 안 된다. |
+| 등록 치수 의미 | Fixed Registration의 `dimensions_m`은 등록 Top Surface 좌표계 기준의 알려진 양수 자재 치수이며 Z가 자체 두께다. |
+| 치수 인계 | 등록 helper는 Fixture 치수를 전달하고 Fixed Vision은 Z를 후보 자체 두께로, X/Y를 상판 치수로 전달한다. |
+| 고정 Offset 금지 | 이 경로에서도 고정 중심 오프셋을 사용하지 않는다. |
 
 ### VR-ICD-VIS-ORCH-12 — Profile 격리 Target 선택
-서로 다른 Configured `target_id`는 각각 다른 Vision-owned Profile을 선택해야 한다. Unknown/Unconfigured ID는 Generic Foreground Aggregation이 아닌 `INVALID_RESULT`를 반환해야 한다. 경쟁 Foreground Geometry가 선택 Profile Pose를 이동시켜서는 안 된다. TestCube Profile은 필수 Observation이 유효할 때만 RawPart를 선택하며 부재/무효 RawPart는 Profile 계약에 따라 거부하거나 Absence로 보고한다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Configured ID | 서로 다른 Configured `target_id`는 각각 다른 Vision-owned Profile을 선택해야 한다. |
+| Unknown·Unconfigured | Unknown/Unconfigured ID는 Generic Foreground Aggregation이 아닌 `INVALID_RESULT`를 반환해야 한다. |
+| 경쟁 Foreground | 경쟁 Foreground Geometry가 선택 Profile Pose를 이동시켜서는 안 된다. |
+| TestCube Observation | TestCube Profile은 필수 Observation이 유효할 때만 RawPart를 선택하며 부재/무효 RawPart는 Profile 계약에 따라 거부하거나 Absence로 보고한다. |
 
 ### VR-ICD-VIS-ORCH-13 — 일시적 Invalid Target 구분
 Configured Valid Target Profile의 일시적 Invalid Observation은 `DETECT_RESULT_TEMPORARY_INVALID_TARGET`로 보고해야 한다. Unknown/Unconfigured Profile은 `DETECT_RESULT_INVALID_RESULT`로 보고한다. 두 Outcome을 Depletion에 매핑해서는 안 된다. 이 구분은 Mission Result에 실제 Vision Failure Classification을 보존하며 자동 Retry Class를 정의하지 않는다.
@@ -234,13 +268,39 @@ Configured Valid Target Profile의 일시적 Invalid Observation은 `DETECT_RESU
 Acquisition ID와 단일 Terminal Result의 상관관계는 이 ICD를 따르며 Deadline 시작·유지, Stability와 Detector의 정확한 처리 순서 및 재실행 금지는 [DetectTarget FDS](../components/vision/fds-detect-target.md)가 소유한다. 공유 Response에 별도 Source Age TTL이나 Stability Acceptance Gate를 추가해서는 안 된다.
 
 ### VR-ICD-VIS-ORCH-16 — Geometry Eligibility와 유효 Absence
-반환 Candidate는 선택 Detector의 단일 Observation Geometry Eligibility를 통과하고 동일한 최종 Depth Observation에서 나와야 한다. Valid Absence는 Detector Observation의 전체 Projected Workspace Coverage와 충분한 Valid Depth를 요구한다. 이 조건은 관측된 Candidate 승인 때가 아닌 Absence 확인 때만 적용한다. Insufficient/Ambiguous Evidence는 Depletion이 아닌 Failure/Timeout이어야 한다. Vision Enumeration은 Grasp Priority가 아니고 인계 뒤 Material Candidate 우선순위는 Task Execution이 소유하며 선택 후보의 Grasp Pose·계획 가능성은 Motion이 소유한다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 반환 Candidate | 반환 Candidate는 선택 Detector의 단일 Observation Geometry Eligibility를 통과하고 동일한 최종 Depth Observation에서 나와야 한다. |
+| Valid Absence | Valid Absence는 Detector Observation의 전체 Projected Workspace Coverage와 충분한 Valid Depth를 요구한다. |
+| Absence 조건 적용 범위 | 이 조건은 관측된 Candidate 승인 때가 아닌 Absence 확인 때만 적용한다. |
+| 부족·모호한 Evidence | Insufficient/Ambiguous Evidence는 Depletion이 아닌 Failure/Timeout이어야 한다. |
+| 인계 뒤 실행 Owner | Vision Enumeration은 Grasp Priority가 아니고 인계 뒤 Material Candidate 우선순위는 Task Execution이 소유하며 선택 후보의 Grasp Pose·계획 가능성은 Motion이 소유한다. |
 
 ### VR-ICD-VIS-ORCH-17 — Acquisition 한정 단일 Material Candidate 목록
-Result는 Outstanding DetectTarget Request 및 요청 Profile과 일치해야 한다. Vision은 최종 Qualified Observation의 모든 가설을 내부 평가하고 SELECTED HIGH·MEDIUM 전체를 단일 `material_candidates`의 Stable Enumeration 순서로 반환해야 한다. LOW·REJECTED는 일반 PICK 목록에 넣지 않고 진단에 보존해야 한다. 단일 목록이 비고 유효한 최종 관측에서 Geometry가 미해결이면 기존 `DETECT_RESULT_GEOMETRY_ERROR` 및 근거 있는 disturbance 계약을 적용한다. 일시적인 Observation Evidence 부족은 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET`이며 정상적인 미해결 Geometry와 구별한다. valid absence만 `OBJECT_NOT_FOUND`다. 경과한 Source Age나 이후 Sensor/Diagnostic Update가 반환 List를 바꾸면 안 된다. Orchestration은 Vision 등급을 재판정하지 않고 전체 목록을 변경 없이 기존 단일 PnP Action에 전달하며 Task Execution은 전달된 목록의 소비·폐기 및 후보 전환을 소유한다. Outer Retry와 다음 Object는 새 DetectTarget Result가 필요하다. Legacy Response `scene_generation`, `SceneStability.msg`, 선택적 Diagnostic Topic은 Wire Compatible을 유지할 수 있으나 Orchestration은 Generation Equality·별도 Stability Lifecycle Signal·두 번째 Source Age TTL을 요구해서는 안 된다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 요청·Profile 일치 | Result는 Outstanding DetectTarget Request 및 요청 Profile과 일치해야 한다. |
+| 전체 적격 목록 | Vision은 최종 Qualified Observation의 모든 가설을 내부 평가하고 SELECTED HIGH·MEDIUM 전체를 단일 `material_candidates`의 Stable Enumeration 순서로 반환해야 한다. |
+| LOW·REJECTED | LOW·REJECTED는 일반 PICK 목록에 넣지 않고 진단에 보존해야 한다. |
+| 미해결 Geometry | 단일 목록이 비고 유효한 최종 관측에서 Geometry가 미해결이면 기존 `DETECT_RESULT_GEOMETRY_ERROR` 및 근거 있는 disturbance 계약을 적용한다. |
+| 일시적 Evidence 부족 | 일시적인 Observation Evidence 부족은 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET`이며 정상적인 미해결 Geometry와 구별한다. |
+| 유효 부재 | valid absence만 `OBJECT_NOT_FOUND`다. |
+| 인계 뒤 불변성 | 경과한 Source Age나 이후 Sensor/Diagnostic Update가 반환 List를 바꾸면 안 된다. |
+| Orchestration·Task Execution 경계 | Orchestration은 Vision 등급을 재판정하지 않고 전체 목록을 변경 없이 기존 단일 PnP Action에 전달하며 Task Execution은 전달된 목록의 소비·폐기 및 후보 전환을 소유한다. |
+| Outer Retry·다음 Object | Outer Retry와 다음 Object는 새 DetectTarget Result가 필요하다. |
+| Legacy 호환·추가 Gate 금지 | Legacy Response `scene_generation`, `SceneStability.msg`, 선택적 Diagnostic Topic은 Wire Compatible을 유지할 수 있으나 Orchestration은 Generation Equality·별도 Stability Lifecycle Signal·두 번째 Source Age TTL을 요구해서는 안 된다. |
 
 ### VR-ICD-VIS-ORCH-26 — 단일 검출 후보 목록 인계
-Vision은 Grasp Priority 의미가 없는 Stable Enumeration 순서로 SELECTED HIGH·MEDIUM Material Candidate 전체를 단일 `material_candidates` 목록으로 반환해야 한다. LOW·REJECTED는 내부 진단에 보존하고 일반 PICK 목록에서 제외한다. Candidate ID는 단일 목록 안에서 Acquisition-local하게 고유하며 후보 Pose·Geometry·provenance는 같은 Source Observation에 속한다. Orchestration은 전체 목록을 변경 없이 단일 PnP 실행 경계에 전달하고 Task Execution은 실행 순서와 Candidate Transition을 소유한다. Candidate payload는 검출 Geometry를 제공하며 Planning Occupancy를 포함하지 않는다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 단일 목록·Enumeration | Vision은 Grasp Priority 의미가 없는 Stable Enumeration 순서로 SELECTED HIGH·MEDIUM Material Candidate 전체를 단일 `material_candidates` 목록으로 반환해야 한다. |
+| LOW·REJECTED | LOW·REJECTED는 내부 진단에 보존하고 일반 PICK 목록에서 제외한다. |
+| Candidate identity·Source | Candidate ID는 단일 목록 안에서 Acquisition-local하게 고유하며 후보 Pose·Geometry·provenance는 같은 Source Observation에 속한다. |
+| 전체 인계·실행 Owner | Orchestration은 전체 목록을 변경 없이 단일 PnP 실행 경계에 전달하고 Task Execution은 실행 순서와 Candidate Transition을 소유한다. |
+| Payload 범위 | Candidate payload는 검출 Geometry를 제공하며 Planning Occupancy를 포함하지 않는다. |
 
 ### VR-ICD-VIS-ORCH-27 — Candidate Geometry와 Legacy Occupancy 비소비
 

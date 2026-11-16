@@ -172,17 +172,28 @@ Fault 요청의 성공은 Hub가 기록한 Stimulus 의도가 적용됐다는 �
 
 ## 4. 검증 요구사항
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-INT-UI-01 — 관측자의 권한
 
 Hub 조작이나 로컬 표시 상태를 변경해도 Safety·Motion·Orchestration·Vision·VDA·Material의 정규 상태를 덮어써서는 안 된다. Oracle은 요청 전후 Owner 발행 상태의 비교다.
 
 ### VR-INT-UI-02 — 집중된 피드백 화면
 
-Hub는 집계 System Observations 패널이나 일반적인 정규 운영 상태의 실시간 종합 요약을 제공하지 않는다. Trigger·Fault·Reset 조작은 로컬 발행/요청 결과만 표시하고 정규 Owner 결과를 암시하지 않는다. Camera/Vision의 Freshness는 `VR-INT-UI-04` 및 Snapshot 검증 요구사항을 별도로 따른다. Hub에는 Vision Detector Snapshot·선택적 Live Camera·Fault Injection·Safety 경유 Acknowledgement/Reset·활성화된 경우 개발 전용 Retry Detection을 유지하고 External Handoff Trigger를 첫 주요 영역으로 배치한다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 종합 상태 요약 | Hub는 집계 System Observations 패널이나 일반적인 정규 운영 상태의 실시간 종합 요약을 제공하지 않는다. |
+| 조작 결과 표시 | Trigger·Fault·Reset 조작은 로컬 발행/요청 결과만 표시하고 정규 Owner 결과를 암시하지 않는다. |
+| Camera·Vision Freshness | Camera/Vision의 Freshness는 `VR-INT-UI-04` 및 Snapshot 검증 요구사항을 별도로 따른다. |
+| 화면 구성 | Hub에는 Vision Detector Snapshot·선택적 Live Camera·Fault Injection·Safety 경유 Acknowledgement/Reset·활성화된 경우 개발 전용 Retry Detection을 유지하고 External Handoff Trigger를 첫 주요 영역으로 배치한다. |
 
 ### VR-INT-UI-03 — Trigger·요청 의미
 
-Trigger 조작은 로컬 발행 결과만 표시하고 Gateway 수락·VDA Phase·Readiness·Supply Completion·Orchestration Admission을 표시하거나 주장하지 않는다. UI 조작과 로컬 결과만으로 실행 상태 전이가 완료된 것처럼 표시해서는 안 된다. Random Drop은 선택적 Seed를 생략한다(`has_random_seed = false`).
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Trigger 결과 표시 | Trigger 조작은 로컬 발행 결과만 표시하고 Gateway 수락·VDA Phase·Readiness·Supply Completion·Orchestration Admission을 표시하거나 주장하지 않는다. |
+| 상태 전이 완료 주장 | UI 조작과 로컬 결과만으로 실행 상태 전이가 완료된 것처럼 표시해서는 안 된다. |
+| Random Drop Seed | Random Drop은 선택적 Seed를 생략한다(`has_random_seed = false`). |
 
 ### Viewer 검증 계약의 Owner
 
@@ -190,23 +201,63 @@ Trigger 조작은 로컬 발행 결과만 표시하고 Gateway 수락·VDA Phase
 
 ### VR-INT-UI-06 — Timeline Stop Simulation Reset
 
-새 실험에서 운영자는 ROS Bringup을 수동 중지하고 Timeline Stop 후 `1_before_play.py` → Timeline Play → `2_after_play.py`의 Session 초기화를 마친 다음 Bringup을 수동 시작해 동일 Session에 연결하고 Endpoint 및 Fresh Readiness를 확인해야 한다. Timeline Stop은 Fresh Gripper `RELEASED`, Safety Recovery 또는 Isaac Kit 재시작을 요구하지 않고 Isaac 소유 Robot Articulation·Simulation Gripper Attachment/Actuator·생성 Material·검증 Fixture·대기 Supply·Simulation Fault Stimulus를 초기화해야 한다. Hub의 Stop 처리는 Isaac 프로세스 내부 Owner Port를 통해 Isaac 소유 Fault Stimulus를 제거하며 Bringup 종료 후 ROS Mock Endpoint에 Cleanup을 요청해서는 안 된다. Safety StopMotion·Safety Reset·실장비 명령도 수행해서는 안 된다. Reset 실패는 새 실험 전에 보고·해결해야 한다. Oracle은 복구된 초기 Simulation 상태·Owner Reset 진단·Fresh Endpoint/Readiness·비어 있는 프로세스 로컬 Accounting이다. Bringup 교체는 Safety Latch/Cause Memory를 전달하지 않으며 새 Safety는 Fresh 입력에 기존 정책을 적용한다. 동일 프로세스 Stop→Play Admission 격리는 요구하지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 새 실험 순서 | 새 실험에서 운영자는 ROS Bringup을 수동 중지하고 Timeline Stop 후 `1_before_play.py` → Timeline Play → `2_after_play.py`의 Session 초기화를 마친 다음 Bringup을 수동 시작해 동일 Session에 연결하고 Endpoint 및 Fresh Readiness를 확인해야 한다. |
+| 초기화 대상·비전제 | Timeline Stop은 Fresh Gripper `RELEASED`, Safety Recovery 또는 Isaac Kit 재시작을 요구하지 않고 Isaac 소유 Robot Articulation·Simulation Gripper Attachment/Actuator·생성 Material·검증 Fixture·대기 Supply·Simulation Fault Stimulus를 초기화해야 한다. |
+| Fault Cleanup 경계 | Hub의 Stop 처리는 Isaac 프로세스 내부 Owner Port를 통해 Isaac 소유 Fault Stimulus를 제거하며 Bringup 종료 후 ROS Mock Endpoint에 Cleanup을 요청해서는 안 된다. |
+| Safety·실장비 명령 금지 | Safety StopMotion·Safety Reset·실장비 명령도 수행해서는 안 된다. |
+| Reset 실패 | Reset 실패는 새 실험 전에 보고·해결해야 한다. |
+| 관찰 근거 | Oracle은 복구된 초기 Simulation 상태·Owner Reset 진단·Fresh Endpoint/Readiness·비어 있는 프로세스 로컬 Accounting이다. |
+| Bringup 교체·Safety | Bringup 교체는 Safety Latch/Cause Memory를 전달하지 않으며 새 Safety는 Fresh 입력에 기존 정책을 적용한다. |
+| 동일 프로세스 Stop→Play | 동일 프로세스 Stop→Play Admission 격리는 요구하지 않는다. |
 
 ### VR-INT-UI-07 — Publish Trigger와 Retry Detection의 분리
 
-Publish Trigger는 새로운 Delivery ID를 사용하고 로컬 발행 결과만 보고해야 한다. Gateway 수락·공급 완료·Readiness·Mission Admission/Outcome은 Owner Interface와 Record를 따른다. Retry Detection은 30초 Caller Timeout으로 새 `/vision/detect_target` 요청 하나를 보내고 수락 시 새 Acquisition을 만들어야 한다. Delivery·ExecuteCycle 생성, Scene/Material 변경, Motion/Gripper 호출을 해서는 안 된다. 동시 Acquisition은 활성 요청을 취소·변경하지 않고 BUSY로 거부하며 활성 Mission은 중단되지 않는다. Oracle은 Gateway Receipt/Readiness·Mission ID·Vision Acquisition/Snapshot ID·Vision Result 및 Retry Detection 이후 변하지 않은 Scene/Material/Motion/Gripper 상태다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Publish Trigger | Publish Trigger는 새로운 Delivery ID를 사용하고 로컬 발행 결과만 보고해야 한다. |
+| Owner 결과 | Gateway 수락·공급 완료·Readiness·Mission Admission/Outcome은 Owner Interface와 Record를 따른다. |
+| Retry Detection 요청 | Retry Detection은 30초 Caller Timeout으로 새 `/vision/detect_target` 요청 하나를 보내고 수락 시 새 Acquisition을 만들어야 한다. |
+| 요청의 비책임 | Delivery·ExecuteCycle 생성, Scene/Material 변경, Motion/Gripper 호출을 해서는 안 된다. |
+| 동시 Acquisition·Mission | 동시 Acquisition은 활성 요청을 취소·변경하지 않고 BUSY로 거부하며 활성 Mission은 중단되지 않는다. |
+| 관찰 근거 | Oracle은 Gateway Receipt/Readiness·Mission ID·Vision Acquisition/Snapshot ID·Vision Result 및 Retry Detection 이후 변하지 않은 Scene/Material/Motion/Gripper 상태다. |
 
 ### VR-INT-UI-08 — Final Demo Fault 화면과 Lifecycle
 
-Fault Injection 영역에는 Emergency Stop(`Inject`/`Clear`), Safety Signal Loss(`Inject 5s`), Vision Mislocalization(`Inject Next Detection Error`)만 노출해야 한다. 다른 Fault 경계는 기존 개발/테스트 경로에서 이용할 수 있지만 이 영역에 표시해서는 안 된다. Safety Reset은 별도 조작으로 유지한다. Hub 상태는 로컬 제출/Owner 응답과 정규 관측 효과를 구별해야 하며, 대응하는 정규 관측 없이 `Signal Restored`·`Motion STOPPED`·`Safety SAFE`·`Retrying`·Recovery 완료를 주장해서는 안 된다. Timeline Stop·Extension 종료는 상기 Cleanup을 따르며 Cleanup은 Safety Latch를 지우거나 Safety Reset을 요청하지 않는다. Oracle은 실제 표시된 Control Set, Owner 요청 결과, 정규 Owner 관측, Lifecycle Cleanup 후 Stimulus 상태다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 노출 Fault Control | Fault Injection 영역에는 Emergency Stop(`Inject`/`Clear`), Safety Signal Loss(`Inject 5s`), Vision Mislocalization(`Inject Next Detection Error`)만 노출해야 한다. |
+| 다른 Fault 경계 | 다른 Fault 경계는 기존 개발/테스트 경로에서 이용할 수 있지만 이 영역에 표시해서는 안 된다. |
+| Safety Reset | Safety Reset은 별도 조작으로 유지한다. |
+| 관측 없는 상태 주장 | Hub 상태는 로컬 제출/Owner 응답과 정규 관측 효과를 구별해야 하며, 대응하는 정규 관측 없이 `Signal Restored`·`Motion STOPPED`·`Safety SAFE`·`Retrying`·Recovery 완료를 주장해서는 안 된다. |
+| Lifecycle Cleanup | Timeline Stop·Extension 종료는 상기 Cleanup을 따르며 Cleanup은 Safety Latch를 지우거나 Safety Reset을 요청하지 않는다. |
+| 관찰 근거 | Oracle은 실제 표시된 Control Set, Owner 요청 결과, 정규 Owner 관측, Lifecycle Cleanup 후 Stimulus 상태다. |
 
 ### VR-INT-UI-09 — Operator Gripper Open
 
-Hub는 Gripper Open을 세 Fault Scenario 및 Safety Reset과 구별해 표시해야 한다. 기존 Safety Permission이 유효·Fresh하고 정상 실행을 허용하며 Motion 비활성이 확인되고 운영자가 자재 Support/구속과 Release 영역 안전을 확인했을 때만 Motion Owner에 요청해야 한다. `MOTION_NONE`·`MOTION_RECOVERY_ONLY`·Stale/Unknown Safety/Motion 관측·활성/정지 중 Task에서는 요청하지 않는다. 명령 수락을 Release로 보고해서는 안 되며 Fresh Motion Holding `RELEASED` 관측만 보존 Batch의 재개를 허용한다. `HELD`/`UNKNOWN` 또는 Fresh 근거 누락은 계속 차단한다. 정상 PnP Batch를 시작하거나 우회해서는 안 된다. Oracle은 Motion Request/Result·Safety Capability·확인된 Motion 비활성·Fresh Holding·불변 Orchestration Admission이다. 독립 Owner 승인 Open 요청을 기존 Motion Interface가 지원하기 전까지 미구현 요구사항이며 Hub는 별도의 Gripper 제어 경로를 만들지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Gripper Open 표시 | Hub는 Gripper Open을 세 Fault Scenario 및 Safety Reset과 구별해 표시해야 한다. |
+| 요청 허용 조건 | 기존 Safety Permission이 유효·Fresh하고 정상 실행을 허용하며 Motion 비활성이 확인되고 운영자가 자재 Support/구속과 Release 영역 안전을 확인했을 때만 Motion Owner에 요청해야 한다. |
+| 요청 금지 조건 | `MOTION_NONE`·`MOTION_RECOVERY_ONLY`·Stale/Unknown Safety/Motion 관측·활성/정지 중 Task에서는 요청하지 않는다. |
+| 수락·Release·Batch 재개 | 명령 수락을 Release로 보고해서는 안 되며 Fresh Motion Holding `RELEASED` 관측만 보존 Batch의 재개를 허용한다. |
+| HELD·UNKNOWN·근거 누락 | `HELD`/`UNKNOWN` 또는 Fresh 근거 누락은 계속 차단한다. |
+| 정상 Batch 우회 금지 | 정상 PnP Batch를 시작하거나 우회해서는 안 된다. |
+| 관찰 근거 | Oracle은 Motion Request/Result·Safety Capability·확인된 Motion 비활성·Fresh Holding·불변 Orchestration Admission이다. |
+| 미구현 경계 | 독립 Owner 승인 Open 요청을 기존 Motion Interface가 지원하기 전까지 미구현 요구사항이며 Hub는 별도의 Gripper 제어 경로를 만들지 않는다. |
 
 ### VR-INT-UI-10 — Cuboid Demonstration
 
-Hub는 TestCube Material Dimension으로 구성된 유한한 단층·2층·3층 Cuboid Preset을 제공해야 한다. Demonstration은 Timeline Play 동안 Play-to-Stop Session당 최대 한 번, Material Supply에 생성 자재나 대기 작업이 없을 때에만 Load해야 한다. Pause/Resume은 허용 횟수를 초기화하지 않는다. Timeline Stop은 Material Supply Reset으로 Demonstration 소유 RawPart를 제거하고 허용 횟수를 초기화해야 한다. 생성은 Gravity가 활성화된 기존 TestCube Rigid Body/Collision 경로를 사용하며 Handoff를 발행하거나 Completion·Readiness·Admission 사실을 만들지 않는다. Oracle은 Adapter Result, 생성 Prim Transform/Physics Attribute, 불변 Handoff/Admission 상태, Stop 후 비어 있는 Demonstration Root다. PhysX Stability는 Isaac Sim 관측으로 확인해야 하며 Preset Geometry 검사만으로 확정되지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Preset 구성 | Hub는 TestCube Material Dimension으로 구성된 유한한 단층·2층·3층 Cuboid Preset을 제공해야 한다. |
+| Load 조건·횟수 | Demonstration은 Timeline Play 동안 Play-to-Stop Session당 최대 한 번, Material Supply에 생성 자재나 대기 작업이 없을 때에만 Load해야 한다. |
+| Pause·Resume | Pause/Resume은 허용 횟수를 초기화하지 않는다. |
+| Timeline Stop | Timeline Stop은 Material Supply Reset으로 Demonstration 소유 RawPart를 제거하고 허용 횟수를 초기화해야 한다. |
+| 생성·운영 권한 경계 | 생성은 Gravity가 활성화된 기존 TestCube Rigid Body/Collision 경로를 사용하며 Handoff를 발행하거나 Completion·Readiness·Admission 사실을 만들지 않는다. |
+| 관찰 근거 | Oracle은 Adapter Result, 생성 Prim Transform/Physics Attribute, 불변 Handoff/Admission 상태, Stop 후 비어 있는 Demonstration Root다. |
+| PhysX Stability | PhysX Stability는 Isaac Sim 관측으로 확인해야 하며 Preset Geometry 검사만으로 확정되지 않는다. |
 
 ## 5. References
 
