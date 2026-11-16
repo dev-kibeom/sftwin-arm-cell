@@ -43,8 +43,7 @@ enum class MotionSegmentKind : std::uint8_t
   PLACE_RETRACT,
   DISTURB_APPROACH,
   DISTURB_PUSH,
-  DISTURB_RETRACT,
-  PAYLOAD_HOME
+  DISTURB_RETRACT
 };
 
 enum class MotionFailureKind : std::uint8_t
@@ -291,18 +290,10 @@ public:
     const std::string & motion, const std::string & execution_id,
     const std::string & movement_id)
   {
-    if (motion == "home") {
-      return executeLegacyMovement(
-        arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME, execution_id, movement_id);
-    }
+    (void)motion; (void)execution_id; (void)movement_id;
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
-  virtual std::uint8_t executePlaceRecoveryJointTarget(
-    const unique_identifier_msgs::msg::UUID & execution_id, const std::string & movement_id)
-  {
-    (void)execution_id; (void)movement_id;
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
-  }
+
 };
 
 }  // namespace arm_cell_motion

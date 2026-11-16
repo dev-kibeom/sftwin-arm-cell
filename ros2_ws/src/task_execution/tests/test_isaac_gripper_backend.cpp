@@ -39,6 +39,16 @@ public:
     ++submit_calls;
     return submit_value;
   }
+  uint8_t execute_taught_motion(
+    const std::string &, const std::string & identity, const std::function<uint8_t()> &) override
+  {
+    arm_cell_interfaces::action::ExecuteTask::Goal goal;
+    goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+    if (!submit(goal, identity)) {
+      return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+    }
+    return wait_for_joint_target_result();
+  }
   bool submit_normalized(const NormalizedMotionRequest & request) override
   {
     normalized_phase = request.phase;

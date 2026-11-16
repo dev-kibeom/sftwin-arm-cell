@@ -27,6 +27,7 @@ public:
   virtual ~IsaacMotionTransport() = default;
 
   virtual bool available() const = 0;
+  virtual bool named_joint_motion_available() const {return available();}
   virtual void begin_pick_search() {}
   virtual void begin_pick_search(const std::string & execution_id)
   { (void)execution_id; begin_pick_search(); }
@@ -66,20 +67,8 @@ public:
     const std::string & motion, const std::string & execution_id,
     const std::function<uint8_t()> & interruption)
   {
-    (void)interruption;
-    if (motion == "home") {
-      arm_cell_interfaces::action::ExecuteTask::Goal goal;
-      goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
-      if (!submit(goal, execution_id)) {
-        return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
-      }
-      return wait_for_joint_target_result();
-    }
+    (void)motion; (void)execution_id; (void)interruption;
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
-  }
-  virtual uint8_t execute_joint_target()
-  {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
   }
   virtual MotionDisturbanceParameters disturbance_parameters() const {return {};}
   virtual void reset_pick_grasp_insertion_started() {}
@@ -149,6 +138,7 @@ public:
   explicit IsaacMotionBackend(std::shared_ptr<IsaacMotionTransport> transport);
 
   bool available() const override;
+  bool named_joint_motion_available() const override;
   void begin_pick_search() override;
   void begin_pick_search(const std::string & execution_id) override;
   void begin_pick_candidate_search() override;
@@ -176,7 +166,6 @@ public:
   uint8_t execute_taught_motion(
     const std::string & motion, const std::string & execution_id,
     const std::function<uint8_t()> & interruption) override;
-  uint8_t execute_joint_target() override;
   MotionDisturbanceParameters disturbance_parameters() const override;
   void reset_pick_grasp_insertion_started() override;
   bool pick_grasp_insertion_started() const override;

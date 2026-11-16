@@ -41,11 +41,15 @@ TEST(TaughtMotion, RejectsInvalidDefinitionsBeforeMovement)
   EXPECT_THROW(parse_taught_motions("{}", {0.0}, {0.1}, 1U), std::invalid_argument);
 }
 
-TEST(TaughtMotion, ReservedNamesCannotChangeTheirTargetMeaning)
+TEST(TaughtMotion, RegistryNamesUseTheSameDataSchema)
 {
-  for (const auto * name : {"home", "payload_home", "return_material"}) {
-    const nlohmann::json bad = {{name, {
-        {"joint_positions", {0.5}}, {"velocity_scale", 0.3}, {"acceleration_scale", 0.2}}}};
-    EXPECT_THROW(parse_taught_motions(bad.dump(), {0.0}, {0.1}, 1U), std::invalid_argument);
-  }
+  const auto motions = parse_taught_motions(
+    R"({
+    "return_material":{"joint_positions":[0.5],"velocity_scale":0.3,"acceleration_scale":0.2},
+    "custom_pose":{"joint_positions":[0.5],"velocity_scale":0.3,"acceleration_scale":0.2}
+  })", {0.0}, {0.1},
+    1U);
+  EXPECT_EQ(
+    motions.at("return_material").joint_positions,
+    motions.at("custom_pose").joint_positions);
 }

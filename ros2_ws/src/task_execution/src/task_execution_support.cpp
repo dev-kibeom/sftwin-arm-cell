@@ -211,8 +211,6 @@ MotionPortResult TaskExecutionSupport::execute_planned_motion(
 
 std::uint8_t TaskExecutionSupport::execute_taught_motion(const std::string & motion)
 {
-  // Keep the existing return movement admission and identity path.
-  if (motion == "return_material") {return execute_place_recovery_joint_target();}
   if (interruption_checker_) {
     const auto interrupted = interruption_checker_();
     if (interrupted != Result::TASK_RESULT_SUCCESS) {return interrupted;}
@@ -258,36 +256,6 @@ std::uint8_t TaskExecutionSupport::execute_legacy_movement(std::uint8_t task_typ
   }
   std::uint8_t result = Result::TASK_RESULT_BACKEND_ERROR;
   try {result = motion_port_->executeLegacyMovement(task_type, execution_id_, movement_id);}
-  catch (...) {
-    std::lock_guard<std::mutex> lock(movement_mutex_);
-    active_movement_id_.clear();
-    active_execution_id_.uuid.fill(0U);
-    throw;
-  }
-  {
-    std::lock_guard<std::mutex> lock(movement_mutex_);
-    active_movement_id_.clear();
-    active_execution_id_.uuid.fill(0U);
-  }
-  return result;
-}
-
-std::uint8_t TaskExecutionSupport::execute_place_recovery_joint_target()
-{
-  if (interruption_checker_) {
-    const auto interrupted = interruption_checker_();
-    if (interrupted != Result::TASK_RESULT_SUCCESS) {return interrupted;}
-  }
-  if (!motion_port_) {return Result::TASK_RESULT_BACKEND_UNAVAILABLE;}
-  const auto movement_id = next_movement_id("joint");
-  const auto execution_id = execution_uuid(execution_id_);
-  {
-    std::lock_guard<std::mutex> lock(movement_mutex_);
-    active_execution_id_ = execution_id;
-    active_movement_id_ = movement_id;
-  }
-  std::uint8_t result = Result::TASK_RESULT_BACKEND_ERROR;
-  try {result = motion_port_->executePlaceRecoveryJointTarget(execution_id, movement_id);}
   catch (...) {
     std::lock_guard<std::mutex> lock(movement_mutex_);
     active_movement_id_.clear();

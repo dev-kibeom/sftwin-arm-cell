@@ -28,6 +28,11 @@ bool IsaacMotionBackend::available() const
   return transport_ && transport_->available();
 }
 
+bool IsaacMotionBackend::named_joint_motion_available() const
+{
+  return transport_ && transport_->named_joint_motion_available();
+}
+
 void IsaacMotionBackend::begin_pick_search()
 {
   if (transport_) {transport_->begin_pick_search();}
@@ -92,12 +97,13 @@ uint8_t IsaacMotionBackend::execute_task(
   const arm_cell_interfaces::action::ExecuteTask::Goal & goal,
   const std::string & motion_goal_uuid)
 {
-  if (!available()) {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
-  }
   if (goal.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME) {
     return execute_taught_motion("home", motion_goal_uuid, {});
   }
+  if (!available()) {
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
+  }
+
   return transport_->submit(goal, motion_goal_uuid) ?
          arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS :
          arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
@@ -224,19 +230,12 @@ uint8_t IsaacMotionBackend::execute_taught_motion(
   const std::string & motion, const std::string & execution_id,
   const std::function<uint8_t()> & interruption)
 {
-  if (!available()) {
+  if (!named_joint_motion_available()) {
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
   }
   return transport_->execute_taught_motion(motion, execution_id, interruption);
 }
 
-uint8_t IsaacMotionBackend::execute_joint_target()
-{
-  if (!available()) {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
-  }
-  return transport_->execute_joint_target();
-}
 
 MotionDisturbanceParameters IsaacMotionBackend::disturbance_parameters() const
 {

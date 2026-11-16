@@ -187,38 +187,10 @@ void PlaceRecovery::register_nodes(
         report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
         return BT::NodeStatus::FAILURE;
       }
-      auto request = support_.make_motion_request(
-        state_.goal,
-        arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING,
-        report_->motion_execution_id);
       report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_HELD;
-      request.segment = MotionSegmentKind::PAYLOAD_HOME;
-      // The backend owns the home joint target. Supply a valid pose envelope
-      // for MotionPort admission; it is not used as the home planning target.
-      request.constraints.orientation_symmetry_order = MotionOrientationSymmetry::UNIQUE;
-      request.has_unobserved_yaw_fallback = false;
-      request.unobserved_yaw_fallback_rad = 0.0;
-      request.target_pose = geometry_msgs::msg::PoseStamped{};
-      request.target_pose.header.frame_id = "base_link";
-      request.target_pose.pose.orientation.w = 1.0;
-      report_->failure_stage = "payload_home:planning";
-      const auto planned = support_.plan_motion_request(request);
-      report_->result_code = planned.result_code;
-      if (planned.result_code != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-        return BT::NodeStatus::FAILURE;
-      }
-      const auto before_execution = support_.gripper()->holding();
-      if (!before_execution.fresh() || before_execution.state != HoldingState::HELD) {
-        report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
-        report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
-        (void)support_.cancel_active_motion(request.execution_id);
-        report_->failure_stage = "payload_home:holding_lost_before_execution";
-        return BT::NodeStatus::FAILURE;
-      }
       report_->failure_stage = "payload_home:execution";
-      const auto executed = support_.execute_planned_motion(planned.plan);
-      report_->result_code = executed.result_code;
-      if (executed.result_code == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+      report_->result_code = support_.execute_taught_motion("payload_home");
+      if (report_->result_code == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
         const auto after = support_.gripper()->holding();
         if (!after.fresh() || after.state != HoldingState::HELD) {
           report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;

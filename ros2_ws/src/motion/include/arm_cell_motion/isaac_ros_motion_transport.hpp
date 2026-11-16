@@ -1,6 +1,7 @@
 #pragma once
 
 #include "arm_cell_motion/taught_motion.hpp"
+#include "arm_cell_motion/taught_motion_trajectory.hpp"
 
 #include "arm_cell_motion/grasp_collision_validator.hpp"
 
@@ -95,6 +96,7 @@ public:
   void configure_waypoint_mode(bool pick_waypoint, bool place_waypoint);
 
   bool available() const override;
+  bool named_joint_motion_available() const override;
   void begin_pick_search() override;
   void begin_pick_search(const std::string & execution_id) override;
   void begin_pick_candidate_search() override;
@@ -119,8 +121,9 @@ public:
   uint8_t execute_taught_motion(
     const std::string & motion, const std::string & execution_id,
     const std::function<uint8_t()> & interruption) override;
-  void configure_taught_motions(TaughtMotions motions) {taught_motions_ = std::move(motions);}
-  uint8_t execute_joint_target() override;
+  void configure_taught_motions(
+    TaughtMotions motions, std::vector<JointMotionLimit> limits = {})
+  {taught_motions_ = std::move(motions); taught_joint_limits_ = std::move(limits);}
   MotionDisturbanceParameters disturbance_parameters() const override;
   void reset_pick_grasp_insertion_started() override;
   bool pick_grasp_insertion_started() const override;
@@ -180,7 +183,8 @@ private:
     const trajectory_msgs::msg::JointTrajectory & trajectory,
     bool cartesian_primitive, bool place_recovery_waypoint,
     const MotionPlanningScales & planning_scales,
-    const std::function<bool()> & discard_if_interrupted);
+    const std::function<bool()> & discard_if_interrupted,
+    const std::vector<JointMotionLimit> * named_limits = nullptr);
   bool place_recovery_state_valid(const NormalizedMotionRequest & request, std::string & reason);
   void record_place_recovery(
     const std::string & event, const std::string & reason,
@@ -238,7 +242,8 @@ private:
   TrajectorySampleResult start_global_profiled_trajectory(
     const trajectory_msgs::msg::JointTrajectory & trajectory, std::uint64_t execution_id,
     double start_simulation_time, const std::string & config,
-    const std::string & motion_goal_uuid = {});
+    const std::string & motion_goal_uuid = {},
+    const std::string & profile_name = "GLOBAL_MOVEIT");
   void finish_global_profile_capture(const std::string & outcome, bool completed);
   void on_joint_state(const sensor_msgs::msg::JointState::ConstSharedPtr message);
   void on_simulation_clock(const rosgraph_msgs::msg::Clock::ConstSharedPtr message);
@@ -283,6 +288,7 @@ private:
   bool wrap_equivalent_joint_policy(const std::string & joint_name) const;
   std::vector<std::string> arm_joint_names_;
   TaughtMotions taught_motions_;
+  std::vector<JointMotionLimit> taught_joint_limits_;
   std::vector<double> home_joint_positions_;
   std::vector<double> retract_joint_positions_;
   std::vector<double> place_tray_return_joint_positions_;

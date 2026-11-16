@@ -30,15 +30,6 @@ bool IsaacRosMotionTransport::submit_normalized(const NormalizedMotionRequest & 
 uint8_t IsaacRosMotionTransport::plan_normalized(
   const NormalizedMotionRequest & request, NormalizedTrajectoryPlan & plan)
 {
-  if (request.segment == MotionSegmentKind::PAYLOAD_HOME) {
-    if (!submit_normalized_once(
-        request, &home_joint_positions_,
-        place_candidate_planning_time_s_, false, &plan))
-    {
-      return normalized_failure_result();
-    }
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS;
-  }
   if (request.place_waypoint_approach) {
     std::optional<NormalizedTrajectoryPlan> cached;
     {
@@ -340,48 +331,89 @@ bool IsaacRosMotionTransport::execute_planned(const NormalizedTrajectoryPlan & p
     plan.planning_scales, discard_if_interrupted);
 }
 
+bool IsaacRosMotionTransport::named_joint_motion_available() const
+{
+  return taught_joint_limits_.size() == arm_joint_names_.size() && !taught_motions_.empty() &&
+         current_state_fresh();
+}
+
 uint8_t IsaacRosMotionTransport::execute_taught_motion(
   const std::string & motion, const std::string & execution_id,
   const std::function<uint8_t()> & interruption)
 {
   using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  if (diagnostics_capture_enabled_) {
+    std::lock_guard<std::mutex> lock(planning_diagnostic_mutex_);
+    pending_motion_planning_goal_uuid_.clear();
+    pending_motion_planning_evidence_.clear();
+  }
   const auto found = taught_motions_.find(motion);
   if (found == taught_motions_.end()) {return Code::TASK_RESULT_INVALID_GOAL;}
-  // A direct final-position fallback would silently discard the speed limits.
-  if (planning_max_acceleration_rad_s2_ <= 0.0) {return Code::TASK_RESULT_BACKEND_ERROR;}
-  NormalizedMotionRequest request;
-  request.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
-  request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_PLANNING;
-  request.segment = MotionSegmentKind::PAYLOAD_HOME;
-  request.taught_motion = motion;
-  request.motion_goal_uuid = execution_id;
-  request.interruption_result = interruption;
   const auto interrupted = [&]() {
       return interruption ? interruption() : Code::TASK_RESULT_SUCCESS;
     };
-  auto result = interrupted();
-  if (result != Code::TASK_RESULT_SUCCESS) {return result;}
-  NormalizedTrajectoryPlan plan;
-  if (!submit_normalized_once(
-      request, &found->second.joint_positions, planning_time_s_, false, &plan))
-  {
-    result = interrupted();
-    return result != Code::TASK_RESULT_SUCCESS ? result : normalized_failure_result();
-  }
+  if (const auto result = interrupted(); result != Code::TASK_RESULT_SUCCESS) {return result;}
+  std::vector<double> start;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    active_motion_task_type_ = request.task_type.value;
+    normalized_failure_result_ = Code::TASK_RESULT_BACKEND_ERROR;
+    last_executed_path_selection_ = {
+      execution_id, arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING, "NAMED_JOINT"};
+    if (!latest_joint_state_ ||
+      std::chrono::steady_clock::now() - latest_state_receipt_ > kStateFreshness ||
+      !extract_arm_positions(*latest_joint_state_, start))
+    {
+      return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
+    }
   }
-  if (!execute_planned(plan)) {
-    result = interrupted();
+  const auto envelope = applied_motion_envelope();
+  if (!envelope.valid) {return Code::TASK_RESULT_PERMISSION_DENIED;}
+  const auto scales = apply_motion_envelope_to_planning_scales(
+    found->second.velocity_scale, found->second.acceleration_scale, envelope);
+  const auto generated = make_taught_joint_trajectory(
+    arm_joint_names_, start, found->second.joint_positions, taught_joint_limits_,
+    scales.max_velocity, scales.max_acceleration);
+  if (!generated.valid) {
+    RCLCPP_WARN(node_->get_logger(), "Named joint motion rejected: %s", generated.reason.c_str());
+    return Code::TASK_RESULT_INVALID_GOAL;
+  }
+  if (diagnostics_capture_enabled_) {
+    const auto & final_time = generated.trajectory.points.back().time_from_start;
+    set_pending_motion_planning_evidence(
+      execution_id, arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME,
+      nlohmann::json{
+        {"decision", "named_joint_motion"}, {"motion_name", motion},
+        {"planner", "not_used"}, {"start_joint_positions", start},
+        {"target_joint_positions", found->second.joint_positions},
+        {"velocity_scale", scales.max_velocity}, {"acceleration_scale", scales.max_acceleration},
+        {"duration_s", final_time.sec + final_time.nanosec * 1e-9}}.dump());
+  }
+  auto effective_limits = taught_joint_limits_;
+  for (auto & limit : effective_limits) {
+    limit.max_velocity *= scales.max_velocity;
+    limit.max_acceleration *= scales.max_acceleration;
+  }
+  NormalizedMotionRequest request;
+  request.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+  request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
+  request.motion_goal_uuid = execution_id;
+  request.interruption_result = interruption;
+  const auto discard_if_interrupted = [&]() {
+      const auto result = interrupted();
+      if (result == Code::TASK_RESULT_SUCCESS) {return false;}
+      // The common executor uses this cause when a stop races worker start.
+      std::lock_guard<std::mutex> lock(mutex_);
+      normalized_failure_result_ = result;
+      return true;
+    };
+  if (!execute_planned_trajectory(
+      request, generated.trajectory, false, false, scales, discard_if_interrupted,
+      &effective_limits))
+  {
+    const auto result = interrupted();
     return result != Code::TASK_RESULT_SUCCESS ? result : Code::TASK_RESULT_BACKEND_ERROR;
   }
   return wait_for_joint_target_result();
-}
-
-uint8_t IsaacRosMotionTransport::execute_joint_target()
-{
-  return execute_taught_motion("return_material", {}, {});
 }
 
 }  // namespace arm_cell_motion

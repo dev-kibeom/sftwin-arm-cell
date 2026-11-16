@@ -38,8 +38,10 @@ flowchart LR
 
 티칭 동작은 Task Execution의 `MoveTaught` BT 액션이 이름으로 요청한다. 순서·조건과
 자재 반환의 Holding·Gripper·Release 확인은 Task Execution이 소유한다. Motion은 단일
-티칭 설정 파일에서 목표와 속도·가속도를 해석하고 기존 admission, Safety envelope,
-취소 및 실행 소유권 경계를 적용한다. 티칭 이동 성공만으로 자재 `RETURNED`를 확정하지 않는다.
+티칭 Registry에서 목표와 속도·가속도를 조회하고 현재 관절값에서 직접 궤적을 생성한다.
+MoveIt 계획·IK·Scene 조회 없이 기존 admission, Safety envelope, 취소·실행 소유권 및
+최종 관절 도달 확인을 적용한다. 모든 이름은 같은 실행기를 사용하며 `MoveTaught`는
+관절 이동만 요청한다. HELD 확인과 RELEASE는 BT의 독립 액션이 담당한다. 티칭 이동 성공만으로 자재 `RETURNED`를 확정하지 않는다.
 
 `MotionPort`는 단일 움직임용 `planMotion`·`executePlannedMotion`과 호환 조합인 `planAndExecuteMotion`, 그리고 기존 `executeDisturb` entry point를 제공하는 in-process C++ 계약이다. 별도 `MotionDisturbPort`나 두 번째 adapter는 두지 않는다. Task Execution BT는 PnP candidate와 교란 candidate를 선택하고 작업 순서·계획 실패 전환·Gripper·복구를 결정한다. 교란 BT는 대표점과 Motion profile 값으로 짧은 목표들을 만들고, 각 구간을 기존 `planMotion`·`executePlannedMotion`으로 계획·실행한다. Motion은 PnP의 object pose/geometry에 기존 object-to-TCP 변환을 유지하며, 교란은 전달된 target pose를 사용해 IK·collision·trajectory를 계획한다.
 `measuredTcpPose`는 Task Execution의 PLACE WAYPOINT clearance 시작 Pose 및 완료 후 Y 경계 확인에 사용한다. `target_is_tcp_pose`가 지정된 PLACE clearance movement는 요청 Pose 자체가 `base_link` TCP 목표이며 object-to-TCP 변환을 다시 적용하지 않는다. PLACE WAYPOINT 접근은 적용된 고정 profile의 사전 준비 경로를 기존 `planMotion` reservation과 `executePlannedMotion` lifecycle로 제출하며, 경로 부재나 profile 불일치는 명시적 movement 실패로 처리하고 임의 이동 또는 다른 전략으로 대체하지 않는다.

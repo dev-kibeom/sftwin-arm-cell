@@ -35,19 +35,8 @@ TaughtMotions parse_taught_motions(
       if (target != "home" && target != "tray_return") {
         throw std::invalid_argument("Unknown taught target: " + target);
       }
-      if (((entry.key() == "home" || entry.key() == "payload_home") && target != "home") ||
-        (entry.key() == "return_material" && target != "tray_return"))
-      {
-        throw std::invalid_argument("Reserved taught motion target mismatch: " + entry.key());
-      }
       motion.joint_positions = target == "home" ? home : tray_return;
     } else {
-      if (entry.key() == "home" || entry.key() == "payload_home" ||
-        entry.key() == "return_material")
-      {
-        throw std::invalid_argument(
-                "Reserved taught motion requires its robot target: " + entry.key());
-      }
       motion.joint_positions = value.at("joint_positions").get<std::vector<double>>();
     }
     const auto valid_scale = [](double scale) {

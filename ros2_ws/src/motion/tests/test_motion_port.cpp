@@ -544,8 +544,8 @@ TEST(MotionPortTest, ControlledLegacyRetractKeepsRecoveryPermissionBoundary)
   auto place_backend = std::make_shared<FakeMotionBackend>();
   MotionCore place_core(place_backend);
   grant_recovery_only(place_core);
-  const auto place_recovery = place_core.executePlaceRecoveryJointTarget(
-    make_uuid(12), "place-recovery-tray");
+  const auto place_recovery = place_core.executeTaughtMotion(
+    "return_material", "00000000000000000000000000000012", "place-recovery-tray");
 
   EXPECT_EQ(
     controlled_retract,

@@ -117,7 +117,6 @@ uint8_t task_type_for_motion_segment(MotionSegmentKind segment)
       return MotionTaskType::TASK_TYPE_PICK;
     case MotionSegmentKind::PLACE_APPROACH:
     case MotionSegmentKind::PLACE_DESCENT:
-    case MotionSegmentKind::PAYLOAD_HOME:
     case MotionSegmentKind::PLACE_CLEARANCE:
     case MotionSegmentKind::PLACE_RETRACT:
     case MotionSegmentKind::DISTURB_APPROACH:
@@ -192,7 +191,7 @@ uint8_t MotionCore::accept_goal_impl(
   const UUID & goal_uuid, uint8_t task_type, Clock::time_point acceptance_time,
   bool refresh_pre_submit_time, bool sample_initial_time,
   std::string * diagnostic_detail, const MotionPortRequest * motion_request,
-  const ExecuteTask::Goal * named_task, bool joint_target, const std::string & movement_id,
+  const ExecuteTask::Goal * named_task, const std::string & movement_id,
   NormalizedTrajectoryPlan * planning_output, bool retain_planned_operation,
   std::uint64_t * retained_plan_id_output, const std::string & taught_motion)
 {
@@ -251,7 +250,10 @@ uint8_t MotionCore::accept_goal_impl(
     }
   }
 
-  const bool backend_available = backend_->available();
+  const bool named_joint_motion = !taught_motion.empty() || (named_task &&
+    named_task->task_type.value == MotionTaskType::TASK_TYPE_GO_HOME);
+  const bool backend_available = named_joint_motion ? backend_->named_joint_motion_available() :
+    backend_->available();
   if (!backend_available) {
     std::lock_guard<std::mutex> lock(mutex_);
     const auto result = interruption_result_locked(
@@ -362,7 +364,6 @@ uint8_t MotionCore::accept_goal_impl(
         motion_execution_support_->plan_motion(*motion_request, *planning_output) :
         motion_execution_support_->execute_motion(*motion_request)) :
         named_task ? motion_execution_support_->execute_task(*named_task, goal_id) :
-        joint_target ? motion_execution_support_->execute_joint_target(goal_id) :
         MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
     } catch (...) {
       throw;
@@ -786,7 +787,6 @@ MotionPortResult MotionCore::planAndExecuteMotion(const MotionPortRequest & requ
     request.segment == MotionSegmentKind::PICK_RETRACT ||
     request.segment == MotionSegmentKind::PLACE_APPROACH ||
     request.segment == MotionSegmentKind::PLACE_DESCENT ||
-    request.segment == MotionSegmentKind::PAYLOAD_HOME ||
     request.segment == MotionSegmentKind::PLACE_CLEARANCE ||
     request.segment == MotionSegmentKind::PLACE_RETRACT ||
     request.segment == MotionSegmentKind::DISTURB_APPROACH ||
@@ -859,7 +859,6 @@ MotionPlanningResult MotionCore::planMotion(const MotionPortRequest & request)
     request.segment == MotionSegmentKind::PICK_RETRACT ||
     request.segment == MotionSegmentKind::PLACE_APPROACH ||
     request.segment == MotionSegmentKind::PLACE_DESCENT ||
-    request.segment == MotionSegmentKind::PAYLOAD_HOME ||
     request.segment == MotionSegmentKind::PLACE_CLEARANCE ||
     request.segment == MotionSegmentKind::PLACE_RETRACT ||
     request.segment == MotionSegmentKind::DISTURB_APPROACH ||
@@ -974,7 +973,7 @@ MotionPlanningResult MotionCore::planMotion(const MotionPortRequest & request)
   std::uint64_t plan_id = 0U;
   result.result_code = accept_goal_impl(
     request.execution_id, task_type_for_motion_segment(request.segment),
-    Clock::now(), true, true, &result.diagnostic_detail, &request, nullptr, false, {},
+    Clock::now(), true, true, &result.diagnostic_detail, &request, nullptr, {},
     &backend_plan, true, &plan_id);
   switch (result.result_code) {
     case MotionTaskResultCode::TASK_RESULT_SUCCESS:
@@ -1412,7 +1411,7 @@ std::uint8_t MotionCore::executeLegacyMovement(
   legacy_movement.task_type.value = task_type;
   return accept_goal_impl(
     parse_uuid(execution_id), task_type, Clock::now(), true, true,
-    nullptr, nullptr, &legacy_movement, false, movement_id);
+    nullptr, nullptr, &legacy_movement, movement_id);
 }
 
 std::uint8_t MotionCore::executeTaughtMotion(
@@ -1430,15 +1429,7 @@ std::uint8_t MotionCore::executeTaughtMotion(
   }
   return accept_goal_impl(
     uuid, MotionTaskType::TASK_TYPE_GO_HOME, Clock::now(), true, true,
-    nullptr, nullptr, nullptr, false, movement_id, nullptr, false, nullptr, motion);
-}
-
-std::uint8_t MotionCore::executePlaceRecoveryJointTarget(
-  const UUID & execution_id, const std::string & movement_id)
-{
-  return accept_goal_impl(
-    execution_id, MotionTaskType::TASK_TYPE_PLACE, Clock::now(), true, true,
-    nullptr, nullptr, nullptr, true, movement_id);
+    nullptr, nullptr, nullptr, movement_id, nullptr, false, nullptr, motion);
 }
 
 bool MotionCore::is_supported_task(uint8_t task_type)

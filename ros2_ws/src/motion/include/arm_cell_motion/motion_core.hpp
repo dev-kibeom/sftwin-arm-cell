@@ -112,8 +112,6 @@ public:
   std::uint8_t executeTaughtMotion(
     const std::string & motion, const std::string & execution_id,
     const std::string & movement_id) override;
-  std::uint8_t executePlaceRecoveryJointTarget(
-    const UUID & execution_id, const std::string & movement_id) override;
 
 private:
   static bool is_supported_task(uint8_t task_type);
@@ -126,7 +124,7 @@ private:
     bool sample_initial_time,
     std::string * diagnostic_detail = nullptr,
     const MotionPortRequest * motion_request = nullptr,
-    const ExecuteTask::Goal * named_task = nullptr, bool joint_target = false,
+    const ExecuteTask::Goal * named_task = nullptr,
     const std::string & movement_id = {},
     NormalizedTrajectoryPlan * planning_output = nullptr,
     bool retain_planned_operation = false,

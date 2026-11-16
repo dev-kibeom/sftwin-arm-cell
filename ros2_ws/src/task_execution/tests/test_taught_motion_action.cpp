@@ -52,6 +52,23 @@ TEST(TaughtMotionAction, ComposesNamedActionsInSequence)
   EXPECT_NE(port->movement_ids[0], port->movement_ids[1]);
 }
 
+TEST(TaughtMotionAction, MaterialReturnUsesTheSameNamedMovementPort)
+{
+  auto port = std::make_shared<TaughtPort>();
+  TaskExecutionSupport support(port, nullptr, {});
+  support.set_execution_identity("00000000000000000000000000000001");
+  TaskExecutionReport report;
+  BT::BehaviorTreeFactory factory;
+  register_taught_motion_action(factory, support, report);
+  auto tree = factory.createTreeFromText(
+    R"(
+    <root main_tree_to_execute="Main"><BehaviorTree ID="Main"><Sequence>
+      <MoveTaught motion="return_material"/><MoveTaught motion="arbitrary_pose"/>
+    </Sequence></BehaviorTree></root>)");
+  EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
+  EXPECT_EQ(port->motions, (std::vector<std::string>{"return_material", "arbitrary_pose"}));
+}
+
 TEST(TaughtMotionAction, FailureStopsTheFollowingAction)
 {
   auto port = std::make_shared<TaughtPort>();

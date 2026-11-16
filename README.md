@@ -333,8 +333,12 @@ JSON 값이 같으면 파일 내용·수정 시각을 보존하고 실제 값이
 한 파일에서 관리합니다. `velocity_scale`·`acceleration_scale`은 각각 Robot model의
 속도·가속도 한계 대비 `(0, 1]` 비율이며, 현재 Safety 제한을 추가 적용합니다.
 기존 직접 위치 명령의 실제 속도와 비례하는 감속률은 아닙니다.
-`home`·`return_material`·`payload_home`은 기존 Robot 목표를 유지합니다.
+기본 `home`·`return_material`·`payload_home` 항목은 기존 Robot 목표를 참조합니다.
 다른 티칭 자세는 같은 파일에 추가할 수 있습니다.
+이름을 Registry에서 조회한 뒤 현재 관절값에서 목표까지 표준 KDL 속도 프로파일로 직접
+Joint Trajectory를 생성합니다. MoveIt 경로 계획·IK·Scene 조회를 호출하지 않고 기존
+simulation-clock 궤적 실행기와 최종 관절 도달 확인을 사용합니다. 직접 관절 이동 경로는
+운영 티칭으로 검증하며, 실제 Isaac 라이브 검증은 별도로 수행합니다.
 
 ```yaml
 motions:

@@ -109,8 +109,8 @@ TEST(TaskExecutorTest, ReturnsHeldObjectToTrayAndConfirmsRelease)
 
   EXPECT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_SUCCESS);
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
-  EXPECT_EQ(backend->joint_target_calls(), 1U);
-  EXPECT_EQ(backend->submitted_task_type().value, MotionTaskType::TASK_TYPE_UNSPECIFIED);
+  EXPECT_EQ(backend->taught_motion_names(), (std::vector<std::string>{"return_material"}));
+
   EXPECT_EQ(gripper->holding().state, HoldingState::RELEASED);
 }
 
@@ -124,7 +124,7 @@ TEST(TaskExecutorTest, DoesNotMoveToTrayWithoutFreshHeldObservation)
   goal.task_type.value = MotionTaskType::TASK_TYPE_RETURN_HELD;
 
   EXPECT_EQ(executor.execute(goal), MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
-  EXPECT_EQ(backend->joint_target_calls(), 0U);
+  EXPECT_TRUE(backend->taught_motion_names().empty());
   EXPECT_EQ(backend->gripper_port()->holding().state, HoldingState::UNKNOWN);
 }
 

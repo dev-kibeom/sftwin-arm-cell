@@ -64,7 +64,6 @@ struct NormalizedMotionRequest
   double retract_distance_m{0.0};
   double estimated_object_height_m{0.0};
   double motion_speed_fraction{1.0};
-  std::string taught_motion;
   bool is_disturbance{false};
   double place_position_tolerance_m{0.0};
   double place_orientation_tolerance_rad{0.0};
@@ -127,6 +126,7 @@ public:
   {return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;}
 
   virtual bool available() const = 0;
+  virtual bool named_joint_motion_available() const {return available();}
   virtual void begin_pick_search() {}
   virtual void begin_pick_search(const std::string & execution_id)
   { (void)execution_id; begin_pick_search(); }
@@ -163,19 +163,10 @@ public:
     const std::string & motion, const std::string & execution_id,
     const std::function<uint8_t()> & interruption)
   {
-    (void)interruption;
-    if (motion == "home") {
-      arm_cell_interfaces::action::ExecuteTask::Goal goal;
-      goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
-      return execute_task(goal, execution_id);
-    }
-    if (motion == "return_material") {return execute_joint_target();}
+    (void)motion; (void)execution_id; (void)interruption;
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
-  virtual uint8_t execute_joint_target()
-  {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
-  }
+
   // SUCCESS means the existing trajectory completion oracle accepted measured
   // execution; it is distinct from backend inactivity/stop confirmation.
   virtual uint8_t execute_normalized(const NormalizedMotionRequest & request)

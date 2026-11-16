@@ -1,4 +1,3 @@
-#include "arm_cell_motion/taught_motion_trajectory.hpp"
 #include "arm_cell_motion/attached_payload.hpp"
 #include "arm_cell_motion/candidate_occupancy.hpp"
 #include "arm_cell_motion/isaac_ros_motion_transport.hpp"
@@ -2890,7 +2889,7 @@ void IsaacRosMotionTransport::finish_profile_trace(const std::string & outcome)
 TrajectorySampleResult IsaacRosMotionTransport::start_global_profiled_trajectory(
   const trajectory_msgs::msg::JointTrajectory & trajectory, std::uint64_t execution_id,
   double start_simulation_time, const std::string & config,
-  const std::string & motion_goal_uuid)
+  const std::string & motion_goal_uuid, const std::string & profile_name)
 {
   bool capture_profile = false;
   std::lock_guard<std::mutex> lock(profile_capture_mutex_);
@@ -2899,7 +2898,7 @@ TrajectorySampleResult IsaacRosMotionTransport::start_global_profiled_trajectory
   }
   capture_profile = profile_trace_ && !global_profile_capture_complete_;
   if (capture_profile) {
-    begin_profile_trace("GLOBAL_MOVEIT", config, motion_goal_uuid, execution_id);
+    begin_profile_trace(profile_name, config, motion_goal_uuid, execution_id);
     global_profile_trace_active_ = true;
   }
   trajectory_worker_->set_profile_trace(capture_profile ? profile_trace_ : nullptr);
@@ -3268,11 +3267,6 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       }
     }
   }
-  if (request.segment == MotionSegmentKind::PAYLOAD_HOME) {
-    std::lock_guard<std::mutex> candidate_lock(mutex_);
-    place_candidate_pose_floor_ = 0U;
-    selected_place_pose_valid_ = false;
-  }
   if (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE) {
     std::lock_guard<std::mutex> place_pose_lock(mutex_);
     if (request.phase == arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING) {
@@ -3398,18 +3392,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     return false;
   }
   const auto envelope = applied_motion_envelope();
-  double velocity_scale = planning_velocity_scaling_factor_;
-  double acceleration_scale = planning_acceleration_scaling_factor_;
-  const auto taught_name = !request.taught_motion.empty() ? request.taught_motion :
-    request.segment == MotionSegmentKind::PAYLOAD_HOME ? "payload_home" : "";
-  if (!taught_name.empty()) {
-    const auto found = taught_motions_.find(taught_name);
-    if (found == taught_motions_.end()) {return false;}
-    velocity_scale = found->second.velocity_scale;
-    acceleration_scale = found->second.acceleration_scale;
-  }
   auto planning_scales = apply_motion_envelope_to_planning_scales(
-    velocity_scale, acceleration_scale, envelope);
+    planning_velocity_scaling_factor_, planning_acceleration_scaling_factor_, envelope);
   if (request.is_disturbance) {
     planning_scales.max_velocity *= request.motion_speed_fraction;
     planning_scales.max_acceleration *= request.motion_speed_fraction;
@@ -3459,8 +3443,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       return restored;
     };
 
-  const bool cartesian_primitive = request.segment != MotionSegmentKind::PAYLOAD_HOME &&
-    !(request.segment == MotionSegmentKind::PLACE_CLEARANCE &&
+  const bool cartesian_primitive = !(request.segment == MotionSegmentKind::PLACE_CLEARANCE &&
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE) &&
     uses_cartesian_manipulation(request.task_type.value, request.phase);
   const char * primitive_type = cartesian_primitive ? "CARTESIAN" : "GLOBAL";
@@ -3483,7 +3466,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   const bool vision_collision_scope_required = vision_derived_pick ||
     (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
     request.has_non_target_occupancy && !request.non_target_occupancy.empty());
-  const bool planning_scene_context_required = !request.taught_motion.empty() ||
+  const bool planning_scene_context_required =
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ||
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE;
   if (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
@@ -3535,12 +3518,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       std::optional<moveit_msgs::msg::AttachedCollisionObject> payload;
       {
         std::lock_guard<std::mutex> payload_lock(mutex_);
-        const bool held_place = (!request.taught_motion.empty() && object_attached_) ||
-          (request.task_type.value ==
+        const bool held_place = request.task_type.value ==
           arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE &&
           request.phase != arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING &&
           !request.is_disturbance &&
-          (!request.place_waypoint_approach || accepted_object_to_tcp_valid_));
+          (!request.place_waypoint_approach || accepted_object_to_tcp_valid_);
         if (held_place) {
           if (!accepted_object_to_tcp_valid_) {
             normalized_failure_result_ =
@@ -3801,13 +3783,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       return false;
     }
     trajectory_velocity_limits.push_back(
-      joint_model->getVariableBounds().front().max_velocity_ *
-      (taught_name.empty() ? 1.0 : planning_scales.max_velocity));
+      joint_model->getVariableBounds().front().max_velocity_);
   }
   const double trajectory_acceleration_limit = planning_max_acceleration_rad_s2_ > 0.0 ?
-    planning_max_acceleration_rad_s2_ *
-    (taught_name.empty() ? 1.0 : planning_scales.max_acceleration) :
-    std::numeric_limits<double>::max();
+    planning_max_acceleration_rad_s2_ : std::numeric_limits<double>::max();
   const auto finalize_raw_trajectory = [&](moveit_msgs::msg::RobotTrajectory & trajectory) {
       return finalize_executable_trajectory(
         trajectory, arm_joint_names_, trajectory_velocity_limits,
@@ -3820,11 +3799,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             return false;
           }
           timed_trajectory.getRobotTrajectoryMsg(raw_trajectory);
-          // Finalization replaces planner timing. Apply taught/Safety limits
-          // here so they remain effective in the trajectory actually streamed.
-          return taught_name.empty() || scale_taught_trajectory(
-            raw_trajectory.joint_trajectory,
-            planning_scales.max_velocity, planning_scales.max_acceleration);
+          return true;
         });
     };
   const bool candidate_attempt_snapshot = vision_derived_pick &&
@@ -6962,10 +6937,10 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
   const trajectory_msgs::msg::JointTrajectory & trajectory,
   bool cartesian_primitive, bool place_recovery_waypoint,
   const MotionPlanningScales & planning_scales,
-  const std::function<bool()> & discard_if_interrupted)
+  const std::function<bool()> & discard_if_interrupted,
+  const std::vector<JointMotionLimit> * named_limits)
 {
-  const auto robot_model = move_group_state_->move_group->getRobotModel();
-  if (planning_max_acceleration_rad_s2_ > 0.0) {
+  if (named_limits || planning_max_acceleration_rad_s2_ > 0.0) {
     if (!trajectory_sampler_configuration_error_.empty()) {
       if (place_recovery_waypoint) {
         place_recovery_waypoint_reason_ = trajectory_sampler_configuration_error_;
@@ -6994,23 +6969,26 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
       start_simulation_time = latest_simulation_time_;
     }
     std::vector<double> velocity_limits;
-    velocity_limits.reserve(arm_joint_names_.size());
-    for (const auto & joint_name : arm_joint_names_) {
-      const auto * joint_model = robot_model->getJointModel(joint_name);
-      if (!joint_model || joint_model->getVariableBounds().empty()) {
-        RCLCPP_WARN(
-          node_->get_logger(),
-          "motion diagnostic missing velocity bounds for %s"
-          "",
-          joint_name.c_str());
-        return false;
+    double acceleration_limit = planning_max_acceleration_rad_s2_;
+    if (named_limits) {
+      if (named_limits->size() != arm_joint_names_.size()) {return false;}
+      acceleration_limit = 0.0;
+      for (const auto & limit : *named_limits) {
+        velocity_limits.push_back(limit.max_velocity);
+        acceleration_limit = std::max(acceleration_limit, limit.max_acceleration);
       }
-      velocity_limits.push_back(joint_model->getVariableBounds().front().max_velocity_);
+    } else {
+      const auto robot_model = move_group_state_->move_group->getRobotModel();
+      for (const auto & joint_name : arm_joint_names_) {
+        const auto * joint_model = robot_model->getJointModel(joint_name);
+        if (!joint_model || joint_model->getVariableBounds().empty()) {return false;}
+        velocity_limits.push_back(joint_model->getVariableBounds().front().max_velocity_);
+      }
     }
     const auto & points = trajectory.points;
     const auto & final_time = points.back().time_from_start;
     const auto validation = validate_time_parameterized_trajectory(
-      trajectory, velocity_limits, planning_max_acceleration_rad_s2_);
+      trajectory, velocity_limits, acceleration_limit);
     if (!validation.valid) {
       if (place_recovery_waypoint) {place_recovery_waypoint_reason_ = validation.reason;}
       RCLCPP_WARN(
@@ -7040,8 +7018,8 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
                   << ";planning_max_acceleration_rad_s2="
                   << planning_max_acceleration_rad_s2_ << ";velocity_limits="
                   << format_double_values(velocity_limits)
-                  << ";moveit_velocity_scaling_factor=" << planning_scales.max_velocity
-                  << ";moveit_acceleration_scaling_factor="
+                  << ";velocity_scale=" << planning_scales.max_velocity
+                  << ";acceleration_scale="
                   << planning_scales.max_acceleration
                   << ";duration_s=" << expected_duration;
     if (discard_if_interrupted()) {
@@ -7076,7 +7054,8 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
       const auto execution_id = ++next_trajectory_execution_id_;
       worker_start = start_global_profiled_trajectory(
         trajectory, execution_id,
-        start_simulation_time, active_limits.str(), request.motion_goal_uuid);
+        start_simulation_time, active_limits.str(), request.motion_goal_uuid,
+        named_limits ? "NAMED_JOINT" : "GLOBAL_MOVEIT");
     }
     if (!worker_start.valid) {
       std::lock_guard<std::mutex> lock(mutex_);

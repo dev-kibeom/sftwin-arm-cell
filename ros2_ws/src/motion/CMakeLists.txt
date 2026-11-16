@@ -28,6 +28,9 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(orocos_kdl_vendor REQUIRED)
+find_package(orocos_kdl REQUIRED)
+find_package(urdf REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -98,6 +101,7 @@ target_compile_definitions(${PROJECT_NAME}_core PRIVATE
   ARM_CELL_BUILD_COMMIT_SHA="${ARM_CELL_BUILD_COMMIT_SHA}"
 )
 ament_target_dependencies(${PROJECT_NAME}_core
+  urdf
   arm_cell_interfaces
   geometry_msgs
   moveit_core
@@ -114,9 +118,9 @@ ament_target_dependencies(${PROJECT_NAME}_core
   pluginlib
   behaviortree_cpp_v3
 )
-target_include_directories(${PROJECT_NAME}_core SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME}_core SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS} ${orocos_kdl_INCLUDE_DIRS})
 target_include_directories(${PROJECT_NAME}_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(${PROJECT_NAME}_core nlohmann_json::nlohmann_json ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME}_core nlohmann_json::nlohmann_json ${OpenCV_LIBS} ${orocos_kdl_LIBRARIES})
 
 add_library(${PROJECT_NAME}_runtime src/motion_node_impl.cpp)
 target_include_directories(${PROJECT_NAME}_runtime PUBLIC
@@ -155,6 +159,8 @@ install(
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(
+  urdf
+  orocos_kdl_vendor
   arm_cell_interfaces
   geometry_msgs
   moveit_core

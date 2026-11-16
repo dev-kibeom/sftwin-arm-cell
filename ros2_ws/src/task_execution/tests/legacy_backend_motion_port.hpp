@@ -124,9 +124,9 @@ public:
     goal.task_type.value = task_type;
     return support_.execute_task(goal, id);
   }
-  std::uint8_t executePlaceRecoveryJointTarget(
-    const unique_identifier_msgs::msg::UUID &, const std::string &) override
-  {return support_.execute_joint_target();}
+  std::uint8_t executeTaughtMotion(
+    const std::string & motion, const std::string & id, const std::string &) override
+  {return support_.execute_taught_motion(motion, id);}
 
 private:
   std::shared_ptr<arm_cell_motion::MotionBackend> backend_;
