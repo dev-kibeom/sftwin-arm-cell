@@ -68,3 +68,28 @@ def test_joint_and_finger_link_names_are_not_algorithm_inputs():
     settings['finger_tip_links'] = [renamed[name] for name in settings['finger_tip_links']]
     actual = ToolGeometry(urdf, settings).fixture(.02, .002)
     assert actual == pytest.approx(original)
+
+
+@pytest.mark.parametrize('suffix,depth', [('', .004), ('_long', .020)])
+def test_explicit_bore_is_solved_without_changing_material_dimensions(suffix, depth):
+    config = load_model_experiment(ROOT / 'ros2_ws/src/bringup/config/model_experiments' / f'm0609_hand_e_c10{suffix}.yaml')
+    model = config['model_configuration']
+    urdf = ET.fromstring(xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml())
+    geometry = ToolGeometry(urdf, config['tool']['runtime'])
+    fixture = geometry.fixture(depth, .002)
+    radius = fixture['inner_radius_m'] + .0003
+    from gripper_runtime.grasp_strategy import select_grasp_strategy
+    strategy = select_grasp_strategy(config['tool']['runtime'],
+        dict(strategy='internal_radial', insertion_depth_m=depth, thickness_m=.002, inner_radius_m=radius),
+        geometry=geometry)
+    solution = strategy.solution
+    strategy.qualify_capture([0, 0, -depth], np.eye(3), solution['grasp_position_m'])
+    assert solution['inner_radius_m'] == radius
+    assert solution['insertion_depth_m'] == depth
+    assert solution['thickness_m'] == .002
+    assert solution['grasp_position_m'] < solution['release_position_m']
+    from internal_grasp_geometry import slab_radius
+    assert slab_radius(geometry.triangles(solution['grasp_position_m']), -depth-.001, -depth+.001) == pytest.approx(radius, abs=1e-8)
+    for unreachable in (fixture['contracted_swept_radius_m'], fixture['expanded_radius_m']+.001, float('nan')):
+        with pytest.raises(ValueError):
+            geometry.solve_bore(depth, .002, unreachable)

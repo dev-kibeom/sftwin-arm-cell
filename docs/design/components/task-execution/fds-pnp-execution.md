@@ -74,6 +74,22 @@ sequenceDiagram
 이 Action은 단일 공정 경계다. PICK과 PLACE는 독립적인 외부 요청이 아니며 Task Execution이
 하나의 candidate list·Recipe snapshot·execution identity로 추적한다.
 
+## 준비된 티칭 파지
+
+명시적으로 준비된 파지 작업은 Tool 능력과 작업 요구의 일치·기하 입력·티칭 이름을 확인한
+뒤 공통 Pick 단계와 기존 Holding·복구를 재사용한다. RELEASE 및 RELEASED 확인,
+접근·삽입, GRASP 및 HELD 확인·Scene 관계 확정, 보유 확인을 포함한 이송,
+RELEASE 및 RELEASED 확인·Scene 관계 해제, 후퇴 순서를 유지한다.
+외경 파지와 내경 방사형 파지는 같은 Task 구조를 사용한다. 물리 구동 방향은
+[Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)의 의미적 Tool
+명령으로 위임한다. 제조사·Robot·Finger 길이별 BT를 두지 않는다.
+
+준비된 입력은 작업 시작 시 고정하며 기존 Vision 후보 검색·Box geometry 입력으로
+재해석하지 않는다. 파지 미확정 시 기존 RELEASE 복구를 사용하고 Safety·Cancel·backend
+오류를 파지 실패로 바꿔 자동 해제하지 않는다. 실제 삽입 시작 이후 후보를 전환하지 않으며,
+확정 해제 후 후퇴 실패가 해제 사실을 되돌리지 않는다. 이 경계는 정식 Material·Vision·Cell
+또는 새로운 운영 PnP 지원 조합을 추가하지 않는다.
+
 ## PICK / PLACE 독립 전략
 
 운영 profile은 PICK과 PLACE의 전략을 독립적으로 선택한다. 각 작업은 시작 시 전략을 고정하며

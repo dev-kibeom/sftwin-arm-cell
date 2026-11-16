@@ -23,7 +23,12 @@ Mode ID는 기존 `actuator`/`grasp` 조합에서 파생한 표시 identity다. 
 Actuator와 파지 구현을 조립한다. `GraspManager`는 기존 Fixed Attach를, `PhysicalGraspManager`는
 선택적 접촉 진단과 Object Detection 기반 보유 추정을 소유한다. Physical Attach은 Tool Capture 전략만 교체하고 기존 GraspManager를 재사용한다. 새 Tool은 이 선택 경계에 구현과 Tool Profile을 등록한다.
 공통 Session은 주입된 Tool의 command/update/관측·파지 계약을 소비한다. 장치 전용 Cell·Robot·Motion·Orchestration 분기는 추가하지 않는다.
-현재 실제 지원 Tool은 2F-85뿐이다.
+운영 Session의 지원 Tool은 2F-85다. C10의 기본형·Long은 동일한 `internal_radial`
+전략과 의미적 GRASP(확장)·RELEASE(수축)를 실험 경계에서 사용한다.
+`runtime.grasp_strategies`는 파지 능력이며 `supported_combinations`·Launcher 모드의
+운영 지원 선언을 대신하지 않는다. 명시적 내경·두께·삽입 깊이는 선택 Tool 기하에서
+검증하고, 시험 Fixture 생성·보고는 전략 밖에 둔다.
+[C10 공통 Task 통합 검증](../../assets/robots/m0609_hand_e_c10/README.md#3단계--공통-grasp-strategytask-통합-검증)을 참조한다.
 
 Cell은 Scene·설치·Material Supply·Camera와 기존 Action Graph 통합을 소유한다. Robot은 Arm Drive와 HOME을,
 Model Assembly의 URDF/USD는 링크·관절·한계·mimic·collision·질량/관성을 소유한다.

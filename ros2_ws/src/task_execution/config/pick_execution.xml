@@ -5,10 +5,35 @@
       <OpenAndConfirmPickRelease/>
       <RetryWhileAllowed name="PickPlanningCandidates">
         <Sequence name="ExecutePickCandidatePlan">
-          <PlanPickApproach/>
-          <ExecutePickApproach/>
-          <PlanPickGraspInsertion/>
-          <ExecutePickGraspInsertion/>
+          <Fallback>
+            <Sequence>
+              <UsesPreparedGrasp/>
+              <RunAndFinalize>
+                <MoveTaught motion="{grasp_approach_motion}"/>
+                <RecordTaughtPickApproach/>
+              </RunAndFinalize>
+            </Sequence>
+            <Sequence>
+              <UsesPlannedGrasp/>
+              <PlanPickApproach/>
+              <ExecutePickApproach/>
+            </Sequence>
+          </Fallback>
+          <Fallback>
+            <Sequence>
+              <UsesPreparedGrasp/>
+              <BeginPreparedGraspInsertion/>
+              <RunAndFinalize>
+                <MoveTaught motion="{grasp_insertion_motion}"/>
+                <RecordTaughtPickInsertion/>
+              </RunAndFinalize>
+            </Sequence>
+            <Sequence>
+              <UsesPlannedGrasp/>
+              <PlanPickGraspInsertion/>
+              <ExecutePickGraspInsertion/>
+            </Sequence>
+          </Fallback>
         </Sequence>
         <AdvancePickPlanningCandidate/>
       </RetryWhileAllowed>
@@ -18,10 +43,18 @@
       </RecoverOnFailure>
       <RunAndFinalize name="PickRetractAndRecord">
         <RecoverOnFailure name="PickRetractFailureHandling">
-          <Sequence name="PlanAndExecutePickRetract">
-            <PlanPickRetract/>
-            <ExecutePickRetract/>
-          </Sequence>
+          <Fallback name="ExecutePickRetract">
+            <Sequence>
+              <UsesPreparedGrasp/>
+              <MoveTaught motion="{grasp_transfer_motion}"/>
+              <RecordTaughtPickTransfer/>
+            </Sequence>
+            <Sequence name="PlanAndExecutePickRetract">
+              <UsesPlannedGrasp/>
+              <PlanPickRetract/>
+              <ExecutePickRetract/>
+            </Sequence>
+          </Fallback>
           <SubTree ID="PickRetractFailureRecovery"/>
         </RecoverOnFailure>
         <FinalizePickRetract/>

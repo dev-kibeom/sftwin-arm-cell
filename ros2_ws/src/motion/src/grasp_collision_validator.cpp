@@ -1,7 +1,7 @@
 #include "arm_cell_motion/grasp_collision_validator.hpp"
 #include <stdexcept>
 #include <unordered_set>
-#include <geometric_shapes/shapes.h>
+#include "arm_cell_motion/box_grasp_collision_policy.hpp"
 
 namespace arm_cell_motion
 {
@@ -82,65 +82,12 @@ GraspCollisionValidationResult validate_grasp_collision(
   }
   std::string collision_group = planning_group;
   if (target_dimensions) {
-    constexpr const char * joint_name = "gripper_robotiq_85_left_knuckle_joint";
-    const auto * joint = state.getRobotModel()->getJointModel(joint_name);
-    if (!contact || !std::isfinite(contact->width_mm) || contact->width_mm <= 0.0 ||
-      contact->width_mm > 85.0 || !object_center.allFinite() ||
-      !object_orientation.coeffs().allFinite() || object_orientation.norm() < 1e-9 ||
-      !target_dimensions->allFinite() ||
-      (target_dimensions->array() <= 0.0).any() || !joint || joint->getVariableCount() != 1U)
+    if (!prepare_closed_box_grasp_collision(
+        grasp_state, *common, *full, object_center, object_orientation, contact, *target_dimensions))
     {
       result.valid = false;
       result.reason = "CLOSED_GRASP_GEOMETRY_UNAVAILABLE";
       return result;
-    }
-    // Same normalized width-to-actuator mapping as the Tool runtime. Setting
-    // the driving joint also updates every URDF mimic joint in this copy.
-    const auto & bounds = joint->getVariableBounds().front();
-    if (!bounds.position_bounded_ || !std::isfinite(bounds.min_position_) ||
-      !std::isfinite(bounds.max_position_) || bounds.max_position_ <= bounds.min_position_)
-    {
-      result.valid = false;
-      result.reason = "CLOSED_GRASP_GEOMETRY_UNAVAILABLE";
-      return result;
-    }
-    const double position = bounds.min_position_ +
-      (1.0 - contact->width_mm / 85.0) * (bounds.max_position_ - bounds.min_position_);
-    grasp_state.setVariablePosition(joint_name, position);
-    grasp_state.update();
-    Eigen::Isometry3d target = Eigen::Isometry3d::Identity();
-    target.translation() = object_center;
-    target.linear() = object_orientation.normalized().toRotationMatrix();
-    if (!target.matrix().allFinite()) {
-      result.valid = false;
-      result.reason = "CLOSED_GRASP_GEOMETRY_UNAVAILABLE";
-      return result;
-    }
-    constexpr const char * target_id = "pick_selected_target";
-    for (const auto & scene : {common, full}) {
-      scene->getWorldNonConst()->removeObject(target_id);
-      scene->getWorldNonConst()->addToObject(
-        target_id,
-        shapes::ShapeConstPtr(
-          new shapes::Box(
-            target_dimensions->x(), target_dimensions->y(), target_dimensions->z())), target);
-      auto & acm = scene->getAllowedCollisionMatrixNonConst();
-      // Only the intended finger surfaces may touch the target. Palm and
-      // linkage remain collision geometry, independently of occupancy mode.
-      for (const auto * link : state.getRobotModel()->getLinkModelsWithCollisionGeometry()) {
-        acm.setEntry(target_id, link->getName(), false);
-      }
-      for (const auto & side : {std::string("left"), std::string("right")}) {
-        const auto prefix = "gripper_robotiq_85_" + side;
-        acm.setEntry(target_id, prefix + "_finger_link", true);
-        acm.setEntry(target_id, prefix + "_finger_tip_link", true);
-        collision_detection::DecideContactFn floor_contact =
-          [](collision_detection::Contact & c) {
-            return std::isfinite(c.depth) && c.depth <= 0.0005 &&
-                   std::abs(c.normal.z()) >= 0.99;
-          };
-        acm.setEntry(prefix + "_finger_tip_link", "amr_tray", floor_contact);
-      }
     }
     // Gripper joints need not belong to the arm planning group. Include the
     // whole robot at this endpoint rather than silently omitting its fingers.

@@ -16,6 +16,7 @@
 #include "arm_cell_motion/motion_geometry.hpp"
 #include "arm_cell_motion/motion_port.hpp"
 #include "arm_cell_task_execution/object_state_tracker.hpp"
+#include "arm_cell_task_execution/prepared_grasp_cycle.hpp"
 #include "arm_cell_task_execution/task_execution_types.hpp"
 
 namespace arm_cell_task_execution
@@ -40,6 +41,13 @@ public:
   void set_grip_force(std::optional<double> force_n) {grip_force_n_ = force_n;}
   void set_execution_identity(std::string execution_id) {execution_id_ = std::move(execution_id);}
   const std::string & execution_identity() const {return execution_id_;}
+
+  void set_prepared_grasp(std::optional<PreparedGraspCycle> prepared)
+  {prepared_grasp_ = std::move(prepared);}
+  const std::optional<PreparedGraspCycle> & prepared_grasp() const {return prepared_grasp_;}
+  void mark_prepared_insertion_started() {prepared_insertion_started_ = true;}
+  void reset_prepared_insertion_started() {prepared_insertion_started_ = false;}
+  bool prepared_insertion_started() const {return prepared_insertion_started_;}
 
   std::shared_ptr<MotionPort> motion_port() const {return motion_port_;}
   std::shared_ptr<GripperPort> gripper() const {return gripper_port_;}
@@ -77,6 +85,8 @@ private:
   std::shared_ptr<MotionPort> motion_port_;
   std::shared_ptr<GripperPort> gripper_port_;
   MotionGeometry geometry_;
+  std::optional<PreparedGraspCycle> prepared_grasp_;
+  bool prepared_insertion_started_{false};
   std::chrono::milliseconds holding_confirmation_timeout_;
   InterruptionChecker interruption_checker_;
   PhaseCallback phase_callback_;

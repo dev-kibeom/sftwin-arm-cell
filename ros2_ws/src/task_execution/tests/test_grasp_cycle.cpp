@@ -1,0 +1,229 @@
+#include "arm_cell_task_execution/task_executor.hpp"
+#include <gtest/gtest.h>
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace arm_cell_task_execution
+{
+using namespace arm_cell_motion;
+namespace
+{
+using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+constexpr const char * execution_id = "1234567890abcdef1234567890abcdef";
+class FixtureMotion : public MotionPort
+{
+public:
+  std::vector<std::string> events;
+  std::string fail_motion;
+  std::uint8_t failure{Code::TASK_RESULT_PATH_OBSTRUCTED};
+  int committed{0};
+  int cleared{0};
+  MotionPortResult planAndExecuteMotion(const MotionPortRequest &) override
+  {
+    return MotionPortResult();
+  }
+  MotionCancelResult cancelMotion(const unique_identifier_msgs::msg::UUID &,
+                                  const std::string &) override
+  {
+    return MotionCancelResult();
+  }
+  MotionObservation observeMotionState() const override { return MotionObservation(); }
+  std::uint8_t executeTaughtMotion(const std::string & name, const std::string &,
+                                   const std::string &) override
+  {
+    events.push_back(name);
+    return name == fail_motion ? failure : Code::TASK_RESULT_SUCCESS;
+  }
+  bool commitPendingGraspRelation() override
+  {
+    ++committed;
+    return true;
+  }
+  void clearGraspRelationAfterRelease() override { ++cleared; }
+};
+class FixtureTool : public GripperPort
+{
+public:
+  FixtureMotion & motion;
+  GraspStrategy strategy;
+  HoldingState state{HoldingState::UNKNOWN};
+  std::uint64_t sequence{0};
+  bool confirm_grasp{true};
+  explicit FixtureTool(FixtureMotion & m, GraspStrategy s) : motion(m), strategy(s) {}
+  bool supportsGraspStrategy(GraspStrategy requested) const override
+  {
+    return requested == strategy;
+  }
+  std::uint8_t prepareGrasp(const GraspSpecification & spec) override
+  {
+    return supportsGraspStrategy(spec.strategy) ? Code::TASK_RESULT_SUCCESS
+                                                : Code::TASK_RESULT_INVALID_GOAL;
+  }
+  std::uint8_t grasp() override
+  {
+    motion.events.push_back(strategy == GraspStrategy::INTERNAL_RADIAL ? "expand" : "close");
+    state = confirm_grasp ? HoldingState::HELD : HoldingState::UNKNOWN;
+    ++sequence;
+    return Code::TASK_RESULT_SUCCESS;
+  }
+  std::uint8_t release() override
+  {
+    motion.events.push_back(strategy == GraspStrategy::INTERNAL_RADIAL ? "contract" : "open");
+    state = HoldingState::RELEASED;
+    ++sequence;
+    return Code::TASK_RESULT_SUCCESS;
+  }
+  std::uint8_t close() override
+  {
+    ADD_FAILURE() << "Physical close bypassed semantic intent";
+    return 0;
+  }
+  std::uint8_t open() override
+  {
+    ADD_FAILURE() << "Physical open bypassed semantic intent";
+    return 0;
+  }
+  HoldingObservation holding() const override
+  {
+    return {state, HoldingObservation::Clock::now(), sequence, std::nullopt};
+  }
+  bool active() const override { return false; }
+  void stop() override {}
+};
+PreparedGraspCycle cycle(GraspStrategy strategy)
+{
+  PreparedGraspCycle request;
+  request.grasp.strategy = strategy;
+  request.grasp.insertion_depth_m = .004;
+  request.grasp.bore_radius_m = .025;
+  request.grasp.thickness_m = .002;
+  request.grasp.release_position_m = .02;
+  request.grasp.grasp_position_m = .01;
+  request.approach_motion = "fixture_approach";
+  request.insertion_motion = "fixture_insert";
+  request.transfer_motion = "fixture_transfer";
+  request.retreat_motion = "fixture_retreat";
+  return request;
+}
+} // namespace
+TEST(GraspCycle, SameTaskTreeRunsBoxAndBothRadialFingerConfigurations)
+{
+  for (const auto strategy : {GraspStrategy::BOX_EXTERIOR, GraspStrategy::INTERNAL_RADIAL})
+  {
+    for (const double depth : {.004, .020})
+    {
+      auto motion = std::make_shared<FixtureMotion>();
+      auto tool = std::make_shared<FixtureTool>(*motion, strategy);
+      TaskExecutor executor(motion, tool, {}, {}, std::chrono::milliseconds(1));
+      auto request = cycle(strategy);
+      request.grasp.insertion_depth_m = depth;
+      EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_SUCCESS);
+      EXPECT_EQ(
+          motion->events,
+          (std::vector<std::string>{
+              strategy == GraspStrategy::INTERNAL_RADIAL ? "contract" : "open", "fixture_approach",
+              "fixture_insert", strategy == GraspStrategy::INTERNAL_RADIAL ? "expand" : "close",
+              "fixture_transfer", strategy == GraspStrategy::INTERNAL_RADIAL ? "contract" : "open",
+              "fixture_retreat"}));
+      EXPECT_EQ(motion->committed, 1);
+      EXPECT_EQ(motion->cleared, 1);
+      EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+    }
+  }
+}
+TEST(GraspCycle, CapabilityMismatchAndInvalidBoreFailBeforeActuation)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::BOX_EXTERIOR);
+  TaskExecutor executor(motion, tool);
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+            Code::TASK_RESULT_INVALID_GOAL);
+  auto request = cycle(GraspStrategy::BOX_EXTERIOR);
+  request.insertion_motion.clear();
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_TRUE(motion->events.empty());
+}
+TEST(GraspCycle, UnconfirmedExpansionUsesExistingReleaseRecoveryWithoutTransfer)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  tool->confirm_grasp = false;
+  TaskExecutor executor(motion, tool, {}, {}, std::chrono::milliseconds(1));
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+            Code::TASK_RESULT_GRASP_FAILURE);
+  EXPECT_EQ(motion->events, (std::vector<std::string>{"contract", "fixture_approach",
+                                                      "fixture_insert", "expand", "contract"}));
+  EXPECT_EQ(motion->committed, 0);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+}
+TEST(GraspCycle, SafetyAtInsertionDoesNotExpandOrReleaseAgain)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  motion->fail_motion = "fixture_insert";
+  motion->failure = Code::TASK_RESULT_SAFETY_PREEMPTED;
+  TaskExecutor executor(motion, tool);
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+            Code::TASK_RESULT_SAFETY_PREEMPTED);
+  EXPECT_EQ(motion->events,
+            (std::vector<std::string>{"contract", "fixture_approach", "fixture_insert"}));
+}
+
+TEST(GraspCycle, InvalidIdentityAndBoreAreRejectedBeforePreparation)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  TaskExecutor executor(motion, tool);
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), ""),
+            Code::TASK_RESULT_INVALID_GOAL);
+  auto request = cycle(GraspStrategy::INTERNAL_RADIAL);
+  request.grasp.insertion_depth_m = 0.;
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_TRUE(motion->events.empty());
+}
+TEST(GraspCycle, InsertionFailureRemainsRecordedAfterPreparedContextEnds)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  motion->fail_motion = "fixture_insert";
+  TaskExecutor executor(motion, tool);
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+            Code::TASK_RESULT_PATH_OBSTRUCTED);
+  EXPECT_TRUE(executor.pick_grasp_insertion_started());
+}
+TEST(GraspCycle, ConfirmedReleaseSurvivesRetreatFailure)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  motion->fail_motion = "fixture_retreat";
+  TaskExecutor executor(motion, tool);
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+            Code::TASK_RESULT_PATH_OBSTRUCTED);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+  EXPECT_EQ(motion->cleared, 1);
+}
+
+TEST(GraspCycle, PreparedFixtureCannotBypassConfiguredMaterialForceAdmission)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  TaskExecutor executor(motion, tool);
+  executor.set_grip_force_policy(GripForcePolicy{});
+  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+            Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_TRUE(motion->events.empty());
+}
+TEST(GraspCycle, RejectedNextOperationDoesNotExposePreviousInsertionEvidence)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  TaskExecutor executor(motion, tool);
+  auto request = cycle(GraspStrategy::INTERNAL_RADIAL);
+  ASSERT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_SUCCESS);
+  ASSERT_TRUE(executor.pick_grasp_insertion_started());
+  request.insertion_motion.clear();
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_FALSE(executor.pick_grasp_insertion_started());
+}
+} // namespace arm_cell_task_execution

@@ -46,7 +46,8 @@ GraspCollisionValidationResult evaluate_finger_occupancy(
   const FingerClearanceParameters & parameters);
 
 // The leaf supplies immutable request scenes and already-validated contact
-// geometry. Strategy selection/calculation stay here, independent of BT search.
+// geometry. Occupancy evaluation stays independent of BT search; closed Box
+// tool/contact policy is owned by box_grasp_collision_policy.
 GraspCollisionValidationResult validate_grasp_collision(
   GraspOccupancyMode mode, const planning_scene::PlanningScene & common_scene,
   const planning_scene::PlanningScene & full_scene, const moveit::core::RobotState & state,

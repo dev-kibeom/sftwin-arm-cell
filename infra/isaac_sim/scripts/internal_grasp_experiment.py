@@ -5,22 +5,24 @@ from pathlib import Path
 
 import numpy as np
 
-from internal_grasp_geometry import link_transforms, qualify_capture, slab_radius
+from internal_grasp_geometry import link_transforms, slab_radius
 
 
 def run_internal_grasp(config, geometry, stage, world, robot, prims, arm_indices,
-                       finger_indices, step, command, report, cycles):
+                       finger_indices, step, command, report, cycles, task_execution_library=None):
     from pxr import Gf, UsdGeom, UsdPhysics, PhysxSchema
     from isaacsim.core.prims import SingleRigidPrim
     from isaacsim.core.utils.types import ArticulationAction
     from gripper_runtime.grasp_joint import UsdFixedJointOwner
+    from gripper_runtime.tool_plugin import ToolIntent, radial_tool_runtime
 
     experiment = config['internal_grasp_experiment']
     fixture = geometry.fixture(experiment['fixture']['insertion_depth_m'], experiment['fixture']['thickness_m'])
     report['fixture'] = fixture
     report['teaching_poses_rad'] = {key: experiment[key] for key in ('approach', 'insert', 'transfer', 'retreat')}
-    report['experiment_source_sha256'] = {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-                                           for name in ('internal_grasp_experiment.py', 'internal_grasp_geometry.py')}
+    report['experiment_source_sha256'] = {name: hashlib.sha256((Path(__file__).parent / name).read_bytes()).hexdigest()
+                                           for name in ('internal_grasp_experiment.py', 'internal_grasp_geometry.py', 'grasp_cycle_fixture.py',
+                                                        'gripper_runtime/grasp_strategy.py', 'gripper_runtime/tool_plugin.py')}
     report['arm_drive_stiffness_scale'] = experiment['arm_drive_stiffness_scale']
     arm_names = config['robot']['motion']['arm_joint_names']
     settings = config['tool']['runtime']
@@ -86,6 +88,11 @@ def run_internal_grasp(config, geometry, stage, world, robot, prims, arm_indices
                 raise RuntimeError('Measured finger target not reached')
         return float(values[primary_index])
 
+    requirement = {key: fixture[key] for key in ('insertion_depth_m', 'thickness_m', 'inner_radius_m')}
+    requirement['strategy'] = 'internal_radial'
+    tool = radial_tool_runtime(move_fingers, config['tool'], geometry, requirement)
+    report['grasp_strategy'] = dict(name=tool.capture.name, solution=tool.capture.solution)
+
     def make_ring(pose):
         prim = UsdGeom.Xform.Define(stage, ring_path)
         prim.AddTransformOp().Set(Gf.Matrix4d(pose.T.tolist()))
@@ -121,8 +128,11 @@ def run_internal_grasp(config, geometry, stage, world, robot, prims, arm_indices
         while cycles == 0 or cycle < cycles:
             # Reuse the rigid body across repetitions: deleting a body invalidates
             # Isaac tensor views shared with the robot articulation.
-            move_fingers(fixture['contract_position_m'])
-            move_arm(experiment['approach'])
+            # The fixture is positioned while stationary. In native mode the
+            # common BT performs contraction and approach after setup.
+            if task_execution_library is None:
+                tool.command(ToolIntent.RELEASE)
+                move_arm(experiment['approach'])
             target_tcp = link_transforms(geometry.urdf, dict(zip(arm_names, experiment['insert'])))['sf_grasp_tcp']
             # Respect the live base transform (including any importer root transform).
             base_world = transform(prims['base_link'])
@@ -139,7 +149,8 @@ def run_internal_grasp(config, geometry, stage, world, robot, prims, arm_indices
                 UsdGeom.Imageable(stage.GetPrimAtPath(ring_path)).MakeVisible()
             report['cycles'].append({'phases': [], 'max_insertion_radial_error_m': 0., 'minimum_insertion_clearance_m': float('inf')})
             current = report['cycles'][-1]
-            record('CONTRACT')
+            if task_execution_library is None:
+                record('CONTRACT')
 
             def inspect_insertion():
                 relative = relative_ring()
@@ -162,16 +173,9 @@ def run_internal_grasp(config, geometry, stage, world, robot, prims, arm_indices
                 if clearance < .001:
                     raise RuntimeError(f'Insertion collision envelope has insufficient clearance: {clearance}')
 
-            move_arm(experiment['insert'], inspect_insertion)
-            record('INSERT', ring_in_tcp=relative_ring().tolist())
-            measured = move_fingers(fixture['grasp_position_m'])
-            relative = relative_ring()
-            qualify_capture(relative[:3,3], relative[:3,:3], measured, fixture, tolerance)
-            if not attachment.create(ring_path) or not attachment.owned_joint_valid():
-                raise RuntimeError('Logical Attach ownership failed')
-            capture_relative = relative.copy()
-            record('EXPAND/GRASP', ring_in_tcp=relative.tolist())
-            initial_ring_position = transform(stage.GetPrimAtPath(ring_path))[:3,3].copy()
+            capture_relative = None
+            initial_ring_position = None
+            released = None
 
             def inspect_attachment():
                 if not attachment.owned_joint_valid():
@@ -182,27 +186,75 @@ def run_internal_grasp(config, geometry, stage, world, robot, prims, arm_indices
                     raise RuntimeError(f'Ring did not follow selected TCP: {error}')
                 current['max_attachment_position_error_m'] = max(current.get('max_attachment_position_error_m',0.), error)
 
-            move_arm(experiment['transfer'], inspect_attachment)
-            displacement = float(np.linalg.norm(transform(stage.GetPrimAtPath(ring_path))[:3,3]-initial_ring_position))
-            if displacement < .05:
-                raise RuntimeError('Attached ring did not transfer')
-            record('TRANSFER', ring_displacement_m=displacement)
-            move_fingers(fixture['contract_position_m'])
-            if not attachment.remove_owned() or attachment.has_owned_joint():
-                raise RuntimeError('Logical Detach failed')
-            # Gravity-disabled test fixture remains at its release pose. Reset the
-            # residual fixed-joint velocity; this is fixture stability, not grasp.
-            ring.set_linear_velocity(np.zeros(3))
-            ring.set_angular_velocity(np.zeros(3))
-            released = transform(stage.GetPrimAtPath(ring_path)).copy()
-            record('CONTRACT/RELEASE')
-            move_arm(experiment['retreat'], inspect_insertion)
-            final = transform(stage.GetPrimAtPath(ring_path))
-            if attachment.has_owned_joint() or np.linalg.norm(final[:3,3]-released[:3,3]) > .001:
-                raise RuntimeError('Released ring moved with retreating TCP')
-            if relative_ring()[2,3] < fixture['thickness_m']/2 + .005:
-                raise RuntimeError('TCP did not retreat clear of ring')
-            record('RETREAT', released_ring_drift_m=float(np.linalg.norm(final[:3,3]-released[:3,3])))
+            def fixture_callback(event, name):
+                nonlocal capture_relative, initial_ring_position, released
+                if event == 0:  # Existing fixture backend for MoveTaught.
+                    if name == 'approach':
+                        move_arm(experiment[name])
+                    elif name == 'insert':
+                        move_arm(experiment[name], inspect_insertion)
+                        record('INSERT', ring_in_tcp=relative_ring().tolist())
+                    elif name == 'transfer':
+                        move_arm(experiment[name], inspect_attachment)
+                        displacement = float(np.linalg.norm(transform(stage.GetPrimAtPath(ring_path))[:3,3]-initial_ring_position))
+                        if displacement < .05:
+                            raise RuntimeError('Attached ring did not transfer')
+                        record('TRANSFER', ring_displacement_m=displacement)
+                    elif name == 'retreat':
+                        move_arm(experiment[name], inspect_insertion)
+                        final = transform(stage.GetPrimAtPath(ring_path))
+                        if attachment.has_owned_joint() or np.linalg.norm(final[:3,3]-released[:3,3]) > .001:
+                            raise RuntimeError('Released ring moved with retreating TCP')
+                        if relative_ring()[2,3] < fixture['thickness_m']/2 + .005:
+                            raise RuntimeError('TCP did not retreat clear of ring')
+                        record('RETREAT', released_ring_drift_m=float(np.linalg.norm(final[:3,3]-released[:3,3])))
+                    else:
+                        raise ValueError(f'Unknown fixture motion: {name}')
+                elif event == 1:  # Semantic GRASP: measured expansion then attach.
+                    tool.command(ToolIntent.GRASP)
+                    measured = float(robot.get_joint_positions(joint_indices=np.array(finger_indices))[primary_index])
+                    relative = relative_ring()
+                    tool.capture.qualify_capture(relative[:3,3], relative[:3,:3], measured)
+                    if not attachment.create(ring_path) or not attachment.owned_joint_valid():
+                        raise RuntimeError('Logical Attach ownership failed')
+                    capture_relative = relative.copy()
+                    initial_ring_position = transform(stage.GetPrimAtPath(ring_path))[:3,3].copy()
+                    record('EXPAND/GRASP', ring_in_tcp=relative.tolist())
+                elif event == 2:  # Semantic RELEASE, including initial contraction.
+                    tool.command(ToolIntent.RELEASE)
+                    if attachment.has_owned_joint():
+                        if not attachment.remove_owned() or attachment.has_owned_joint():
+                            raise RuntimeError('Logical Detach failed')
+                        ring.set_linear_velocity(np.zeros(3))
+                        ring.set_angular_velocity(np.zeros(3))
+                        released = transform(stage.GetPrimAtPath(ring_path)).copy()
+                        record('CONTRACT/RELEASE')
+                    elif not current['phases']:
+                        record('CONTRACT')
+                elif event == 3:  # Fresh fixture Holding observation.
+                    if attachment.owned_joint_valid():
+                        inspect_attachment()
+                        return 1
+                    measured = float(robot.get_joint_positions(joint_indices=np.array(finger_indices))[primary_index])
+                    return 2 if abs(measured-fixture['release_position_m']) <= tolerance else 0
+                elif event == 4:
+                    return 0 if attachment.owned_joint_valid() else 9
+                elif event == 5:
+                    return 9 if attachment.has_owned_joint() else 0
+                elif event == 6:
+                    tool.command(ToolIntent.STOP)
+                else:
+                    raise ValueError(f'Unknown fixture event: {event}')
+                return 0
+
+            if task_execution_library is not None:
+                from grasp_cycle_fixture import run_task_grasp_cycle
+                current['task_execution'] = run_task_grasp_cycle(
+                    task_execution_library, tool.capture.name, tool.capture.solution, fixture_callback)
+            else:
+                # Compatibility for the original PR #103 isolated experiment.
+                for event, name in ((0, 'insert'), (1, ''), (0, 'transfer'), (2, ''), (0, 'retreat')):
+                    fixture_callback(event, name)
             UsdGeom.Imageable(stage.GetPrimAtPath(ring_path)).MakeInvisible()
             cycle += 1
             if cycles == 0:

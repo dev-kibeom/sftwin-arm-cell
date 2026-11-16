@@ -44,6 +44,21 @@ uint8_t PickExecution::prepare_candidate(bool candidate_inputs_validated)
   const auto & goal = state_.goal;
   state_.approach_submitted = false;
   state_.candidate_inputs_validated = candidate_inputs_validated;
+  if (support_.prepared_grasp()) {
+    if (!support_.prepared_grasp()->valid() ||
+      support_.object_state_tracker().state() != MotionObjectState::NO_OBJECT)
+    {
+      return record_stage(
+        MotionTaskResultCode::TASK_RESULT_INVALID_GOAL, "validation", false, false);
+    }
+    return report_->result_code = MotionTaskResultCode::TASK_RESULT_SUCCESS;
+  }
+  if (support_.gripper() &&
+    !support_.gripper()->supportsGraspStrategy(GraspStrategy::BOX_EXTERIOR))
+  {
+    return record_stage(
+      MotionTaskResultCode::TASK_RESULT_INVALID_GOAL, "grasp_strategy", false, false);
+  }
   const bool valid_pick_approach =
     goal.pick_approach_translation_direction ==
     ExecuteTask::Goal::PICK_APPROACH_TCP_INSERTION_AXIS ||
@@ -158,7 +173,7 @@ uint8_t PickExecution::execute_grasp_insertion(std::uint8_t result)
 
 uint8_t PickExecution::close_and_confirm_grasp()
 {
-  // A CLOSE may physically retain material even when its observation is uncertain.
+  // A GRASP may physically retain material even when its observation is uncertain.
   report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
   auto result = support_.execute_gripper_close(state_.holding_baseline);
   if (result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
@@ -263,6 +278,33 @@ void PickExecution::register_nodes(
       report_->result_code = result; return result;
     };
   register_callback_action(
+    factory, "UsesPreparedGrasp", [this]() {
+      return support_.prepared_grasp() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    });
+  register_callback_action(
+    factory, "UsesPlannedGrasp", [this]() {
+      return support_.prepared_grasp() ? BT::NodeStatus::FAILURE : BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
+    factory, "BeginPreparedGraspInsertion", [this]() {
+      support_.mark_prepared_insertion_started();
+      return BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
+    factory, "RecordTaughtPickApproach", [this]() {
+      execute_approach(report_->result_code);
+      return BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
+    factory, "RecordTaughtPickInsertion", [this]() {
+      execute_grasp_insertion(report_->result_code);
+      return BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
+    factory, "RecordTaughtPickTransfer", [this]() {
+      return domain_status(execute_retract(report_->result_code));
+    });
+  register_callback_action(
     factory, "PreparePickCandidate", [this, set_result]() {
       state_.goal = blackboard_->get<ExecuteTask::Goal>("pick_candidate_goal");
       const bool validated = blackboard_->get<bool>("pick_candidate_inputs_validated");
@@ -325,7 +367,8 @@ void PickExecution::register_nodes(
           return BT::NodeStatus::FAILURE;
         }
       }
-      if (!support_.motion_port()->advanceToNextPlanningCandidate()) {
+      if (support_.prepared_grasp() ||
+        !support_.motion_port()->advanceToNextPlanningCandidate()) {
         return BT::NodeStatus::FAILURE;
       }
       support_.motion_port()->beginPickGraspRelation();

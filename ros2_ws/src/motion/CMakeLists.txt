@@ -82,6 +82,7 @@ add_library(${PROJECT_NAME}_core
   src/pick_grasp_contact.cpp
   src/finger_clearance.cpp
   src/occupancy_intersection.cpp
+  src/box_grasp_collision_policy.cpp
   src/grasp_collision_validator.cpp
   src/pick_state_collision.cpp
   src/pick_approach_ik.cpp
@@ -93,6 +94,7 @@ add_library(${PROJECT_NAME}_core
   src/cartesian_manipulation.cpp
   src/motion_execution_support.cpp
 )
+set_target_properties(${PROJECT_NAME}_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(${PROJECT_NAME}_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>

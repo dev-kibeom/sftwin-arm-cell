@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--configuration', required=True)
     parser.add_argument('--report', required=True)
     parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--task-execution-library', help='Test bridge library for common native Task BT integration')
     parser.add_argument('--internal-grasp', action='store_true', help='Isolated logical bore grasp with teaching poses')
     parser.add_argument('--cycles', type=int, default=0, help='0 repeats until the window closes')
     args = parser.parse_args()
@@ -47,6 +48,8 @@ def main():
     config = json.loads(Path(args.configuration).read_text())
     if config.get('execution_scope') != 'model_only':
         parser.error('A model-only configuration is required')
+    if args.task_execution_library and not args.internal_grasp:
+        parser.error('--task-execution-library requires --internal-grasp')
     if args.internal_grasp and 'internal_grasp_experiment' not in config:
         parser.error('Selected profile has no internal grasp teaching/fixture configuration')
     from isaacsim import SimulationApp
@@ -213,8 +216,9 @@ def main():
         if args.internal_grasp:
             from internal_grasp_experiment import run_internal_grasp
             report['scope'] = 'isolated teaching-pose logical internal grasp; no Mission or physical grasp'
+            report['execution_mode'] = 'common_task_bt_fixture' if args.task_execution_library else 'isolated_fixture'
             run_internal_grasp(config, tool_geometry, stage, world, robot, prims, arm_indices,
-                               indices, step, command, report, args.cycles)
+                               indices, step, command, report, args.cycles, args.task_execution_library)
             report.update(status='PASS', model_id=model.model_id,
                           max_synchronization_error_m=max_sync, sample_count=sample_count,
                           tcp_translation_m=expected_tcp, observed_tip_links=tip_links,

@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)"
 ISAAC_SIM_ROOT="${ISAAC_SIM_ROOT:-$HOME/isaac_sim}"
 if [[ $# -lt 1 ]]; then
-    echo 'Usage: run_model_experiment.sh PROFILE [--headless] [--cycles N] [--internal-grasp]' >&2
+    echo 'Usage: run_model_experiment.sh PROFILE [--headless] [--cycles N] [--internal-grasp] [--task-execution-library SO]' >&2
     exit 2
 fi
 profile="$1"
