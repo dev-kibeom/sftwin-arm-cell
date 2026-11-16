@@ -1,0 +1,1011 @@
+{
+  "segments": 64,
+  "metadata": {
+    "created": "2026-11-16T00:00:00Z",
+    "modified": "2026-11-16T00:00:00Z"
+  },
+  "materials": {
+    "charcoal": {
+      "diffuse": [
+        0.075,
+        0.08,
+        0.077,
+        1
+      ],
+      "specular": [
+        0.16,
+        0.16,
+        0.16,
+        1
+      ],
+      "shininess": 36
+    },
+    "orange": {
+      "diffuse": [
+        0.98,
+        0.265,
+        0.025,
+        1
+      ],
+      "specular": [
+        0.16,
+        0.16,
+        0.16,
+        1
+      ],
+      "shininess": 36
+    },
+    "seal": {
+      "diffuse": [
+        0.018,
+        0.022,
+        0.025,
+        1
+      ],
+      "specular": [
+        0.16,
+        0.16,
+        0.16,
+        1
+      ],
+      "shininess": 36
+    },
+    "steel": {
+      "diffuse": [
+        0.62,
+        0.66,
+        0.68,
+        1
+      ],
+      "specular": [
+        0.45,
+        0.45,
+        0.45,
+        1
+      ],
+      "shininess": 72
+    },
+    "fastener": {
+      "diffuse": [
+        0.16,
+        0.18,
+        0.19,
+        1
+      ],
+      "specular": [
+        0.16,
+        0.16,
+        0.16,
+        1
+      ],
+      "shininess": 36
+    },
+    "led": {
+      "diffuse": [
+        0.2,
+        0.95,
+        0.24,
+        1
+      ],
+      "specular": [
+        0.16,
+        0.16,
+        0.16,
+        1
+      ],
+      "shininess": 36,
+      "emission": [
+        0.12,
+        0.6,
+        0.12,
+        1
+      ]
+    }
+  },
+  "revision": {
+    "macro": "hcr14_visual_revision",
+    "label": "Authored HCR-14 visual meshes SHA256"
+  },
+  "links": {
+    "link0": [
+      {
+        "shape": "body",
+        "center": [
+          0,
+          0,
+          0.009
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.018,
+        "radius": 0.095,
+        "material": "steel",
+        "edge": 0.002
+      },
+      {
+        "shape": "lathe",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "profile": [
+          [
+            0.018,
+            0
+          ],
+          [
+            0.018,
+            0.094
+          ],
+          [
+            0.026,
+            0.094
+          ],
+          [
+            0.05,
+            0.088
+          ],
+          [
+            0.08,
+            0.077
+          ],
+          [
+            0.102,
+            0.074
+          ],
+          [
+            0.107,
+            0.073
+          ],
+          [
+            0.107,
+            0
+          ]
+        ],
+        "material": "charcoal"
+      },
+      {
+        "shape": "bolts",
+        "center": [
+          0,
+          0,
+          0.02
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "pitch_radius": 0.085,
+        "count": 4,
+        "size": 0.0045,
+        "material": "fastener"
+      }
+    ],
+    "link1": [
+      {
+        "shape": "body",
+        "center": [
+          0,
+          0,
+          0.045
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.1,
+        "radius": 0.075,
+        "material": "charcoal",
+        "edge": 0.012
+      },
+      {
+        "shape": "body",
+        "center": [
+          0,
+          -0.051,
+          0.1
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.122,
+        "radius": 0.075,
+        "material": "charcoal",
+        "edge": 0.012
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          0,
+          0.003
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.009,
+        "outer": 0.0758,
+        "inner": 0.07,
+        "material": "seal"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0,
+          -0.113,
+          0.1
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.006,
+        "radius": 0.066,
+        "material": "charcoal",
+        "edge": 0.002
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.111,
+          0.1
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.004,
+        "outer": 0.0748,
+        "inner": 0.07,
+        "material": "seal"
+      },
+      {
+        "shape": "bolts",
+        "center": [
+          0,
+          -0.117,
+          0.1
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "pitch_radius": 0.052,
+        "count": 4,
+        "size": 0.0028,
+        "material": "fastener"
+      }
+    ],
+    "link2": [
+      {
+        "shape": "body",
+        "center": [
+          0,
+          -0.047,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.106,
+        "radius": 0.075,
+        "material": "charcoal",
+        "edge": 0.012
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.003,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.008,
+        "outer": 0.0756,
+        "inner": 0.07,
+        "material": "seal"
+      },
+      {
+        "shape": "lathe",
+        "center": [
+          0,
+          -0.1,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "profile": [
+          [
+            0.015,
+            0
+          ],
+          [
+            0.015,
+            0.071
+          ],
+          [
+            0.06,
+            0.073
+          ],
+          [
+            0.1,
+            0.068
+          ],
+          [
+            0.145,
+            0.06
+          ],
+          [
+            0.19,
+            0.059
+          ],
+          [
+            0.565,
+            0.059
+          ],
+          [
+            0.61,
+            0.061
+          ],
+          [
+            0.66,
+            0.062
+          ],
+          [
+            0.702,
+            0.059
+          ],
+          [
+            0.715,
+            0.055
+          ],
+          [
+            0.715,
+            0
+          ]
+        ],
+        "material": "charcoal"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.1,
+          0.115
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.005,
+        "outer": 0.065,
+        "inner": 0.058,
+        "material": "seal"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.1,
+          0.64
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "length": 0.004,
+        "outer": 0.0625,
+        "inner": 0.056,
+        "material": "seal"
+      }
+    ],
+    "link3": [
+      {
+        "shape": "body",
+        "center": [
+          0,
+          0.034,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.092,
+        "radius": 0.059,
+        "material": "charcoal",
+        "edge": 0.01
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          0.003,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.009,
+        "outer": 0.0595,
+        "inner": 0.054,
+        "material": "seal"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0,
+          -0.014,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.006,
+        "radius": 0.051,
+        "material": "charcoal",
+        "edge": 0.002
+      },
+      {
+        "shape": "bolts",
+        "center": [
+          0,
+          -0.018,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "pitch_radius": 0.04,
+        "count": 4,
+        "size": 0.0024,
+        "material": "fastener"
+      },
+      {
+        "shape": "lathe",
+        "center": [
+          0,
+          0.0755,
+          0
+        ],
+        "axis": [
+          -1,
+          0,
+          0
+        ],
+        "profile": [
+          [
+            0.015,
+            0
+          ],
+          [
+            0.015,
+            0.052
+          ],
+          [
+            0.05,
+            0.055
+          ],
+          [
+            0.08,
+            0.051
+          ],
+          [
+            0.115,
+            0.044
+          ],
+          [
+            0.16,
+            0.043
+          ],
+          [
+            0.42,
+            0.043
+          ],
+          [
+            0.465,
+            0.044
+          ],
+          [
+            0.505,
+            0.045
+          ],
+          [
+            0.535,
+            0.041
+          ],
+          [
+            0.535,
+            0
+          ]
+        ],
+        "material": "orange"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          -0.089,
+          0.0755,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.007,
+        "outer": 0.0505,
+        "inner": 0.043,
+        "material": "seal"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          -0.474,
+          0.0755,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.006,
+        "outer": 0.0456,
+        "inner": 0.04,
+        "material": "seal"
+      }
+    ],
+    "link4": [
+      {
+        "shape": "body",
+        "center": [
+          0,
+          0.0021,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.1512,
+        "radius": 0.045,
+        "material": "orange",
+        "edge": 0.01
+      },
+      {
+        "shape": "body",
+        "center": [
+          -0.03885,
+          -0.0735,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.0777,
+        "radius": 0.0445,
+        "material": "orange",
+        "edge": 0.009
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          0.003,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.007,
+        "outer": 0.0456,
+        "inner": 0.041,
+        "material": "seal"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          0.067,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.002,
+        "outer": 0.0428,
+        "inner": 0.038,
+        "material": "steel"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0,
+          0.078,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.004,
+        "radius": 0.0355,
+        "material": "orange",
+        "edge": 0.001
+      },
+      {
+        "shape": "bolts",
+        "center": [
+          0,
+          0.0805,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "pitch_radius": 0.028,
+        "count": 3,
+        "size": 0.0017,
+        "material": "fastener"
+      }
+    ],
+    "link5": [
+      {
+        "shape": "body",
+        "center": [
+          0.0021,
+          0,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.1512,
+        "radius": 0.045,
+        "material": "orange",
+        "edge": 0.01
+      },
+      {
+        "shape": "body",
+        "center": [
+          -0.0735,
+          -0.03885,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.0777,
+        "radius": 0.0445,
+        "material": "orange",
+        "edge": 0.009
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.007,
+        "outer": 0.0456,
+        "inner": 0.041,
+        "material": "seal"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0.067,
+          0,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.002,
+        "outer": 0.0428,
+        "inner": 0.038,
+        "material": "steel"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0.078,
+          0,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.004,
+        "radius": 0.0355,
+        "material": "orange",
+        "edge": 0.001
+      },
+      {
+        "shape": "bolts",
+        "center": [
+          0.0805,
+          0,
+          0
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "pitch_radius": 0.028,
+        "count": 3,
+        "size": 0.0017,
+        "material": "fastener"
+      }
+    ],
+    "link6": [
+      {
+        "shape": "body",
+        "center": [
+          0,
+          0.032,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.091,
+        "radius": 0.045,
+        "material": "orange",
+        "edge": 0.009
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.007,
+        "outer": 0.0456,
+        "inner": 0.041,
+        "material": "seal"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0,
+          -0.031,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.046,
+        "radius": 0.0445,
+        "material": "steel",
+        "edge": 0.003
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.017,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.004,
+        "outer": 0.0454,
+        "inner": 0.041,
+        "material": "led"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.022,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.002,
+        "outer": 0.0448,
+        "inner": 0.041,
+        "material": "seal"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.0585,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.01,
+        "outer": 0.0315,
+        "inner": 0.01575,
+        "material": "steel"
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0,
+          -0.0636,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "length": 0.0005,
+        "outer": 0.0315,
+        "inner": 0.01575,
+        "material": "steel"
+      },
+      {
+        "shape": "bolts",
+        "center": [
+          0,
+          -0.064,
+          0
+        ],
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "pitch_radius": 0.025,
+        "count": 4,
+        "size": 0.003,
+        "material": "fastener"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0.042,
+          -0.034,
+          -0.013
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.012,
+        "radius": 0.006,
+        "material": "fastener",
+        "edge": 0.001
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0.0485,
+          -0.034,
+          -0.013
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.003,
+        "outer": 0.005,
+        "inner": 0.0028,
+        "material": "seal"
+      },
+      {
+        "shape": "body",
+        "center": [
+          0.042,
+          -0.034,
+          0.013
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.012,
+        "radius": 0.006,
+        "material": "fastener",
+        "edge": 0.001
+      },
+      {
+        "shape": "ring",
+        "center": [
+          0.0485,
+          -0.034,
+          0.013
+        ],
+        "axis": [
+          1,
+          0,
+          0
+        ],
+        "length": 0.003,
+        "outer": 0.005,
+        "inner": 0.0028,
+        "material": "seal"
+      }
+    ]
+  }
+}

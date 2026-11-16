@@ -1,1 +1,1 @@
-This directory selects the independently authored primitive envelopes. It contains no vendor meshes. See ../README.md.
+This directory selects the authored visual shells and primitive collision envelopes. See ../README.md.

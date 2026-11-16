@@ -1,8 +1,9 @@
-# Simulation HOME/Return, radians; not manufacturer/controller teaching data.
+# User-selected simulation HOME in degrees: 180, 0, 0, 0, 90, 0.
+# Radians below; independent of the existing Return posture.
 home_joint_positions:
+- 3.141592653589793
 - 0
 - 0
-- -1.5707963267948966
 - 0
 - 1.5707963267948966
 - 0
