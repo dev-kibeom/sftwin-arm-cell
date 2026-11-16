@@ -70,7 +70,11 @@ print('ISAAC_DATA_ONLY')
     fake_launcher.write_text('#!/bin/sh\nexec python3 -I -c ' + shlex.quote(code) + '\n')
     fake_launcher.chmod(0o755)
     environment = dict(os.environ)
-    environment.pop('PYTHONPATH', None)
+    # Keep ROS Python dependencies needed by the exporter's model validation.
+    # The launcher adds Bringup only for export; the simulator must not inherit it.
+    environment['PYTHONPATH'] = os.pathsep.join(
+        entry for entry in environment.get('PYTHONPATH', '').split(os.pathsep)
+        if entry and 'bringup' not in entry)
     environment['ISAAC_SIM_ROOT'] = str(launcher_root)
     environment['ARM_CELL_RUNTIME_CONFIG'] = str(tmp_path / 'runtime.json')
     environment['ARM_CELL_PROFILE'] = str(PROFILE)

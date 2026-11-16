@@ -113,7 +113,8 @@ def test_common_scene_lifecycle_uses_selected_cell_and_preserves_stop_order(tmp_
                                        'material_supply_factory': 'alternative_lifecycle:supply',
                                        'scene_builder': 'alternative_lifecycle:scene'}},
                      'model_configuration': {'isaac': {'articulation_root': 'root', 'articulation_base': 'base'}},
-                     'motion': {'arm_joint_names': ['joint']}, 'home_joint_positions': [0], 'robot': {}}
+                     'motion': {'arm_joint_names': ['joint']}, 'home_joint_positions': [0],
+                     'robot': {}, 'tool': {'runtime': {}}}
     received = []
     plugin = types.ModuleType('alternative_lifecycle')
     plugin.scene = lambda **kwargs: received.append(kwargs['configuration']) or object()

@@ -283,6 +283,7 @@ ARM_CELL_LOG_LEVEL=info ARM_CELL_DIAGNOSTICS=vision,motion docker compose up --b
 | 런처에서 Python 모듈을 찾지 못함 | 런처 실행에 쓰는 Python으로 requirements를 설치했는지 확인합니다. 가상환경을 사용한다면 활성화합니다. |
 | `ros2_ws/install/setup.bash`가 없음 | 호스트 빌드를 완료합니다. GUI 런처는 Docker 이미지의 빌드 결과를 사용하지 않습니다. |
 | Isaac 실행 파일을 찾지 못함 | `ISAAC_SIM_ROOT`가 `isaac-sim.sh`를 포함한 디렉터리인지 확인합니다. |
+| 모델 변경 후 첫 Isaac 시작이 Play 직후 멈춤 | 공통 `isaac_arm_cell.sh`는 동기 렌더링으로 시작합니다. Isaac 5.1에서 URDF 재생성 후 throttling 확장이 비동기 렌더링을 전환하며 멈추는 경로를 피하기 위한 설정입니다. 직접 실행 시에도 `--/exts/isaacsim.core.throttling/enable_async=false --/app/asyncRendering=false --/app/asyncRenderingLowLatency=false`를 적용합니다. |
 | 실행 터미널이 열리지 않음 | `xterm` 설치와 X11/XWayland 디스플레이를 확인합니다. |
 | ROS 시작이 차단되거나 이미 실행 중이라고 표시됨 | 기존 런처·CLI·Docker 실행을 먼저 종료합니다. 다른 checkout의 프로세스는 자동 정리하지 않습니다. |
 | 영상이나 로봇 상태가 갱신되지 않음 | Timeline이 Play 상태인지, After Playing 초기화가 완료됐는지, Isaac과 ROS의 domain·RMW 설정이 같은지 확인합니다. |
