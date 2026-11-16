@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:macro name="hcr14_visual_revision">
-    <!-- Authored HCR-14 visual meshes SHA256: 8457fb6430b9e568027de25b573fd0b5343df09943b705c93c43e3ea9555b741 -->
+    <!-- Authored HCR-14 visual meshes SHA256: bb23dcba7068d107284b90f63d376a804a812833f5d3615ce72abe47591ea746 -->
   </xacro:macro>
 </robot>

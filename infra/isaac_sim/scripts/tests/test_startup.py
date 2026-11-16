@@ -32,6 +32,9 @@ def test_startup_keeps_before_play_play_after_play_order(monkeypatch, headless):
                                                           log_error=lambda error: pytest.fail(error)))
     monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(SCRIPTS.parents[2]))
     monkeypatch.setenv('SFTWIN_HEADLESS', '1' if headless else '0')
+    from isaac_runtime import runtime_workflow
+    monkeypatch.setattr(runtime_workflow, 'prepare_startup_model',
+                        lambda *_: events.append('prepare'))
     loop = asyncio.new_event_loop()
     monkeypatch.setattr(asyncio, 'ensure_future', loop.create_task)
     try:
@@ -42,5 +45,5 @@ def test_startup_keeps_before_play_play_after_play_order(monkeypatch, headless):
         loop.run_until_complete(namespace['_ARM_CELL_STARTUP_TASK'])
     finally:
         loop.close()
-    assert events == ['update', (SCRIPTS, '1_before_play.py'), 'play', 'update',
+    assert events == ['prepare', 'update', (SCRIPTS, '1_before_play.py'), 'play', 'update',
                       (SCRIPTS, '2_after_play_headless.py' if headless else '2_after_play.py')]

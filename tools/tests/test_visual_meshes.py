@@ -5,6 +5,8 @@ import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 NS = {"c": "http://www.collada.org/2005/11/COLLADASchema"}
 
@@ -120,3 +122,53 @@ def test_sharp_body_and_material_ids_do_not_depend_on_exporter_names(tmp_path):
     assert len(identifiers) == len(set(identifiers))
     for binding in mesh.findall(".//c:instance_material", NS):
         assert binding.get("target")[1:] in identifiers
+
+
+def test_offset_elliptical_sections_form_a_closed_outward_shell():
+    import math
+    import numpy as np
+
+    shell = tool().Shell(32)
+    shell.loft(axis=[0, 0, 1], sections=[
+        [0, 0, 0, 0, 0], [0, 0, 0, .2, .1],
+        [.1, 0, 1, .2, .1], [.1, 0, 1, 0, 0],
+    ], material='paint')
+    points, normals, faces, _ = shell.parts[0]
+    points = np.array(points)
+    assert points.min(axis=0) == pytest.approx([-.2, -.1, 0])
+    assert points.max(axis=0) == pytest.approx([.3, .1, 1])
+    volume = 0
+    for a, b, c in faces:
+        p, q, r = points[[a, b, c]]
+        area = np.cross(q-p, r-p)
+        assert np.linalg.norm(area) > 0
+        volume += np.dot(p, np.cross(q, r))/6
+    assert volume == pytest.approx(math.pi*.2*.1, rel=.01)
+    assert np.linalg.norm(normals, axis=1) == pytest.approx(np.ones(len(normals)))
+
+
+def test_swept_elbow_has_outward_faces_and_perpendicular_end_sections():
+    import math
+    import numpy as np
+
+    radius, tube = .1, .02
+    path = [[-radius*(1-math.cos(a)), radius*math.sin(a), 0, tube, tube]
+            for a in np.linspace(0, math.pi/2, 33)]
+    shell = tool().Shell(32)
+    shell.sweep(normal=[0, 0, 1], sections=[
+        [*path[0][:3], 0, 0], *path, [*path[-1][:3], 0, 0],
+    ], material='paint')
+    points, normals, faces, _ = shell.parts[0]
+    points = np.array(points)
+    volume = sum(np.dot(points[a], np.cross(points[b], points[c]))/6
+                 for a, b, c in faces)
+    assert volume == pytest.approx(math.pi*tube**2 * math.pi*radius/2, rel=.015)
+    # End rings are perpendicular to the local path, rather than all parallel.
+    first, last = points[32:64], points[-64:-32]
+    assert np.ptp(first[:, 1]) < .001
+    assert np.ptp(last[:, 0]) < .001
+    assert np.linalg.norm(normals, axis=1) == pytest.approx(np.ones(len(normals)))
+    for a, b, c in faces:
+        face_normal = np.cross(points[b]-points[a], points[c]-points[a])
+        assert np.linalg.norm(face_normal) > 0
+        assert np.dot(face_normal, np.array(normals)[[a, b, c]].mean(axis=0)) > 0

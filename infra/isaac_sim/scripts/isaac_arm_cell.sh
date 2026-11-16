@@ -37,4 +37,12 @@ else
         --profile "${ARM_CELL_PROFILE:-$PROJECT_ROOT/ros2_ws/src/bringup/config/operational_profile.yaml}" \
         --output "$ARM_CELL_RUNTIME_CONFIG"
 fi
-exec "$ISAAC_LAUNCHER" "$@" --exec "$STARTUP_SCRIPT"
+# Full Kit enables async rendering while stopped, then switches it off on Play.
+# After an in-process URDF import that switch can deadlock in Isaac 5.1's
+# throttling callback. Start synchronous so asset preparation and Play use one
+# rendering mode. Explicit caller settings still follow these defaults.
+exec "$ISAAC_LAUNCHER" \
+    --/exts/isaacsim.core.throttling/enable_async=false \
+    --/app/asyncRendering=false \
+    --/app/asyncRenderingLowLatency=false \
+    "$@" --exec "$STARTUP_SCRIPT"

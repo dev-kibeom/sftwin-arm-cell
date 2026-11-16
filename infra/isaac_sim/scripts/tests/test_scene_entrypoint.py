@@ -13,6 +13,32 @@ def _isolated(code, *args):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_launcher_starts_with_synchronous_rendering_before_asset_import(tmp_path):
+    import json
+    import os
+    import shlex
+
+    snapshot = tmp_path / 'runtime.json'
+    snapshot.write_text('{}')
+    launcher = tmp_path / 'isaac-sim.sh'
+    launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(sys.executable)
+                        + ' -I -c ' + shlex.quote('import json,sys; print(json.dumps(sys.argv[1:]))')
+                        + ' "$@"\n')
+    launcher.chmod(0o755)
+    result = subprocess.run(
+        ['bash', str(SCRIPTS / 'isaac_arm_cell.sh'), '--runtime-config', str(snapshot), '--no-window'],
+        env={**os.environ, 'ISAAC_SIM_ROOT': str(tmp_path)}, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    arguments = json.loads(result.stdout)
+    settings = dict(argument[2:].split('=', 1) for argument in arguments
+                    if argument.startswith('--/') and '=' in argument)
+    assert settings['/exts/isaacsim.core.throttling/enable_async'] == 'false'
+    assert settings['/app/asyncRendering'] == 'false'
+    assert settings['/app/asyncRenderingLowLatency'] == 'false'
+    assert '--no-window' in arguments
+    assert arguments[arguments.index('--exec') + 1] == str(SCRIPTS / 'isaac_arm_cell_startup.py')
+
+
 def test_alternate_builder_runs_in_checkout_without_m0609(tmp_path):
     (tmp_path / 'scene_entrypoint.py').write_text((SCRIPTS / 'scene_entrypoint.py').read_text())
     (tmp_path / 'other_cell.py').write_text(

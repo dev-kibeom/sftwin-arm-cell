@@ -87,6 +87,75 @@ class Shell:
                         faces.append(face)
         self.parts.append((points, normals, faces, material))
 
+    def loft(self, axis, sections, material):
+        """Join parallel elliptical sections [x,y,z,u_radius,v_radius].
+
+        Section centres may shift sideways to form offset housings. Zero-radius
+        first/last sections close the shell; order follows the positive axis.
+        """
+        axis = unit(axis)
+        u = unit(cross((0, 1, 0) if abs(axis[2]) > 0.9 else (0, 0, 1), axis))
+        v = cross(axis, u)
+        self._validate_sections(sections)
+        self._section_mesh(sections, [(u, v)] * len(sections), material)
+
+    @staticmethod
+    def _validate_sections(sections):
+        if len(sections) < 2 or any(
+            len(s) != 5 or not all(math.isfinite(x) for x in s)
+            or s[3] < 0 or s[4] < 0 for s in sections
+        ):
+            raise ValueError("sections require finite centres and nonnegative radii")
+
+    def sweep(self, normal, sections, material):
+        """Sweep elliptical rings along a planar path, with local tangent frames.
+
+        Unlike loft, rings turn with the path, so a joint elbow is one continuous
+        surface rather than two intersecting cylinders. normal is the bend-plane
+        normal and the first radius direction. Duplicate endpoint centres allow
+        a closed cap without changing the path tangent.
+        """
+        self._validate_sections(sections)
+        normal = unit(normal)
+        frames = []
+        for index, section in enumerate(sections):
+            center = section[:3]
+            before = next((s[:3] for s in reversed(sections[:index])
+                           if s[:3] != center), center)
+            after = next((s[:3] for s in sections[index+1:]
+                          if s[:3] != center), center)
+            tangent = unit(tuple(b-a for a, b in zip(before, after)))
+            if abs(sum(a*b for a, b in zip(tangent, normal))) > 1e-6:
+                raise ValueError("sweep path must lie in a plane perpendicular to normal")
+            frames.append((normal, unit(cross(tangent, normal))))
+        self._section_mesh(sections, frames, material)
+
+    def _section_mesh(self, sections, frames, material):
+        points, faces = [], []
+        for (x, y, z, ru, rv), (u, v) in zip(sections, frames):
+            for column in range(self.segments):
+                angle = 2 * math.pi * column / self.segments
+                points.append(tuple(c + ru * math.cos(angle) * a
+                                    + rv * math.sin(angle) * b
+                                    for c, a, b in zip((x, y, z), u, v)))
+        normals = [[0., 0., 0.] for _ in points]
+        for row in range(len(sections) - 1):
+            for column in range(self.segments):
+                a = row * self.segments + column
+                b = row * self.segments + (column + 1) % self.segments
+                for face in ((a, b, b + self.segments),
+                             (a, b + self.segments, a + self.segments)):
+                    p, q, r = (points[i] for i in face)
+                    area = cross(tuple(y-x for x, y in zip(p, q)),
+                                 tuple(y-x for x, y in zip(p, r)))
+                    if sum(x*x for x in area) <= 1e-22:
+                        continue
+                    faces.append(face)
+                    for index in face:
+                        normals[index] = [a+b for a, b in zip(normals[index], area)]
+        normals = [unit(n) if any(n) else unit(cross(*frames[0])) for n in normals]
+        self.parts.append((points, normals, faces, material))
+
     def body(self, center, axis, length, radius, material, edge=0.006):
         if length <= 0 or radius <= 0 or edge < 0:
             raise ValueError("body dimensions must be positive and edge nonnegative")
@@ -287,6 +356,8 @@ def generate(source, output=None):
         operations = {
             "body": shell.body,
             "lathe": shell.lathe,
+            "loft": shell.loft,
+            "sweep": shell.sweep,
             "ring": shell.ring,
             "bolts": shell.bolts,
         }
