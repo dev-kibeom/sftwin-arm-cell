@@ -104,6 +104,19 @@ def validate_model_configuration(config):
             chain.get('tip_link') != 'sf_grasp_tcp'):
         raise ValueError('Assembly planning group requires the canonical base-to-TCP chain')
     by_child = {joint.find('child').get('link'): joint for joint in joints.values()}
+    mount_links = names(model.get('mount_collision_links'), 'Assembly mount_collision_links', links)
+    if not mount_links:
+        raise ValueError('Assembly mount_collision_links must not be empty')
+    for name in mount_links:
+        if urdf.find(f"link[@name='{name}']/collision") is None:
+            raise ValueError('Assembly mount_collision_links requires collision geometry')
+        cursor, visited = name, set()
+        while cursor != 'base_link':
+            joint = by_child.get(cursor)
+            if cursor in visited or joint is None or joint.get('type') != 'fixed':
+                raise ValueError('Assembly mount_collision_links must be fixed to base_link')
+            visited.add(cursor)
+            cursor = joint.find('parent').get('link')
     chain_names = []
     cursor = 'sf_grasp_tcp'
     visited = set()
@@ -163,6 +176,11 @@ def validate_model_configuration(config):
     tool_runtime_model(tool, joints, arm)
     geometry = yaml.safe_load(Path(cell['geometry']).read_text())
     static_scene = yaml.safe_load(Path(cell['static_scene']).read_text())
+    mount_object = cell['contact_objects'].get('robot_mount')
+    if not isinstance(mount_object, str) or not mount_object or any(
+            mount_object not in {obj['id'] for obj in source['objects']}
+            for source in (geometry, static_scene)):
+        raise ValueError('Cell robot_mount contact object must exist in geometry and static_scene')
     contact = cell['contact_objects']['pick_retract']
     if any(contact not in {obj['id'] for obj in source['objects']}
            for source in (geometry, static_scene)):

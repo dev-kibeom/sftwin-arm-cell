@@ -348,6 +348,7 @@ private:
   double pick_ik_timeout_s_{1.0};
   GraspOccupancyMode grasp_occupancy_mode_{GraspOccupancyMode::FULL_COLLISION};
   FingerClearanceParameters finger_clearance_;
+  GraspMountContact grasp_mount_contact_;
   double pick_grasp_ik_timeout_s_{1.0};
   double pick_approach_ik_timeout_s_{1.0};
   std::mutex pick_search_budget_mutex_;

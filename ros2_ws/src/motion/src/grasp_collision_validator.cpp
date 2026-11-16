@@ -1,5 +1,6 @@
 #include "arm_cell_motion/grasp_collision_validator.hpp"
 #include <stdexcept>
+#include <unordered_set>
 #include <geometric_shapes/shapes.h>
 
 namespace arm_cell_motion
@@ -30,11 +31,34 @@ GraspCollisionValidationResult validate_grasp_collision(
   const Eigen::Vector3d & insertion_axis_tcp,
   const std::vector<arm_cell_interfaces::msg::CollisionPrimitive> & occupancy,
   const FingerClearanceParameters & parameters, const std::string & planning_group,
-  const std::optional<Eigen::Vector3d> & target_dimensions)
+  const std::optional<Eigen::Vector3d> & target_dimensions,
+  const GraspMountContact & mount_contact)
 {
   GraspCollisionValidationResult result;
   result.mode = mode;
   result.evaluated = true;
+  // Direct parameter callers must not turn a movable link into a mount
+  // exemption. Source composition also checks these model references.
+  bool mount_valid = mount_contact.links.empty() == mount_contact.object_id.empty();
+  std::unordered_set<std::string> mount_links;
+  for (const auto & name : mount_contact.links) {
+    const auto * link = state.getRobotModel()->getLinkModel(name);
+    if (!mount_links.insert(name).second || !link || link->getShapes().empty()) {
+      mount_valid = false;
+      break;
+    }
+    while (link && link->getName() != "base_link") {
+      const auto * joint = link->getParentJointModel();
+      if (!joint || joint->getType() != moveit::core::JointModel::FIXED) {break;}
+      link = link->getParentLinkModel();
+    }
+    if (!link || link->getName() != "base_link") {mount_valid = false;}
+  }
+  if (!mount_valid) {
+    result.valid = false;
+    result.reason = "INVALID_MOUNT_CONTACT";
+    return result;
+  }
   moveit::core::RobotState grasp_state(state);
   const auto copy_scene = [](const planning_scene::PlanningScene & source) {
       auto copy = std::make_shared<planning_scene::PlanningScene>(source.getRobotModel());
@@ -47,14 +71,13 @@ GraspCollisionValidationResult validate_grasp_collision(
     };
   auto common = copy_scene(common_scene);
   auto full = copy_scene(full_scene);
-  // The fixed robot base is mounted on this riser. Whole-robot endpoint
-  // checks include that installation contact; only this exact pair is exempt.
-  // Apply to private copies so shared scene policy and other contacts survive.
+  // Installation contact applies only to the declared pairs in these private
+  // endpoint scenes; shared scenes and all other contacts retain their policy.
   for (const auto & scene : {common, full}) {
-    if (state.getRobotModel()->hasLinkModel("base_link") &&
-      scene->getWorld()->hasObject("robot_riser"))
-    {
-      scene->getAllowedCollisionMatrixNonConst().setEntry("base_link", "robot_riser", true);
+    if (scene->getWorld()->hasObject(mount_contact.object_id)) {
+      for (const auto & link : mount_contact.links) {
+        scene->getAllowedCollisionMatrixNonConst().setEntry(link, mount_contact.object_id, true);
+      }
     }
   }
   std::string collision_group = planning_group;

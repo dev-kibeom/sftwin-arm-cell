@@ -243,6 +243,10 @@ MotionNode::MotionNode(
   const auto tool_width_control = declare_parameter<bool>("tool_width_control", true);
   const auto payload_touch_links = declare_parameter<std::vector<std::string>>(
     "payload_touch_links", std::vector<std::string>{});
+  const auto grasp_mount_contact_links = declare_parameter<std::vector<std::string>>(
+    "grasp_mount_contact_links", std::vector<std::string>{});
+  const auto grasp_mount_contact_object = declare_parameter<std::string>(
+    "grasp_mount_contact_object", "");
   const auto pick_retract_contact_links = declare_parameter<std::vector<std::string>>(
     "pick_retract_contact_links", std::vector<std::string>{});
   const auto pick_retract_contact_object = declare_parameter<std::string>(
@@ -462,6 +466,8 @@ MotionNode::MotionNode(
         rclcpp::Parameter("tool_grasp_collision_links", tool_grasp_collision_links),
         rclcpp::Parameter("tool_width_control", tool_width_control),
         rclcpp::Parameter("payload_touch_links", payload_touch_links),
+        rclcpp::Parameter("grasp_mount_contact_links", grasp_mount_contact_links),
+        rclcpp::Parameter("grasp_mount_contact_object", grasp_mount_contact_object),
         rclcpp::Parameter("pick_retract_contact_links", pick_retract_contact_links),
         rclcpp::Parameter("pick_retract_contact_object", pick_retract_contact_object),
         rclcpp::Parameter("wrap_equivalent_joints", wrap_equivalent_joints),

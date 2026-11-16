@@ -85,6 +85,8 @@ Robot·Tool의 논리 설정과 결합 URDF/SRDF 모델 자산의 선택은 구�
 
 Bringup은 원본 설정을 조립할 때 Robot의 관절·Limits·HOME과 선택 Assembly의 관절 체인·Identity·Planning Group, Tool의 접촉 Link 및 Cell 참조의 정합성을 확인한다. 이 검사는 실행 중 관측이나 USD Topology 검증을 대신하지 않으며, export된 Runtime Configuration을 읽을 때 원본 자산을 재검증하는 Runtime Gate를 추가하지 않는다.
 
+고정 설치 접촉의 모델 내부 충돌 Link는 Model Assembly가, 설치 상대 객체는 Cell이 선언한다. Bringup은 원본 설정 조립 시 설치 Link의 형상·베이스 고정 연결과 Cell 객체 참조를 검증해 Motion에 전달한다. 접촉 예외의 적용 구간과 제한은 [Motion Execution FDS](../components/motion/fds-motion-execution.md)의 Grasp Occupancy 전략이 소유한다.
+
 Bringup은 선택된 Cell의 Camera·Material Supply Binding을 기존 Runtime Configuration에 조립·검증·export한다. Isaac Scene·Camera Graph·Snapshot·Material Supply와 ROS Camera Overlay는 같은 선택값을 소비하며 별도 기본 Cell을 다시 선택하지 않는다. Camera 설치 및 공급 위치는 Cell의 기존 Geometry를 참조해 유도하고, Camera Geometry 도출·RGB-D 발행 및 자재 공급 알고리즘과 실행 생명주기는 기존 Owner에 남는다. Launcher는 Profile 선택과 프로세스 실행을 담당한다.
 
 Motion은 Robot·Tool·Cell의 입력을 소비해 기존 좌표 변환·계획·실행을 수행한다. Tool 데이터의 소유권은 Motion의 target 변환 책임을 이전하지 않는다. Material의 형상·파지 Offset과 Mission의 자재·작업 선택 구조는 유지하며, 작업의 장소는 Cell이, 작업의 Approach·허용오차 등 정책은 해당 작업 Owner가 소유한다. Process Profile은 현재 도입하지 않는다. Profile 선택은 다중 로봇의 동시 실행이나 실물 Backend의 준비 완료를 보장하지 않는다.

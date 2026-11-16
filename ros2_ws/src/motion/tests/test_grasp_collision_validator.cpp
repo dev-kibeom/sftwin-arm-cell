@@ -541,14 +541,21 @@ TEST_F(ClosedGraspCollisionTest, OtherFloorObjectsAndBodyFloorContactsStayForbid
 
 namespace arm_cell_motion
 {
-TEST(GraspMountContact, AllowsOnlyFixedBaseRiserPair)
+class GraspMountContactTest : public ::testing::TestWithParam<std::string> {};
+
+TEST_P(GraspMountContactTest, AllowsOnlyDeclaredFixedBasePair)
 {
   moveit::core::RobotModelBuilder builder("mount", "base_link");
+  const auto mount_link = GetParam();
+  const GraspMountContact mount_contact{{mount_link}, "robot_riser"};
+  if (mount_link != "base_link") {
+    builder.addChain("base_link->" + mount_link, "fixed");
+  }
   builder.addChain("base_link->tool", "prismatic");
   builder.addGroupChain("base_link", "tool", "arm");
   geometry_msgs::msg::Pose origin;
   origin.orientation.w = 1.0;
-  builder.addCollisionBox("base_link", {0.02, 0.02, 0.02}, origin);
+  builder.addCollisionBox(mount_link, {0.02, 0.02, 0.02}, origin);
   builder.addCollisionBox("tool", {0.02, 0.02, 0.02}, origin);
   auto model = builder.build();
   moveit::core::RobotState state(model);
@@ -557,25 +564,49 @@ TEST(GraspMountContact, AllowsOnlyFixedBaseRiserPair)
   state.update();
   planning_scene::PlanningScene scene(model);
   scene.getAllowedCollisionMatrixNonConst().setEntry("base_link", "tool", true);
+  scene.getAllowedCollisionMatrixNonConst().setEntry(mount_link, "tool", true);
   scene.getWorldNonConst()->addToObject(
     "robot_riser", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
     Eigen::Isometry3d::Identity());
-  for (auto mode : {GraspOccupancyMode::NONE, GraspOccupancyMode::FULL_COLLISION}) {
-    auto result = validate_grasp_collision(
-      mode, scene, scene, state, Eigen::Isometry3d::Identity(),
-      Eigen::Vector3d::Zero(), Eigen::Quaterniond::Identity(), std::nullopt,
-      Eigen::Vector3d::UnitZ(), {}, {}, "");
+  for (auto mode : kModes) {
+    const auto check = [&](const GraspMountContact & policy) {
+        return validate_grasp_collision(
+          mode, scene, scene, state, Eigen::Isometry3d::Identity(),
+          Eigen::Vector3d::Zero(), Eigen::Quaterniond::Identity(), BoxGraspContact{0U, 60.0},
+          Eigen::Vector3d::UnitZ(), {}, {}, "", std::nullopt, policy);
+      };
+    // No declaration must not inherit a hidden robot-specific exemption.
+    EXPECT_FALSE(check({}).allowed);
+    for (const auto & invalid : std::vector<GraspMountContact>{
+        {{"tool"}, "robot_riser"}, {{"missing"}, "robot_riser"},
+        {{mount_link, mount_link}, "robot_riser"}, {{mount_link}, ""},
+        {{}, "robot_riser"}})
+    {
+      const auto rejected = check(invalid);
+      EXPECT_FALSE(rejected.valid);
+      EXPECT_FALSE(rejected.allowed);
+    }
+    auto result = check(mount_contact);
     EXPECT_TRUE(result.allowed);
     EXPECT_TRUE(validate_pick_state_collision(scene, state, "").collision);
     state.setVariablePosition("base_link-tool-joint", 0.0);
     state.update();
-    result = validate_grasp_collision(
-      mode, scene, scene, state, Eigen::Isometry3d::Identity(),
-      Eigen::Vector3d::Zero(), Eigen::Quaterniond::Identity(), std::nullopt,
-      Eigen::Vector3d::UnitZ(), {}, {}, "");
+    result = check(mount_contact);
     EXPECT_FALSE(result.allowed);
     state.setVariablePosition("base_link-tool-joint", 0.5);
     state.update();
+    scene.getWorldNonConst()->addToObject(
+      "other_fixture", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
+      Eigen::Isometry3d::Identity());
+    EXPECT_FALSE(check(mount_contact).allowed);
+    scene.getWorldNonConst()->removeObject("other_fixture");
+    scene.getWorldNonConst()->removeObject("robot_riser");
+    EXPECT_TRUE(check(mount_contact).allowed);
+    scene.getWorldNonConst()->addToObject(
+      "robot_riser", shapes::ShapeConstPtr(new shapes::Box(0.02, 0.02, 0.02)),
+      Eigen::Isometry3d::Identity());
   }
 }
+INSTANTIATE_TEST_SUITE_P(
+  BaseGeometry, GraspMountContactTest, ::testing::Values("base_link", "link0"));
 }
