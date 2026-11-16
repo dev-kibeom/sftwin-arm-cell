@@ -19,6 +19,7 @@
 #include <arm_cell_interfaces/msg/disturbance_outcome.hpp>
 #include <arm_cell_interfaces/msg/motion_status.hpp>
 #include <arm_cell_interfaces/msg/motion_task_result_code.hpp>
+#include <arm_cell_interfaces/msg/motion_task_type.hpp>
 #include <arm_cell_interfaces/msg/safety_cause_set.hpp>
 #include <unique_identifier_msgs/msg/uuid.hpp>
 
@@ -284,6 +285,17 @@ public:
   {
     (void)task_type; (void)execution_id; (void)movement_id;
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+  }
+  // Named taught joint movement; speed and target are owned by Motion configuration.
+  virtual std::uint8_t executeTaughtMotion(
+    const std::string & motion, const std::string & execution_id,
+    const std::string & movement_id)
+  {
+    if (motion == "home") {
+      return executeLegacyMovement(
+        arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME, execution_id, movement_id);
+    }
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
   virtual std::uint8_t executePlaceRecoveryJointTarget(
     const unique_identifier_msgs::msg::UUID & execution_id, const std::string & movement_id)

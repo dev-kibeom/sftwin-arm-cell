@@ -64,6 +64,7 @@ struct NormalizedMotionRequest
   double retract_distance_m{0.0};
   double estimated_object_height_m{0.0};
   double motion_speed_fraction{1.0};
+  std::string taught_motion;
   bool is_disturbance{false};
   double place_position_tolerance_m{0.0};
   double place_orientation_tolerance_rad{0.0};
@@ -157,6 +158,19 @@ public:
   {
     (void)motion_goal_uuid;
     return execute_task(goal);
+  }
+  virtual uint8_t execute_taught_motion(
+    const std::string & motion, const std::string & execution_id,
+    const std::function<uint8_t()> & interruption)
+  {
+    (void)interruption;
+    if (motion == "home") {
+      arm_cell_interfaces::action::ExecuteTask::Goal goal;
+      goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+      return execute_task(goal, execution_id);
+    }
+    if (motion == "return_material") {return execute_joint_target();}
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
   virtual uint8_t execute_joint_target()
   {

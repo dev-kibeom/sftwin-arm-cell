@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <sstream>
 #include <thread>
 
@@ -193,7 +194,7 @@ uint8_t MotionCore::accept_goal_impl(
   std::string * diagnostic_detail, const MotionPortRequest * motion_request,
   const ExecuteTask::Goal * named_task, bool joint_target, const std::string & movement_id,
   NormalizedTrajectoryPlan * planning_output, bool retain_planned_operation,
-  std::uint64_t * retained_plan_id_output)
+  std::uint64_t * retained_plan_id_output, const std::string & taught_motion)
 {
   const auto goal_id = uuid_string(goal_uuid);
   {
@@ -355,11 +356,13 @@ uint8_t MotionCore::accept_goal_impl(
   uint8_t execution_result = MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
   {
     try {
-      execution_result = motion_request ? (planning_output ?
+      execution_result = !taught_motion.empty() ?
+        motion_execution_support_->execute_taught_motion(taught_motion, goal_id) :
+        motion_request ? (planning_output ?
         motion_execution_support_->plan_motion(*motion_request, *planning_output) :
         motion_execution_support_->execute_motion(*motion_request)) :
         named_task ? motion_execution_support_->execute_task(*named_task, goal_id) :
-        joint_target ? motion_execution_support_->execute_joint_target() :
+        joint_target ? motion_execution_support_->execute_joint_target(goal_id) :
         MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
     } catch (...) {
       throw;
@@ -1410,6 +1413,24 @@ std::uint8_t MotionCore::executeLegacyMovement(
   return accept_goal_impl(
     parse_uuid(execution_id), task_type, Clock::now(), true, true,
     nullptr, nullptr, &legacy_movement, false, movement_id);
+}
+
+std::uint8_t MotionCore::executeTaughtMotion(
+  const std::string & motion, const std::string & execution_id, const std::string & movement_id)
+{
+  const auto uuid = parse_uuid(execution_id);
+  if (motion.empty() || movement_id.empty() || execution_id.size() != 32U ||
+    !std::all_of(
+      execution_id.begin(), execution_id.end(), [](unsigned char value) {
+        return std::isxdigit(value) != 0;
+      }) ||
+    std::none_of(uuid.uuid.begin(), uuid.uuid.end(), [](std::uint8_t byte) {return byte != 0U;}))
+  {
+    return MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+  }
+  return accept_goal_impl(
+    uuid, MotionTaskType::TASK_TYPE_GO_HOME, Clock::now(), true, true,
+    nullptr, nullptr, nullptr, false, movement_id, nullptr, false, nullptr, motion);
 }
 
 std::uint8_t MotionCore::executePlaceRecoveryJointTarget(

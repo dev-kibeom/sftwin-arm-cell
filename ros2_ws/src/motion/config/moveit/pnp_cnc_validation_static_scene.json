@@ -254,7 +254,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "66da3d0af239e9997383f99866f3a01b3154859788c6ed02f537bc8c344b4957",
+    "canonical_manifest_sha256": "76ae0650211a9c592dca2d0e05a0818560bf02d5484a74fff92beb7e0d86d773",
     "selection_sha256": "cf7eff5d33421569394902e45a5001695360ff0fb6e1f62e6e431122a4f7dafb"
   }
 }

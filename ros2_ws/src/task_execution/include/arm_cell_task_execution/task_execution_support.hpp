@@ -57,6 +57,7 @@ public:
     std::uint8_t phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_PLANNING);
   MotionPortResult execute_planned_motion(
     const MotionPlan & plan, bool completes_operation = true);
+  std::uint8_t execute_taught_motion(const std::string & motion);
   std::uint8_t execute_legacy_movement(std::uint8_t task_type);
   std::uint8_t execute_place_recovery_joint_target();
   MotionCancelResult cancel_active_motion(const unique_identifier_msgs::msg::UUID & execution_id);

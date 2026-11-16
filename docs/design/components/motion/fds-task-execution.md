@@ -877,6 +877,22 @@ PICK·PLACE 작업 위치에서 HOME으로의 이동은 부착 자재가 있는 
 
 GO_HOME은 기존 HOME 관절 자세로 이동하며, 명시적 설정이 없는 한 무관한 Gripper 부작용을 발생시켜서는 안 된다. Home 도달 자체가 작업 성공 조건이므로 기존 관절 명령 완료 판정을 유지한다. HOME은 충돌 없는 이동 환경이 보장된 고정 관절 자세이며, 이 설계는 GO_HOME에 추가 IK·경유지 탐색이나 무제한 경로 재계획을 추가하지 않는다. 실제 Backend·상태·Safety·취소·명령 완료 오류는 기존 Terminal 계약을 따른다.
 
+### 이름 기반 티칭 이동과 속도 설정
+
+GO_HOME과 트레이 반환 이동은 Motion이 소유한 단일 티칭 설정 파일의 이름을 사용한다.
+`home`과 `payload_home`은 선택 Robot의 기존 HOME 목표를, `return_material`은 기존
+트레이 반환 목표를 참조한다. 이 예약 이름의 목표 의미를 다른 자세로 바꿀 수 없다.
+추가 이름은 `arm_joint_names` 순서의 유한 관절 위치(rad)를 등록한다.
+
+각 동작의 `velocity_scale`과 `acceleration_scale`은 Robot model 한계 대비 `(0, 1]`
+비율이다. PICK/PLACE의 일반 planning scale과 독립적이며 현재 Safety envelope 비율을
+곱해 적용한다. 현재 측정 상태에서 고정 관절 목표까지 유한 budget으로 경로를 계획하고,
+최종 시간 매개변수화 이후에도 이 한계가 유지되는 궤적을 simulation clock으로 실행한다.
+시간 궤적을 실행할 수 없으면 단일 목표 명령으로 대체하지 않고 실패한다. GO_HOME과
+독립 티칭 이동은 궤적 전송 완료 이후에도 기존 연속 피드백 기반 목표 도달을 확인한다.
+자재를 잡고 있으면 해당 payload를 포함한 Scene으로 계획하며, 알 수 없는 동작이나
+잘못된 설정은 움직임을 실행하지 않는다. 중단 이후 계획 결과로 이동을 재개하지 않는다.
+
 ## 5. RETRACT
 
 RETRACT는 제한된 Recovery 작업이며 Goal 도달과 Safety Recovery 계약을 그대로 적용한다.

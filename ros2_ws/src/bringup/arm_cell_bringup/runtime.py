@@ -139,6 +139,13 @@ def compose_owner_profiles(config, path, *, tool_actuator=None, tool_grasp=None)
     owner_path = resolve(reference, path.parent)
     config['motion_configuration'] = {key: str(resolve(value, owner_path.parent))
                                       for key, value in read(owner_path).items()}
+    taught_path = resolve(config.pop('taught_motion_configuration',
+        'package://arm_cell_motion/config/taught_motions.yaml'), path.parent)
+    taught = read(taught_path)
+    if set(taught) != {'motions'} or not isinstance(taught['motions'], dict):
+        raise ValueError('Taught motion configuration requires a motions mapping')
+    merge_owned(motion, {'taught_motions_json': json.dumps(taught['motions'], allow_nan=False)},
+                'motion')
     validate_model_configuration(config)
     for key in ('planning_group', 'model_id'):
         merge_owned(motion, {key: model[key]}, 'motion')

@@ -1,4 +1,5 @@
 #include "arm_cell_task_execution/motion_bt_executor.hpp"
+#include "arm_cell_task_execution/taught_motion_action.hpp"
 
 #include <array>
 #include <exception>
@@ -142,6 +143,7 @@ MotionBtExecutionResult MotionBtExecutor::execute(
   BT::BehaviorTreeFactory factory;
   register_candidate_search_control(factory);
   register_task_selector(factory);
+  register_taught_motion_action(factory, support_, report);
   register_wait_action(factory, support_.interruption_checker(), report);
   factory.registerBuilder<UnsupportedWaypointNode>(
     "UnsupportedWaypoint",
@@ -176,8 +178,8 @@ MotionBtExecutionResult MotionBtExecutor::execute(
 
   const auto config_directory = ament_index_cpp::get_package_share_directory(
     "arm_cell_task_execution") + "/config/";
-  for (const auto * file : std::array<const char *, 6>{
-      "pick_recovery.xml", "pick_execution.xml", "place_recovery.xml",
+  for (const auto * file : std::array<const char *, 7>{
+      "held_object_return.xml", "pick_recovery.xml", "pick_execution.xml", "place_recovery.xml",
       "pick_candidate_search.xml", "place_execution.xml", "motion_tasks.xml"})
   {
     factory.registerBehaviorTreeFromFile(config_directory + file);

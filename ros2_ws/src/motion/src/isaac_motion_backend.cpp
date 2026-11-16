@@ -95,13 +95,12 @@ uint8_t IsaacMotionBackend::execute_task(
   if (!available()) {
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
   }
-  if (!transport_->submit(goal, motion_goal_uuid)) {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+  if (goal.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME) {
+    return execute_taught_motion("home", motion_goal_uuid, {});
   }
-  if (goal.task_type.value != arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME) {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS;
-  }
-  return transport_->wait_for_joint_target_result();
+  return transport_->submit(goal, motion_goal_uuid) ?
+         arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS :
+         arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
 }
 
 uint8_t IsaacMotionBackend::execute_normalized(const NormalizedMotionRequest & request)
@@ -219,6 +218,16 @@ uint8_t IsaacMotionBackend::execute_planned_normalized(
     transport_->record_task_accuracy(request, result);
   }
   return result;
+}
+
+uint8_t IsaacMotionBackend::execute_taught_motion(
+  const std::string & motion, const std::string & execution_id,
+  const std::function<uint8_t()> & interruption)
+{
+  if (!available()) {
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
+  }
+  return transport_->execute_taught_motion(motion, execution_id, interruption);
 }
 
 uint8_t IsaacMotionBackend::execute_joint_target()

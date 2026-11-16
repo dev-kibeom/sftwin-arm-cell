@@ -545,6 +545,11 @@ MotionNode::MotionNode(
         diagnostics_capture_enabled, diagnostics_output_directory,
         diagnostics_snapshot_run_directory, planning_planner_id,
         place_waypoint_trajectory_file);
+      const auto taught_motions_json = declare_parameter<std::string>("taught_motions_json", "{}");
+      isaac_transport_->configure_taught_motions(
+        parse_taught_motions(
+          taught_motions_json, home_joint_positions, place_tray_return_joint_positions,
+          arm_joint_names.size()));
       backend = std::make_shared<IsaacMotionBackend>(isaac_transport_);
     } else if (backend_mode == "unavailable") {
       test_backend = std::make_shared<UnavailableMotionBackend>(

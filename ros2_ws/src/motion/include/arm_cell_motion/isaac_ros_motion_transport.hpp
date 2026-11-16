@@ -1,5 +1,7 @@
 #pragma once
 
+#include "arm_cell_motion/taught_motion.hpp"
+
 #include "arm_cell_motion/grasp_collision_validator.hpp"
 
 #include <chrono>
@@ -114,6 +116,10 @@ public:
   uint8_t plan_normalized(
     const NormalizedMotionRequest & request, NormalizedTrajectoryPlan & plan) override;
   bool execute_planned(const NormalizedTrajectoryPlan & plan) override;
+  uint8_t execute_taught_motion(
+    const std::string & motion, const std::string & execution_id,
+    const std::function<uint8_t()> & interruption) override;
+  void configure_taught_motions(TaughtMotions motions) {taught_motions_ = std::move(motions);}
   uint8_t execute_joint_target() override;
   MotionDisturbanceParameters disturbance_parameters() const override;
   void reset_pick_grasp_insertion_started() override;
@@ -276,6 +282,7 @@ private:
   std::vector<std::string> place_ik_seed_joints_;
   bool wrap_equivalent_joint_policy(const std::string & joint_name) const;
   std::vector<std::string> arm_joint_names_;
+  TaughtMotions taught_motions_;
   std::vector<double> home_joint_positions_;
   std::vector<double> retract_joint_positions_;
   std::vector<double> place_tray_return_joint_positions_;

@@ -1,3 +1,4 @@
+#include "arm_cell_motion/taught_motion_trajectory.hpp"
 #include "arm_cell_motion/attached_payload.hpp"
 #include "arm_cell_motion/candidate_occupancy.hpp"
 #include "arm_cell_motion/isaac_ros_motion_transport.hpp"
@@ -3397,8 +3398,18 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     return false;
   }
   const auto envelope = applied_motion_envelope();
+  double velocity_scale = planning_velocity_scaling_factor_;
+  double acceleration_scale = planning_acceleration_scaling_factor_;
+  const auto taught_name = !request.taught_motion.empty() ? request.taught_motion :
+    request.segment == MotionSegmentKind::PAYLOAD_HOME ? "payload_home" : "";
+  if (!taught_name.empty()) {
+    const auto found = taught_motions_.find(taught_name);
+    if (found == taught_motions_.end()) {return false;}
+    velocity_scale = found->second.velocity_scale;
+    acceleration_scale = found->second.acceleration_scale;
+  }
   auto planning_scales = apply_motion_envelope_to_planning_scales(
-    planning_velocity_scaling_factor_, planning_acceleration_scaling_factor_, envelope);
+    velocity_scale, acceleration_scale, envelope);
   if (request.is_disturbance) {
     planning_scales.max_velocity *= request.motion_speed_fraction;
     planning_scales.max_acceleration *= request.motion_speed_fraction;
@@ -3472,7 +3483,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   const bool vision_collision_scope_required = vision_derived_pick ||
     (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
     request.has_non_target_occupancy && !request.non_target_occupancy.empty());
-  const bool planning_scene_context_required =
+  const bool planning_scene_context_required = !request.taught_motion.empty() ||
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ||
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE;
   if (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
@@ -3524,11 +3535,12 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       std::optional<moveit_msgs::msg::AttachedCollisionObject> payload;
       {
         std::lock_guard<std::mutex> payload_lock(mutex_);
-        const bool held_place = request.task_type.value ==
+        const bool held_place = (!request.taught_motion.empty() && object_attached_) ||
+          (request.task_type.value ==
           arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE &&
           request.phase != arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_RETRACTING &&
           !request.is_disturbance &&
-          (!request.place_waypoint_approach || accepted_object_to_tcp_valid_);
+          (!request.place_waypoint_approach || accepted_object_to_tcp_valid_));
         if (held_place) {
           if (!accepted_object_to_tcp_valid_) {
             normalized_failure_result_ =
@@ -3788,10 +3800,14 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         joint_name.c_str());
       return false;
     }
-    trajectory_velocity_limits.push_back(joint_model->getVariableBounds().front().max_velocity_);
+    trajectory_velocity_limits.push_back(
+      joint_model->getVariableBounds().front().max_velocity_ *
+      (taught_name.empty() ? 1.0 : planning_scales.max_velocity));
   }
   const double trajectory_acceleration_limit = planning_max_acceleration_rad_s2_ > 0.0 ?
-    planning_max_acceleration_rad_s2_ : std::numeric_limits<double>::max();
+    planning_max_acceleration_rad_s2_ *
+    (taught_name.empty() ? 1.0 : planning_scales.max_acceleration) :
+    std::numeric_limits<double>::max();
   const auto finalize_raw_trajectory = [&](moveit_msgs::msg::RobotTrajectory & trajectory) {
       return finalize_executable_trajectory(
         trajectory, arm_joint_names_, trajectory_velocity_limits,
@@ -3804,7 +3820,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
             return false;
           }
           timed_trajectory.getRobotTrajectoryMsg(raw_trajectory);
-          return true;
+          // Finalization replaces planner timing. Apply taught/Safety limits
+          // here so they remain effective in the trajectory actually streamed.
+          return taught_name.empty() || scale_taught_trajectory(
+            raw_trajectory.joint_trajectory,
+            planning_scales.max_velocity, planning_scales.max_acceleration);
         });
     };
   const bool candidate_attempt_snapshot = vision_derived_pick &&
@@ -7005,6 +7025,7 @@ bool IsaacRosMotionTransport::execute_planned_trajectory(
     if (discard_if_interrupted()) {return false;}
     {
       std::lock_guard<std::mutex> lock(mutex_);
+      active_motion_task_type_ = request.task_type.value;
       timed_trajectory_active_ = true;
       timed_clock_callback_count_ = 0;
       timed_command_publish_attempt_count_ = 0;
@@ -7522,11 +7543,18 @@ MotionCompletionOutcome IsaacRosMotionTransport::wait_for_motion_completion_unti
         pending_pick_descent_trajectory_.points.clear();
         pending_pick_descent_for_current_execution_ = false;
       }
-      execution_active_ = false;
       timed_trajectory_active_ = false;
-      motion_progress_watchdog_active_ = false;
-      log_motion_state_locked("TRAJECTORY_COMPLETED");
-      return MotionCompletionOutcome::COMPLETED;
+      if (active_motion_task_type_ !=
+        arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME)
+      {
+        execution_active_ = false;
+        motion_progress_watchdog_active_ = false;
+        log_motion_state_locked("TRAJECTORY_COMPLETED");
+        return MotionCompletionOutcome::COMPLETED;
+      }
+      settled_feedback_count_ = 0;
+      // Continue observing fresh feedback; trajectory completion alone is not arrival.
+
     }
     if (now >= deadline) {
       if (trajectory_worker_) {trajectory_worker_->cancel("place_waypoint_execution_timeout");}
@@ -8068,10 +8096,14 @@ void IsaacRosMotionTransport::on_simulation_clock(
       trajectory_worker_->diagnostics().execution_id == execution_id &&
       trajectory_worker_->completion_eligible())
     {
-      execution_active_ = false;
-      // Normal command execution completion is not stop/inactivity evidence.
+      if (active_motion_task_type_ !=
+        arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME)
+      {
+        execution_active_ = false;
+        motion_progress_watchdog_active_ = false;
+      }
+      // Taught joint moves keep observing arrival after command production ends.
       inactivity_confirmed_ = false;
-      motion_progress_watchdog_active_ = false;
       finish_global_profile_capture("trajectory_execution_complete", true);
     }
   }

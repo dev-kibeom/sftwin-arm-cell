@@ -332,7 +332,9 @@ std::uint8_t MotionExecutionSupport::execute_task(
   auto result = interruption_checker_ ? interruption_checker_() :
     MotionTaskResultCode::TASK_RESULT_SUCCESS;
   if (result == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-    result = backend_->execute_task(goal, execution_id);
+    result = goal.task_type.value == MotionTaskType::TASK_TYPE_GO_HOME ?
+      backend_->execute_taught_motion("home", execution_id, interruption_checker_) :
+      backend_->execute_task(goal, execution_id);
     if (interruption_checker_) {
       const auto interrupted = interruption_checker_();
       if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {result = interrupted;}
@@ -344,13 +346,13 @@ std::uint8_t MotionExecutionSupport::execute_task(
   return result;
 }
 
-std::uint8_t MotionExecutionSupport::execute_joint_target()
+std::uint8_t MotionExecutionSupport::execute_joint_target(const std::string & execution_id)
 {
   const auto started = std::chrono::steady_clock::now();
   auto result = interruption_checker_ ? interruption_checker_() :
     MotionTaskResultCode::TASK_RESULT_SUCCESS;
   if (result == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-    result = backend_->execute_joint_target();
+    result = backend_->execute_taught_motion("return_material", execution_id, interruption_checker_);
     if (interruption_checker_) {
       const auto interrupted = interruption_checker_();
       if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {result = interrupted;}

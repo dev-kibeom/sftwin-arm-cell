@@ -340,14 +340,48 @@ bool IsaacRosMotionTransport::execute_planned(const NormalizedTrajectoryPlan & p
     plan.planning_scales, discard_if_interrupted);
 }
 
-uint8_t IsaacRosMotionTransport::execute_joint_target()
+uint8_t IsaacRosMotionTransport::execute_taught_motion(
+  const std::string & motion, const std::string & execution_id,
+  const std::function<uint8_t()> & interruption)
 {
-  if (place_tray_return_joint_positions_.size() != arm_joint_names_.size() ||
-    !publish_joint_target(place_tray_return_joint_positions_))
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  const auto found = taught_motions_.find(motion);
+  if (found == taught_motions_.end()) {return Code::TASK_RESULT_INVALID_GOAL;}
+  // A direct final-position fallback would silently discard the speed limits.
+  if (planning_max_acceleration_rad_s2_ <= 0.0) {return Code::TASK_RESULT_BACKEND_ERROR;}
+  NormalizedMotionRequest request;
+  request.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+  request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_PLANNING;
+  request.segment = MotionSegmentKind::PAYLOAD_HOME;
+  request.taught_motion = motion;
+  request.motion_goal_uuid = execution_id;
+  request.interruption_result = interruption;
+  const auto interrupted = [&]() {
+      return interruption ? interruption() : Code::TASK_RESULT_SUCCESS;
+    };
+  auto result = interrupted();
+  if (result != Code::TASK_RESULT_SUCCESS) {return result;}
+  NormalizedTrajectoryPlan plan;
+  if (!submit_normalized_once(
+      request, &found->second.joint_positions, planning_time_s_, false, &plan))
   {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+    result = interrupted();
+    return result != Code::TASK_RESULT_SUCCESS ? result : normalized_failure_result();
+  }
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    active_motion_task_type_ = request.task_type.value;
+  }
+  if (!execute_planned(plan)) {
+    result = interrupted();
+    return result != Code::TASK_RESULT_SUCCESS ? result : Code::TASK_RESULT_BACKEND_ERROR;
   }
   return wait_for_joint_target_result();
+}
+
+uint8_t IsaacRosMotionTransport::execute_joint_target()
+{
+  return execute_taught_motion("return_material", {}, {});
 }
 
 }  // namespace arm_cell_motion

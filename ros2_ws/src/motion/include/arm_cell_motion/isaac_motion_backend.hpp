@@ -62,6 +62,21 @@ public:
   {return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;}
   virtual bool execute_planned(const NormalizedTrajectoryPlan &)
   {return false;}
+  virtual uint8_t execute_taught_motion(
+    const std::string & motion, const std::string & execution_id,
+    const std::function<uint8_t()> & interruption)
+  {
+    (void)interruption;
+    if (motion == "home") {
+      arm_cell_interfaces::action::ExecuteTask::Goal goal;
+      goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+      if (!submit(goal, execution_id)) {
+        return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+      }
+      return wait_for_joint_target_result();
+    }
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+  }
   virtual uint8_t execute_joint_target()
   {
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
@@ -158,6 +173,9 @@ public:
   uint8_t generate_place_waypoint_approach(
     const NormalizedMotionRequest & request, const std::string & path) override;
   uint8_t execute_planned_normalized(const NormalizedTrajectoryPlan & plan) override;
+  uint8_t execute_taught_motion(
+    const std::string & motion, const std::string & execution_id,
+    const std::function<uint8_t()> & interruption) override;
   uint8_t execute_joint_target() override;
   MotionDisturbanceParameters disturbance_parameters() const override;
   void reset_pick_grasp_insertion_started() override;

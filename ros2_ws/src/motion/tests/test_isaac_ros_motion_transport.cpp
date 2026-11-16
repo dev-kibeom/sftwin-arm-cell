@@ -2862,3 +2862,34 @@ TEST_F(IsaacRosMotionTransportTest, RetreatReplanningUsesPlaceFinalBudgetPerActi
 
 }  // namespace
 }  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, TaughtHomeRequiresMeasuredArrivalAfterTrajectoryCompletion)
+{
+  start_timed_motion_for_test();
+  transport_->active_motion_task_type_ = MotionTaskType::TASK_TYPE_GO_HOME;
+  transport_->on_simulation_clock(clock_message(1.0));
+  ASSERT_TRUE(transport_->trajectory_worker_->completion_eligible());
+  EXPECT_TRUE(transport_->execution_active());
+  auto completion = std::async(
+    std::launch::async,
+    [this]() {return transport_->wait_for_motion_completion();});
+  EXPECT_EQ(completion.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
+  publish_feedback(std::vector<double>(6, 0.1));
+  publish_feedback(std::vector<double>(6, 0.1));
+  ASSERT_EQ(completion.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+  EXPECT_EQ(completion.get(), MotionCompletionOutcome::COMPLETED);
+}
+
+TEST_F(IsaacRosMotionTransportTest, TaughtMotionRejectsUnknownAndUntimedExecution)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  EXPECT_EQ(
+    transport_->execute_taught_motion("missing", "goal", {}),
+    Code::TASK_RESULT_INVALID_GOAL);
+  transport_->configure_taught_motions({{"home", {std::vector<double>(6, 0.1), 0.3, 0.2}}});
+  EXPECT_EQ(transport_->execute_taught_motion("home", "goal", {}), Code::TASK_RESULT_BACKEND_ERROR);
+  EXPECT_TRUE(commands_.empty());
+}
+}  // namespace arm_cell_motion

@@ -55,6 +55,8 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config/pick_approach_planning.xml" PICK_A
 configure_file(src/pick_approach_tree_xml.hpp.in generated/pick_approach_tree_xml.hpp @ONLY)
 
 add_library(${PROJECT_NAME}_core
+  src/taught_motion_trajectory.cpp
+  src/taught_motion.cpp
   src/motion_core.cpp
   src/candidate_search.cpp
   src/isaac_motion_backend.cpp
@@ -168,6 +170,10 @@ ament_export_dependencies(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_taught_motion_trajectory tests/test_taught_motion_trajectory.cpp)
+  target_link_libraries(test_taught_motion_trajectory ${PROJECT_NAME}_core)
+  ament_add_gtest(test_taught_motion tests/test_taught_motion.cpp)
+  target_link_libraries(test_taught_motion ${PROJECT_NAME}_core nlohmann_json::nlohmann_json)
   find_package(moveit_ros_planning REQUIRED)
   find_package(ament_lint_auto REQUIRED)
 

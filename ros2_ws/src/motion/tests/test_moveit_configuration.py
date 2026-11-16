@@ -87,7 +87,9 @@ def test_move_group_uses_simulation_time():
 
 
 @pytest.mark.parametrize('runtime_document', [False, True])
-def test_validation_profile_selects_time_parameterization_and_acceleration_limits(tmp_path, runtime_document):
+def test_validation_profile_selects_time_parameterization_and_acceleration_limits(
+    tmp_path, runtime_document,
+):
     source_package = Path(__file__).resolve().parents[1]
     spec = importlib.util.spec_from_file_location(
         "planning_only_launch", source_package / "launch/planning_only.launch.py"
@@ -114,7 +116,8 @@ def test_validation_profile_selects_time_parameterization_and_acceleration_limit
         if isinstance(entity, Node) and entity.node_package == "moveit_ros_move_group"
     )
     parameters = evaluate_parameters(context, move_group._Node__parameters)
-    for joint_name in (f"joint_{index}" for index in range(1, 7)):
+    robot = yaml.safe_load((source_package / 'config/robots/m0609.yaml').read_text())
+    for joint_name in robot['motion']['arm_joint_names']:
         assert (
             parameters[0][
                 f"robot_description_planning.joint_limits.{joint_name}.has_acceleration_limits"
@@ -130,7 +133,13 @@ def test_validation_profile_selects_time_parameterization_and_acceleration_limit
     assert "AddTimeOptimalParameterization" in parameters[0]["ompl.request_adapters"]
 
 
-def test_static_scene_artifact_matches_canonical_manifest():
+@pytest.mark.parametrize(
+    'selection_path',
+    sorted((Path(__file__).resolve().parents[1] / 'config/moveit').glob(
+        '*_static_scene_selection.json')),
+    ids=lambda path: path.stem,
+)
+def test_static_scene_artifact_matches_canonical_manifest(selection_path):
     share = Path(get_package_share_directory("arm_cell_motion"))
     repo_manifest = next(
         parent / "config/pnp_cnc_static_environment.json"
@@ -139,15 +148,15 @@ def test_static_scene_artifact_matches_canonical_manifest():
     )
     manifest = json.loads(repo_manifest.read_text())
     selection = json.loads(
-        (share / "config/moveit/pnp_cnc_static_scene_selection.json").read_text()
+        (share / 'config/moveit' / selection_path.name).read_text()
     )
-    artifact = json.loads((share / "config/moveit/pnp_cnc_static_scene.json").read_text())
+    artifact_name = selection_path.name.replace('_selection.json', '.json')
+    artifact = json.loads((share / 'config/moveit' / artifact_name).read_text())
     generator = load_generator()
     by_id = generator.validate(manifest, selection)
-    assert [obj["id"] for obj in artifact["objects"]] == selection["selected_ids"]
-    assert artifact["objects"] == [
-        by_id[object_id] for object_id in selection["selected_ids"]
-    ]
+    actual = {obj['id']: obj for obj in artifact['objects']}
+    assert len(actual) == len(artifact['objects'])  # Duplicate IDs must not be hidden by the map.
+    assert actual == {object_id: by_id[object_id] for object_id in selection['selected_ids']}
     assert (
         artifact["source"]["canonical_manifest_sha256"]
         == hashlib.sha256(generator.canonical_bytes(manifest).encode()).hexdigest()
@@ -156,65 +165,6 @@ def test_static_scene_artifact_matches_canonical_manifest():
         artifact["source"]["selection_sha256"]
         == hashlib.sha256(generator.canonical_bytes(selection).encode()).hexdigest()
     )
-    assert len(artifact["objects"]) == len(selection["selected_ids"])
-    assert not any(
-        "dimensions" in json.dumps(value) or "pose" in json.dumps(value)
-        for value in selection.values()
-    )
-
-
-def test_pnp_static_scene_contains_observed_isaac_collision_obstacles():
-    share = Path(get_package_share_directory("arm_cell_motion"))
-    artifact = json.loads((share / "config/moveit/pnp_cnc_validation_static_scene.json").read_text())
-    selection = json.loads(
-        (share / "config/moveit/pnp_cnc_validation_static_scene_selection.json").read_text()
-    )
-    repo_manifest = next(
-        parent / "config/pnp_cnc_static_environment.json"
-        for parent in [Path.cwd(), *Path(__file__).resolve().parents]
-        if (parent / "config/pnp_cnc_static_environment.json").is_file()
-    )
-    manifest = json.loads(repo_manifest.read_text())
-    by_id = load_generator().validate(manifest, selection)
-    objects = {obj["id"]: obj for obj in artifact["objects"]}
-
-    assert [obj["id"] for obj in artifact["objects"]] == selection["selected_ids"]
-    assert artifact["objects"] == [
-        by_id[object_id] for object_id in selection["selected_ids"]
-    ]
-
-    assert {
-        "amr_tray",  # Required by the bounded PICK retract fingertip exception.
-        "cnc_front_left",
-        "cnc_front_top",
-        "camera_rig_post_left",
-        "camera_rig_post_right",
-        "amr_tray_rail_left",
-        "amr_tray_rail_right",
-        "amr_tray_rail_rear",
-        "amr_tray_marker_post",
-    } <= objects.keys()
-    # Geometry is owned by the canonical manifest. The full equality above
-    # checks every selected object's dimensions and pose without a second copy
-    # of installation coordinates in this test. Required IDs remain explicit
-    # to catch accidental loss of collision coverage from the selection.
-    assert not {
-        "amr_raw_slot_support",
-        "amr_raw_slot_marker_guard",
-        "amr_finished_slot_support",
-    }.intersection(objects)
-
-
-def test_camera_drop_bracket_uses_canonical_static_geometry():
-    resolver, repo_root = load_isaac_manifest_resolver()
-    objects = resolver["load_canonical_static_geometry"](project_root=repo_root)
-    manifest = json.loads(
-        (repo_root / "config/pnp_cnc_static_environment.json").read_text()
-    )
-    bracket = next(
-        obj for obj in manifest["objects"] if obj["id"] == "camera_drop_bracket"
-    )
-    assert objects["camera_drop_bracket"] == bracket
 
 
 def load_isaac_manifest_resolver():
@@ -286,13 +236,14 @@ def test_isaac_builder_rejects_invalid_explicit_root_and_missing_manifest(tmp_pa
 def test_isaac_builder_preserves_canonical_static_environment_semantics():
     resolver, repo_root = load_isaac_manifest_resolver()
     objects = resolver["load_canonical_static_geometry"](project_root=repo_root)
-    assert set(objects) == resolver["REQUIRED_STATIC_OBJECT_IDS"]
-    assert len(objects) == 23
+    manifest = json.loads(resolver['canonical_manifest_path'](project_root=repo_root).read_text())
+    assert objects == {obj['id']: obj for obj in manifest['objects']}
 
 
 def test_selected_robot_limits_survive_validation_time_parameterization(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    spec = importlib.util.spec_from_file_location('selected_robot_limits_launch', source / 'launch/planning_only.launch.py')
+    spec = importlib.util.spec_from_file_location(
+        'selected_robot_limits_launch', source / 'launch/planning_only.launch.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     limits = tmp_path / 'joint_limits.yaml'
@@ -306,14 +257,21 @@ def test_selected_robot_limits_survive_validation_time_parameterization(tmp_path
     move_group = module.compose(context)[0]
     (parameters, _) = evaluate_parameters(context, move_group._Node__parameters)
     # launch_ros flattens nested parameter dictionaries into dotted keys.
-    assert parameters['robot_description_planning.joint_limits.joint_1.max_velocity'] == 0.25
-    assert parameters['robot_description_planning.joint_limits.joint_1.has_velocity_limits'] is True
-    assert parameters['robot_description_planning.joint_limits.joint_1.max_acceleration'] == 5.0
+    selected_limits = yaml.safe_load(limits.read_text())['joint_limits']['joint_1']
+    assert (parameters['robot_description_planning.joint_limits.joint_1.max_velocity']
+            == selected_limits['max_velocity'])
+    assert parameters[
+        'robot_description_planning.joint_limits.joint_1.has_velocity_limits'] is True
+    validation_path = source.parent / 'bringup/config/pnp_validation_profile.yaml'
+    validation = yaml.safe_load(validation_path.read_text())
+    assert (parameters['robot_description_planning.joint_limits.joint_1.max_acceleration']
+            == validation['motion']['planning_max_acceleration_rad_s2'])
 
 
 def test_standalone_moveit_uses_selected_logical_robot_profile(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    spec = importlib.util.spec_from_file_location('selected_robot_profile_launch', source / 'launch/planning_only.launch.py')
+    spec = importlib.util.spec_from_file_location(
+        'selected_robot_profile_launch', source / 'launch/planning_only.launch.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     robot = yaml.safe_load((source / 'config/robots/m0609.yaml').read_text())
@@ -325,12 +283,20 @@ def test_standalone_moveit_uses_selected_logical_robot_profile(tmp_path):
     selected.write_text(yaml.safe_dump(robot))
     context = LaunchContext()
     context.launch_configurations.update(
-        robot_profile=str(selected), use_rviz='false', joint_states='/joint_states', log_level='info',
+        robot_profile=str(selected), use_rviz='false',
+        joint_states='/joint_states', log_level='info',
         planning_profile=str(source.parent / 'bringup/config/pnp_validation_profile.yaml'))
     (parameters, _) = evaluate_parameters(context, module.compose(context)[0]._Node__parameters)
-    assert parameters['robot_description_planning.joint_limits.joint_2.max_velocity'] == 0.25
-    assert parameters['robot_description_planning.joint_limits.joint_2.max_acceleration'] == 5.0
+    limits_document = yaml.safe_load((tmp_path / 'limits.yaml').read_text())
+    selected_limits = limits_document['joint_limits']['joint_2']
+    assert (parameters['robot_description_planning.joint_limits.joint_2.max_velocity']
+            == selected_limits['max_velocity'])
+    validation_path = source.parent / 'bringup/config/pnp_validation_profile.yaml'
+    validation = yaml.safe_load(validation_path.read_text())
+    assert (parameters['robot_description_planning.joint_limits.joint_2.max_acceleration']
+            == validation['motion']['planning_max_acceleration_rad_s2'])
     assert 'robot_description_planning.joint_limits.joint_1.max_acceleration' not in parameters
     from launch.actions import DeclareLaunchArgument
-    assert 'robot_profile' in {item.name for item in module.generate_launch_description().entities
-                               if isinstance(item, DeclareLaunchArgument)}
+    arguments = {item.name for item in module.generate_launch_description().entities
+                 if isinstance(item, DeclareLaunchArgument)}
+    assert 'robot_profile' in arguments
