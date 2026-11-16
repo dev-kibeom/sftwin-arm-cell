@@ -71,3 +71,49 @@ def test_private_mesh_override_keeps_the_same_chain_and_tool(tmp_path):
         assert {m.get('filename') for m in link.findall('.//mesh')} == {str(mesh_root / f'link{i}.stl')}
     assert [ET.tostring(j) for j in detailed.findall('joint')] == [
         ET.tostring(j) for j in basic.findall('joint')]
+
+
+def test_requested_home_and_existing_return_are_independent():
+    config, _ = model()
+    assert config['home_joint_positions'] == pytest.approx([
+        math.pi, 0, 0, 0, math.pi/2, 0])
+    assert config['robot']['motion']['place_tray_return_joint_positions'] == pytest.approx([
+        0, 0, -math.pi/2, 0, math.pi/2, 0])
+
+
+def test_authored_visual_meshes_are_available_in_metres():
+    _, urdf = model()
+    for i in range(7):
+        visual = urdf.find(f"link[@name='link{i}']/visual/geometry/mesh")
+        assert visual is not None
+        path = Path(visual.get('filename'))
+        document = ET.parse(path)
+        ns = {'c': 'http://www.collada.org/2005/11/COLLADASchema'}
+        assert float(document.find('c:asset/c:unit', ns).get('meter')) == 1
+        geometries = document.findall('.//c:geometry', ns)
+        assert geometries
+        for geometry in geometries:
+            positions = geometry.find('c:mesh/c:source/c:float_array', ns)
+            assert all(math.isfinite(float(v)) for v in positions.text.split())
+
+
+def test_regenerated_visual_digest_invalidates_expanded_urdf(tmp_path):
+    import importlib.util
+    import shutil
+    script = ROOT / 'assets/robots/hcr14/scripts/generate_visuals.py'
+    spec = importlib.util.spec_from_file_location('hcr14_visuals', script)
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    for index in range(7):
+        shutil.copyfile(script.parents[1] / 'visual' / f'link{index}.dae',
+                        tmp_path / f'link{index}.dae')
+    wrapper = tmp_path / 'test.xacro'
+    wrapper.write_text('<robot xmlns:xacro="http://www.ros.org/wiki/xacro">'
+                       '<xacro:include filename="revision.xacro"/>'
+                       '<xacro:hcr14_visual_revision/></robot>')
+    generator.write_revision(tmp_path)
+    before = xacro.process_file(str(wrapper)).toxml()
+    changed = tmp_path / 'link0.dae'
+    changed.write_bytes(changed.read_bytes() + b'\n')
+    generator.write_revision(tmp_path)
+    assert xacro.process_file(str(wrapper)).toxml() != before

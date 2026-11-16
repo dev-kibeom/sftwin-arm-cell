@@ -1,8 +1,9 @@
 # HCR-14 실험적 시뮬레이션 모델
 
 HCR-14 3G의 STEP 축선과 외형 치수를 사용한 시뮬레이션 모델이다. 제조사 URDF,
-제어기 영점, 실물 보정 모델이 아니다. 기본 visual/collision은 직접 작성한 원통
-근사 형상이다. 정확한 CAD 외형이나 보수적인 collision envelope로 간주하지 않는다.
+제어기 영점, 실물 보정 모델이 아니다. 기본 visual은 자체 작성한 회전체 프로파일로
+만든 둥근 하우징·테이퍼 암·씰·Flange의 시각 근사이고, collision은 기존 원통 근사다.
+정확한 CAD 외형이나 보수적인 collision envelope로 간주하지 않는다.
 
 ## 근거와 좌표계
 
@@ -47,6 +48,26 @@ CAD 조립 자세를 모든 관절의 시뮬레이션 `q=0`으로 정의한다. 
 0.5 rad/s²로 제한한다. 질량, box 관성, effort=1000 및 drive tuning은 전부
 시뮬레이션 추정/설정값이다. 제조사 물성이나 정격 토크가 아니다.
 
+## 시각 모델
+
+[HCR-14 제품 사진](https://kenyeriengineering.com/cobots/models/)과 공개 제품 자료의
+짙은 회색 장완/대형 관절, 주황색 단완/손목, 금속 Flange와 녹색 표시 링을 참고했다.
+사진/텍스처/제조사 CAD는 포함하지 않는다. 시각 파일 `visual/link0.dae`…`link6.dae`는
+`scripts/generate_visuals.py`가 자체 정의한 프로파일을 회전시켜 생성한다.
+원본 CAD를 읽거나 변환하지 않으며 기구학·물성·collision의 별도 모델을 만들지 않는다.
+생성기는 시각 mesh 전체의 SHA256을 `visual/revision.xacro`에도 기록한다. 이 정보는
+확장 URDF provenance에 포함되어, 프로파일/재질 수정 후 재생성하면 기존 USD도
+갱신된다. 시각 mesh를 직접 편집하지 말고 생성기에서 수정한다.
+모든 시각 mesh는 기존 link-local 프레임의 m 단위다.
+
+```bash
+python3 assets/robots/hcr14/scripts/generate_visuals.py
+```
+
+collision과 관성은 외관 변경 전과 동일하다. 볼트·씰·측면 커넥터 등의 장식 치수는
+시각 근사이며 제조 치수나 충돌 정밀도를 뜻하지 않는다. 표시 링은 고정된 외관이며
+실제 장비 상태나 Safety 상태를 나타내지 않는다.
+
 ## 실행과 로컬 상세 형상
 
 Launcher의 `HCR-14 (experimental · simplified geometry)`를 선택하거나:
@@ -60,15 +81,18 @@ ARM_CELL_PROFILE="$PWD/ros2_ws/src/bringup/config/hcr14_profile.yaml" \
 기존 Bringup 및 공통 Xacro→URDF→Isaac USD 경로를 사용한다.
 이 Assembly는 `isaac.build_missing_on_startup: true`를 선택한다. Launcher/CLI의
 Kit startup은 생성 URDF/USD/provenance가 없으면 공통 Pre Build producer를 먼저
-실행한 뒤 scene을 구성한다. 첫 실행에는 자산 생성 시간이 추가된다. 기존 로봇의
+실행한 뒤 scene을 구성한다. 기존 산출물이 있어도 공통 provenance가 선택된
+Xacro/URDF/USD의 불일치를 확인하면 같은 producer로 갱신한다.
+첫 실행과 모델 변경 후에는 자산 생성 시간이 추가된다. 기존 로봇의
 Pre Build 실행 정책은 바꾸지 않는다. 별도 Importer,
-Motion 또는 PnP 분기는 없다. HOME/Return은 `[0,0,-pi/2,0,pi/2,0]` rad이며
-이 시뮬레이션 규약에서 선정한 셀 내 비충돌 시작 자세이다. 제조사 HOME이나
+Motion 또는 PnP 분기는 없다. HOME은 사용자가 지정한
+`[180,0,0,0,90,0]` ° (`[pi,0,0,0,pi/2,0]` rad)이다.
+Return은 기존 `[0,0,-pi/2,0,pi/2,0]` rad를 유지한다. 제조사 HOME이나
 충돌 없는 복귀 경로를 뜻하지 않는다. 로봇마다 기존 HOME/Return 설정은 보존한다.
 
 상세 형상이 필요한 경우 이용권이 확인된 `link0.stl`…`link6.stl`을 로컬 디렉터리에
 준비하고 Model Assembly의 `mesh_root`를 그 절대 경로로 지정한 로컬 설정을 사용한다.
-기본 `primitive` 디렉터리는 단순화 형상을 선택한다. 다른 디렉터리는 STL을 선택하며,
+기본 `primitive` 디렉터리는 자체 시각 mesh + 기존 단순화 collision을 선택한다. 다른 디렉터리는 STL을 선택하며,
 누락 mesh를 자동으로 대체하지 않는다. 로컬 Model YAML은
 `urdf`/`semantic`을 원래 package URI로 유지하고 로컬 Deployment YAML의
 `model_configuration`에 그 경로를 지정한다. Launcher 등록 파일을 수정할 필요는 없다.
@@ -93,7 +117,8 @@ Git에 넣지 않는다. 로컬 자산은 `.local_artifacts/` 등에 보관하�
   target 읽기를 확인했다. Headless PhysX에서 HOME 초기화 후 6축을 각각 +0.1 rad
   구동하고 HOME으로 복귀시켰다. 각 목표에서 180 step 후 최대 관절 오차는
   0.003 rad 미만이었다. 그래픽 전체 Cell PnP 인수 시험과 구분한다.
-- MoveIt KDL에서 기본 형상의 HOME FK/IK, 자체 충돌 및 static Cell 비충돌을 확인했다.
+- MoveIt KDL에서 요청된 HOME `[180,0,0,0,90,0]` °의 FK/IK, 자체 충돌 및
+  static Cell 비충돌을 확인했다.
   기존 Tray 중심 부근의 하향 TCP 자세에서 충돌 없는 IK를 찾았다.
 - CNC loading의 기존 고정 TCP 자세는 IK가 성립하지만, 기본 근사 collision 형상과
   기존 static scene을 사용한 200 seed 탐색에서 충돌 없는 해를 찾지 못했다.

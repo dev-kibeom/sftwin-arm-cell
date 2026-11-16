@@ -47,10 +47,18 @@ def run_role(role, namespace):
 def prepare_startup_model(namespace, project_root):
     """Honor the selected Assembly's explicit first-run preparation policy."""
     from .model_build_configuration import ModelBuildConfiguration
+    from .model_provenance import verify_current_artifact
     configuration = load_runtime_configuration()
     namespace['runtime_configuration'] = configuration
     if not configuration['model_configuration']['isaac'].get('build_missing_on_startup', False):
         return
     model = ModelBuildConfiguration.from_runtime(configuration, project_root)
-    if not all(path.is_file() for path in (model.generated_urdf, model.usd, model.provenance)):
-        run_step('build_robot_usd.py', namespace)
+    if all(path.is_file() for path in (model.generated_urdf, model.usd, model.provenance)):
+        try:
+            verify_current_artifact(model.source, model.generated_urdf, model.usd,
+                                    model.provenance, xacro_arguments=model.xacro_arguments)
+            return
+        except ValueError:
+            # The selected source changed: refresh with the same common producer.
+            pass
+    run_step('build_robot_usd.py', namespace)
