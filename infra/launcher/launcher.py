@@ -29,7 +29,7 @@ OWNERS = {
 
 
 def deployments(root=ROOT):
-    """Only complete production deployments register runnable combinations.
+    """Complete deployments register runnable combinations, including labelled experiments.
 
     The current host entry point implements the existing Isaac composition.
     Validation fixtures and arbitrary cross-products are never deployments.
@@ -55,13 +55,17 @@ def deployments(root=ROOT):
             continue
         status = data.get('launcher', {}).get('validation_status', 'baseline')
         entries.append(dict(profile=path, backend=str(backend), validation_status=status, **owners))
-    return entries
+    return sorted(entries, key=lambda entry: entry['validation_status'] == 'experimental')
 
 
 def profile_choices(root=ROOT):
     result = {key: [str(path.resolve()) for path in sorted((root / directory).glob('*.yaml'))]
               for key, directory in OWNERS.items()}
-    result['backend'] = sorted({entry['backend'] for entry in deployments(root)})
+    entries = deployments(root)
+    result['backend'] = sorted({entry['backend'] for entry in entries})
+    if entries:
+        for key, paths in result.items():
+            paths.sort(key=lambda path: path != entries[0][key])
     return result
 
 
@@ -264,6 +268,8 @@ class Launcher(QMainWindow):
         try:
             entry = self.selection()
             message = f"Profile: {entry['profile'].name} | {self.tool_mode.currentText()}"
+            if entry['validation_status'] == 'experimental':
+                message += ' — 실험적 모델 · 단순화 형상 · 실물 일치 미검증'
             if entry['tool_actuator'] == 'physics' or entry['validation_status'] == 'live-pending':
                 message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
         except ValueError as exc:

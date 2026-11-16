@@ -14,3 +14,9 @@
 
 # Optional repository-local Python environment.
 /.venv/
+
+# Experimental HCR-14 runtime products / private detailed geometry.
+/infra/isaac_sim/assets/urdf/generated/hcr14_*.urdf
+/infra/isaac_sim/assets/usd/hcr14_*
+/infra/isaac_sim/assets/usd/configuration/hcr14_*
+/assets/robots/hcr14/meshes/

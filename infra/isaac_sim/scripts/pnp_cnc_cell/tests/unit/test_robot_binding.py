@@ -116,12 +116,13 @@ def test_duplicate_joint_inside_selected_robot_is_ambiguous(exported_configurati
         author_home_targets(stage, binding, Physics)
 
 
-def test_registered_rb5_assembly_reaches_graph_and_common_tool(tmp_path, monkeypatch):
+@pytest.mark.parametrize('robot', ['rb5_850', 'hcr14'])
+def test_registered_assembly_reaches_graph_and_common_tool(tmp_path, monkeypatch, robot):
     from pathlib import Path
     from arm_cell_bringup.runtime import export_runtime_configuration
     root = Path(__file__).resolve().parents[6]
     snapshot = export_runtime_configuration(
-        root / 'ros2_ws/src/bringup/config/rb5_850_profile.yaml', tmp_path / 'rb5.json')
+        root / f'ros2_ws/src/bringup/config/{robot}_profile.yaml', tmp_path / 'selected.json')
     monkeypatch.setenv('ARM_CELL_RUNTIME_CONFIG', str(snapshot))
     config = load_runtime_configuration(snapshot)
     binding = RobotBinding.from_runtime(config)
