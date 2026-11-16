@@ -2865,7 +2865,7 @@ TEST_F(IsaacRosMotionTransportTest, RetreatReplanningUsesPlaceFinalBudgetPerActi
 
 namespace arm_cell_motion
 {
-TEST_F(IsaacRosMotionTransportTest, TaughtHomeRequiresMeasuredArrivalAfterTrajectoryCompletion)
+TEST_F(IsaacRosMotionTransportTest, TaughtHomeAccumulatesFeedbackAcrossWaitLoopIterations)
 {
   start_timed_motion_for_test();
   transport_->active_motion_task_type_ = MotionTaskType::TASK_TYPE_GO_HOME;
@@ -2874,9 +2874,30 @@ TEST_F(IsaacRosMotionTransportTest, TaughtHomeRequiresMeasuredArrivalAfterTrajec
   EXPECT_TRUE(transport_->execution_active());
   auto completion = std::async(
     std::launch::async,
-    [this]() {return transport_->wait_for_motion_completion();});
-  EXPECT_EQ(completion.wait_for(std::chrono::milliseconds(20)), std::future_status::timeout);
+    [this]() {return transport_->wait_for_motion_completion_until(
+      std::chrono::steady_clock::now() + std::chrono::seconds(2));});
+  pump_until([this]() {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    return !transport_->timed_trajectory_active_;
+  });
   publish_feedback(std::vector<double>(6, 0.1));
+  std::uint64_t first_feedback_generation;
+  {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    first_feedback_generation = transport_->joint_state_generation_;
+  }
+  // Only a target republish by the waiter can acknowledge this new generation.
+  // This proves a loop iteration ran after the first callback, without sleeps.
+  pump_until([this, first_feedback_generation]() {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    return transport_->motion_command_generation_ >= first_feedback_generation;
+  });
+  {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    EXPECT_EQ(transport_->settled_feedback_count_, 1);
+    EXPECT_TRUE(transport_->execution_active_);
+  }
+  EXPECT_EQ(completion.wait_for(std::chrono::milliseconds(0)), std::future_status::timeout);
   publish_feedback(std::vector<double>(6, 0.1));
   ASSERT_EQ(completion.wait_for(std::chrono::seconds(1)), std::future_status::ready);
   EXPECT_EQ(completion.get(), MotionCompletionOutcome::COMPLETED);

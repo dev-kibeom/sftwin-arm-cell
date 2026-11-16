@@ -7531,9 +7531,9 @@ MotionCompletionOutcome IsaacRosMotionTransport::wait_for_motion_completion_unti
         log_motion_state_locked("TRAJECTORY_COMPLETED");
         return MotionCompletionOutcome::COMPLETED;
       }
+      // This reset belongs only to the timed -> arrival-observation transition.
+      // The cleared timed_trajectory_active_ gate lets later callbacks accumulate.
       settled_feedback_count_ = 0;
-      // Continue observing fresh feedback; trajectory completion alone is not arrival.
-
     }
     if (now >= deadline) {
       if (trajectory_worker_) {trajectory_worker_->cancel("place_waypoint_execution_timeout");}
