@@ -118,7 +118,10 @@ def test_held_motion_loss_open_stop_reset_shutdown():
     result.note_open_release_command_applied(2, 85.)
     assert tick(result, gripper) is HoldingState.UNKNOWN
     drive.pos = 0.
-    assert tick(result, gripper) is HoldingState.RELEASED
+    assert tick(result, gripper) is HoldingState.UNKNOWN
+    for _ in range(6):
+        tick(result, gripper)
+    assert result.holding_observation().state is HoldingState.RELEASED
     result.cancel_tool_transaction()
     assert tick(result, gripper) is HoldingState.UNKNOWN
     assert result.reset_for_simulation_stop()
@@ -225,6 +228,9 @@ def test_real_session_rejection_held_without_attachment_open_and_restart():
     assert not adapter.status[-1]['released']
     drive.pos = 0.
     session.on_physics_step(0.05)
+    assert not adapter.status[-1]['released']
+    for _ in range(6):
+        session.on_physics_step(0.05)
     assert adapter.status[-1]['released']
     sequence = adapter.status[-1]['sequence']
     assert session.reset_for_simulation_stop()

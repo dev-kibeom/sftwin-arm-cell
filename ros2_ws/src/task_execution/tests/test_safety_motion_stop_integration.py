@@ -11,9 +11,11 @@ import pytest
 import rclpy
 from arm_cell_interfaces.action import ExecuteTask
 from arm_cell_interfaces.msg import AMRDockingState
+from arm_cell_interfaces.msg import MotionCapability
 from arm_cell_interfaces.msg import MotionStatus
 from arm_cell_interfaces.msg import MotionTaskType
 from arm_cell_interfaces.msg import PackMLState
+from arm_cell_interfaces.msg import SafetyCauseSet
 from arm_cell_interfaces.msg import SafetyHardwareState
 from arm_cell_interfaces.msg import SafetyState
 from arm_cell_interfaces.msg import StopMode
@@ -243,10 +245,20 @@ class TestSafetyMotionStopIntegration(unittest.TestCase):
         self.spin_until(
             lambda: self.latest_motion_state(MotionStatus.MOTION_STATE_STOPPING)
         )
-        self.assertEqual(
-            self.safety_states[-1].safety_state,
-            SafetyState.SAFETY_STATE_EMERGENCY_STOPPED,
+        # Safety may already have advanced to STOPPING while Motion still
+        # awaits backend inactivity. Check the emergency decision independently
+        # of which allowed intermediate sample reached this subscriber last.
+        latest_safety = self.safety_states[-1]
+        self.assertIn(
+            latest_safety.safety_state,
+            (
+                SafetyState.SAFETY_STATE_EMERGENCY_STOPPED,
+                SafetyState.SAFETY_STATE_STOPPING,
+            ),
         )
+        self.assertTrue(latest_safety.active_causes.value & SafetyCauseSet.E_STOP)
+        self.assertEqual(latest_safety.motion_capability.value, MotionCapability.MOTION_NONE)
+        self.assertEqual(latest_safety.selected_stop_mode.value, StopMode.STOP_MODE_EMERGENCY)
 
         self.set_backend_state(self.active_client, False)
         self.set_backend_state(self.confirmed_client, True)

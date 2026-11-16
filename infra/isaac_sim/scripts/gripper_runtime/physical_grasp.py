@@ -3,6 +3,7 @@ import math
 import logging
 import time
 
+from gripper_runtime.physical_release import RobotiqReleaseObservation
 from gripper_runtime.contact_reaction import finger_reactions, reaction_diagnostics
 from gripper_runtime.grasp_attachment import GraspState, HoldingState, HoldingObservation
 
@@ -25,6 +26,8 @@ class PhysicalGraspManager:
         self._sequence = 1
         self._holding = HoldingObservation(HoldingState.UNKNOWN, time.monotonic(), 1)
         self._opening = False
+        self._release_observation = RobotiqReleaseObservation(
+            gripper.settings['release'], gripper.MAX_WIDTH_MM)
         self._close_reference_id = None
         self._expected_width_mm = None
         self._reference_signature = None
@@ -146,6 +149,7 @@ class PhysicalGraspManager:
         return True
 
     def cancel_tool_transaction(self):
+        self._release_observation.reset()
         self.state = GraspState.SEEKING
         self._opening = False
         self._close_reference_id = None
@@ -169,8 +173,9 @@ class PhysicalGraspManager:
                     LOGGER.warning('Optional contact observer cleanup failed: %s', error)
                 self._observer = None
         if not self.ready:
+            self._release_observation.reset()
             self._record(HoldingState.UNKNOWN)
-        elif self._opening and self.tool.capture.release_complete(self.gripper, None):
+        elif self._opening and self._release_observation.update(self.gripper.observation(), dt):
             self.state = GraspState.EMPTY
             self._record(HoldingState.RELEASED)
         else:

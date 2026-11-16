@@ -295,13 +295,31 @@ Retry/Recovery GO_HOME 및 Safety 승인 standalone RETRACT는 호환 adapter의
 E-Stop Reset으로 정상 Safety 권한이 복원된 뒤에도 MotionStatus의 fresh Holding이 `HELD`이면
 Orchestration은 `RETURN_HELD` standalone task를 한 번 요청하며, Task Execution은 재사용 가능한
 `ReturnHeldToTray` BT Action Node를 실행한다. Node는 진입 시 fresh `HELD`를 확인하고, 현재 정지
-관절 상태에서 설정된 Tray 반환 관절 목표로 직접 이동·OPEN·3초 interruptible wait·새
-`RELEASED` 관측 확인을 한 반환 동작으로 수행한다. 대기 중 취소나 Safety 선점이 발생하면 확인
+관절 상태에서 설정된 Tray 반환 관절 목표로 직접 이동·OPEN·비차단 fresh `RELEASED`
+관측 대기를 한 반환 동작으로 수행한다. 대기 중 취소나 Safety 선점이 발생하면 확인
 단계로 진행하지 않는다. 초기 Holding이 fresh `HELD`가 아니면 이동하지 않으며, 이동·OPEN·대기·확인
 실패나 Safety 선점 시 자동 재시도하지 않는다. PLACE 삽입 실패 복구도 HOME 이동 뒤 같은 Node를
 조합하며, 반환 성공 시 원래 PLACE 실패 결과를 보존한다. 확인된 E-Stop 반환은 GO_HOME 결과와
 독립적으로 `RETURNED`로 보존한다. Orchestration은 이 task 뒤 fresh `RELEASED`와 정지·비활성 상태를
 확인하고 GO_HOME 후 batch를 잇는다.
+
+## 비차단 해제 관측 대기
+
+정상 PLACE와 Tray 반환은 OPEN 명령 성공 이후 새 Sequence와 fresh `RELEASED`를 관측한
+경우에만 Scene 정리와 `PLACED`/`RETURNED`를 확정한다. 경과 시간만으로 `UNKNOWN`을 해제
+완료로 바꾸거나 처리 수량을 반영하지 않는다. 물리 구동·모델·장치별 해제 판정은 Tool/Backend가
+소유하며 Task Execution은 장치 종류·개방 폭·시뮬레이션 모드를 분기하지 않는다.
+
+두 경로는 재사용 가능한 비차단 BT `Wait`에 해제 관측 완료 조건을 결합한다. 완료 조건이 없는
+`Wait(duration_ms=...)`는 시간 대기이고, 관측 완료 조건이 있으면 fresh `RELEASED` 도달은 성공,
+기존 holding confirmation timeout 소진은 실패다. `RUNNING` 동안 BT tick과 ROS Safety 수신은
+계속된다. 매 tick은 완료보다 Cancel·Safety 선점을 먼저 확인하며 halt는 진행 중 대기를 폐기한다.
+대기 중 선점·취소이면 Scene 정리·후퇴·HOME·반환 확정으로 진행하지 않는다.
+
+기존 PLACE의 UNKNOWN 실패와 관측 부재 Timeout의 유한 OPEN 재시도 구분은 유지한다.
+Tray 반환은 별도의 고정 3초 대기를 추가하지 않고 같은 fresh 관측을 기존 timeout 안에서 기다린다.
+Logical Snap·Physics Snap의 실제 해제/Attachment 확인 계약은 유지한다. E-Stop 반환 이후
+Orchestration도 기존 fresh `RELEASED`와 Safety 정상 권한·정지·비활성 조건을 계속 요구한다.
 
 ## 자재 기반 파지력 정책
 

@@ -8,7 +8,6 @@
 
 namespace arm_cell_task_execution
 {
-using namespace arm_cell_motion;
 
 using ExecuteTask = arm_cell_interfaces::action::ExecuteTask;
 using MotionTaskResultCode = arm_cell_interfaces::msg::MotionTaskResultCode;

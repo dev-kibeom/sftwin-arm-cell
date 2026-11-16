@@ -65,6 +65,8 @@ public:
     std::uint64_t & baseline_sequence, std::uint8_t release_attempt = 0,
     std::uint8_t retry_budget = 0, std::uint8_t last_failure = 0);
   std::uint8_t wait_interruptibly(std::chrono::milliseconds duration) const;
+  std::chrono::milliseconds holding_confirmation_timeout() const
+  {return holding_confirmation_timeout_;}
   std::uint64_t holding_sequence() const;
   HoldingWaitResult fresh_holding(HoldingState expected, std::uint64_t baseline_sequence) const;
 

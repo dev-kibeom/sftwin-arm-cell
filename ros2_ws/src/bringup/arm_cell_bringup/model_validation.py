@@ -235,6 +235,13 @@ def tool_runtime_model(tool, joints, arm):
         value = settings['holding'][key]
         if not finite_number(value) or value <= 0:
             raise ValueError(f'Tool holding {key} must be finite and positive')
+    if combination[1] == 'physical':
+        for key in ('open_tolerance_mm', 'position_stability_tolerance_rad', 'stable_duration_s'):
+            value = settings['release'][key]
+            if not finite_number(value) or value <= 0:
+                raise ValueError(f'Tool release {key} must be finite and positive')
+        if settings['release']['open_tolerance_mm'] >= runtime['max_width_mm']:
+            raise ValueError('Tool release open_tolerance_mm must be smaller than full opening')
     material = settings['contact_material']
     for key in ('static_friction', 'dynamic_friction', 'restitution'):
         if not finite_number(material[key]) or material[key] < 0:

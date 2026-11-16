@@ -6,7 +6,7 @@
     <Sequence name="PlaceApproachFailureRecovery">
       <PreparePlaceApproachReturn/>
       <ReturnHeldPlaceHome/>
-      <ReturnHeldToTray/>
+      <SubTree ID="ReturnHeldToTray"/>
       <FinalizeHeldPlaceReturn/>
     </Sequence>
   </BehaviorTree>
@@ -18,7 +18,7 @@
         <Sequence name="ReturnHeldObject">
           <PlaceReturnRecoveryNeeded/>
           <ReturnHeldPlaceHome/>
-          <ReturnHeldToTray/>
+          <SubTree ID="ReturnHeldToTray"/>
           <FinalizeHeldPlaceReturn/>
         </Sequence>
         <PlaceReturnNotNeeded/>

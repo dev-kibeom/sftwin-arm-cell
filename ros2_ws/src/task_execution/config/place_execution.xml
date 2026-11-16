@@ -47,7 +47,7 @@
         <RetryWhileAllowed name="PlaceReleaseRetries">
           <Sequence name="OpenAndConfirmPlaceRelease">
             <ExecutePlaceReleaseAttempt />
-            <PlaceReleaseConfirmed />
+            <WaitForPlaceRelease />
           </Sequence>
           <ContinuePlaceReleaseRetries />
         </RetryWhileAllowed>

@@ -86,6 +86,14 @@ Holding Observation(HELD/RELEASED/UNKNOWN)은 Attachment Ownership과 별개다.
 Real의 Object Detection은 순간 속도 진동만으로 정지를 거부하지 않고 지속적인 관절 위치 안정성과
 closing target 미도달을 해석한다. Moving, Stopped Opening, At Requested Position은 HELD 근거가 아니다.
 Simulation은 이 상태를 관절 관측으로 추정하고 Hardware는 제조사 Detection을 제공할 수 있다.
+보유·해제 판정은 선택 Tool 구현이 소유한다. Physical Real의 `RELEASED`는 적용된 OPEN 목표에
+실제 관절이 접근하고 연속 위치 안정 관측이 충족된 상태다. 초기 OPEN 접근 허용치는 Tool 설정의
+0.5 mm이며 위치 안정 허용치와 지속 시간도 Tool 설정에서 제공한다. OPEN 명령 수락·경과 시간만으로
+`RELEASED`를 만들지 않는다. 새 명령·STOP·취소·목표 이탈은 이전 안정 관측을 초기화한다.
+실제 Hardware Adapter는 제조사 위치·동작/물체감지 상태를 해석해 같은 HoldingObservation을 제공할
+수 있으며, simulator의 관절 모델이나 허용치를 그대로 재사용할 의무가 없다. 실제 Hardware Adapter
+구현과 실물 해제 검증은 이번 범위에 포함하지 않는다.
+
 보유·해제 판정은 선택 Tool 구현이 소유한다. Physical Real의 교정되지 않은 선형 폭 환산은 진단용이며 예상 접촉 폭과의 정밀 비교로 보유를 거부하지 않는다. Object Detection은 선택 자재의 동일성을 증명하지 않는다. Snap의 기하·접촉 Qualification은 별도로 유지한다.
 좌우 Fingertip 반력이나 자재 World Pose는 Hardware/Real 공통 관측의 필수 필드가 아니다.
 
