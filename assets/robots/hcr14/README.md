@@ -53,15 +53,16 @@ CAD 조립 자세를 모든 관절의 시뮬레이션 `q=0`으로 정의한다. 
 [HCR-14 제품 사진](https://kenyeriengineering.com/cobots/models/)과 공개 제품 자료의
 짙은 회색 장완/대형 관절, 주황색 단완/손목, 금속 Flange와 녹색 표시 링을 참고했다.
 사진/텍스처/제조사 CAD는 포함하지 않는다. 시각 파일 `visual/link0.dae`…`link6.dae`는
-`scripts/generate_visuals.py`가 자체 정의한 프로파일을 회전시켜 생성한다.
+공통 도구 `tools/visual_meshes.py`가 `visuals.json`의 프로파일·재질 정의를 읽어
+회전 형상으로 생성한다. HCR-14 전용 생성 코드는 두지 않는다.
 원본 CAD를 읽거나 변환하지 않으며 기구학·물성·collision의 별도 모델을 만들지 않는다.
 생성기는 시각 mesh 전체의 SHA256을 `visual/revision.xacro`에도 기록한다. 이 정보는
 확장 URDF provenance에 포함되어, 프로파일/재질 수정 후 재생성하면 기존 USD도
-갱신된다. 시각 mesh를 직접 편집하지 말고 생성기에서 수정한다.
+갱신된다. 시각 mesh를 직접 편집하지 말고 `visuals.json`에서 수정한다.
 모든 시각 mesh는 기존 link-local 프레임의 m 단위다.
 
 ```bash
-python3 assets/robots/hcr14/scripts/generate_visuals.py
+python3 tools/visual_meshes.py assets/robots/hcr14/visuals.json
 ```
 
 collision과 관성은 외관 변경 전과 동일하다. 볼트·씰·측면 커넥터 등의 장식 치수는

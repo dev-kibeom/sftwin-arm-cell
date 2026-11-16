@@ -100,20 +100,22 @@ def test_authored_visual_meshes_are_available_in_metres():
 def test_regenerated_visual_digest_invalidates_expanded_urdf(tmp_path):
     import importlib.util
     import shutil
-    script = ROOT / 'assets/robots/hcr14/scripts/generate_visuals.py'
+    script = ROOT / 'tools/visual_meshes.py'
     spec = importlib.util.spec_from_file_location('hcr14_visuals', script)
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
     for index in range(7):
-        shutil.copyfile(script.parents[1] / 'visual' / f'link{index}.dae',
+        shutil.copyfile(ROOT / 'assets/robots/hcr14/visual' / f'link{index}.dae',
                         tmp_path / f'link{index}.dae')
     wrapper = tmp_path / 'test.xacro'
     wrapper.write_text('<robot xmlns:xacro="http://www.ros.org/wiki/xacro">'
                        '<xacro:include filename="revision.xacro"/>'
                        '<xacro:hcr14_visual_revision/></robot>')
-    generator.write_revision(tmp_path)
+    generator.write_revision(tmp_path, [f'link{i}' for i in range(7)],
+                             macro='hcr14_visual_revision')
     before = xacro.process_file(str(wrapper)).toxml()
     changed = tmp_path / 'link0.dae'
     changed.write_bytes(changed.read_bytes() + b'\n')
-    generator.write_revision(tmp_path)
+    generator.write_revision(tmp_path, [f'link{i}' for i in range(7)],
+                             macro='hcr14_visual_revision')
     assert xacro.process_file(str(wrapper)).toxml() != before
