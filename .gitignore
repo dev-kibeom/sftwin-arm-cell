@@ -20,3 +20,8 @@
 /infra/isaac_sim/assets/usd/hcr14_*
 /infra/isaac_sim/assets/usd/configuration/hcr14_*
 /assets/robots/hcr14/meshes/
+
+# Derived C10 experiment artifacts.
+/infra/isaac_sim/assets/urdf/generated/m0609_hand_e_c10.urdf
+/infra/isaac_sim/assets/usd/m0609_hand_e_c10_*
+/infra/isaac_sim/assets/usd/configuration/m0609_hand_e_c10_*

@@ -396,3 +396,19 @@ def test_grasp_parameter_producer_rejects_invalid_overrides(window, tmp_path):
                        {'move_duration_s': -1}, {'primary_joint': 1}):
         with pytest.raises(ValueError):
             launcher.export_selection(dict(entry, tool_parameters=parameters), tmp_path / 'bad.json')
+
+
+def test_model_experiment_cannot_start_ros(app, window, monkeypatch):
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    entry = launcher.model_experiments()[0]
+    window.start_model_experiment(entry)
+    assert len(calls) == 1
+    assert calls[0][1][1].endswith('run_model_experiment.sh')
+    assert not window.ros.isEnabled()
+    assert '파지 미지원' in window.status.text()
+    assert all(not button.isEnabled() for button in window.experiment_buttons)
+    window.start_ros()
+    assert len(calls) == 1
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)
+    assert all(button.isEnabled() for button in window.experiment_buttons)

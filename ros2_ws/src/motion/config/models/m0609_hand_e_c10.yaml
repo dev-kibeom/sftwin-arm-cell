@@ -1,0 +1,16 @@
+urdf: package://arm_cell_motion/assets/robots/m0609_hand_e_c10/urdf/m0609_hand_e_c10.urdf.xacro
+mesh_root: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/meshes
+semantic: package://arm_cell_motion/config/moveit/m0609_hand_e_c10.srdf
+robot_id: m0609
+tool_id: hand_e_c10
+model_id: m0609_hand_e_c10
+planning_group: arm
+mount_collision_links:
+- base_link
+isaac:
+  articulation_root: root_joint
+  articulation_base: base_link
+  prismatic_joints:
+  - gripper_hande_c10_finger_1_joint
+  - gripper_hande_c10_finger_2_joint
+  - gripper_hande_c10_finger_3_joint

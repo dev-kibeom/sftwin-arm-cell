@@ -72,15 +72,11 @@ def prim_path(value, label, absolute):
     return value
 
 
-def validate_model_configuration(config):
-    """Validate the selected assembly and its Robot/Tool/Cell references.
-
-    Existing runtime parameter projections are deliberately left untouched.
-    Isaac prim bindings are checked as references, not as proof of USD topology.
-    """
+def validate_assembly_configuration(config):
+    """Validate shared Robot/Assembly geometry, SRDF chain, limits and bindings."""
     import xacro
 
-    robot, tool, cell = (config[key] for key in ('robot', 'tool', 'cell'))
+    robot = config['robot']
     model = config['model_configuration']
     urdf = ET.fromstring(xacro.process_file(model['urdf'], mappings={
         'mesh_root': model['mesh_root'],
@@ -164,6 +160,17 @@ def validate_model_configuration(config):
             raise ValueError(f'Assembly planning group is absent from {key}')
     for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
         names(robot['joint_policy'][key], f'Robot joint_policy.{key}', arm)
+    prim_path(model['isaac']['articulation_root'], 'Assembly articulation_root', False)
+    base = prim_path(model['isaac']['articulation_base'], 'Assembly articulation_base', False)
+    if str(base) not in links:
+        raise ValueError('Assembly articulation_base must name a URDF link')
+    return links, joints, arm
+
+
+def validate_model_configuration(config):
+    """Validate the selected production assembly and Robot/Tool/Cell references."""
+    links, joints, arm = validate_assembly_configuration(config)
+    tool, cell = config['tool'], config['cell']
     names(tool['grasp_pose_collision_links'], 'Tool grasp_pose_collision_links', links)
     for key in ('payload_touch_links', 'pick_retract'):
         names(tool['contact_links'][key], f'Tool contact_links.{key}', links)
@@ -194,10 +201,6 @@ def validate_model_configuration(config):
         if location.get('frame') != 'base_link':
             raise ValueError('Cell work locations must use canonical base_link')
     prim_path(cell['isaac']['robot_prim_path'], 'Cell robot_prim_path', True)
-    prim_path(model['isaac']['articulation_root'], 'Assembly articulation_root', False)
-    base = prim_path(model['isaac']['articulation_base'], 'Assembly articulation_base', False)
-    if str(base) not in links:
-        raise ValueError('Assembly articulation_base must name a URDF link')
 
 
 def tool_runtime_model(tool, joints, arm):

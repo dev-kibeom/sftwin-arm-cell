@@ -58,6 +58,16 @@ def deployments(root=ROOT):
     return sorted(entries, key=lambda entry: entry['validation_status'] == 'experimental')
 
 
+def model_experiments(root=ROOT):
+    """Registered model-only runs are separate from production grasp deployments."""
+    entries = []
+    for path in sorted((root / 'ros2_ws/src/bringup/config/model_experiments').glob('*.yaml')):
+        data = read(path)
+        if data.get('kind') == 'arm-cell-model-experiment' and data.get('schema_version') == 1:
+            entries.append(dict(profile=path, label=data['display_name']))
+    return entries
+
+
 def profile_choices(root=ROOT):
     result = {key: [str(path.resolve()) for path in sorted((root / directory).glob('*.yaml'))]
               for key, directory in OWNERS.items()}
@@ -132,6 +142,7 @@ class Launcher(QMainWindow):
         self.closing = False
         self.phase = 0
         self.run = None
+        self.model_experiment_active = False
         self.error = ''
         # One host simulation uses fixed ports even across repository checkouts.
         self.lock = QLockFile(str(Path(tempfile.gettempdir()) / f'arm-cell-launcher-{os.getuid()}.lock'))
@@ -184,6 +195,13 @@ class Launcher(QMainWindow):
         layout.addWidget(self.status)
         hint = QLabel('Isaac 초기화 완료 후 ROS 2를 시작하세요. 출력은 각 터미널에서 확인합니다.')
         layout.addWidget(hint)
+        self.experiment_buttons = []
+        for entry in model_experiments():
+            button = QPushButton(entry['label'])
+            button.setToolTip('별도 모델에서 세 손가락을 왕복 구동합니다. ROS Mission·파지 미지원.')
+            button.clicked.connect(lambda checked=False, entry=entry: self.start_model_experiment(entry))
+            layout.addWidget(button)
+            self.experiment_buttons.append(button)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(100)
@@ -280,7 +298,12 @@ class Launcher(QMainWindow):
         self.parameter_panel.setEnabled(not active)
         self.reset_parameters.setEnabled(not active)
         self.isaac.setEnabled(valid and not active)
-        self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
+        self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping
+                            and not self.model_experiment_active)
+        for button in self.experiment_buttons:
+            button.setEnabled(not active)
+        if self.model_experiment_active and active:
+            message = 'C10 모델·관절 실험 실행 중 — ROS Mission·파지 미지원'
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
@@ -314,6 +337,7 @@ class Launcher(QMainWindow):
         if self.processes or self.terminals or self.stopping:
             return
         self.error = ''
+        self.model_experiment_active = False
         if not self.lock.tryLock(0):
             self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
             self.validate()
@@ -333,8 +357,26 @@ class Launcher(QMainWindow):
             self.begin_stop()
         self.validate()
 
+    def start_model_experiment(self, entry):
+        if self.processes or self.terminals or self.stopping:
+            return
+        self.error = ''
+        if not self.lock.tryLock(0):
+            self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
+            self.validate()
+            return
+        try:
+            self.model_experiment_active = True
+            self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/run_model_experiment.sh'),
+                                 str(entry['profile'])], dict(os.environ, PYTHONUNBUFFERED='1'))
+        except Exception as exc:
+            self.error = str(exc)
+            self.begin_stop()
+        self.validate()
+
     def start_ros(self):
-        if 'isaac' not in self.processes or 'ros' in self.processes or self.stopping:
+        if (self.model_experiment_active or 'isaac' not in self.processes
+                or 'ros' in self.processes or self.stopping):
             return
         try:
             self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), str(self.runtime),

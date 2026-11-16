@@ -1,0 +1,8 @@
+{
+  "meshes/collision/hand_e_c10/base_front.stl": "e42d915fc352b30a8d52364dd546c466d2cc5e29dceaaf2df42cf513a52fe485",
+  "meshes/collision/hand_e_c10/base_housing.stl": "fe4a11a10137feb506662699a05923bdbecb2f2a2b597548c1b54deec3d3eb9a",
+  "meshes/collision/hand_e_c10/finger_slider.stl": "64d7b90801972d2ed5bbd648274fa925e5a8348d79aa4c9c1fce19cc3585f350",
+  "meshes/collision/hand_e_c10/finger_tip.stl": "0a74667a2ce45fc464c9ff84ce1656fc6f10ad29e3f6edbeb9dcf0c17aa697bd",
+  "meshes/visual/hand_e_c10/base.stl": "6b5eb1938c2c75301e21144cb3bb885b9b0b73c30fca3cbbcd6b31b7accf7944",
+  "meshes/visual/hand_e_c10/finger.stl": "a2fa22f8d29a76f8e986ad01ca0922aec40d49faf690af7299464b28f485e932"
+}

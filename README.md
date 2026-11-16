@@ -363,3 +363,7 @@ SubTree를 재사용해 Holding 확인·이동·해제·Release 확인을 함께
 배포 profile의 `taught_motion_configuration`으로 파일을 선택할 수 있습니다.
 소스 YAML/XML 변경 후 재빌드·overlay 적용·Task Execution 프로세스 재시작이 필요하며,
 현재 실행 중 동작의 속도가 자동으로 바뀌지는 않습니다. 새 자세 저장 UI는 제공하지 않습니다.
+
+Hand-E C10 stage-1 model integration is available as a separate **M0609 + Hand-E C10 · 모델·관절 실험** Launcher button.
+It supports radial finger actuation only; ROS Mission and grasp modes are unavailable.
+See [C10 model and live experiment instructions](assets/robots/m0609_hand_e_c10/README.md).

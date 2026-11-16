@@ -1,0 +1,15 @@
+tool_id: hand_e_c10
+display_name: Hand-E C10 (모델·관절 실험 전용)
+tool_type: radial_gripper
+runtime:
+  actuator: joint_position
+  grasp: none
+  supported_combinations: []
+  launcher_modes: []
+  capabilities: [joint_position]
+  primary_joint: gripper_hande_c10_finger_1_joint
+  # Simulation position-drive tuning, not calibrated grip force.
+  drive_stiffness: 10000.0
+  drive_damping: 100.0
+  sweep_duration_s: 2.0
+  position_tolerance_m: 0.0002
