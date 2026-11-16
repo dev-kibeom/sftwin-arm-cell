@@ -108,12 +108,13 @@ def test_assembly_identity_cannot_escape_generated_directory(exported_configurat
 
 
 @pytest.mark.parametrize('robot_id', ['m0609', 'hcr14'])
-def test_c10_uses_prismatic_bindings_and_separate_derived_artifacts(robot_id):
+@pytest.mark.parametrize('suffix', ['', '_long'])
+def test_c10_uses_prismatic_bindings_and_separate_derived_artifacts(robot_id, suffix):
     from arm_cell_bringup.model_experiment import load_model_experiment
     from isaac_runtime.model_build_configuration import ModelBuildConfiguration
-    config = load_model_experiment(ROOT / 'ros2_ws/src/bringup/config/model_experiments' / f'{robot_id}_hand_e_c10.yaml')
+    config = load_model_experiment(ROOT / 'ros2_ws/src/bringup/config/model_experiments' / f'{robot_id}_hand_e_c10{suffix}.yaml')
     selected = ModelBuildConfiguration.from_runtime(config, ROOT)
     assert selected.revolute_joints == ()
     assert selected.prismatic_joints == tuple(config['tool']['runtime']['joint_model'])
-    assert selected.generated_urdf.stem == selected.model_id == f'{robot_id}_hand_e_c10'
-    assert selected.usd.name == f'{robot_id}_hand_e_c10_generated.usd'
+    assert selected.generated_urdf.stem == selected.model_id == f'{robot_id}_hand_e_c10{suffix}'
+    assert selected.usd.name == f'{robot_id}_hand_e_c10{suffix}_generated.usd'

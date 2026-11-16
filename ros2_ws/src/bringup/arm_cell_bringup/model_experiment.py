@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 
 from .runtime import read, resolve
-from .model_validation import validate_assembly_configuration, finite_number
+from .model_validation import validate_assembly_configuration, finite_number, names
 
 
 def load_model_experiment(path):
@@ -24,7 +24,7 @@ def load_model_experiment(path):
     if any(model[f'{key}_id'] != config[key][f'{key}_id'] for key in ('robot', 'tool')):
         raise ValueError('Model experiment owner identity mismatch')
     config['home_joint_positions'] = read(robot['home'])['home_joint_positions']
-    _, joints, arm = validate_assembly_configuration(config)
+    links, joints, arm = validate_assembly_configuration(config)
     runtime = tool['runtime']
     if runtime['supported_combinations'] or runtime['capabilities'] != ['joint_position']:
         raise ValueError('Model experiment cannot advertise grasp support')
@@ -54,6 +54,20 @@ def load_model_experiment(path):
         if not finite_number(runtime[key]) or runtime[key] <= 0:
             raise ValueError(f'Experiment {key} must be finite and positive')
     runtime['joint_model'] = linkage
+    tips = runtime.get('finger_tip_links', [joint.find('child').get('link') for joint in selected.values()])
+    names(tips, 'Tool finger_tip_links', links)
+    if len(tips) != len(selected):
+        raise ValueError('Tool requires one observed tip per moving finger')
+    by_child = {joint.find('child').get('link'): joint for joint in joints.values()}
+    for tip, finger in zip(tips, selected.values()):
+        cursor, visited = tip, set()
+        while cursor != finger.find('child').get('link'):
+            joint = by_child.get(cursor)
+            if cursor in visited or joint is None or joint.get('type') != 'fixed':
+                raise ValueError('Tool tip must be rigidly attached to its moving finger')
+            visited.add(cursor)
+            cursor = joint.find('parent').get('link')
+    runtime['finger_tip_links'] = tips
     # Validate dependent endpoints before a simulator is launched.
     for position in (linkage[primary]['lower'], linkage[primary]['upper']):
         joint_targets(linkage, position)

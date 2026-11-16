@@ -1,10 +1,11 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="m0609_hand_e_c10">
   <xacro:arg name="mesh_root" default="${xacro.abs_filename('../../m0609_robotiq_2f85/meshes')}"/>
+  <xacro:arg name="finger_extension_length" default="0.0"/>
   <xacro:include filename="../../m0609_robotiq_2f85/urdf/m0609_macro.xacro"/>
   <xacro:include filename="../../m0609_robotiq_2f85/urdf/m0609_tool_adapter.xacro"/>
   <xacro:include filename="../../../tools/hand_e_c10/urdf/assembly.xacro"/>
   <xacro:m0609_robot mesh_dir="$(arg mesh_root)"/>
   <xacro:m0609_tool_adapter parent="tool0"/>
-  <xacro:hand_e_c10_assembly mesh_dir="${xacro.abs_filename('../../../tools/hand_e_c10/meshes')}"/>
+  <xacro:hand_e_c10_assembly extension_length="$(arg finger_extension_length)" mesh_dir="${xacro.abs_filename('../../../tools/hand_e_c10/meshes')}"/>
 </robot>

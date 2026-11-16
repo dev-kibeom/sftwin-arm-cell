@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="hcr14_hand_e_c10">
   <xacro:arg name="mesh_root" default="${xacro.abs_filename('../primitive')}"/>
+  <xacro:arg name="finger_extension_length" default="0.0"/>
   <xacro:include filename="hcr14_macro.xacro"/>
   <xacro:include filename="../../../tools/hand_e_c10/urdf/assembly.xacro"/>
   <xacro:hcr14_robot mesh_dir="$(arg mesh_root)"/>
@@ -14,5 +15,5 @@
     <parent link="flange"/><child link="tool_mount"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
-  <xacro:hand_e_c10_assembly mesh_dir="${xacro.abs_filename('../../../tools/hand_e_c10/meshes')}"/>
+  <xacro:hand_e_c10_assembly extension_length="$(arg finger_extension_length)" mesh_dir="${xacro.abs_filename('../../../tools/hand_e_c10/meshes')}"/>
 </robot>

@@ -1,0 +1,7 @@
+kind: arm-cell-model-experiment
+schema_version: 1
+display_name: HCR-14 + Hand-E C10 + 100 mm 핑거 · 모델·관절 실험 (파지 미지원)
+robot: package://arm_cell_motion/config/robots/hcr14.yaml
+tool: package://arm_cell_motion/config/tools/hand_e_c10_long.yaml
+model_configuration: package://arm_cell_motion/config/models/hcr14_hand_e_c10_long.yaml
+motion_configuration: package://arm_cell_motion/config/planning.yaml

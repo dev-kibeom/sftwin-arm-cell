@@ -171,3 +171,6 @@ bash infra/isaac_sim/scripts/run_model_experiment.sh \
 실행 범위는 독립 모델의 Import·Articulation 생성과 손가락 왕복 구동입니다.
 ROS 시작은 비활성화하며, Mission·파지·자재·Vision·Physical Grasp·신규 Cell은 지원하지 않습니다.
 기존 셀에서의 충돌 없는 경로나 파지 성공을 뜻하지 않습니다.
+
+사진을 참고한 100 mm 연장 핑거도 별도 `hcr14_hand_e_c10_long` 실험으로 제공합니다.
+[연장부 치수·물성 가정과 실행법](../../tools/hand_e_c10/README.md)을 참조하세요.
