@@ -28,8 +28,8 @@ def test_long_fingers_preserve_mechanism_and_move_tcp(robot_id):
         link = extended.find(f"link[@name='gripper_hande_c10_extension_{i}']")
         assert link is not None
         dimensions = list(map(float, link.find('collision/geometry/box').get('size').split()))
-        assert dimensions == pytest.approx([.008, .012, .100])
-        assert float(link.find('inertial/mass').get('value')) > 0
+        assert dimensions == pytest.approx([.003, .012, .100])
+        assert float(link.find('inertial/mass').get('value')) == pytest.approx(.00972)
         joint = extended.find(f"joint[@name='gripper_hande_c10_extension_{i}_mount']")
         assert joint.get('type') == 'fixed'
         assert joint.find('parent').get('link') == name

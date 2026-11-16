@@ -10,7 +10,7 @@
     <!-- User-sized simulation extensions; vendor mesh and joints stay untouched. -->
     <xacro:if value="${extension_length > 0}">
       <xacro:macro name="c10_extension" params="index">
-        <xacro:property name="width" value="0.008"/>
+        <xacro:property name="width" value="0.003"/>
         <xacro:property name="depth" value="0.012"/>
         <xacro:property name="mass" value="${2700 * width * depth * extension_length}"/>
         <link name="gripper_hande_c10_extension_${index}">
