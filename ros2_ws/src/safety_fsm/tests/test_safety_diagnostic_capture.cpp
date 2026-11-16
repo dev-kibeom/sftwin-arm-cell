@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #define main arm_cell_safety_node_main
 #include "../src/safety_node.cpp"
@@ -32,10 +33,11 @@ TEST(SafetyDiagnosticCaptureStorage, FirstEventIsWrittenOnShutdown)
     std::ifstream input(entry.path());
     std::string line;
     ASSERT_TRUE(static_cast<bool>(std::getline(input, line)));
-    EXPECT_NE(line.find("schema_version"), std::string::npos);
+    EXPECT_TRUE(nlohmann::json::parse(line).contains("schema_version"));
     ASSERT_TRUE(static_cast<bool>(std::getline(input, line)));
-    EXPECT_NE(line.find("capture_summary"), std::string::npos);
-    EXPECT_NE(line.find("\"capture_complete\":true"), std::string::npos);
+    const auto summary = nlohmann::json::parse(line);
+    EXPECT_EQ(summary.at("event"), "capture_summary");
+    EXPECT_EQ(summary.at("capture_complete"), true);
     ++count;
   }
   EXPECT_EQ(count, 1U);

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -11,6 +12,15 @@
 
 namespace arm_cell_motion {
 namespace {
+std::vector<nlohmann::json> read_events(std::istream & input) {
+  std::vector<nlohmann::json> records;
+  std::string line;
+  while (std::getline(input, line)) {
+    records.push_back(nlohmann::json::parse(line));
+  }
+  return records;
+}
+
 ClockDiagnosticCapture::Sample sample(double clock_s, double steady_s) {
   ClockDiagnosticCapture::Sample value;
   value.clock_time_ns = static_cast<int64_t>(clock_s * 1e9);
@@ -41,20 +51,23 @@ TEST(ClockDiagnosticCapture,
   const auto jsonl = capture_dir / "events.jsonl";
   ASSERT_TRUE(std::filesystem::exists(jsonl));
   std::ifstream input(jsonl);
-  const std::string contents((std::istreambuf_iterator<char>(input)), {});
-  EXPECT_NE(contents.find("\"event\":\"backward_epoch\""), std::string::npos);
-  EXPECT_NE(contents.find("\"clock_epoch\":1"), std::string::npos);
-  EXPECT_NE(contents.find("\"capture_id\":\"test-capture\""),
-            std::string::npos);
-  EXPECT_NE(contents.find("\"receipt_steady_ns\":"), std::string::npos);
-  EXPECT_NE(contents.find("\"node_ros_time_ns\":"), std::string::npos);
-  EXPECT_NE(contents.find("\"rtf_interval\":"), std::string::npos);
+  const auto contents = read_events(input);
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("event") == "backward_epoch";}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("clock_epoch") == 1;}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("capture_id") == "test-capture";}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.contains("receipt_steady_ns");}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.contains("node_ros_time_ns");}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.contains("rtf_interval");}));
   std::ifstream manifest(capture_dir / "manifest.json");
   ASSERT_TRUE(manifest.good());
-  const std::string manifest_contents(
-      (std::istreambuf_iterator<char>(manifest)), {});
-  EXPECT_NE(manifest_contents.find("\"receipt_gap_threshold_ns\":2000000000"),
-            std::string::npos);
+  const auto manifest_contents = nlohmann::json::parse(manifest);
+  EXPECT_EQ(manifest_contents.at("receipt_gap_threshold_ns"), 2000000000);
   std::filesystem::remove_all(root);
 }
 
@@ -76,9 +89,11 @@ TEST(ClockDiagnosticCapture, SourceStampAgeDoesNotMasqueradeAsReceiptDelay) {
   }
   std::ifstream input(root / "age-capture" / "test-process" / "events.jsonl");
   ASSERT_TRUE(input.good());
-  const std::string contents((std::istreambuf_iterator<char>(input)), {});
-  EXPECT_NE(contents.find("\"source_age_ns\":9000000000"), std::string::npos);
-  EXPECT_NE(contents.find("\"event\":\"initialized\""), std::string::npos);
+  const auto contents = read_events(input);
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("source_age_ns") == 9000000000;}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("event") == "initialized";}));
   std::filesystem::remove_all(root);
 }
 
@@ -95,11 +110,11 @@ TEST(ClockDiagnosticCapture, ForwardJumpIsReportedWithObservedThreshold) {
   }
   std::ifstream input(root / "jump-capture" / "test-process" / "events.jsonl");
   ASSERT_TRUE(input.good());
-  const std::string contents((std::istreambuf_iterator<char>(input)), {});
-  EXPECT_NE(contents.find("\"forward_jump_threshold_ns\":1200000000"),
-            std::string::npos);
-  EXPECT_NE(contents.find("\"event\":\"suspected_forward_jump\""),
-            std::string::npos);
+  const auto contents = read_events(input);
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("forward_jump_threshold_ns") == 1200000000;}));
+  EXPECT_TRUE(std::any_of(contents.begin(), contents.end(),
+      [](const auto & record) {return record.at("event") == "suspected_forward_jump";}));
   std::filesystem::remove_all(root);
 }
 
@@ -133,11 +148,10 @@ TEST(ClockDiagnosticCapture, FlushFailureMarksCaptureIncomplete) {
   }
   std::ifstream manifest(directory / "manifest.json");
   ASSERT_TRUE(manifest.good());
-  const std::string contents((std::istreambuf_iterator<char>(manifest)), {});
-  EXPECT_NE(contents.find("\"writer_failed\":true"), std::string::npos);
-  EXPECT_NE(contents.find("\"complete\":false"), std::string::npos);
-  EXPECT_NE(contents.find("\"shutdown_status\":\"incomplete\""),
-            std::string::npos);
+  const auto contents = nlohmann::json::parse(manifest);
+  EXPECT_EQ(contents.at("writer_failed"), true);
+  EXPECT_EQ(contents.at("complete"), false);
+  EXPECT_EQ(contents.at("shutdown_status"), "incomplete");
   std::filesystem::remove_all(root);
 }
 
@@ -156,17 +170,11 @@ TEST(ClockDiagnosticCapture,
   std::ifstream manifest(root / "overflow-capture" / "test-process" /
                          "manifest.json");
   ASSERT_TRUE(manifest.good());
-  const std::string contents((std::istreambuf_iterator<char>(manifest)), {});
-  const auto count_pos = contents.find("\"dropped_count\":");
-  ASSERT_NE(count_pos, std::string::npos);
-  const auto dropped_value = contents.find(':', count_pos) + 1;
-  EXPECT_GT(std::stoull(contents.substr(dropped_value)), 0u);
-  const auto retained_pos = contents.find("\"retained_count\":");
-  ASSERT_NE(retained_pos, std::string::npos);
-  const auto retained_value = contents.find(':', retained_pos) + 1;
-  EXPECT_LE(std::stoull(contents.substr(retained_value)), 512u);
-  EXPECT_NE(contents.find("\"complete\":false"), std::string::npos);
-  EXPECT_NE(contents.find("\"shutdown_status\":\"clean\""), std::string::npos);
+  const auto contents = nlohmann::json::parse(manifest);
+  EXPECT_GT(contents.at("dropped_count").get<std::uint64_t>(), 0u);
+  EXPECT_LE(contents.at("retained_count").get<std::uint64_t>(), 512u);
+  EXPECT_EQ(contents.at("complete"), false);
+  EXPECT_EQ(contents.at("shutdown_status"), "clean");
   std::filesystem::remove_all(root);
 }
 
@@ -189,9 +197,7 @@ TEST(ClockDiagnosticCapture, RepeatedRollbackDoesNotDuplicateSequenceRecords) {
   std::string line;
   std::vector<uint64_t> sequences;
   while (std::getline(input, line)) {
-    const auto pos = line.find("\"sequence\":");
-    ASSERT_NE(pos, std::string::npos);
-    sequences.push_back(std::stoull(line.substr(pos + 11)));
+    sequences.push_back(nlohmann::json::parse(line).at("sequence").get<uint64_t>());
   }
   EXPECT_EQ(sequences.size(), 13u);
   EXPECT_TRUE(std::is_sorted(sequences.begin(), sequences.end()));
@@ -225,8 +231,8 @@ TEST(ClockDiagnosticCapture, RepeatedStallDecisionsConsumeFinitePostWindow) {
   std::ifstream manifest(root / "stall-capture" / "test-process" /
                          "manifest.json");
   ASSERT_TRUE(manifest.good());
-  const std::string contents((std::istreambuf_iterator<char>(manifest)), {});
-  EXPECT_NE(contents.find("\"window_complete\":true"), std::string::npos);
+  const auto contents = nlohmann::json::parse(manifest);
+  EXPECT_EQ(contents.at("window_complete"), true);
 }
 
 TEST(ClockDiagnosticCapture,
@@ -250,28 +256,23 @@ TEST(ClockDiagnosticCapture,
   }
   std::ifstream input(root / "late-stall" / "test-process" / "events.jsonl");
   ASSERT_TRUE(input.good());
-  std::string first_record;
-  ASSERT_TRUE(static_cast<bool>(std::getline(input, first_record)));
-  EXPECT_NE(first_record.find("\"event\":\"clock_progress\""),
-            std::string::npos);
-  const auto clock_time_pos = first_record.find("\"clock_time_ns\":");
-  ASSERT_NE(clock_time_pos, std::string::npos);
-  const auto clock_time_value = first_record.find(':', clock_time_pos) + 1;
-  const auto first_clock_time =
-      std::stoll(first_record.substr(clock_time_value));
+  const auto records = read_events(input);
+  ASSERT_FALSE(records.empty());
+  EXPECT_EQ(records.front().at("event"), "clock_progress");
+  const auto first_clock_time = records.front().at("clock_time_ns").get<int64_t>();
   EXPECT_GT(first_clock_time, 2'000'000'000LL);
   EXPECT_LT(first_clock_time, 3'000'000'000LL);
-  std::string contents(first_record);
-  contents.append(std::istreambuf_iterator<char>(input), {});
-  EXPECT_NE(contents.find("\"event\":\"watchdog_decision\""),
-            std::string::npos);
-  EXPECT_EQ(contents.find("\"event\":\"initialized\""), std::string::npos);
+  EXPECT_TRUE(std::any_of(records.begin(), records.end(), [](const auto & record) {
+      return record.at("event") == "watchdog_decision";
+    }));
+  EXPECT_FALSE(std::any_of(records.begin(), records.end(), [](const auto & record) {
+      return record.at("event") == "initialized";
+    }));
   std::ifstream manifest(root / "late-stall" / "test-process" /
                          "manifest.json");
   ASSERT_TRUE(manifest.good());
-  const std::string manifest_contents(
-      (std::istreambuf_iterator<char>(manifest)), {});
-  EXPECT_NE(manifest_contents.find("\"complete\":true"), std::string::npos);
+  const auto manifest_contents = nlohmann::json::parse(manifest);
+  EXPECT_EQ(manifest_contents.at("complete"), true);
   std::filesystem::remove_all(root);
 }
 
@@ -296,17 +297,15 @@ TEST(ClockDiagnosticCapture, RearmsForSecondAnomalyAfterFirstWindowCompletes) {
   }
   std::ifstream input(root / "rearm-capture" / "test-process" / "events.jsonl");
   ASSERT_TRUE(input.good());
-  const std::string contents((std::istreambuf_iterator<char>(input)), {});
-  const auto first = contents.find("\"event\":\"backward_epoch\"");
-  ASSERT_NE(first, std::string::npos);
-  EXPECT_NE(contents.find("\"event\":\"backward_epoch\"", first + 1),
-            std::string::npos);
+  const auto contents = read_events(input);
+  EXPECT_GE(std::count_if(contents.begin(), contents.end(), [](const auto & record) {
+      return record.at("event") == "backward_epoch";
+    }), 2);
   std::ifstream manifest(root / "rearm-capture" / "test-process" /
                          "manifest.json");
   ASSERT_TRUE(manifest.good());
-  const std::string manifest_contents(
-      (std::istreambuf_iterator<char>(manifest)), {});
-  EXPECT_NE(manifest_contents.find("\"complete\":true"), std::string::npos);
+  const auto manifest_contents = nlohmann::json::parse(manifest);
+  EXPECT_EQ(manifest_contents.at("complete"), true);
   std::filesystem::remove_all(root);
 }
 

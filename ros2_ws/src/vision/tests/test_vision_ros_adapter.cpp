@@ -4,10 +4,10 @@
 #include <future>
 #include <memory>
 #include <limits>
-#include <sstream>
 #include <thread>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rcutils/logging.h>
 #include <rosgraph_msgs/msg/clock.hpp>
@@ -141,19 +141,15 @@ TEST(VisionRosAdapter, M1cFixtureNominalFieldsReachPolicyWithoutRewriting)
 {
   std::ifstream manifest_stream(M1C_FIXTURE_MANIFEST);
   ASSERT_TRUE(manifest_stream.good());
-  std::stringstream manifest_content;
-  manifest_content << manifest_stream.rdbuf();
-  const auto manifest = manifest_content.str();
-  ASSERT_NE(manifest.find("\"status\": \"PARTIALLY VERIFIED\""), std::string::npos);
-  ASSERT_NE(manifest.find("\"frame_id\": \"camera_color_optical_frame\""), std::string::npos);
-  ASSERT_NE(manifest.find("\"width\": 1280"), std::string::npos);
-  ASSERT_NE(manifest.find("\"height\": 720"), std::string::npos);
-  ASSERT_NE(
-    manifest.find("\"selected_image_stamp_range_ns\": [\n    36933335259"),
-    std::string::npos);
-  ASSERT_NE(manifest.find("\"depth_unit\": \"NOT VERIFIED\""), std::string::npos);
-  ASSERT_NE(manifest.find("\"depth_semantics\": \"NOT VERIFIED\""), std::string::npos);
-  ASSERT_NE(manifest.find("\"pixel_correspondence\": \"NOT VERIFIED\""), std::string::npos);
+  const auto manifest = nlohmann::json::parse(manifest_stream);
+  EXPECT_EQ(manifest.at("status"), "PARTIALLY VERIFIED");
+  EXPECT_EQ(manifest.at("camera").at("frame_id"), "camera_color_optical_frame");
+  EXPECT_EQ(manifest.at("camera").at("width"), 1280);
+  EXPECT_EQ(manifest.at("camera").at("height"), 720);
+  EXPECT_EQ(manifest.at("selected_image_stamp_range_ns").at(0), 36933335259LL);
+  EXPECT_EQ(manifest.at("depth_unit"), "NOT VERIFIED");
+  EXPECT_EQ(manifest.at("depth_semantics"), "NOT VERIFIED");
+  EXPECT_EQ(manifest.at("pixel_correspondence"), "NOT VERIFIED");
 
   sensor_msgs::msg::Image rgb = image(36, 933335259);
   sensor_msgs::msg::Image depth = image(36, 933335259);

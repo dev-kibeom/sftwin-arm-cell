@@ -42,6 +42,7 @@ ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_dependencies(arm_cell_interfaces)
 
 if(BUILD_TESTING)
+  find_package(nlohmann_json REQUIRED)
   find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -54,7 +55,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   ament_add_gtest(test_safety_diagnostic_capture tests/test_safety_diagnostic_capture.cpp)
-  target_link_libraries(test_safety_diagnostic_capture ${PROJECT_NAME}_core)
+  target_link_libraries(test_safety_diagnostic_capture ${PROJECT_NAME}_core nlohmann_json::nlohmann_json)
   target_include_directories(test_safety_diagnostic_capture PRIVATE include)
   ament_target_dependencies(test_safety_diagnostic_capture rclcpp arm_cell_interfaces)
 
