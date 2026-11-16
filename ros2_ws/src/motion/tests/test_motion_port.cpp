@@ -544,8 +544,8 @@ TEST(MotionPortTest, ControlledLegacyRetractKeepsRecoveryPermissionBoundary)
   auto place_backend = std::make_shared<FakeMotionBackend>();
   MotionCore place_core(place_backend);
   grant_recovery_only(place_core);
-  const auto place_recovery = place_core.executePlaceRecoveryJointTarget(
-    make_uuid(12), "place-recovery-tray");
+  const auto place_recovery = place_core.executeTaughtMotion(
+    "return_material", "00000000000000000000000000000012", "place-recovery-tray");
 
   EXPECT_EQ(
     controlled_retract,
@@ -737,3 +737,24 @@ TEST(MotionPortTest, SafetyStopStillPreemptsThroughTheCoreStopBoundary)
 }
 }  // namespace
 }  // namespace arm_cell_motion
+
+
+TEST(MotionCoreTaughtMotion, RejectsInvalidIdentityBeforeAdmission)
+{
+  using namespace arm_cell_motion;
+  auto backend = std::make_shared<FakeMotionBackend>();
+  MotionCore core(backend);
+  for (const auto & id : {std::string(32, '0'), std::string(31, '1') + "z", std::string("short")}) {
+    EXPECT_EQ(
+      core.executeTaughtMotion(
+        "home", id,
+        "move"), MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+  }
+  EXPECT_EQ(
+    core.executeTaughtMotion("", std::string(32, '1'), "move"),
+    MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+  EXPECT_EQ(
+    core.executeTaughtMotion("home", std::string(32, '1'), ""),
+    MotionTaskResultCode::TASK_RESULT_INVALID_GOAL);
+  EXPECT_EQ(backend->submitted_task_type().value, MotionTaskType::TASK_TYPE_UNSPECIFIED);
+}

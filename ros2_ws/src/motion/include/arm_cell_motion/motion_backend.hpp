@@ -126,6 +126,7 @@ public:
   {return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;}
 
   virtual bool available() const = 0;
+  virtual bool named_joint_motion_available() const {return available();}
   virtual void begin_pick_search() {}
   virtual void begin_pick_search(const std::string & execution_id)
   { (void)execution_id; begin_pick_search(); }
@@ -158,10 +159,14 @@ public:
     (void)motion_goal_uuid;
     return execute_task(goal);
   }
-  virtual uint8_t execute_joint_target()
+  virtual uint8_t execute_taught_motion(
+    const std::string & motion, const std::string & execution_id,
+    const std::function<uint8_t()> & interruption)
   {
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+    (void)motion; (void)execution_id; (void)interruption;
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
+
   // SUCCESS means the existing trajectory completion oracle accepted measured
   // execution; it is distinct from backend inactivity/stop confirmation.
   virtual uint8_t execute_normalized(const NormalizedMotionRequest & request)

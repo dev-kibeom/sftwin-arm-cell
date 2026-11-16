@@ -25,13 +25,11 @@ std::uint8_t HeldObjectReturn::prepare()
     return report_->result_code;
   }
 
-  report_->failure_stage = stage_prefix_ + ":tray_joint_target";
-  report_->result_code = support_.execute_place_recovery_joint_target();
-  if (report_->result_code != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-    report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
-    return report_->result_code;
-  }
+  return report_->result_code = MotionTaskResultCode::TASK_RESULT_SUCCESS;
+}
 
+std::uint8_t HeldObjectReturn::open()
+{
   holding_baseline_ = 0;
   holding_result_ = HoldingWaitResult::TIMEOUT;
   report_->failure_stage = stage_prefix_ + ":gripper_open";
@@ -81,25 +79,27 @@ void HeldObjectReturn::register_nodes(
   stage_prefix_ = goal.task_type.value == MotionTaskType::TASK_TYPE_PLACE ?
     "place_return" : "held_return";
   report_ = &report;
-  register_callback_action(factory, "PrepareHeldTrayReturn", [this]() {
+  register_callback_action(
+    factory, "PrepareHeldTrayReturn", [this]() {
       return prepare() == MotionTaskResultCode::TASK_RESULT_SUCCESS ?
-             BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-    });
-  register_callback_action(factory, "FinalizeHeldTrayReturn", [this]() {
-    return finalize() == MotionTaskResultCode::TASK_RESULT_SUCCESS ?
       BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
-  });
-  register_release_wait_action(factory, "WaitForReturnedRelease", support_, holding_baseline_,
+    });
+  register_callback_action(
+    factory, "OpenReturnedGripper", [this]() {
+      return open() == MotionTaskResultCode::TASK_RESULT_SUCCESS ?
+      BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    });
+  register_callback_action(
+    factory, "FinalizeHeldTrayReturn", [this]() {
+      return finalize() == MotionTaskResultCode::TASK_RESULT_SUCCESS ?
+      BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    });
+  register_release_wait_action(
+    factory, "WaitForReturnedRelease", support_, holding_baseline_,
     holding_result_, report, [this]() {
       report_->result_code = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
       report_->failure_stage = stage_prefix_ + ":release_confirmation";
     });
-  factory.registerBehaviorTreeFromText(R"(
-    <root><BehaviorTree ID="ReturnHeldToTray"><Sequence>
-      <PrepareHeldTrayReturn/>
-      <WaitForReturnedRelease/>
-      <FinalizeHeldTrayReturn/>
-    </Sequence></BehaviorTree></root>)");
 }
 
 }  // namespace arm_cell_task_execution

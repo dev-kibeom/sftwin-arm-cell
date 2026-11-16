@@ -877,6 +877,31 @@ PICK·PLACE 작업 위치에서 HOME으로의 이동은 부착 자재가 있는 
 
 GO_HOME은 기존 HOME 관절 자세로 이동하며, 명시적 설정이 없는 한 무관한 Gripper 부작용을 발생시켜서는 안 된다. Home 도달 자체가 작업 성공 조건이므로 기존 관절 명령 완료 판정을 유지한다. HOME은 충돌 없는 이동 환경이 보장된 고정 관절 자세이며, 이 설계는 GO_HOME에 추가 IK·경유지 탐색이나 무제한 경로 재계획을 추가하지 않는다. 실제 Backend·상태·Safety·취소·명령 완료 오류는 기존 Terminal 계약을 따른다.
 
+### Named Joint Motion과 티칭 설정
+
+GO_HOME·트레이 반환·payload HOME 및 추가 티칭 자세는 단일 Registry의 이름으로 조회한다.
+각 항목은 목표 관절 위치와 속도·가속도 비율을 소유한다. 목표는 선택 Robot의 기존 자세
+참조 또는 `arm_joint_names` 순서의 유한 관절 위치(rad)로 등록하며, 실행기는 이름별로
+분기하지 않는다. GO_HOME 등 기존 작업 요청을 이름으로 연결하는 부분은 호출 경계에 둔다.
+
+Named Joint Motion은 현재 측정 관절값에서 목표까지 직접 Joint Trajectory를 생성한다.
+MoveIt 경로 계획·IK·Planning Scene 조회·충돌 경로 탐색을 수행하지 않는다. Robot의
+위치·속도 한계와 설정된 관절 가속도 한계를 소비하고, 표준 동기화 속도 프로파일을 사용한다.
+별도의 보간기나 작업별 궤적 생성기를 두지 않으며 기존 simulation-clock sampler·명령
+전송·감시·Stop 실행기를 재사용한다. 티칭 자세 사이의 직접 관절 이동 경로 적합성은 운영
+티칭에서 확보하며, 이 실행 성공을 충돌 검사 완료로 표현하지 않는다.
+
+`velocity_scale`과 `acceleration_scale`은 각각 관절 속도·가속도 한계 대비 `(0, 1]`
+비율이다. PICK/PLACE planning scale과 독립적이며 현재 Safety envelope 비율을 곱해
+적용한다. 모든 티칭 동작은 같은 admission·execution identity·Cancel·Safety 경계를
+사용한다. 미등록 이름, 오래되거나 불완전한 관절 피드백, 잘못된 목표·한계 또는 실행 조건
+부재는 이동을 시작하지 않고 실패한다. 중단이 확정된 뒤 궤적을 시작하거나 재개하지 않는다.
+
+GO_HOME과 독립 티칭 이동은 궤적 전송 완료 이후에도 기존 연속 관절 피드백 기반 목표
+도달을 확인한다. Named Joint Motion은 Holding을 판단하거나 Gripper를 열고 닫지 않는다.
+자재 반환의 fresh HELD·OPEN·fresh RELEASED 및 객체 처리 확정은 Task Execution BT가
+소유한다. 설정된 시간 궤적 실행이 불가능하면 단일 목표 명령으로 대체하지 않는다.
+
 ## 5. RETRACT
 
 RETRACT는 제한된 Recovery 작업이며 Goal 도달과 Safety Recovery 계약을 그대로 적용한다.

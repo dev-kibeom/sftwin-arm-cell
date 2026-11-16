@@ -27,3 +27,5 @@ motion_profile_sections:
   cell:
   - motion
 capture_section: gripper_capture
+
+taught_motion_configuration: package://arm_cell_motion/config/taught_motions.yaml

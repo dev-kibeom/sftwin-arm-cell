@@ -1,3 +1,4 @@
+#include <map>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -154,8 +155,7 @@ public:
       const bool approach = request.phase ==
         arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_APPROACHING;
       if ((approach && fail_place_approach_planning) ||
-        (!approach && fail_place_insertion_planning &&
-        request.segment != MotionSegmentKind::PAYLOAD_HOME))
+        (!approach && fail_place_insertion_planning))
       {
         last_place_stage = approach ? "place_approach_planning" : "place_insertion_planning";
         return MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED;
@@ -243,10 +243,14 @@ public:
            MotionTaskResultCode::TASK_RESULT_SUCCESS;
   }
 
-  uint8_t execute_joint_target() override
+  uint8_t execute_taught_motion(
+    const std::string & motion, const std::string &, const std::function<uint8_t()> &) override
   {
-    events.push_back("tray");
-    return MotionTaskResultCode::TASK_RESULT_SUCCESS;
+    const std::map<std::string, std::string> labels{
+      {"home", "home"}, {"payload_home", "payload_home"}, {"return_material", "tray"}};
+    events.push_back(labels.at(motion));
+    if (motion == "home") {waypoint_events.push_back("home");}
+    return motion == "home" ? home_result : MotionTaskResultCode::TASK_RESULT_SUCCESS;
   }
 
   std::string last_place_failure_stage() const override {return last_place_stage;}
@@ -2352,7 +2356,7 @@ TEST(TaskExecutorPickPlaceTest, PlaceApproachExhaustionRetriesViaHomeThenReturns
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
   EXPECT_EQ(
     backend->events, (std::vector<std::string>{
-      "motion:3", "motion:4", "motion:3", "home", "tray", "gripper"}));
+      "motion:3", "payload_home", "motion:3", "home", "tray", "gripper"}));
   EXPECT_EQ(backend->open_calls, 1);
 }
 
@@ -2370,7 +2374,7 @@ TEST(TaskExecutorPickPlaceTest, PlaceInsertionExhaustionReturnsViaHomeAndTray)
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
   EXPECT_EQ(
     backend->events,
-    (std::vector<std::string>{"motion:3", "motion:4", "motion:4",
+    (std::vector<std::string>{"motion:3", "motion:4", "payload_home",
       "motion:3", "motion:4", "home", "tray", "gripper"}));
   EXPECT_EQ(backend->open_calls, 1);
 }

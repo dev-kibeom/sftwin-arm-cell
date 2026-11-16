@@ -171,6 +171,14 @@ public:
     return true;
   }
 
+  uint8_t execute_taught_motion(
+    const std::string &, const std::string &, const std::function<uint8_t()> &) override
+  {
+    ExecuteTask::Goal goal;
+    goal.task_type.value = MotionTaskType::TASK_TYPE_GO_HOME;
+    return execute_task(goal);
+  }
+
   void cancel() override
   {
     if (stop_callback_) {
@@ -545,6 +553,32 @@ MotionNode::MotionNode(
         diagnostics_capture_enabled, diagnostics_output_directory,
         diagnostics_snapshot_run_directory, planning_planner_id,
         place_waypoint_trajectory_file);
+      const auto taught_motions_json = declare_parameter<std::string>("taught_motions_json", "{}");
+      auto named_joint_limits = joint_motion_limits_from_urdf(
+        robot_description, arm_joint_names, planning_max_acceleration_rad_s2);
+      const auto & overrides = get_node_parameters_interface()->get_parameter_overrides();
+      for (std::size_t index = 0; index < arm_joint_names.size(); ++index) {
+        const auto prefix = "robot_description_planning.joint_limits." + arm_joint_names[index] +
+          ".";
+        for (const auto & entry : std::vector<std::pair<std::string, double *>>{
+            {"max_velocity", &named_joint_limits[index].max_velocity},
+            {"max_acceleration", &named_joint_limits[index].max_acceleration}})
+        {
+          const auto value = overrides.find(prefix + entry.first);
+          if (value != overrides.end()) {
+            const auto maximum = rclcpp::Parameter(value->first, value->second).as_double();
+            if (!std::isfinite(maximum) || maximum <= 0) {
+              throw std::invalid_argument("Named joint motion limits must be positive and finite");
+            }
+            *entry.second = std::min(*entry.second, maximum);
+          }
+        }
+      }
+      isaac_transport_->configure_taught_motions(
+        parse_taught_motions(
+          taught_motions_json, home_joint_positions,
+          place_tray_return_joint_positions, arm_joint_names.size()),
+        std::move(named_joint_limits));
       backend = std::make_shared<IsaacMotionBackend>(isaac_transport_);
     } else if (backend_mode == "unavailable") {
       test_backend = std::make_shared<UnavailableMotionBackend>(

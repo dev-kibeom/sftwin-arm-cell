@@ -326,3 +326,35 @@ Isaac Before Play에서 Stage의 카메라 상태를 추출하고 같은 설정�
 진단 기록이나 사람이 유지하는 원본 Calibration 파일과 구분합니다. 경로의 디렉터리는 유지하며,
 JSON 값이 같으면 파일 내용·수정 시각을 보존하고 실제 값이 달라질 때만 저장합니다.
 기존 `isaac_camera_stage_snapshot.json`을 직접 지정한 외부 명령은 새 파일명으로 갱신하세요.
+
+### 티칭 동작과 개별 속도
+
+티칭 동작 속도는 [`taught_motions.yaml`](ros2_ws/src/motion/config/taught_motions.yaml)
+한 파일에서 관리합니다. `velocity_scale`·`acceleration_scale`은 각각 Robot model의
+속도·가속도 한계 대비 `(0, 1]` 비율이며, 현재 Safety 제한을 추가 적용합니다.
+기존 직접 위치 명령의 실제 속도와 비례하는 감속률은 아닙니다.
+기본 `home`·`return_material`·`payload_home` 항목은 기존 Robot 목표를 참조합니다.
+다른 티칭 자세는 같은 파일에 추가할 수 있습니다.
+이름을 Registry에서 조회한 뒤 현재 관절값에서 목표까지 표준 KDL 속도 프로파일로 직접
+Joint Trajectory를 생성합니다. MoveIt 경로 계획·IK·Scene 조회를 호출하지 않고 기존
+simulation-clock 궤적 실행기와 최종 관절 도달 확인을 사용합니다. 직접 관절 이동 경로는
+운영 티칭으로 검증하며, 실제 Isaac 라이브 검증은 별도로 수행합니다.
+
+```yaml
+motions:
+  # 기존 home / return_material / payload_home 항목과 함께 등록
+  standby:
+    joint_positions: [0.0, 0.0, 1.57, 0.0, 1.57, 0.0]  # rad, arm_joint_names 순서
+    velocity_scale: 0.25
+    acceleration_scale: 0.15
+```
+
+Task Execution의 [`motion_tasks.xml`](ros2_ws/src/task_execution/config/motion_tasks.xml) 및
+관련 SubTree XML에서 `<MoveTaught motion="standby"/>`를 Sequence에 배치합니다.
+자재 반환은 [`ReturnHeldToTray`](ros2_ws/src/task_execution/config/held_object_return.xml)
+SubTree를 재사용해 Holding 확인·이동·해제·Release 확인을 함께 유지합니다.
+이동만으로 자재 반환 성공을 판정하지 않습니다.
+
+배포 profile의 `taught_motion_configuration`으로 파일을 선택할 수 있습니다.
+소스 YAML/XML 변경 후 재빌드·overlay 적용·Task Execution 프로세스 재시작이 필요하며,
+현재 실행 중 동작의 속도가 자동으로 바뀌지는 않습니다. 새 자세 저장 UI는 제공하지 않습니다.

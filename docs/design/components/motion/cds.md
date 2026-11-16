@@ -33,13 +33,18 @@ classDiagram
         <<existing interface>>
     }
     TaskExecution ..> MotionRuntime : in-process MotionPort
-    MotionRuntime --> MotionPlanner : call planning service
+    MotionRuntime --> MotionPlanner : 계획 기반 movement
+    MotionRuntime --> NamedJointMotion : 이름 기반 관절 궤적 생성
+    NamedJointMotion --> TrajectoryExecutor : 기존 실행기 재사용
     MotionRuntime --> TrajectoryExecutor : call execution service
     MotionPlanner --> MotionPlanning : plan movement
     TrajectoryExecutor --> RobotBackend : existing backend contract
 ```
 
-`MotionRuntime`은 하나의 movement operation을 예약해 MotionPlanner와 TrajectoryExecutor에 위임한다. 외부 PnP Action은 이 구조에 포함하지 않으며 Task Execution의 in-process MotionPort contract만 연결한다.
+`MotionRuntime`은 하나의 movement operation을 예약한다. 계획 기반 이동은 MotionPlanner와
+TrajectoryExecutor에 위임하고, Named Joint Motion은 Registry의 목표·한계로 현재 관절값에서
+직접 궤적을 생성해 같은 TrajectoryExecutor에 전달한다. Named Joint Motion은 MoveIt planner,
+IK 또는 Planning Scene에 의존하지 않으며 Holding·Release 판단은 Task Execution이 소유한다. 외부 PnP Action은 이 구조에 포함하지 않으며 Task Execution의 in-process MotionPort contract만 연결한다.
 
 Motion runtime은 Task Execution이 쓰는 단일 `GripperPort` 및 concrete Isaac adapter/transport를 소유·제공한다. Task Execution은 기존 Gripper command/holding choreography를 소유하며 같은 instance를 주입받는다. 물리 force/current/effort, 다중 관절 매핑 및 Isaac attachment는 adapter 책임이며 Motion이 직접 attach/detach하지 않는다. 공유 lifecycle은 [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)와 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)를 따른다.
 

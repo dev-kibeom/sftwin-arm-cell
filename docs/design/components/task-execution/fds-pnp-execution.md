@@ -406,3 +406,14 @@ clearance 실패·경계 미충족, GO_HOME 실패, 사전 계산 결과 부재�
 - [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)
 - [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md)
 - [Safety–Motion ICD](../../interfaces/icd-safety-motion.md)
+
+## 티칭 동작의 BT 조합
+
+`MoveTaught`는 `motion` 입력으로 Motion 설정의 동작 이름을 받는 재사용 가능한 액션이다.
+BT XML에서 Sequence/SubTree의 이동 액션을 추가·제거·배치하며, 속도·가속도 수치는
+BT에 중복하지 않는다. GO_HOME 분기는 `home`을 호출한다. `ReturnHeldToTray` SubTree는
+fresh HELD 확인 → `return_material` 이동 → OPEN → fresh RELEASED 확인 → 반환 확정
+순서다. 이동 실패나 중단 시 이후 OPEN을 실행하지 않고 기존 실패 의미를 유지한다.
+Payload HOME의 Holding 확인 절차는 기존 `PayloadHome` SubTree가 유지하며, 관절 이동은
+같은 Registry의 `payload_home`을 공통 Named Joint Motion 실행기로 요청한다. 이를 위한
+MoveIt 계획 요청·예약은 만들지 않는다. 설정 저장·가르치기 UI는 이 경계에 포함하지 않는다.

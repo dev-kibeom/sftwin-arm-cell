@@ -41,7 +41,7 @@ public:
     const NormalizedTrajectoryPlan & plan, bool finalize_diagnostics = true);
   std::uint8_t execute_task(
     const ExecuteTask::Goal & goal, const std::string & execution_id);
-  std::uint8_t execute_joint_target();
+  std::uint8_t execute_taught_motion(const std::string & motion, const std::string & execution_id);
   NormalizedMotionRequest normalized_request(
     const ExecuteTask::Goal & goal, std::uint8_t phase, const std::string & execution_id) const;
   NormalizedMotionRequest normalized_request(const MotionPortRequest & request) const;

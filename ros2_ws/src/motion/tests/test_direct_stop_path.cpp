@@ -44,6 +44,13 @@ class BlockingStatusBackend final : public MotionBackend
 {
 public:
   bool available() const override {return true;}
+  uint8_t execute_taught_motion(
+    const std::string &, const std::string &, const std::function<uint8_t()> &) override
+  {
+    ExecuteTask::Goal goal;
+    goal.task_type.value = MotionTaskType::TASK_TYPE_GO_HOME;
+    return execute_task(goal);
+  }
   bool submit(const ExecuteTask::Goal &) override
   {
     execution_active_ = true;
@@ -95,6 +102,13 @@ class BlockingSubmitBackend final : public MotionBackend
 {
 public:
   bool available() const override {return true;}
+  uint8_t execute_taught_motion(
+    const std::string &, const std::string &, const std::function<uint8_t()> &) override
+  {
+    ExecuteTask::Goal goal;
+    goal.task_type.value = MotionTaskType::TASK_TYPE_GO_HOME;
+    return execute_task(goal);
+  }
   bool submit(const ExecuteTask::Goal &) override
   {
     stop_requested_.store(false);

@@ -325,14 +325,14 @@ std::uint8_t MotionExecutionSupport::execute_planned_motion(
   return result;
 }
 
-std::uint8_t MotionExecutionSupport::execute_task(
-  const ExecuteTask::Goal & goal, const std::string & execution_id)
+std::uint8_t MotionExecutionSupport::execute_taught_motion(
+  const std::string & motion, const std::string & execution_id)
 {
   const auto started = std::chrono::steady_clock::now();
   auto result = interruption_checker_ ? interruption_checker_() :
     MotionTaskResultCode::TASK_RESULT_SUCCESS;
   if (result == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-    result = backend_->execute_task(goal, execution_id);
+    result = backend_->execute_taught_motion(motion, execution_id, interruption_checker_);
     if (interruption_checker_) {
       const auto interrupted = interruption_checker_();
       if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {result = interrupted;}
@@ -344,13 +344,17 @@ std::uint8_t MotionExecutionSupport::execute_task(
   return result;
 }
 
-std::uint8_t MotionExecutionSupport::execute_joint_target()
+std::uint8_t MotionExecutionSupport::execute_task(
+  const ExecuteTask::Goal & goal, const std::string & execution_id)
 {
+  if (goal.task_type.value == MotionTaskType::TASK_TYPE_GO_HOME) {
+    return execute_taught_motion("home", execution_id);
+  }
   const auto started = std::chrono::steady_clock::now();
   auto result = interruption_checker_ ? interruption_checker_() :
     MotionTaskResultCode::TASK_RESULT_SUCCESS;
   if (result == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
-    result = backend_->execute_joint_target();
+    result = backend_->execute_task(goal, execution_id);
     if (interruption_checker_) {
       const auto interrupted = interruption_checker_();
       if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {result = interrupted;}
@@ -473,17 +477,6 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
   const MotionPortRequest & movement) const
 {
   NormalizedMotionRequest request;
-  if (movement.segment == MotionSegmentKind::PAYLOAD_HOME) {
-    request.task_type.value = MotionTaskType::TASK_TYPE_PLACE;
-    request.segment = movement.segment;
-    request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
-    request.motion_goal_uuid = execution_uuid_string(movement.execution_id);
-    request.movement_id = movement.movement_id;
-    request.tcp_target = movement.target_pose;
-    request.target_pose = movement.target_pose;
-    request.object_pose = movement.target_pose;
-    return request;
-  }
   const bool pick = movement.segment == MotionSegmentKind::PICK_APPROACH ||
     movement.segment == MotionSegmentKind::PICK_DESCENT ||
     movement.segment == MotionSegmentKind::PICK_RETRACT;
@@ -504,7 +497,6 @@ NormalizedMotionRequest MotionExecutionSupport::normalized_request(
       break;
     case MotionSegmentKind::PICK_DESCENT:
     case MotionSegmentKind::PLACE_DESCENT:
-    case MotionSegmentKind::PAYLOAD_HOME:
     case MotionSegmentKind::PLACE_CLEARANCE:
       request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
       break;

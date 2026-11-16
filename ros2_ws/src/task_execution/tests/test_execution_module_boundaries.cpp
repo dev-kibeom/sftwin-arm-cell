@@ -27,6 +27,9 @@ public:
     events.push_back("execute_normalized");
     return normalized_result;
   }
+  uint8_t execute_taught_motion(
+    const std::string &, const std::string &, const std::function<uint8_t()> &) override
+  {events.push_back("execute_taught_motion"); return normalized_result;}
   void cancel() override {}
   void hold() override {}
   void stop() override {}
@@ -338,7 +341,7 @@ TEST(PlaceRecoveryModule, HomeRetryBudgetDoesNotOpenHeldObject)
   EXPECT_EQ(fixture.gripper->open_count, 0U);
 }
 
-TEST(PlaceRecoveryModule, PayloadHomeUsesPlannedMotionAndNeverOpens)
+TEST(PlaceRecoveryModule, PayloadHomeUsesNamedMotionAndNeverOpens)
 {
   Fixture fixture;
   fixture.gripper->state = HoldingState::HELD;
@@ -351,7 +354,8 @@ TEST(PlaceRecoveryModule, PayloadHomeUsesPlannedMotionAndNeverOpens)
     "<root main_tree_to_execute=\"Home\"><BehaviorTree ID=\"Home\">"
     "<ReturnHomeWithPayload/></BehaviorTree></root>", fixture.blackboard);
   EXPECT_EQ(tree.tickRoot(), BT::NodeStatus::SUCCESS);
-  EXPECT_EQ(fixture.backend->normalized_requests, 1);
+  EXPECT_EQ(fixture.backend->events, (std::vector<std::string>{"execute_taught_motion"}));
+  EXPECT_EQ(fixture.backend->normalized_requests, 0);
   EXPECT_EQ(fixture.gripper->open_count, 0U);
   EXPECT_EQ(fixture.report.object_disposition, ExecuteTask::Result::OBJECT_DISPOSITION_HELD);
 }

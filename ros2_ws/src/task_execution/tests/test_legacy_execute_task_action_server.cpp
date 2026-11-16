@@ -71,6 +71,12 @@ public:
   std::uint8_t executeLegacyMovement(
     std::uint8_t, const std::string &, const std::string &) override
   {return Code::TASK_RESULT_SUCCESS;}
+  std::uint8_t executeTaughtMotion(
+    const std::string &, const std::string & id, const std::string & movement) override
+  {
+    return executeLegacyMovement(
+      arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME, id, movement);
+  }
   bool stagePickCaptureReference(
     const geometry_msgs::msg::PoseStamped &, double, std::uint8_t, const std::string &) override
   {return true;}

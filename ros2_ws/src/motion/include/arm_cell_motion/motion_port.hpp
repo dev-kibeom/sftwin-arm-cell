@@ -19,6 +19,7 @@
 #include <arm_cell_interfaces/msg/disturbance_outcome.hpp>
 #include <arm_cell_interfaces/msg/motion_status.hpp>
 #include <arm_cell_interfaces/msg/motion_task_result_code.hpp>
+#include <arm_cell_interfaces/msg/motion_task_type.hpp>
 #include <arm_cell_interfaces/msg/safety_cause_set.hpp>
 #include <unique_identifier_msgs/msg/uuid.hpp>
 
@@ -42,8 +43,7 @@ enum class MotionSegmentKind : std::uint8_t
   PLACE_RETRACT,
   DISTURB_APPROACH,
   DISTURB_PUSH,
-  DISTURB_RETRACT,
-  PAYLOAD_HOME
+  DISTURB_RETRACT
 };
 
 enum class MotionFailureKind : std::uint8_t
@@ -285,12 +285,15 @@ public:
     (void)task_type; (void)execution_id; (void)movement_id;
     return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
   }
-  virtual std::uint8_t executePlaceRecoveryJointTarget(
-    const unique_identifier_msgs::msg::UUID & execution_id, const std::string & movement_id)
+  // Named taught joint movement; speed and target are owned by Motion configuration.
+  virtual std::uint8_t executeTaughtMotion(
+    const std::string & motion, const std::string & execution_id,
+    const std::string & movement_id)
   {
-    (void)execution_id; (void)movement_id;
-    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
+    (void)motion; (void)execution_id; (void)movement_id;
+    return arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
+
 };
 
 }  // namespace arm_cell_motion

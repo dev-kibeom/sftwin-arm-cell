@@ -1,0 +1,11 @@
+<root>
+  <BehaviorTree ID="ReturnHeldToTray">
+    <Sequence name="ReturnHeldToTray">
+      <PrepareHeldTrayReturn/>
+      <MoveTaught motion="return_material"/>
+      <OpenReturnedGripper/>
+      <WaitForReturnedRelease/>
+      <FinalizeHeldTrayReturn/>
+    </Sequence>
+  </BehaviorTree>
+</root>

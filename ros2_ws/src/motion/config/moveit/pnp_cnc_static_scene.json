@@ -579,7 +579,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "canonical_manifest_sha256": "66da3d0af239e9997383f99866f3a01b3154859788c6ed02f537bc8c344b4957",
-    "selection_sha256": "696375d019af91df658ff0cf006d73fc63c89f88d0f79bc8dfb34b479966dc07"
+    "canonical_manifest_sha256": "76ae0650211a9c592dca2d0e05a0818560bf02d5484a74fff92beb7e0d86d773",
+    "selection_sha256": "8fa8e709f501a2b5deb7eed365b902cd5305ec15da400a354992fdf6f124c9ab"
   }
 }

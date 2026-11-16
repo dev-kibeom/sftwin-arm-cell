@@ -2862,3 +2862,212 @@ TEST_F(IsaacRosMotionTransportTest, RetreatReplanningUsesPlaceFinalBudgetPerActi
 
 }  // namespace
 }  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, TaughtHomeAccumulatesFeedbackAcrossWaitLoopIterations)
+{
+  start_timed_motion_for_test();
+  transport_->active_motion_task_type_ = MotionTaskType::TASK_TYPE_GO_HOME;
+  transport_->on_simulation_clock(clock_message(1.0));
+  ASSERT_TRUE(transport_->trajectory_worker_->completion_eligible());
+  EXPECT_TRUE(transport_->execution_active());
+  auto completion = std::async(
+    std::launch::async,
+    [this]() {return transport_->wait_for_motion_completion_until(
+      std::chrono::steady_clock::now() + std::chrono::seconds(2));});
+  pump_until([this]() {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    return !transport_->timed_trajectory_active_;
+  });
+  publish_feedback(std::vector<double>(6, 0.1));
+  std::uint64_t first_feedback_generation;
+  {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    first_feedback_generation = transport_->joint_state_generation_;
+  }
+  // Only a target republish by the waiter can acknowledge this new generation.
+  // This proves a loop iteration ran after the first callback, without sleeps.
+  pump_until([this, first_feedback_generation]() {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    return transport_->motion_command_generation_ >= first_feedback_generation;
+  });
+  {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    EXPECT_EQ(transport_->settled_feedback_count_, 1);
+    EXPECT_TRUE(transport_->execution_active_);
+  }
+  EXPECT_EQ(completion.wait_for(std::chrono::milliseconds(0)), std::future_status::timeout);
+  publish_feedback(std::vector<double>(6, 0.1));
+  ASSERT_EQ(completion.wait_for(std::chrono::seconds(1)), std::future_status::ready);
+  EXPECT_EQ(completion.get(), MotionCompletionOutcome::COMPLETED);
+}
+
+TEST_F(IsaacRosMotionTransportTest, TaughtMotionRejectsUnknownAndMissingJointLimits)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  EXPECT_EQ(
+    transport_->execute_taught_motion("missing", "goal", {}),
+    Code::TASK_RESULT_INVALID_GOAL);
+  transport_->configure_taught_motions({{"home", {std::vector<double>(6, 0.1), 0.3, 0.2}}});
+  publish_feedback(std::vector<double>(6, 0));
+  EXPECT_EQ(transport_->execute_taught_motion("home", "goal", {}), Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_TRUE(commands_.empty());
+}
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, NamedJointMotionExecutesWithoutMoveGroupOrGripper)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  const std::vector<double> start(6, 0.0), target(6, 0.2);
+  transport_->diagnostics_capture_enabled_ = true;
+  transport_->configure_taught_motions(
+    {{"any_pose", {target, 0.4, 0.3}}}, std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  transport_->move_group_state_->required = true;
+  transport_->move_group_state_->ready = false;
+  publish_feedback(start);
+  transport_->on_simulation_clock(clock_message(10.0));
+  EXPECT_FALSE(transport_->available());
+  EXPECT_TRUE(transport_->named_joint_motion_available());
+  ASSERT_TRUE(transport_->set_motion_envelope({0.5F, 0.25F, true}));
+  auto completion = std::async(
+    std::launch::async, [this]() {
+      return transport_->execute_taught_motion("any_pose", "named-execution", {});
+    });
+  pump_until(
+    [this, &completion]() {
+      return transport_->trajectory_worker_->active() ||
+      completion.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
+    });
+  if (!transport_->trajectory_worker_->active()) {
+    EXPECT_EQ(completion.get(), Code::TASK_RESULT_SUCCESS);
+    return;
+  }
+  const auto evidence = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
+  EXPECT_EQ(evidence.at("planner"), "not_used");
+  EXPECT_EQ(evidence.at("motion_name"), "any_pose");
+  const auto trajectory = transport_->trajectory_worker_->trajectory_;
+  EXPECT_EQ(trajectory.points.front().positions, start);
+  EXPECT_EQ(trajectory.points.back().positions, target);
+  for (const auto & point : trajectory.points) {
+    for (const auto velocity : point.velocities) {
+      EXPECT_LE(std::abs(velocity), 0.4 * 0.5 + 1e-6);
+    }
+    for (const auto acceleration : point.accelerations) {
+      EXPECT_LE(std::abs(acceleration), 2 * 0.3 * 0.25 + 1e-6);
+    }
+  }
+  const auto & final = trajectory.points.back().time_from_start;
+  transport_->on_simulation_clock(clock_message(10.0 + final.sec + final.nanosec * 1e-9));
+  pump_until(
+    [this]() {
+      std::lock_guard<std::mutex> lock(transport_->mutex_);
+      return !transport_->timed_trajectory_active_;
+    });
+  EXPECT_EQ(completion.wait_for(std::chrono::milliseconds(0)), std::future_status::timeout);
+  publish_feedback(target);
+  publish_feedback(target);
+  if (completion.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+    transport_->cancel();
+    ADD_FAILURE() << "Named movement did not finish after measured arrival";
+  }
+  EXPECT_EQ(completion.get(), Code::TASK_RESULT_SUCCESS);
+  EXPECT_TRUE(close_ids_.empty());
+}
+
+TEST_F(IsaacRosMotionTransportTest, NamedJointMotionHonorsLatchedInterruptionBeforeCommand)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  transport_->configure_taught_motions(
+    {{"return_material", {std::vector<double>(6, 0.2), 0.4, 0.3}}},
+    std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  publish_feedback(std::vector<double>(6, 0));
+  transport_->on_simulation_clock(clock_message(10.0));
+  for (const auto reason : {Code::TASK_RESULT_CANCELED, Code::TASK_RESULT_SAFETY_PREEMPTED}) {
+    unsigned checks = 0;
+    EXPECT_EQ(
+      transport_->execute_taught_motion(
+        "return_material", "named", [&]() {
+          return ++checks > 1 ? reason : Code::TASK_RESULT_SUCCESS;
+        }), reason);
+    EXPECT_TRUE(commands_.empty());
+  }
+}
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, NamedJointMotionStopsActiveCommandsOnCancelAndSafety)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  transport_->configure_taught_motions(
+    {{"arbitrary", {std::vector<double>(6, 0.5), 0.4, 0.3}}},
+    std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  for (const auto reason : {Code::TASK_RESULT_CANCELED, Code::TASK_RESULT_SAFETY_PREEMPTED}) {
+    publish_feedback(std::vector<double>(6, 0));
+    transport_->on_simulation_clock(clock_message(10.0));
+    std::atomic<std::uint8_t> interruption{Code::TASK_RESULT_SUCCESS};
+    auto completion = std::async(
+      std::launch::async, [this, &interruption]() {
+        return transport_->execute_taught_motion(
+          "arbitrary", "named", [&interruption]() {
+            return interruption.load();
+          });
+      });
+    pump_until(
+      [this, &completion]() {
+        return transport_->trajectory_worker_->active() ||
+        completion.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
+      });
+    if (!transport_->trajectory_worker_->active()) {
+      EXPECT_EQ(completion.get(), Code::TASK_RESULT_SUCCESS);
+      continue;
+    }
+    interruption = reason;
+    if (reason == Code::TASK_RESULT_CANCELED) {transport_->cancel();} else {
+      transport_->safety_preempt(arm_cell_interfaces::msg::StopMode::STOP_MODE_CONTROLLED);
+    }
+    if (completion.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+      transport_->cancel();
+      ADD_FAILURE() << "Named movement did not terminate after interruption";
+    }
+    EXPECT_EQ(completion.get(), reason);
+    EXPECT_FALSE(transport_->trajectory_worker_->active());
+    executor_.spin_some();
+    const auto command_count = commands_.size();
+    transport_->on_simulation_clock(clock_message(20.0));
+    executor_.spin_some();
+    EXPECT_EQ(commands_.size(), command_count);
+  }
+}
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, NamedJointMotionKeepsSafetyCauseAcrossRacedWorkerStart)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  transport_->configure_taught_motions(
+    {{"arbitrary", {std::vector<double>(6, 0.5), 0.4, 0.3}}},
+    std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  publish_feedback(std::vector<double>(6, 0));
+  transport_->on_simulation_clock(clock_message(10.0));
+  bool preempted = false;
+  const auto result = transport_->execute_taught_motion(
+    "arbitrary", "named", [&]() {
+      if (preempted) {return Code::TASK_RESULT_SAFETY_PREEMPTED;}
+      if (transport_->timed_trajectory_active_ && !transport_->trajectory_worker_->active()) {
+        // Safety arrives after this permission observation but before worker start.
+        transport_->safety_preempt(arm_cell_interfaces::msg::StopMode::STOP_MODE_CONTROLLED);
+        preempted = true;
+      }
+      return Code::TASK_RESULT_SUCCESS;
+    });
+  EXPECT_TRUE(preempted);
+  EXPECT_EQ(result, Code::TASK_RESULT_SAFETY_PREEMPTED);
+  EXPECT_EQ(transport_->completion_outcome_, MotionCompletionOutcome::SAFETY_PREEMPTED);
+  EXPECT_FALSE(transport_->trajectory_worker_->active());
+}
+}  // namespace arm_cell_motion

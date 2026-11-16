@@ -215,6 +215,7 @@ public:
 
 private:
   std::uint8_t prepare();
+  std::uint8_t open();
   std::uint8_t finalize();
   std::uint64_t holding_baseline_{0};
   HoldingWaitResult holding_result_{HoldingWaitResult::TIMEOUT};

@@ -231,11 +231,23 @@ public:
     return execute_normalized(plan.request);
   }
 
-  uint8_t execute_joint_target() override
+  uint8_t execute_taught_motion(
+    const std::string & motion, const std::string & execution_id,
+    const std::function<uint8_t()> & interruption) override
   {
-    ++joint_target_calls_;
-    return joint_target_result_;
+    if (interruption) {
+      const auto result = interruption();
+      if (result != arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+        return result;
+      }
+    }
+    taught_motion_names_.push_back(motion);
+    arm_cell_interfaces::action::ExecuteTask::Goal goal;
+    goal.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+    (void)execution_id;
+    return execute_task(goal);
   }
+  const std::vector<std::string> & taught_motion_names() const {return taught_motion_names_;}
 
   uint8_t command_gripper(float) override
   {
@@ -303,7 +315,6 @@ public:
   void set_place_waypoint_generation_result(uint8_t result)
   {place_waypoint_generation_result_ = result;}
   int planned_execution_calls() const {return planned_execution_calls_;}
-  std::size_t joint_target_calls() const {return joint_target_calls_;}
   int diagnostic_finalize_calls() const {return diagnostic_finalize_calls_.load();}
   void set_task_result(uint8_t result) {task_result_ = result;}
   void reset_pick_grasp_insertion_started() override
@@ -383,8 +394,7 @@ private:
   int planned_execution_calls_{0};
   std::atomic<int> diagnostic_finalize_calls_{0};
   uint8_t task_result_{arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS};
-  uint8_t joint_target_result_{arm_cell_interfaces::msg::MotionTaskResultCode::TASK_RESULT_SUCCESS};
-  std::size_t joint_target_calls_{0U};
+  std::vector<std::string> taught_motion_names_;
   bool pick_grasp_insertion_started_{false};
   arm_cell_interfaces::msg::MotionTaskType submitted_task_type_{};
   bool block_execution_{false};

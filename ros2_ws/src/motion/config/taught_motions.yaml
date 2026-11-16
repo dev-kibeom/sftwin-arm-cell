@@ -1,0 +1,17 @@
+# One place for taught movement speeds. Scales are fractions of robot limits,
+# independent of PICK/PLACE planning scales, and multiplied by Safety limits.
+# target references reuse the selected robot's poses; joint_positions (radians,
+# arm_joint_names order) can instead define an additional taught position.
+motions:
+  home:
+    target: home
+    velocity_scale: 0.3
+    acceleration_scale: 0.2
+  return_material:
+    target: tray_return
+    velocity_scale: 0.2
+    acceleration_scale: 0.15
+  payload_home:
+    target: home
+    velocity_scale: 0.2
+    acceleration_scale: 0.15

@@ -76,6 +76,8 @@ install(TARGETS task_execution_node RUNTIME DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_taught_motion_action tests/test_taught_motion_action.cpp)
+  target_link_libraries(test_taught_motion_action ${PROJECT_NAME}_core)
   ament_add_gtest(test_wait_action tests/test_wait_action.cpp)
   target_link_libraries(test_wait_action ${PROJECT_NAME}_core)
   ament_add_gtest(test_grip_force_policy tests/test_grip_force_policy.cpp)
