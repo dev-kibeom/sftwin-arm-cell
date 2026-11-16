@@ -31,7 +31,8 @@ private:
     if (report_.result_code == MotionTaskResultCode::TASK_RESULT_SUCCESS) {
       return BT::NodeStatus::SUCCESS;
     }
-    if (report_.object_disposition != ExecuteTask::Result::OBJECT_DISPOSITION_UNCHANGED) {
+    if (report_.object_disposition == ExecuteTask::Result::OBJECT_DISPOSITION_HELD ||
+      report_.object_disposition == ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN) {
       report_.object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
     }
     return BT::NodeStatus::FAILURE;

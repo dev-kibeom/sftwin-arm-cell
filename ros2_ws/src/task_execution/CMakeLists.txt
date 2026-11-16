@@ -35,6 +35,7 @@ add_library(${PROJECT_NAME}_core
   src/execute_disturb_action_server.cpp
   src/legacy_execute_task_action_server.cpp
 )
+set_target_properties(${PROJECT_NAME}_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(${PROJECT_NAME}_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -76,6 +77,13 @@ install(TARGETS task_execution_node RUNTIME DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+  add_library(grasp_cycle_fixture_bridge SHARED tests/grasp_cycle_fixture_bridge.cpp)
+  target_link_libraries(grasp_cycle_fixture_bridge ${PROJECT_NAME}_core)
+  ament_add_pytest_test(test_grasp_cycle_fixture tests/test_grasp_cycle_fixture.py
+    ENV "ARM_CELL_GRASP_FIXTURE_LIBRARY=$<TARGET_FILE:grasp_cycle_fixture_bridge>")
+  ament_add_gtest(test_grasp_cycle tests/test_grasp_cycle.cpp)
+  target_link_libraries(test_grasp_cycle ${PROJECT_NAME}_core)
   ament_add_gtest(test_taught_motion_action tests/test_taught_motion_action.cpp)
   target_link_libraries(test_taught_motion_action ${PROJECT_NAME}_core)
   ament_add_gtest(test_wait_action tests/test_wait_action.cpp)

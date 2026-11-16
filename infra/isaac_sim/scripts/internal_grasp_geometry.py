@@ -1,8 +1,4 @@
-"""Selected URDF collision envelopes for the isolated C10 bore experiment.
-
-No grasp strategy or material registration: dimensions are derived from the
-selected moving links at a fixture-specific axial slab, in canonical TCP axes.
-"""
+"""Selected URDF collision envelopes and explicit-bore solve in canonical TCP axes."""
 import itertools
 import math
 from pathlib import Path
@@ -126,34 +122,48 @@ class ToolGeometry:
             result.append(triangles @ transform[:3, :3].T + transform[:3, 3])
         return np.concatenate(result)
 
-    def fixture(self, depth, thickness):
+    def _bore_envelopes(self, depth, thickness):
         if not all(math.isfinite(v) and v > 0 for v in (depth, thickness)) or depth <= thickness/2:
             raise ValueError('Invalid insertion depth or ring thickness')
         primary = self.linkage[self.settings['primary_joint']]
         lower, upper = primary['lower'], primary['upper']
         contracted = self.triangles(upper)
-        expanded = self.triangles(lower)
         slab = (-depth-thickness/2, -depth+thickness/2)
         contracted_radius = slab_radius(contracted, slab[0], max(0., float(contracted[:, :, 2].max())))
-        expanded_radius = slab_radius(expanded, *slab)
-        inner = (contracted_radius + expanded_radius)/2
-        if inner - contracted_radius < .001:
-            raise ValueError('Selected depth has no useful insertion clearance')
-        # The midpoint radius gives room to insert and a reachable inner surface.
-        # Stop at tangency rather than commanding through the logical ring wall.
+        expanded_radius = slab_radius(self.triangles(lower), *slab)
+        return lower, upper, slab, contracted_radius, expanded_radius
+
+    def solve_bore(self, depth, thickness, inner_radius):
+        """Solve selected fingers against material dimensions supplied by the task.
+
+        The swept distal envelope must clear the bore by 1 mm at contraction;
+        the expansion endpoint must reach its inner wall at the capture slab.
+        """
+        lower, upper, slab, contracted_radius, expanded_radius = self._bore_envelopes(depth, thickness)
+        if (not math.isfinite(inner_radius) or inner_radius-contracted_radius < .001
+                or inner_radius >= expanded_radius):
+            raise ValueError('Bore is outside selected Tool insertion/expansion envelope')
         lo, hi = lower, upper
         for _ in range(40):
             mid = (lo+hi)/2
-            if slab_radius(self.triangles(mid), *slab) > inner:
+            if slab_radius(self.triangles(mid), *slab) > inner_radius:
                 lo = mid
             else:
                 hi = mid
         transforms = link_transforms(self.urdf, {})
         relative = np.linalg.inv(transforms[self.base_link]) @ transforms['sf_grasp_tcp']
-        return dict(insertion_depth_m=depth, thickness_m=thickness, inner_radius_m=inner,
-                    outer_radius_m=inner+.008, contracted_swept_radius_m=contracted_radius,
-                    expanded_radius_m=expanded_radius, contract_position_m=upper,
-                    grasp_position_m=(lo+hi)/2, tcp_z_m=float(relative[2, 3]))
+        return dict(insertion_depth_m=depth, thickness_m=thickness, inner_radius_m=inner_radius,
+                    contracted_swept_radius_m=contracted_radius, expanded_radius_m=expanded_radius,
+                    release_position_m=upper, grasp_position_m=(lo+hi)/2,
+                    tcp_z_m=float(relative[2, 3]))
+
+    def fixture(self, depth, thickness):
+        """Experiment-only ring generation; common strategies never infer material size."""
+        _, _, _, contracted_radius, expanded_radius = self._bore_envelopes(depth, thickness)
+        inner = (contracted_radius + expanded_radius)/2
+        solution = self.solve_bore(depth, thickness, inner)
+        return dict(solution, outer_radius_m=inner+.008,
+                    contract_position_m=solution['release_position_m'])
 
 
 def qualify_capture(relative_position, relative_rotation, measured_primary, fixture, tolerance):

@@ -182,7 +182,7 @@ void PickCandidateSearch::record_attempt(
 bool PickCandidateSearch::transition_allowed() const
 {
   return state_.last_result != MotionTaskResultCode::TASK_RESULT_SUCCESS &&
-         !support_.motion_port()->pickGraspInsertionStarted() &&
+         !(support_.prepared_insertion_started() || support_.motion_port()->pickGraspInsertionStarted()) &&
          (state_.last_result == MotionTaskResultCode::TASK_RESULT_IK_UNREACHABLE ||
          state_.last_result == MotionTaskResultCode::TASK_RESULT_PATH_OBSTRUCTED ||
          state_.last_result == MotionTaskResultCode::TASK_RESULT_GRASP_CANDIDATE_EXHAUSTED);
@@ -195,7 +195,7 @@ void PickCandidateSearch::record_search()
     if (state_.candidate_active && report_) {
       record_attempt(
         report_->result_code, report_->failure_stage,
-        support_.motion_port()->pickGraspInsertionStarted());
+        (support_.prepared_insertion_started() || support_.motion_port()->pickGraspInsertionStarted()));
     }
     support_.motion_port()->recordMaterialCandidateSearch(
       state_.attempts, state_.outcome_material_candidate_id);
@@ -232,14 +232,14 @@ void PickCandidateSearch::register_nodes(
     factory, "RecordPickCandidateSuccess", [this]() {
       record_attempt(
         report_->result_code, report_->failure_stage,
-        support_.motion_port()->pickGraspInsertionStarted());
+        (support_.prepared_insertion_started() || support_.motion_port()->pickGraspInsertionStarted()));
       return BT::NodeStatus::SUCCESS;
     });
   register_callback_action(
     factory, "CanTransitionPickCandidate", [this]() {
       record_attempt(
         report_->result_code, report_->failure_stage,
-        support_.motion_port()->pickGraspInsertionStarted());
+        (support_.prepared_insertion_started() || support_.motion_port()->pickGraspInsertionStarted()));
       const auto & interrupted = support_.interruption_checker();
       if (interrupted) {
         const auto result = interrupted();

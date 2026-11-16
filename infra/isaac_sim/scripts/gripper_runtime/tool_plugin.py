@@ -1,10 +1,8 @@
 """Tool-owned actuation and capture predicates; attachment remains in GraspManager."""
 from dataclasses import dataclass
 from enum import Enum
-import math
 
-from gripper_runtime.grasp_policy import CapturePolicy, GraspConfig
-from gripper_runtime.grasp_qualification import GraspQualification, GripperCharacteristics
+from gripper_runtime.grasp_strategy import BoxExteriorGraspStrategy, select_grasp_strategy
 
 
 class ToolIntent(Enum):
@@ -59,72 +57,8 @@ class ToolRuntime:
         return self.actuator.get_width()
 
 
-class ParallelGripperCapture:
-    """Existing parallel-gripper capture and release predicates, unchanged."""
-    select = staticmethod(CapturePolicy.evaluate)
-
-    def __init__(self, supported_shapes=('box',), max_width_mm=None):
-        self.supported_shapes = tuple(supported_shapes)
-        self.max_width_mm = max_width_mm
-
-    @staticmethod
-    def candidate_source(stage, tcp_path, registry, actuator):
-        from gripper_runtime.grasp_stage import StageCaptureQuery
-        return StageCaptureQuery(stage, tcp_path, registry, actuator, reference_config=None)
-
-    def qualify(self, candidate):
-        return GraspQualification.evaluate(
-            material_shape=candidate.shape,
-            gripper_characteristics=GripperCharacteristics('parallel_gripper', self.supported_shapes),
-        )
-
-    def ready_during_grasp(self, candidate, source):
-        try:
-            measured = float(candidate.measured_opening_mm)
-            expected = float(candidate.capture_reference['expected_contact_width_mm'])
-            tolerance = float(getattr(
-                source, 'actual_contact_width_tolerance_mm',
-                GraspConfig().contact_width_tolerance_mm,
-            ))
-            return (math.isfinite(measured) and measured >= 0.0
-                    and math.isfinite(expected) and expected > 0.0
-                    and math.isfinite(tolerance) and tolerance >= 0.0
-                    and measured <= expected + tolerance)
-        except (TypeError, ValueError, KeyError, OverflowError):
-            return False
-
-    @staticmethod
-    def physical_holding_detected(observation, settings):
-        """Parallel Tool obstruction inference, without uncalibrated aperture gating.
-
-        This is device-level possession evidence, not target identification.
-        The physical actuator's width is compatibility telemetry; Snap's
-        geometric qualification retains its separate width requirement.
-        """
-        pos, target = observation['actual_position_rad'], observation['target_position_rad']
-        epsilon = observation['position_tolerance_rad']
-        return (observation['command_direction'] == 'closing'
-                and observation['object_detection'] == 'stopped_closing'
-                and observation['stopped_duration_s'] >= settings['stopped_dwell_s']
-                and all(math.isfinite(v) for v in (pos, target, epsilon))
-                and target - pos > epsilon
-                and observation['lower_limit_rad'] + epsilon < pos
-                < observation['upper_limit_rad'] - epsilon)
-
-    @staticmethod
-    def width_matches_reference(measured, expected, tolerance):
-        return (all(math.isfinite(v) for v in (measured, expected, tolerance))
-                and measured >= 0.0 and expected > 0.0 and tolerance >= 0.0
-                and abs(measured - expected) <= tolerance)
-
-    @staticmethod
-    def on_capture_ready(actuator):
-        actuator.stop()
-
-    def release_complete(self, actuator, target):
-        width = float(actuator.get_width())
-        target = self.max_width_mm if target is None else target
-        return target is not None and math.isfinite(width) and width >= target - 0.1
+# Compatibility name for existing Tool clients.
+ParallelGripperCapture = BoxExteriorGraspStrategy
 
 
 def _parallel_command(actuator, intent, duration):
@@ -142,7 +76,8 @@ def parallel_tool_runtime(actuator, profile):
     return ToolRuntime(
         actuator, frozenset(settings['capabilities']),
         lambda intent, duration: _parallel_command(actuator, intent, duration),
-        ParallelGripperCapture(settings['supported_shapes'], maximum),
+        select_grasp_strategy({**settings, 'grasp_strategies': settings.get('grasp_strategies', ['box_exterior'])},
+                              {'strategy': 'box_exterior'}),
         maximum, float(settings['move_duration_s']),
     )
 
@@ -215,3 +150,19 @@ def select_tool_runtime(profile, binding, *, implementations=None):
     except KeyError:
         raise ValueError(f'Unsupported Tool runtime implementation: {name}') from None
     return build(profile, binding)
+
+
+def radial_tool_runtime(move_primary, profile, geometry, requirement):
+    """Bind model-experiment joint motion to common Tool GRASP/RELEASE intent.
+
+    The caller owns interpolation and measured settling. No production launcher
+    combination or attachment ownership is introduced by this binding.
+    """
+    settings = profile['runtime']
+    strategy = select_grasp_strategy(settings, requirement, geometry=geometry)
+    def execute(intent, duration):
+        if intent is ToolIntent.STOP:
+            raise ValueError('Synchronous radial binding does not support STOP')
+        move_primary(strategy.primary_position(intent))
+    return ToolRuntime(move_primary, frozenset(settings['capabilities']), execute,
+                       strategy, move_duration=float(settings['sweep_duration_s']))

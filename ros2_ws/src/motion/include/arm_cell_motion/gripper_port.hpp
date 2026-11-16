@@ -5,6 +5,7 @@
 #include <optional>
 
 #include <arm_cell_interfaces/msg/motion_task_result_code.hpp>
+#include "arm_cell_motion/grasp_strategy.hpp"
 
 namespace arm_cell_motion
 {
@@ -49,8 +50,19 @@ public:
 
   virtual ~GripperPort() = default;
 
-  uint8_t grasp() {return close();}
-  uint8_t release() {return open();}
+  virtual uint8_t grasp() {return close();}
+  virtual uint8_t grasp(double grip_force_n) {return close(grip_force_n);}
+  virtual uint8_t release() {return open();}
+
+  virtual bool supportsGraspStrategy(GraspStrategy strategy) const
+  {return strategy == GraspStrategy::BOX_EXTERIOR;}
+  // Device adapter must validate the solution against its selected Tool before
+  // accepting it. Legacy parallel adapters retain their unchanged Box path.
+  virtual uint8_t prepareGrasp(const GraspSpecification & specification)
+  {
+    return specification.valid() && specification.strategy == GraspStrategy::BOX_EXTERIOR ?
+           ResultCode::TASK_RESULT_SUCCESS : ResultCode::TASK_RESULT_INVALID_GOAL;
+  }
 
   virtual uint8_t close() = 0;
   // Sum of opposing finger contact normal forces in N. Native adapters must

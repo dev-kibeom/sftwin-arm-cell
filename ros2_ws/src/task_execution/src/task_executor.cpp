@@ -85,6 +85,57 @@ std::uint8_t TaskExecutor::execute(const ExecuteTask::Goal & goal)
   return execute(goal, object_state());
 }
 
+std::uint8_t TaskExecutor::execute_grasp_cycle(
+  const PreparedGraspCycle & request, const std::string & motion_execution_id)
+{
+  last_report_ = TaskExecutionReport{};
+  last_report_.motion_execution_id = motion_execution_id;
+  last_report_.object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNCHANGED;
+  support_->reset_prepared_insertion_started();
+  if (support_->motion_port()) {support_->motion_port()->resetPickGraspInsertionStarted();}
+  attempted_material_candidate_ids_.clear();
+  outcome_material_candidate_id_.clear();
+  const auto tool = support_->gripper();
+  const bool valid_identity = motion_execution_id.size() == 32 &&
+    motion_execution_id.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos &&
+    motion_execution_id.find_first_not_of('0') != std::string::npos;
+  if (!valid_identity || !request.valid() || !tool ||
+    !tool->supportsGraspStrategy(request.grasp.strategy) ||
+    object_state() != MotionObjectState::NO_OBJECT)
+  {
+    last_report_.failure_stage = "grasp_strategy:unsupported_or_invalid_request";
+    return last_report_.result_code = MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+  }
+  // This prepared entry has no Material catalog admission. Do not silently
+  // bypass a configured operational force policy for an experimental input.
+  if (grip_force_policy_) {
+    last_report_.failure_stage = "grasp_strategy:material_force_admission_required";
+    return last_report_.result_code = MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
+  }
+  if (support_->interruption_checker()) {
+    const auto result = support_->interruption_checker()();
+    if (result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+      return last_report_.result_code = result;
+    }
+  }
+  const auto configured = tool->prepareGrasp(request.grasp);
+  if (configured != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+    last_report_.failure_stage = "grasp_strategy:tool_preparation";
+    return last_report_.result_code = configured;
+  }
+  // Scope the prepared work input to this synchronous operation, including
+  // exceptional exits. Ordinary Vision PICK remains independent of this path.
+  support_->set_prepared_grasp(request);
+  struct Reset
+  {
+    TaskExecutionSupport & support;
+    ~Reset() {support.set_prepared_grasp(std::nullopt);}
+  } reset{*support_};
+  ExecuteTask::Goal goal;
+  goal.task_type.value = MotionTaskType::TASK_TYPE_PICK;
+  return execute(goal, object_state(), motion_execution_id);
+}
+
 MotionDisturbResult TaskExecutor::execute_disturb(const MotionDisturbRequest & request)
 {
   return bt_executor_->execute_disturb(request);
@@ -97,6 +148,7 @@ std::uint8_t TaskExecutor::execute(
   const auto execution_started = std::chrono::steady_clock::now();
   const auto motion = support_->motion_port();
   motion->resetPickGraspInsertionStarted();
+  support_->reset_prepared_insertion_started();
   support_->set_execution_identity(motion_execution_id);
   set_object_state(object_state);
   attempted_material_candidate_ids_.clear();
@@ -290,7 +342,8 @@ TaskExecutor::ExecutePnp::Result TaskExecutor::execute_pnp(
 bool TaskExecutor::pick_grasp_insertion_started() const
 {
   const auto motion = support_->motion_port();
-  return motion && motion->pickGraspInsertionStarted();
+  return support_->prepared_insertion_started() ||
+         (motion && motion->pickGraspInsertionStarted());
 }
 
 MotionCancelResult TaskExecutor::cancel_active_motion(

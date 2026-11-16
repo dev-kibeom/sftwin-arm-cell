@@ -55,6 +55,8 @@ public:
     MotionGeometry geometry, std::chrono::milliseconds holding_confirmation_timeout);
 
   std::uint8_t execute(const ExecuteTask::Goal & goal);
+  std::uint8_t execute_grasp_cycle(
+    const PreparedGraspCycle & request, const std::string & motion_execution_id);
   std::uint8_t execute(
     const ExecuteTask::Goal & goal, MotionObjectState object_state,
     const std::string & motion_execution_id = {});

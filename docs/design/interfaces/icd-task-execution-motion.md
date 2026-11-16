@@ -104,6 +104,18 @@ Task Execution의 material ledger가 아니다.
 | Gripper command sequence·Holding expectation | Task Execution | 기존 PnP 단계에서 shared port 호출 |
 | Holding observation·device mapping | Motion transport/adapter | 단일 observation stream; 양 계층이 별도 subscription/adapter를 만들지 않음 |
 
+GripperPort의 `GRASP`·`RELEASE`는 의미적 명령이다. 외경 평행 파지는 닫기·열기로,
+내경 방사형 파지는 확장·수축으로 Tool adapter가 실현한다. Tool의 파지 능력과 작업 요구가
+일치해야 하며 Robot 모델은 전략 선택 입력이 아니다. 기존 parallel adapter의 호환
+close/open 경계는 유지한다. 내경 해의 선택 Tool 범위·기하 적합성 검증은 Tool 책임이며,
+명령 수락만으로 HELD 또는 RELEASED를 확정하지 않는다.
+
+준비된 티칭 파지 입력은 검증된 Tool 기하 해와 등록된 접근·삽입·이송·후퇴 동작 이름을
+Task Execution에 전달한다. 개별 이동은 같은 MotionPort 티칭 실행·취소·Safety 계약을
+사용하며 새 Motion 실행기를 두지 않는다. 시험 Fixture의 형상 생성·보고는 이 공유 계약의
+책임이 아니다. 운영 Vision/PnP의 기존 입력과 지원 조합은 변경하지 않는다. Material별 파지력 인수가 없는
+준비된 시험 입력으로 기존 운영 force policy를 우회하지 않는다.
+
 기존 Gripper command·Holding observation 동작은 변경하지 않는다. 통신 지연 대기, UNKNOWN
 분류, 실제 파지 실패의 OPEN 복구, 중복 OPEN/Holding 검증 제거 및 Timeout/completion 조건은
 기존 상세 FDS가 소유하며 이 ICD는 동작 절차를 복제하지 않는다.

@@ -178,15 +178,22 @@ MotionBtExecutionResult MotionBtExecutor::execute(
 
   const auto config_directory = ament_index_cpp::get_package_share_directory(
     "arm_cell_task_execution") + "/config/";
-  for (const auto * file : std::array<const char *, 7>{
+  for (const auto * file : std::array<const char *, 8>{
       "held_object_return.xml", "pick_recovery.xml", "pick_execution.xml", "place_recovery.xml",
-      "pick_candidate_search.xml", "place_execution.xml", "motion_tasks.xml"})
+      "pick_candidate_search.xml", "place_execution.xml", "motion_tasks.xml", "grasp_cycle.xml"})
   {
     factory.registerBehaviorTreeFromFile(config_directory + file);
   }
-  auto tree = factory.createTree("MotionTask", blackboard);
+  auto tree = factory.createTree(support_.prepared_grasp() ? "GraspCycle" : "MotionTask", blackboard);
   for (const auto & board : tree.blackboard_stack) {
     board->set("payload_home_operation", place_recovery.payload_home_operation());
+    if (support_.prepared_grasp()) {
+      const auto & prepared = *support_.prepared_grasp();
+      board->set("grasp_approach_motion", prepared.approach_motion);
+      board->set("grasp_insertion_motion", prepared.insertion_motion);
+      board->set("grasp_transfer_motion", prepared.transfer_motion);
+      board->set("grasp_retreat_motion", prepared.retreat_motion);
+    }
   }
   std::unique_ptr<BT::PublisherZMQ> groot_publisher;
   try {

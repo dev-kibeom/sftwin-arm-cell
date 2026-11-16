@@ -2,6 +2,7 @@ tool_id: hand_e_c10
 display_name: Hand-E C10 (모델·관절 실험 전용)
 tool_type: radial_gripper
 runtime:
+  grasp_strategies: [internal_radial]
   actuator: joint_position
   grasp: none
   supported_combinations: []

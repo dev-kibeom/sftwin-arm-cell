@@ -95,10 +95,48 @@ Logical Attach합니다. 이송 중 TCP 상대 고리 자세와 부착 관절을
 고리는 중력을 끈 실험용 Rigid Body이며 접촉용 Collider는 없습니다. 삽입 가능성은
 선택된 Finger의 충돌 형상을 고리 단면에 투영하여 검사합니다. 해제 후 잔여 속도를
 0으로 설정해 시험 고리를 유지합니다. 이 방식은 물리 접촉·마찰·파지력·자유낙하나
-실제 배치 안정성을 검증하지 않습니다. 정식 Material/Cell 등록, 범용 Grasp Strategy,
-Vision, Physical Grasp, ROS Mission 연동은 포함하지 않습니다.
+실제 배치 안정성을 검증하지 않습니다. 정식 Material/Cell 등록, Vision, Physical Grasp, ROS Mission 연동은 포함하지 않습니다.
 
 실행별 `configuration.json`과 `result.json`에는 Fixture 치수, 티칭 자세,
 단계별 측정 Finger·TCP·고리 자세·부착 상태, 삽입 여유, 이송 부착 오차와 해제 후 변위를
 기록합니다. 설정·실행기·실험 모듈·생성 URDF/USD의 해시로 실행 입력을 식별합니다.
 전체 시퀀스가 완료되어야 `PASS`이며 중단·실패는 wrapper에서도 실패로 반환합니다.
+
+
+## 3단계 — 공통 Grasp Strategy·Task 통합 검증
+
+Tool 설정의 `runtime.grasp_strategies`와 작업의 `strategy` 요구가 일치할 때만
+`box_exterior` 또는 `internal_radial`을 선택합니다. Robot 종류로 선택하지 않습니다.
+기본 C10과 Long은 같은 `InternalRadialGraspStrategy`를 사용하며 선택된 URDF·TCP·Finger
+충돌 형상으로 명시적인 내경·두께·삽입 깊이에 대한 목표를 계산합니다. 시험 고리 치수를
+선정하는 `fixture()`와 시각 형상·보고는 실험에 남습니다.
+`GRASP`는 확장, `RELEASE`는 수축입니다. 기존 2F-85의 닫기·열기는 유지합니다.
+
+공통 Task BT까지 실행하려면 `BUILD_TESTING=ON`으로 빌드한
+`arm_cell_task_execution`의 `grasp_cycle_fixture_bridge` 라이브러리를 지정합니다.
+ROS 2 및 빌드 overlay를 source한 뒤 아래 명령을 실행합니다.
+
+```bash
+bash infra/isaac_sim/scripts/run_model_experiment.sh \
+  ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10.yaml \
+  --internal-grasp --headless --cycles 1 \
+  --task-execution-library "$PWD/ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so"
+# Long: profile을 m0609_hand_e_c10_long.yaml로 변경합니다.
+```
+
+이 라이브러리는 시험 전용 in-process 어댑터입니다. 같은 `TaskExecutor`의 공통 Pick BT,
+`MoveTaught`, 의미적 GripperPort, fresh Holding 확인과 기존 파지 실패 복구를 실행합니다.
+라이브 Fixture 이동·측정·Logical Attach는 기존 Isaac 실험 함수가 제공합니다.
+순서는 수축→접근→삽입→확장·부착→이송→수축·해제→후퇴이며, 이송은 Pick의
+보유 확인을 포함한 retract 단계를 재사용합니다. 부착 실패·불확정 관측 후 이송하지 않습니다.
+
+이 경로는 운영 ROS Motion runtime의 계획·Safety admission·Stop 전체를 검증하는 것이
+아닙니다. 운영 호출은 같은 in-process `execute_grasp_cycle`에 등록된 티칭 이름과
+선택 Tool의 검증된 기하 해를 전달하고 기존 MotionPort 티칭 실행기를 사용합니다.
+준비된 입력에는 Material별 파지력 인수가 없으므로 운영 force policy가 설정된 executor는
+이 입력을 거부합니다. 운영 C10 Gripper transport와 Mission 조합은 아직 등록하지 않았으며 Launcher도 모델 실험
+상태를 유지합니다. 라이브러리 옵션을 생략하면 기존 독립 실험 경로가 유지됩니다.
+
+PR #103의 티칭 자세는 현재 실험 설정에 유지합니다. 5단계 신규 Cell 도입 때 Cell Profile로
+옮길 예정이며 이번 통합에서는 이동하지 않습니다. 실행 보고에는 공통 Task 사용 시 native
+라이브러리 해시·execution identity·결과를 함께 기록합니다.

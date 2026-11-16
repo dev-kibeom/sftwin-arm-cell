@@ -1,0 +1,14 @@
+<root>
+  <!-- Same process tree for prepared exterior and internal grasp operations.
+       PickExecution's retract stage is the held transfer for this input. -->
+  <BehaviorTree ID="GraspCycle">
+    <Sequence>
+      <SubTree ID="PickCandidateSearch"/>
+      <PrepareHeldTrayReturn/>
+      <OpenReturnedGripper/>
+      <WaitForReturnedRelease/>
+      <FinalizeHeldTrayReturn/>
+      <MoveTaught motion="{grasp_retreat_motion}"/>
+    </Sequence>
+  </BehaviorTree>
+</root>

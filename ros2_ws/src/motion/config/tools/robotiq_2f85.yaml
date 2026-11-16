@@ -49,6 +49,7 @@ contact_links:
 
 # Isaac implementation and optional capabilities are Tool-owned.
 runtime:
+  grasp_strategies: [box_exterior]
   isaac_bootstrap: pnp_cnc_cell.runtime_entrypoints:bootstrap_robotiq
   implementation: robotiq_2f85
   actuator: logical
