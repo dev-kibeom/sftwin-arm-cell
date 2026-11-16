@@ -366,7 +366,9 @@ SubTree를 재사용해 Holding 확인·이동·해제·Release 확인을 함께
 
 Hand-E C10 1단계 모델 통합은 Launcher의 별도 **M0609 + Hand-E C10 · 모델·관절 실험** 또는
 **HCR-14 + Hand-E C10 · 모델·관절 실험** 버튼으로 실행할 수 있습니다.
-손가락의 방사형 관절 구동만 지원하며, ROS Mission과 파지 모드는 지원하지 않습니다.
+기본 실행은 손가락의 방사형 관절 왕복이며, ROS Mission과 운영 파지 모드는 지원하지 않습니다.
+M0609의 기본형·연장형에는 `--internal-grasp`로 고정 티칭 자세 기반 내경 파지
+실험(Logical Attach)을 실행할 수 있습니다.
 자세한 내용은 [C10 모델 및 라이브 실험 안내](assets/robots/m0609_hand_e_c10/README.md)를 참조하세요.
 
 사진을 참고한 **100 mm 연장 핑거**는 별도 M0609·HCR-14 모델 실험 항목으로 제공합니다.

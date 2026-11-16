@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 
 from .runtime import read, resolve
-from .model_validation import validate_assembly_configuration, finite_number, names
+from .model_validation import validate_assembly_configuration, finite_number, names, joint_pose, planning_limits
 
 
 def load_model_experiment(path):
@@ -71,6 +71,22 @@ def load_model_experiment(path):
     # Validate dependent endpoints before a simulator is launched.
     for position in (linkage[primary]['lower'], linkage[primary]['upper']):
         joint_targets(linkage, position)
+    if 'internal_grasp_experiment' in source:
+        experiment = read(resolve(source['internal_grasp_experiment'], path.parent))
+        fixture = source.get('internal_grasp_fixture', {})
+        for key in ('insertion_depth_m', 'thickness_m'):
+            if not finite_number(fixture.get(key)) or fixture[key] <= 0:
+                raise ValueError(f'Internal grasp fixture requires positive {key}')
+        overrides = planning_limits(robot['joint_limits'], arm, joints)
+        for key in ('approach', 'insert', 'transfer', 'retreat'):
+            joint_pose(experiment.get(key), f'Internal grasp {key}', arm, joints, overrides)
+        scale = experiment.get('arm_drive_stiffness_scale')
+        if not finite_number(scale) or scale <= 0:
+            raise ValueError('Internal grasp drive scale must be positive')
+        duration = experiment.get('move_duration_s')
+        if not finite_number(duration) or duration <= 0:
+            raise ValueError('Internal grasp move duration must be positive')
+        config['internal_grasp_experiment'] = dict(experiment, fixture=fixture)
     return config
 
 

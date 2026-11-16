@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--configuration', required=True)
     parser.add_argument('--report', required=True)
     parser.add_argument('--headless', action='store_true')
+    parser.add_argument('--internal-grasp', action='store_true', help='Isolated logical bore grasp with teaching poses')
     parser.add_argument('--cycles', type=int, default=0, help='0 repeats until the window closes')
     args = parser.parse_args()
     if args.cycles < 0 or (args.headless and args.cycles == 0):
@@ -46,6 +47,8 @@ def main():
     config = json.loads(Path(args.configuration).read_text())
     if config.get('execution_scope') != 'model_only':
         parser.error('A model-only configuration is required')
+    if args.internal_grasp and 'internal_grasp_experiment' not in config:
+        parser.error('Selected profile has no internal grasp teaching/fixture configuration')
     from isaacsim import SimulationApp
     app = SimulationApp({'headless': args.headless})
     report = {'status': 'ABORTED', 'revision': os.environ.get('ARM_CELL_EXPERIMENT_REVISION'),
@@ -68,7 +71,10 @@ def main():
         runpy.run_path(str(root / 'infra/isaac_sim/scripts/isaac_runtime/runtime_steps/build_robot_usd.py'),
                        init_globals={'runtime_configuration': config})
         urdf = ET.parse(model.generated_urdf).getroot()
-        expected_tcp = aligned_fixed_translation(urdf, 'gripper_hand_e_c10_base_link', 'sf_grasp_tcp')
+        report['generated_urdf_sha256'] = hashlib.sha256(model.generated_urdf.read_bytes()).hexdigest()
+        from internal_grasp_geometry import ToolGeometry
+        tool_geometry = ToolGeometry(urdf, config['tool']['runtime'])
+        expected_tcp = aligned_fixed_translation(urdf, tool_geometry.base_link, 'sf_grasp_tcp')
         expected_collisions = {link.get('name'): len(link.findall('collision'))
                                for link in urdf.findall('link')
                                if link.get('name').startswith('gripper_') and link.findall('collision')}
@@ -89,6 +95,15 @@ def main():
                                robot_settings.get('joint_drive_damping', {}))
         author_home_targets(stage, binding, UsdPhysics)
         apply_joint_drive_profile(stage, binding, UsdPhysics)
+        if args.internal_grasp:
+            # Fixture alignment needs sub-mm tracking. Tune only this isolated
+            # experiment; the selected model and operational drive policy stay intact.
+            scale = config['internal_grasp_experiment']['arm_drive_stiffness_scale']
+            for prim in stage.Traverse():
+                if prim.GetName() in binding.joint_names and prim.HasAPI(UsdPhysics.DriveAPI, 'angular'):
+                    drive = UsdPhysics.DriveAPI(prim, 'angular')
+                    drive.GetStiffnessAttr().Set(drive.GetStiffnessAttr().Get()*scale)
+                    drive.GetDampingAttr().Set(drive.GetDampingAttr().Get()*math.sqrt(scale))
         settings = config['tool']['runtime']
         linkage = settings['joint_model']
         names = list(linkage)
@@ -178,7 +193,7 @@ def main():
 
         def geometry():
             cache = UsdGeom.XformCache()
-            base = cache.GetLocalToWorldTransform(prims['gripper_hand_e_c10_base_link']).GetInverse()
+            base = cache.GetLocalToWorldTransform(prims[tool_geometry.base_link]).GetInverse()
             positions = []
             for name in tip_links:
                 transform = cache.GetLocalToWorldTransform(prims[name]) * base
@@ -195,6 +210,18 @@ def main():
             if count != expected_count:
                 raise RuntimeError(f'Collision decomposition lost on {name}')
             collision_counts[name] = count
+        if args.internal_grasp:
+            from internal_grasp_experiment import run_internal_grasp
+            report['scope'] = 'isolated teaching-pose logical internal grasp; no Mission or physical grasp'
+            run_internal_grasp(config, tool_geometry, stage, world, robot, prims, arm_indices,
+                               indices, step, command, report, args.cycles)
+            report.update(status='PASS', model_id=model.model_id,
+                          max_synchronization_error_m=max_sync, sample_count=sample_count,
+                          tcp_translation_m=expected_tcp, observed_tip_links=tip_links,
+                          collision_counts=collision_counts,
+                          usd_sha256=hashlib.sha256(model.usd.read_bytes()).hexdigest())
+            print('C10 INTERNAL GRASP EXPERIMENT PASS', flush=True)
+            return
         cycle = 0
         while app.is_running() and (args.cycles == 0 or cycle < args.cycles):
             opened = settle(lower)
