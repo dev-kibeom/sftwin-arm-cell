@@ -64,5 +64,10 @@ def _report_startup_failure(task):
         carb.log_error(f"ARM Cell startup failed: {error!r}")
 
 
+# The synchronous importer may pump Kit updates while enabling extensions.
+# Run it before entering an asyncio task to avoid reentrant Task execution.
+carb.log_info("ARM Cell startup: preparing selected model assets")
+runtime_workflow.prepare_startup_model(_RUNTIME_NAMESPACE, PROJECT_ROOT)
+
 _ARM_CELL_STARTUP_TASK = asyncio.ensure_future(_start_arm_cell())
 _ARM_CELL_STARTUP_TASK.add_done_callback(_report_startup_failure)

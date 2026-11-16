@@ -57,7 +57,11 @@ ARM_CELL_PROFILE="$PWD/ros2_ws/src/bringup/config/hcr14_profile.yaml" \
   infra/isaac_sim/scripts/isaac_arm_cell.sh
 ```
 
-기존 Bringup 및 공통 Xacro→URDF→Isaac USD 경로를 사용한다. 별도 Importer,
+기존 Bringup 및 공통 Xacro→URDF→Isaac USD 경로를 사용한다.
+이 Assembly는 `isaac.build_missing_on_startup: true`를 선택한다. Launcher/CLI의
+Kit startup은 생성 URDF/USD/provenance가 없으면 공통 Pre Build producer를 먼저
+실행한 뒤 scene을 구성한다. 첫 실행에는 자산 생성 시간이 추가된다. 기존 로봇의
+Pre Build 실행 정책은 바꾸지 않는다. 별도 Importer,
 Motion 또는 PnP 분기는 없다. HOME/Return은 `[0,0,-pi/2,0,pi/2,0]` rad이며
 이 시뮬레이션 규약에서 선정한 셀 내 비충돌 시작 자세이다. 제조사 HOME이나
 충돌 없는 복귀 경로를 뜻하지 않는다. 로봇마다 기존 HOME/Return 설정은 보존한다.

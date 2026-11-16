@@ -1,7 +1,8 @@
 """Ordered Script Editor roles for the common Isaac backend.
 
 Before Play owns the selected configuration snapshot. After Play reuses it;
-Pre Build is deliberately independent and never runs implicitly at startup.
+Pre Build remains independent. A deployment can explicitly opt in to preparing
+missing generated model assets during host startup.
 """
 import os
 from pathlib import Path
@@ -41,3 +42,15 @@ def run_role(role, namespace):
         os.environ["SFTWIN_RUNTIME_MODE"] = "production"
     for filename in ROLES[role]:
         run_step(filename, namespace)
+
+
+def prepare_startup_model(namespace, project_root):
+    """Honor the selected Assembly's explicit first-run preparation policy."""
+    from .model_build_configuration import ModelBuildConfiguration
+    configuration = load_runtime_configuration()
+    namespace['runtime_configuration'] = configuration
+    if not configuration['model_configuration']['isaac'].get('build_missing_on_startup', False):
+        return
+    model = ModelBuildConfiguration.from_runtime(configuration, project_root)
+    if not all(path.is_file() for path in (model.generated_urdf, model.usd, model.provenance)):
+        run_step('build_robot_usd.py', namespace)
