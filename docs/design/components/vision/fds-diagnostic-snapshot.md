@@ -129,18 +129,35 @@ Terminal Snapshot은 해당 Acquisition에서 결과를 확정한 뒤 구성한�
 
 운영 중 경량 Record를 남기는 시점과 실패 시 증거 보존의 목적은 **추후 프레임을 다시 취득하거나 검출을 재실행하지 않고 해당 시도의 실패를 해석할 수 있도록 하는 것**이다. 숫자 Replay Input과 시각화 Artifact의 차이, Acquisition ID·Frame·Stamp의 의미는 해당 공유 계약을 따른다. 저장·발행 실패는 Diagnostic 상태로 보고하되 정규 Detection 및 Mission 결과를 바꾸지 않는다.
 
+각 표의 행은 해당 기존 VR의 조건별 확인 항목이며, 행 전체가 원래 식별자의 검증 범위를 유지한다. 행 분리는 새 VR이나 기존 Evidence의 적용 범위를 추가하지 않는다.
+
 ### VR-VIS-DETECT-16 — 원본 관측과 연결된 Detector 근거
 
-모든 Detector Snapshot은 프레임별 판단에 처리한 정확한 Depth 관측을 식별하고 선택적 RGB 사용 여부, 미사용 시 제외 이유, 사용 시 선택한 RGB 원본 Timestamp와 Frame을 따로 기록해야 한다. RGB 선택은 Detector 결과 확정 후에 수행하며 결과를 재실행하거나 변경해서는 안 된다. RGB·Depth Timestamp와 로컬 수신 시각은 관측 Metadata이지 수락 Gate가 아니다. RGB가 없거나 공간적으로 호환되지 않으면 RGB 없는 Snapshot을 만들고 Depth Detection을 거부하지 않아야 한다. 다중 관측 Calibration 및 Stability 요약은 프레임별 판단과 분리해 표기해야 한다. 누락된 원본 식별자·Detector 출력은 명시적으로 없는 상태를 유지하고 무관한 Camera Frame이나 추론 Geometry로 대체해서는 안 된다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Depth·RGB Source Identity | 모든 Detector Snapshot은 프레임별 판단에 처리한 정확한 Depth 관측을 식별하고 선택적 RGB 사용 여부, 미사용 시 제외 이유, 사용 시 선택한 RGB 원본 Timestamp와 Frame을 따로 기록해야 한다. |
+| RGB 선택 시점 | RGB 선택은 Detector 결과 확정 후에 수행하며 결과를 재실행하거나 변경해서는 안 된다. |
+| Timestamp 의미 | RGB·Depth Timestamp와 로컬 수신 시각은 관측 Metadata이지 수락 Gate가 아니다. |
+| RGB 부재·비호환 | RGB가 없거나 공간적으로 호환되지 않으면 RGB 없는 Snapshot을 만들고 Depth Detection을 거부하지 않아야 한다. |
+| 다중 관측 요약 | 다중 관측 Calibration 및 Stability 요약은 프레임별 판단과 분리해 표기해야 한다. |
+| 누락된 근거 | 누락된 원본 식별자·Detector 출력은 명시적으로 없는 상태를 유지하고 무관한 Camera Frame이나 추론 Geometry로 대체해서는 안 된다. |
 
 ### VR-VIS-DETECT-17 — Terminal 근거와 Lifecycle 분리
 
-Calibration 파일 생성에 성공하면 Vision은 Calibration Snapshot의 생성·저장·발행을 시도해야 한다. DetectTarget Terminal 성공·실패 시 Vision은 Acquisition 순번 폴더에 대표 Annotation `detection.png`를 생성·저장·발행해야 한다. 해당 metadata와 진단 JSON은 `acquisition_id`와 이미지 상대 경로로 연계한다. 성공에는 Canonical Target Pose와 선택 Profile 결과, 실패에는 Terminal Domain Result와 실제 관측된 가장 구체적인 단계를 포함해야 한다. Snapshot Encoding·저장·발행 실패가 Vision 서비스 결과나 Safety·Motion·Orchestration·Mission 결과를 지연·변경해서는 안 된다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Calibration 성공 | Calibration 파일 생성에 성공하면 Vision은 Calibration Snapshot의 생성·저장·발행을 시도해야 한다. |
+| DetectTarget Terminal | DetectTarget Terminal 성공·실패 시 Vision은 Acquisition 순번 폴더에 대표 Annotation `detection.png`를 생성·저장·발행해야 한다. |
+| Metadata 연결 | 해당 metadata와 진단 JSON은 `acquisition_id`와 이미지 상대 경로로 연계한다. |
+| 성공·실패 근거 | 성공에는 Canonical Target Pose와 선택 Profile 결과, 실패에는 Terminal Domain Result와 실제 관측된 가장 구체적인 단계를 포함해야 한다. |
+| 출력 실패 독립성 | Snapshot Encoding·저장·발행 실패가 Vision 서비스 결과나 Safety·Motion·Orchestration·Mission 결과를 지연·변경해서는 안 된다. |
 
 ### VR-VIS-DETECT-18 — Viewer와 독립적인 Snapshot 실행
 
-Hub 프로세스나 Snapshot Subscriber가 없어도 Vision은 Calibration 성공 Snapshot과 각 DetectTarget Terminal Snapshot을 생성·저장 시도한 후 발행도 시도해야 한다. 로컬 저장 실패는 발행을 억제하거나 Canonical Operation Result를 변경하지 않는다.
-
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Viewer·Subscriber 부재 | Hub 프로세스나 Snapshot Subscriber가 없어도 Vision은 Calibration 성공 Snapshot과 각 DetectTarget Terminal Snapshot을 생성·저장 시도한 후 발행도 시도해야 한다. |
+| 로컬 저장 실패 | 로컬 저장 실패는 발행을 억제하거나 Canonical Operation Result를 변경하지 않는다. |
 
 ## 검증 계약 및 참조
 

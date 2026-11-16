@@ -55,6 +55,8 @@ Isaac Reset은 멱등적이며 Fresh Gripper `RELEASED`나 실제 Safety Recover
 
 ## 5. Verification Requirements
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-SIM-TIME-01 — 단조 Pause/Resume
 시간 역행이 없는 Pause/Resume은 정상적인 Session 참여 관계를 유지해야 한다.
 
@@ -65,7 +67,15 @@ Isaac Reset은 멱등적이며 Fresh Gripper `RELEASED`나 실제 Safety Recover
 Epoch 변경을 Timestamp 재작성이나 Stale Cached State Replay로 숨겨서는 안 된다.
 
 ### VR-SIM-TIME-05 — 새 Isaac Session에 Bringup 연결
-이전 Bringup 중지와 Timeline Stop으로 과거 Session을 정리한 뒤에도 Kit은 열려 있어야 한다. Timeline Play가 새 Isaac Session을 시작하고 After Playing 초기화가 새 Bringup 시작 전에 Session Descriptor를 제공해야 한다. 새 Bringup은 같은 Session에 연결하고 Fresh Endpoint를 확립해야 한다. 새 Delivery 전에 Fresh Simulation Observation/Readiness를 검증하며 이전 Delivery Accounting·Mission·Retry Budget·Pending Readiness·Action·Vision Result를 승계하지 않는다. Oracle은 Kit Process 연속성, Reset된 Stage Material, 새 Session ID, 가능한 경우 Isaac/ROS Session Record의 동일 ID, 구분되는 ROS Process/Goal/Acquisition ID, Fresh Endpoint 관측 및 신규 Admission 성공이다. 기존 Bringup을 유지한 Stop→Play는 이 절차 범위 밖이며 Session 연결 실패는 관측 가능하게 남되 Runtime 판단을 바꾸지 않는다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 과거 Session 정리 | 이전 Bringup 중지와 Timeline Stop으로 과거 Session을 정리한 뒤에도 Kit은 열려 있어야 한다. |
+| 새 Session·Descriptor | Timeline Play가 새 Isaac Session을 시작하고 After Playing 초기화가 새 Bringup 시작 전에 Session Descriptor를 제공해야 한다. |
+| 새 Bringup 연결 | 새 Bringup은 같은 Session에 연결하고 Fresh Endpoint를 확립해야 한다. |
+| 새 Delivery 준비 | 새 Delivery 전에 Fresh Simulation Observation/Readiness를 검증하며 이전 Delivery Accounting·Mission·Retry Budget·Pending Readiness·Action·Vision Result를 승계하지 않는다. |
+| 관찰 근거 | Oracle은 Kit Process 연속성, Reset된 Stage Material, 새 Session ID, 가능한 경우 Isaac/ROS Session Record의 동일 ID, 구분되는 ROS Process/Goal/Acquisition ID, Fresh Endpoint 관측 및 신규 Admission 성공이다. |
+| 범위 밖·연결 실패 | 기존 Bringup을 유지한 Stop→Play는 이 절차 범위 밖이며 Session 연결 실패는 관측 가능하게 남되 Runtime 판단을 바꾸지 않는다. |
 
 ### VR-OBS-SESSION-REVISION-01 — 참여 프로세스 소스 출처
 Session Source Revision을 확보할 수 있으면 Session Descriptor에 참여 프로세스별 Revision·Dirty State를 기록해야 한다. 확보할 수 없다면 그 사실과 사유를 표현하되 Session Finalization을 차단해서는 안 된다. Oracle은 `session.json`의 프로세스별 출처 상관관계와 Unavailable 표시다.

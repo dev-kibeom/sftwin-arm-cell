@@ -131,29 +131,58 @@ Motion terminal 결과는 해당 operation의 정규 결과다. `MotionStatus`�
 
 ## Verification Requirements
 
+각 표의 행은 해당 기존 VR의 조건별 확인 항목이며, 행 전체가 원래 식별자의 검증 범위를 유지한다. 행 분리는 새 VR이나 기존 Evidence의 적용 범위를 추가하지 않는다.
+
 ### VR-MOT-DISTURB-01 — 높이순 후보 및 계획 탐색
 
-Motion은 모든 `disturbance_candidates`를 `observed_height_m` 내림차순, 동률에서 입력 Enumeration 순서로 검토해야 하며(SHALL), category 기반 순위를 적용해서는 안 된다(SHALL NOT). 네 고정 평면 방향 각각에 대해 접근·접촉 진입·밀기·후퇴 전체 경로를 계획하고, 하나라도 계획할 수 없으면 다음 방향 또는 후보를 검토해야 한다(SHALL). 후보 면적·형상 또는 CollisionObject containment를 실행 Gate로 추가해서는 안 된다(SHALL NOT). 모든 계획을 소진하면 `PLAN_EXHAUSTED`를 반환해야 한다(SHALL).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 후보 순서 | Motion은 모든 `disturbance_candidates`를 `observed_height_m` 내림차순, 동률에서 입력 Enumeration 순서로 검토해야 하며(SHALL), category 기반 순위를 적용해서는 안 된다(SHALL NOT). |
+| 방향별 전체 계획 | 네 고정 평면 방향 각각에 대해 접근·접촉 진입·밀기·후퇴 전체 경로를 계획하고, 하나라도 계획할 수 없으면 다음 방향 또는 후보를 검토해야 한다(SHALL). |
+| 추가 Gate 금지 | 후보 면적·형상 또는 CollisionObject containment를 실행 Gate로 추가해서는 안 된다(SHALL NOT). |
+| 계획 소진 | 모든 계획을 소진하면 `PLAN_EXHAUSTED`를 반환해야 한다(SHALL). |
 
 ### VR-MOT-DISTURB-02 — 계획과 실제 실행 실패 구분
 
-계획된 동작 묶음을 실행한 뒤 실제 실행 실패가 발생하면 다른 후보·방향으로 재분류하지 않고 원래 실행 실패 근거와 함께 `EXECUTION_FAILURE`를 반환해야 한다(SHALL). 모든 접근·밀기·후퇴 구간의 기존 측정 완료 조건을 충족한 경우에만 `COMPLETED`를 반환해야 한다(SHALL). 물체 이동·Holding·PICK 가능성 검증을 완료 조건에 추가해서는 안 된다(SHALL NOT).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 실제 실행 실패 | 계획된 동작 묶음을 실행한 뒤 실제 실행 실패가 발생하면 다른 후보·방향으로 재분류하지 않고 원래 실행 실패 근거와 함께 `EXECUTION_FAILURE`를 반환해야 한다(SHALL). |
+| 완료 조건 | 모든 접근·밀기·후퇴 구간의 기존 측정 완료 조건을 충족한 경우에만 `COMPLETED`를 반환해야 한다(SHALL). |
+| 추가 완료 조건 금지 | 물체 이동·Holding·PICK 가능성 검증을 완료 조건에 추가해서는 안 된다(SHALL NOT). |
 
 ### VR-MOT-DISTURB-03 — Cancel·Safety 정지 근거
 
-요청자 Cancel과 Safety direct Stop은 서로 구별되어야 하며(SHALL), terminal 결과는 각각 `CANCELED`와 `SAFETY_PREEMPTED` 및 해당 원인을 보존해야 한다(SHALL). 어느 정지 요청의 수락만으로 `backend_inactivity_confirmed`를 확정해서는 안 된다(SHALL NOT). 자재 간 의도된 교란 접촉을 허용하더라도 Robot self-collision·Tray·고정 설비 충돌 제한은 유지되어야 한다(SHALL).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Cancel·Safety 결과 | 요청자 Cancel과 Safety direct Stop은 서로 구별되어야 하며(SHALL), terminal 결과는 각각 `CANCELED`와 `SAFETY_PREEMPTED` 및 해당 원인을 보존해야 한다(SHALL). |
+| 정지 요청 수락 | 어느 정지 요청의 수락만으로 `backend_inactivity_confirmed`를 확정해서는 안 된다(SHALL NOT). |
+| 충돌 제한 | 자재 간 의도된 교란 접촉을 허용하더라도 Robot self-collision·Tray·고정 설비 충돌 제한은 유지되어야 한다(SHALL). |
 
 ### VR-MOT-DISTURB-04 — 요청별 Scene 및 고정 설비 충돌
 
-교란은 기존 요청별 Scene 구성 정책을 사용하고 Vision 자재 Occupancy를 제외해야 한다(SHALL). 별도 Scene이나 교란 전용 ACM 예외를 만들어서는 안 된다(SHALL NOT). Robot self-collision, Tray, Rail 및 고정 설비 충돌 검사는 유지해야 한다(SHALL).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 요청별 Scene | 교란은 기존 요청별 Scene 구성 정책을 사용하고 Vision 자재 Occupancy를 제외해야 한다(SHALL). |
+| 추가 Scene·ACM | 별도 Scene이나 교란 전용 ACM 예외를 만들어서는 안 된다(SHALL NOT). |
+| 고정 충돌 검사 | Robot self-collision, Tray, Rail 및 고정 설비 충돌 검사는 유지해야 한다(SHALL). |
 
 ### VR-MOT-DISTURB-05 — 결과·취소 경합의 단일 확정
 
-Cancel이 Motion operation 시작 전에 도착하면 실행을 시작하지 않고 취소할 수 있어야 하며(SHALL), 이 경우 Backend 비활성 근거를 꾸며내서는 안 된다(SHALL NOT). Cancel 수락 후 실제 중단 지연 중에는 operation terminal을 미리 확정하지 않아야 한다(SHALL). Motion이 `COMPLETED` 또는 `EXECUTION_FAILURE`를 확정한 뒤 도착한 Cancel은 해당 결과를 재분류해서는 안 된다(SHALL NOT). 실제 실행 중단을 Motion이 확정한 경우에만 `CANCELED`를 반환해야 한다(SHALL). Safety와 Cancel이 경합하면 Safety 원인·정지 근거가 보존되어야 하며 한 Goal당 terminal은 한 번만 확정되어야 한다(SHALL).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 시작 전 Cancel | Cancel이 Motion operation 시작 전에 도착하면 실행을 시작하지 않고 취소할 수 있어야 하며(SHALL), 이 경우 Backend 비활성 근거를 꾸며내서는 안 된다(SHALL NOT). |
+| 중단 지연 | Cancel 수락 후 실제 중단 지연 중에는 operation terminal을 미리 확정하지 않아야 한다(SHALL). |
+| 결과 확정 뒤 Cancel | Motion이 `COMPLETED` 또는 `EXECUTION_FAILURE`를 확정한 뒤 도착한 Cancel은 해당 결과를 재분류해서는 안 된다(SHALL NOT). |
+| CANCELED 확정 | 실제 실행 중단을 Motion이 확정한 경우에만 `CANCELED`를 반환해야 한다(SHALL). |
+| Safety 경합·단일 Terminal | Safety와 Cancel이 경합하면 Safety 원인·정지 근거가 보존되어야 하며 한 Goal당 terminal은 한 번만 확정되어야 한다(SHALL). |
 
 ### VR-MOT-DISTURB-06 — 전체 계획 후 실행
 
-선택한 접근·접촉 진입·밀기·후퇴 경로 전체를 계획·time-parameterize한 뒤에만 execution worker를 시작해야 한다(SHALL). 실행이 시작된 뒤에는 실패나 중단이 발생해도 다른 후보 또는 방향으로 전환해서는 안 된다(SHALL NOT). 기존 측정 joint-state completion oracle을 만족할 때만 `COMPLETED`를 반환해야 하며(SHALL), 자재 이동 또는 후속 PICK 가능성을 완료 의미로 주장해서는 안 된다(SHALL NOT).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 전체 계획 후 실행 | 선택한 접근·접촉 진입·밀기·후퇴 경로 전체를 계획·time-parameterize한 뒤에만 execution worker를 시작해야 한다(SHALL). |
+| 실행 이후 전환 | 실행이 시작된 뒤에는 실패나 중단이 발생해도 다른 후보 또는 방향으로 전환해서는 안 된다(SHALL NOT). |
+| 완료 Oracle·보증 범위 | 기존 측정 joint-state completion oracle을 만족할 때만 `COMPLETED`를 반환해야 하며(SHALL), 자재 이동 또는 후속 PICK 가능성을 완료 의미로 주장해서는 안 된다(SHALL NOT). |
 
 ## 참조
 

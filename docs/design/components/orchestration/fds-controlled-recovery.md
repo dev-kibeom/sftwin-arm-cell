@@ -28,7 +28,7 @@ Safety→Motion 직접 StopMotion이 일차 정지 경로이며 Orchestration �
 ```text
 중단된 ExecuteCycle 하나
 → one controlled-recovery episode
-→ E-Stop: Reset 후 HELD 자재를 Tray 반환 목표로 이동·릴리즈 확인·HOME 후 새 검출로 배치 계속
+→ E-Stop: Reset·기존 handoff 후 episode당 한 번 RETURN_HELD → 릴리즈 확인·HOME 후 새 검출로 배치 계속
 → 기타 승인된 복구: episode당 최대 1회 RETRACT
 ```
 
@@ -135,22 +135,26 @@ Recovery에 성공했다고 중단된 작업의 결과가 성공으로 바뀌지
 
 ### Final Demo 배치 계속 실행
 
-E-Stop과 구성된 Hard Fault 복구에서는 원인 해소, 명시적 관리자 Clear, 승인·Reset, 현재 capability를 Safety가 소유한다. Orchestration은 명시적인 관리자 Clear와 승인·Reset 완료를 기다린 다음 최신 상태로 준비 조건을 다시 평가해야 한다(SHALL). 원인 해소만으로는 충분하지 않다. 정상 동작을 재개하려면 fresh `RELEASED`가 필요하다. E-Stop으로 중단된 배치에서는 자동 RETRACT나 자동 자재 처리 명령을 내리지 않는다. `HELD` 또는 `UNKNOWN`이면 관리자가 자재를 직접 안전하게 처리한 뒤 복구를 요청하며, Orchestration은 fresh `RELEASED`가 확인되기 전까지 HOME을 비롯한 다음 동작을 시작하지 않는다.
-Holding 상태는 MotionStatus에 표시된 Gripper 관측으로 확인한다. Orchestration은 명령, 오래된 Sample 또는 경과 시간으로 `RELEASED`를 추론하지 않는다.
+E-Stop과 구성된 Hard Fault 복구에서는 원인 해소, 명시적 관리자 Clear, 승인·Reset, 현재 capability를 Safety가 소유한다. Orchestration은 명시적인 관리자 Clear와 승인·Reset 완료를 기다린 다음 최신 상태로 준비 조건을 다시 평가해야 한다(SHALL). 원인 해소만으로는 충분하지 않다. 중단 Action은 1절의 기존 Motion 정지 근거와 Safety 복구 조건으로 handoff하며, Action terminal 자체를 추가 전제 조건으로 요구하지 않는다.
+
+E-Stop으로 중단된 배치에서 관리자 Reset 후 `MOTION_NORMAL`이 복원되고 기존 handoff가 성립한 뒤에도 MotionStatus의 fresh Holding이 `HELD`이면, Orchestration은 해당 Recovery Episode당 한 번 Task Execution에 standalone `RETURN_HELD`를 요청한다. 이 반환은 중단 Task의 재실행이 아니며 E-Stop 복구에서 자동 RETRACT를 요청하지 않는다. Task Execution은 현재 정지 관절 상태에서 Tray 반환 목표로 직접 이동하고 OPEN 후 새 fresh `RELEASED`를 확인한다. 반환 동작·취소·선점·실패의 상세 의미는 [Task Execution PnP FDS](../task-execution/fds-pnp-execution.md)의 `RETURN_HELD` 계약을 따른다. 이동·OPEN·해제 관측 실패, 취소 또는 재차 Safety 선점 시 자동 반환 Retry를 하지 않고 원래 중단 결과와 반환 실패 근거를 보존한다.
+
+반환 성공은 이후 GO_HOME 성공과 독립된 반환 사실이다. Orchestration은 반환 Task 뒤 fresh `RELEASED`와 정지·비활성 상태를 확인한 후에만 아래의 GO_HOME·새 Vision 관측으로 계속 실행한다. `UNKNOWN` 또는 stale Holding이면 새 유효 관측을 확보할 때까지 자동 이동·릴리즈·계속 실행을 차단한다. 명령, 오래된 Sample 또는 경과 시간으로 `RELEASED`를 추론하지 않는다.
 
 준비 조건이 복원되고 최신 Holding이 `RELEASED`이며 Safety가 정상 Motion을 허가하면 Orchestration은 새 GO_HOME 작업을 요청해야 한다(SHALL). 이후 새로운 Vision 관측을 취득하고 보존된 배치 문맥에서 새 반복을 시작한다. 이는 새로운 작업과 Target 선택 Episode이며 중단된 Action의 재개나 암묵적인 PICK Retry가 아니다. Safety가 `MOTION_RECOVERY_ONLY`만 허가하는 동안 수행해서는 안 된다(SHALL NOT). 이 대기·계속 실행 중에도 배치 실행은 활성 상태로 유지된다. 이후 수량이 정상적으로 달성되면 최종 결과가 `MISSION_EXIT_QUANTITY_REACHED`일 수 있지만 중단 근거는 보존되고 관찰 가능해야 하며, 중단된 작업이 성공으로 바뀌는 것은 아니다.
 
 중단된 작업 결과와 이후 계속 실행의 결과는 독립적이다. GO_HOME 성공 및 이후 배치 계속 실행은 원래 E-Stop 또는 Hard Fault 원인을 배치 Feedback과 수락 증거에 보존해야 하며(SHALL), 중단 기록을 성공으로 지우거나 덮어써서는 안 된다(SHALL NOT).
 
-E-Stop 및 지정된 하드폴트 복구에서 자재 자동 처리는 허용하지 않는다. 관리자 확인·Reset, fresh `RELEASED`, `MOTION_NORMAL` 이후 HOME을 신규 Action으로 요청하고, 새로운 Vision 검출부터 잔여 배치를 이어간다. `HELD` 또는 `UNKNOWN`이면 관리자가 객체를 안전하게 처리하고 새로운 `RELEASED` 관측이 확보되기 전에는 계속 실행을 위한 Motion을 허용하지 않는다. 그때까지 `UNKNOWN`은 Fail-closed로 유지한다.
+E-Stop 이외의 지정된 Hard Fault에는 위 `RETURN_HELD` 허용을 확대하지 않는다. 해당 복구에서 `HELD`이면 기존대로 관리자가 자재를 안전하게 처리하고 새 fresh `RELEASED` 관측을 확보해야 한다. 관리자 확인·Reset과 현재 준비·Safety 조건이 충족되기 전에는 계속 실행하지 않는다.
 
-Holding 상태는 자동 계속 실행의 허용 조건이다:
+Holding 상태에 따른 반환 및 배치 계속 실행 조건은 다음과 같다.
 
-| 정지·Reset 후 최신 Holding 상태 | 계속 실행 조건 |
+| 정지·Reset 후 최신 Holding 상태 | 반환·계속 실행 조건 |
 |---|---|
-| `RELEASED` | 준비 조건과 Safety가 허용하면 GO_HOME 및 새 Vision 관측으로 보존된 배치를 계속 실행 |
-| `HELD` | 자동 계속 실행 금지. Final Demo에서는 관리자의 안전한 자재 처리와 새로운 `RELEASED` 확인이 필요 |
-| `UNKNOWN` | 자동 Motion·Recovery 금지. 관리자 조치와 안전 상태 확인 전까지 Fail-closed, 계속 실행 전 새로운 `RELEASED` 필요 |
+| Fresh `RELEASED` | 준비 조건과 `MOTION_NORMAL`이 허용하면 새 GO_HOME 및 새 Vision 관측으로 보존된 배치를 계속 실행 |
+| E-Stop 이후 fresh `HELD` | 기존 handoff와 관리자 Reset·`MOTION_NORMAL` 이후 Episode당 한 번 `RETURN_HELD`. 반환 성공 후 fresh `RELEASED`·정지·비활성을 확인한 다음 GO_HOME 및 새 Vision 관측으로 계속 실행 |
+| 그 외 Hard Fault 이후 `HELD` | 자동 자재 반환 허용 없음. 기존 관리자 자재 처리와 새로운 fresh `RELEASED` 확인 필요 |
+| `UNKNOWN` 또는 stale Holding | 새 유효 관측 전까지 자동 이동·릴리즈·계속 실행을 차단하고 Fail-closed 유지 |
 
 이 배치 계속 실행 규칙은 동일 Recovery Episode에서 두 번째 RETRACT를 승인하지 않는다. 별도로 허용된 복구 Motion도 Safety의 현재 복구 Envelope와 해당 복구 계약 안에서만 실행해야 한다. Safety E-Stop/Reset 및 배치 계속 실행은 보존된 중단 사유를 변경하지 않는다. Action의 최종 결과는 배치 결과를 나타낼 뿐 중단된 작업의 기록을 다시 쓰지 않는다.
 
@@ -166,32 +170,48 @@ sequenceDiagram
   participant Safety
   participant Motion
   participant Orch as Orchestration
+  participant Task as Task Execution
   participant Hub as UI Hub
   participant Vision
 
   Safety->>Motion: StopMotion(EMERGENCY)
   Motion-->>Safety: STOPPING (기존 명령 실행 종료 처리 중)
-  Orch->>Orch: 중단 Action 종료·배치 수량과 E-Stop 이력 보존
+  Orch->>Orch: 중단 작업·배치 수량과 원래 중단 이력 보존
   Orch-->>Hub: WAITING_RECOVERY
-  Note over Orch: 원래 중단 원인과 배치 잔여 수량 보존
   Motion-->>Safety: STOPPED (이전 실행 종료 및 Stop/Hold 전달 완료)
-  opt HELD 또는 UNKNOWN
-    Orch-->>Hub: 관리자의 자재 수동 처리가 필요함
-    Note over Hub,Motion: 자재 처리 후 fresh RELEASED가 확인되어야 정상 재개 가능
-  end
-  Hub->>Safety: E-Stop 해제 후 관리자 Reset·복구 승인
+  Note over Safety,Orch: 기존 Motion 정지 근거·Safety 복구 조건으로 handoff, 중단 Action terminal 필수 아님
+  Hub->>Safety: 원인 해소 후 관리자 Reset·복구 승인
   Safety->>Safety: 원인 해소·입력 유효성·정지 완료·Reset 평가
   alt 복구 조건 미충족
     Safety-->>Hub: Reset 또는 동작 허가 보류
     Orch-->>Hub: WAITING_RECOVERY 유지
   else Reset 적용 및 MOTION_NORMAL
     Safety-->>Orch: 정상 Motion 권한·유효한 Envelope
-    Motion-->>Orch: fresh RELEASED 관측
-    Orch->>Motion: 새 Goal로 GO_HOME
-    Motion-->>Orch: HOME 완료
-    Orch->>Vision: 새 DetectTarget
-    Vision-->>Orch: 새로운 결과
-    Orch->>Orch: 미처리 배치 수량부터 새 iteration 진행
+    Motion-->>Orch: 최신 Holding 관측
+    alt UNKNOWN 또는 stale Holding
+      Note over Orch: 새 유효 관측 전까지 자동 이동·릴리즈·계속 실행 차단
+    else E-Stop 이후 fresh HELD
+      Orch->>Task: 새 Goal로 RETURN_HELD (Episode당 한 번)
+      Note over Task,Motion: 현재 정지 관절 상태 → Tray 반환 이동 → OPEN → 새 fresh RELEASED 확인
+      alt 반환 성공
+        Task-->>Orch: 확인된 반환 결과
+        Motion-->>Orch: fresh RELEASED 및 정지·비활성 관측
+      else 이동·OPEN·해제 관측 실패, 취소 또는 재차 Safety 선점
+        Task-->>Orch: 실패·취소·선점 결과 및 반환 근거
+        Note over Orch: 자동 반환 Retry 없음, 원래 중단 결과·실패 근거 보존, 계속 실행 금지
+      end
+    else 그 외 Hard Fault 이후 HELD
+      Orch-->>Hub: 기존 관리자 자재 처리 및 새 RELEASED 확인 필요
+    end
+    opt (RETURN_HELD 미요청 또는 성공) 및 fresh RELEASED·기존 정지/비활성 및 현재 준비·Safety 조건 충족
+      Orch->>Task: 새 Goal로 GO_HOME
+      Task-->>Orch: HOME 결과
+      opt HOME 성공
+        Orch->>Vision: 새 DetectTarget
+        Vision-->>Orch: 새로운 결과
+        Orch->>Orch: 미처리 배치 수량부터 새 iteration 진행
+      end
+    end
   end
 ```
 
@@ -203,9 +223,11 @@ sequenceDiagram
 |---|---|---|
 | retain interrupted task/iteration provenance through batch continuation | `VR-ORCH-REC-02` | original interruption provenance remains observable through later batch completion/abort |
 | continuation uses a new GO_HOME and fresh perception; interrupted task/target is not replayed | `VR-ORCH-REC-07` | task and observation identities after reset, with no resubmission of interrupted task or reuse of its target observation |
-| holding gates automatic continuation | `VR-ORCH-REC-08` | fresh holding state and subsequent task request sequence; only `RELEASED` permits automatic continuation |
+| Holding에 따른 반환과 계속 실행 | `VR-ORCH-REC-08` | E-Stop Reset·handoff 후 fresh `HELD`의 Episode당 한 번 `RETURN_HELD`, 반환 결과 및 fresh `RELEASED`·정지/비활성 확인 뒤 HOME·새 관측 순서; `UNKNOWN`·stale은 자동 이동·릴리즈·계속 실행 차단 |
 
 ## 6. 검증 요구사항
+
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
 
 ### VR-ORCH-REC-01 — 복구 요청의 조기 실행 금지
 
@@ -213,7 +235,11 @@ Motion이 `MOTION_STATE_STOPPED`를 보고하고 Safety가 현재 `MOTION_RECOVE
 
 ### VR-ORCH-REC-02 — 원래 Mission 결과 보존
 
-복구 성공으로 중단된 작업·반복을 성공으로 표시해서는 안 된다(SHALL NOT). 중단 원인은 배치가 최종 완료되거나 중단될 때까지 관찰 가능해야 한다(SHALL). 이후 배치가 성공하더라도 새 작업 식별자와 새로운 Vision 관측이 필요하다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 복구 성공 | 복구 성공으로 중단된 작업·반복을 성공으로 표시해서는 안 된다(SHALL NOT). |
+| 중단 원인 보존 | 중단 원인은 배치가 최종 완료되거나 중단될 때까지 관찰 가능해야 한다(SHALL). |
+| 이후 배치 성공 | 이후 배치가 성공하더라도 새 작업 식별자와 새로운 Vision 관측이 필요하다. |
 
 ### VR-ORCH-REC-03 — Safety 직접 정지의 독립성
 
@@ -221,30 +247,65 @@ Safety가 직접 정지를 시작하는 데 Orchestration의 취소가 필요해
 
 ### VR-ORCH-REC-04 — Episode당 복구 요청 한 번
 
-중단된 ExecuteCycle 하나에 연결된 Controlled Recovery Episode에서, Recovery를 허용하는 Safety 상태가 반복 발행되거나 일시적인 권한 상실 이후 다시 제공되더라도 Orchestration은 해당 Episode에 RETRACT를 최대 한 번만 요청해야 한다(SHALL). 실제로 새로운 Mission/Recovery Episode가 발생하거나 향후 명시적인 Retry 허가가 없다면 두 번째 요청을 발행해서는 안 된다(SHALL NOT). 현재 범위에는 승인된 Recovery Retry 정책이 없다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 동일 Episode·권한 반복 | 중단된 ExecuteCycle 하나에 연결된 Controlled Recovery Episode에서, Recovery를 허용하는 Safety 상태가 반복 발행되거나 일시적인 권한 상실 이후 다시 제공되더라도 Orchestration은 해당 Episode에 RETRACT를 최대 한 번만 요청해야 한다(SHALL). |
+| 두 번째 요청 | 실제로 새로운 Mission/Recovery Episode가 발생하거나 향후 명시적인 Retry 허가가 없다면 두 번째 요청을 발행해서는 안 된다(SHALL NOT). |
+| 현재 Retry 범위 | 현재 범위에는 승인된 Recovery Retry 정책이 없다. |
 
 ### VR-ORCH-REC-05 — Recovery 중단과 재진입 Retry 금지
 
-Controlled Recovery Episode 하나에서 RETRACT 전이나 실행 중 복구 권한이 회수되거나 더 높은 심각도의 Safety 상태가 복구를 중단하면 Orchestration은 Recovery 진행을 중단해야 한다(SHALL). 이후 `MOTION_RECOVERY_ONLY`가 다시 제공되더라도 같은 Episode에 RETRACT를 다시 요청해서는 안 된다(SHALL NOT).
-
-검증 기준은 Safety가 더 높은 `selected_stop_mode`를 발행하고, Safety의 지시에 따라 Motion이 활성 RETRACT를 종료하며, 이후 복구 권한이 다시 제공될 수 있는 동안에도 해당 Episode의 RETRACT 요청 수가 1 이하로 유지되는 것이다. 심각도 전이가 RETRACT 종료·결과보다 먼저 기록되고 Orchestration이 별도의 정지 정책을 발행하지 않았는지도 확인한다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 권한 회수·상위 위험 | Controlled Recovery Episode 하나에서 RETRACT 전이나 실행 중 복구 권한이 회수되거나 더 높은 심각도의 Safety 상태가 복구를 중단하면 Orchestration은 Recovery 진행을 중단해야 한다(SHALL). |
+| 복구 권한 재제공 | 이후 `MOTION_RECOVERY_ONLY`가 다시 제공되더라도 같은 Episode에 RETRACT를 다시 요청해서는 안 된다(SHALL NOT). |
+| 요청 횟수·정지 결과 | 검증 기준은 Safety가 더 높은 `selected_stop_mode`를 발행하고, Safety의 지시에 따라 Motion이 활성 RETRACT를 종료하며, 이후 복구 권한이 다시 제공될 수 있는 동안에도 해당 Episode의 RETRACT 요청 수가 1 이하로 유지되는 것이다. |
+| 심각도·종료 순서 | 심각도 전이가 RETRACT 종료·결과보다 먼저 기록되고 Orchestration이 별도의 정지 정책을 발행하지 않았는지도 확인한다. |
 
 ### VR-ORCH-REC-06 — 복구 실패 시 Mission 결과 보존
 
-허가된 RETRACT가 실패하거나 중단되면 Orchestration은 원래 정규 `MissionExitReason`을 보존하고 자동 RETRACT Retry와 Mission Retry를 수행해서는 안 된다(SHALL NOT). 검증 근거는 원래 ExecuteCycle 종료 사유, RETRACT 요청 횟수, 중단 이후 정상 Mission Task 요청 횟수, RETRACT 결과·종료 증거다. Recovery 실패는 진단·증거에만 남으며 새로운 공개 Mission Exit Result를 만들지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| RETRACT 실패·중단 | 허가된 RETRACT가 실패하거나 중단되면 Orchestration은 원래 정규 `MissionExitReason`을 보존하고 자동 RETRACT Retry와 Mission Retry를 수행해서는 안 된다(SHALL NOT). |
+| 관찰 근거 | 검증 근거는 원래 ExecuteCycle 종료 사유, RETRACT 요청 횟수, 중단 이후 정상 Mission Task 요청 횟수, RETRACT 결과·종료 증거다. |
+| 진단·공개 결과 | Recovery 실패는 진단·증거에만 남으며 새로운 공개 Mission Exit Result를 만들지 않는다. |
 
 ### VR-ORCH-REC-07 — 중단된 Task 재개 금지
 
-Safety 중단 및 관리자의 Clear/Acknowledge/Reset 이후에도 Orchestration은 중단된 Task Goal을 다시 제출하거나 기존 Target 관측을 재사용해서는 안 된다(SHALL NOT). 허가된 계속 실행은 배치 문맥과 원래 실패 근거를 보존하면서 새 GO_HOME 및 새로운 Vision 관측을 사용해야 한다(SHALL). 계속 실행 또는 최종 중단이 결정되기 전까지 ExecuteCycle은 `WAITING_RECOVERY`로 유지된다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 중단 Goal·관측 재사용 | Safety 중단 및 관리자의 Clear/Acknowledge/Reset 이후에도 Orchestration은 중단된 Task Goal을 다시 제출하거나 기존 Target 관측을 재사용해서는 안 된다(SHALL NOT). |
+| 허가된 계속 실행 | 허가된 계속 실행은 배치 문맥과 원래 실패 근거를 보존하면서 새 GO_HOME 및 새로운 Vision 관측을 사용해야 한다(SHALL). |
+| 결정 전 ExecuteCycle | 계속 실행 또는 최종 중단이 결정되기 전까지 ExecuteCycle은 `WAITING_RECOVERY`로 유지된다. |
 
 ### VR-ORCH-REC-08 — Holding에 따른 계속 실행 제한
 
-정지 이후 Holding이 `RELEASED`, `HELD`, `UNKNOWN`인 경우 계속 실행은 다음을 따라야 한다(SHALL). `RELEASED`에서는 정지·Safety 조건과 함께 자동 계속 실행할 수 있다. E-Stop 원인이 해소되고 운영자 Reset으로 Safety가 정상 Motion 권한을 부여한 뒤 Holding이 `HELD`이면 Orchestration은 episode당 한 번 Task Execution에 자재 반환을 요청해야 한다(SHALL). Task Execution은 현재 정지 관절 상태에서 기존 Tray 반환 관절 목표로 이동하고, OPEN 후 새 `RELEASED` 관측을 확인한 다음에만 성공을 반환해야 한다(SHALL). 성공 후 Orchestration은 HOME으로 이동하고 새 Vision 관측 및 새 Task identity로 배치를 계속한다. 이 반환은 중단된 Task의 재실행이나 RETRACT가 아니다. `UNKNOWN` 또는 stale Holding은 새 유효 관측이 확보될 때까지 자동 이동·릴리즈·계속 실행을 막아야 한다(SHALL). Tray 이동·릴리즈 확인 실패나 재차 Safety 선점 시 자동 Retry하지 않고 원래 중단 결과와 실패 근거를 보존한다(SHALL). 검증 근거는 Holding freshness, Safety Reset/권한, 반환·릴리즈·HOME 요청 순서, terminal 결과 및 원래 중단 사유다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 적용 상태 | 정지 이후 Holding이 `RELEASED`, `HELD`, `UNKNOWN`인 경우 계속 실행은 다음을 따라야 한다(SHALL). |
+| RELEASED | `RELEASED`에서는 정지·Safety 조건과 함께 자동 계속 실행할 수 있다. |
+| Reset 뒤 HELD | E-Stop 원인이 해소되고 운영자 Reset으로 Safety가 정상 Motion 권한을 부여한 뒤 Holding이 `HELD`이면 Orchestration은 episode당 한 번 Task Execution에 자재 반환을 요청해야 한다(SHALL). |
+| 자재 반환·릴리즈 완료 | Task Execution은 현재 정지 관절 상태에서 기존 Tray 반환 관절 목표로 이동하고, OPEN 후 새 `RELEASED` 관측을 확인한 다음에만 성공을 반환해야 한다(SHALL). |
+| 반환 성공 뒤 계속 실행 | 성공 후 Orchestration은 HOME으로 이동하고 새 Vision 관측 및 새 Task identity로 배치를 계속한다. |
+| 반환의 의미 | 이 반환은 중단된 Task의 재실행이나 RETRACT가 아니다. |
+| UNKNOWN·Stale | `UNKNOWN` 또는 stale Holding은 새 유효 관측이 확보될 때까지 자동 이동·릴리즈·계속 실행을 막아야 한다(SHALL). |
+| 반환 실패·재선점 | Tray 이동·릴리즈 확인 실패나 재차 Safety 선점 시 자동 Retry하지 않고 원래 중단 결과와 실패 근거를 보존한다(SHALL). |
+| 관찰 근거 | 검증 근거는 Holding freshness, Safety Reset/권한, 반환·릴리즈·HOME 요청 순서, terminal 결과 및 원래 중단 사유다. |
 
 ### VR-ORCH-REC-09 — 미확정 Action의 기존 Recovery handoff
 
-Task Execution Goal 수락·terminal이 미확정일 때에도 Orchestration은 기존 Safety stop/recovery 흐름을 수행해야 한다(SHALL). 해당 Submission ID와 관측된 실제 Action Goal UUID 및 중단 원인을 Recovery Episode에 보존하고, 기존 Motion 정지 근거와 Safety 복구 조건이 충족되기 전에는 미해결 Goal의 lifecycle을 handoff 또는 종료로 간주해서는 안 된다(SHALL NOT). 기존 handoff 이후 늦게 도착한 Goal 응답은 중단된 Goal을 replay하거나 새 Mission 작업을 승인해서는 안 된다(SHALL NOT). 검증 근거는 해당 Submission ID와 관측된 Goal ID, Motion 정지 근거, Safety 복구 상태, Recovery Episode 및 이후 Task Goal 요청이다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 수락·terminal 미확정 | Task Execution Goal 수락·terminal이 미확정일 때에도 Orchestration은 기존 Safety stop/recovery 흐름을 수행해야 한다(SHALL). |
+| Handoff 전 책임 | 해당 Submission ID와 관측된 실제 Action Goal UUID 및 중단 원인을 Recovery Episode에 보존하고, 기존 Motion 정지 근거와 Safety 복구 조건이 충족되기 전에는 미해결 Goal의 lifecycle을 handoff 또는 종료로 간주해서는 안 된다(SHALL NOT). |
+| Handoff 뒤 늦은 응답 | 기존 handoff 이후 늦게 도착한 Goal 응답은 중단된 Goal을 replay하거나 새 Mission 작업을 승인해서는 안 된다(SHALL NOT). |
+| 관찰 근거 | 검증 근거는 해당 Submission ID와 관측된 Goal ID, Motion 정지 근거, Safety 복구 상태, Recovery Episode 및 이후 Task Goal 요청이다. |
 
 ### VR-ORCH-REC-CANCEL — Handoff와 후속 복구 Action
 
-기존 Motion 정지 근거와 Safety 복구 조건이 충족된 handoff에 중단 Action terminal을 필수로 요구해서는 안 된다(SHALL NOT). 늦은 수락·Feedback·terminal과 취소는 원래 Action에만 귀속하고 후속 복구 Action의 취소로 적용해서는 안 된다(SHALL NOT). 재차 Safety 선점에도 같은 경계를 유지해야 한다(SHALL). 검증 근거는 각 Goal identity, handoff 근거, 늦은 응답 및 후속 Action의 취소·결과다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Handoff 성립 근거 | 기존 Motion 정지 근거와 Safety 복구 조건이 충족된 handoff에 중단 Action terminal을 필수로 요구해서는 안 된다(SHALL NOT). |
+| 원래 Action 귀속 | 늦은 수락·Feedback·terminal과 취소는 원래 Action에만 귀속하고 후속 복구 Action의 취소로 적용해서는 안 된다(SHALL NOT). |
+| 재차 Safety 선점 | 재차 Safety 선점에도 같은 경계를 유지해야 한다(SHALL). |
+| 관찰 근거 | 검증 근거는 각 Goal identity, handoff 근거, 늦은 응답 및 후속 Action의 취소·결과다. |

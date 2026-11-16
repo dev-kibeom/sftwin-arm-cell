@@ -210,19 +210,39 @@ Simulator Profile 값을 제공·검증하지 못하면 WU-14 Acceptance를 차�
 
 ## 10. 검증 요구사항
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-INT-PNP-01 — Seed 기반 Fixture Lifecycle
 
-Seed가 Spawn Pose를 결정하고 Manifest가 Seed를 기록해야 한다. 정상 Release 후 설정된 Cleanup Delay가 지나면 Fixture 소유 Prim만 PlanningScene에서 제거하고 `ABSENT`를 확인한다. Detach·소유권이 확인된 경우 Isaac Prim의 최종 물리 삭제는 Release 후 Cleanup 경로에서 수행하며 GO_HOME 성공이나 Mission `FINISHED`를 기다리는 조건은 없다. 정상 Cleanup은 Attach·모호·`UNKNOWN` 객체를 임의 삭제하지 않고 Run Abort 시 안전하게 취소한다. Timeline Stop은 별도 Reset 경로로, 남은 Simulation Attachment를 먼저 정리하고 Fixture Prim을 삭제한다. 이 경로는 `RELEASED`·GO_HOME·Mission 완료를 요구하지 않는다. 양 경로의 제거는 멱등적이어야 한다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Seed·Manifest | Seed가 Spawn Pose를 결정하고 Manifest가 Seed를 기록해야 한다. |
+| 정상 Cleanup | 정상 Release 후 설정된 Cleanup Delay가 지나면 Fixture 소유 Prim만 PlanningScene에서 제거하고 `ABSENT`를 확인한다. |
+| Isaac Prim 최종 삭제 | Detach·소유권이 확인된 경우 Isaac Prim의 최종 물리 삭제는 Release 후 Cleanup 경로에서 수행하며 GO_HOME 성공이나 Mission `FINISHED`를 기다리는 조건은 없다. |
+| 모호 객체·Run Abort | 정상 Cleanup은 Attach·모호·`UNKNOWN` 객체를 임의 삭제하지 않고 Run Abort 시 안전하게 취소한다. |
+| Timeline Stop | Timeline Stop은 별도 Reset 경로로, 남은 Simulation Attachment를 먼저 정리하고 Fixture Prim을 삭제한다. |
+| Reset의 비전제 | 이 경로는 `RELEASED`·GO_HOME·Mission 완료를 요구하지 않는다. |
+| 제거의 멱등성 | 양 경로의 제거는 멱등적이어야 한다. |
 
 ### VR-INT-PNP-02 — Capture-local Attachment
 
-Close·Capture Volume·Pose·Orientation·선언된 mm 단위 접촉 폭 비교를 충족하는 적격 Object 정확히 하나만 Attach할 수 있다. 먼 Object·부적격·모호·허용 폭 초과 Object는 Attach할 수 없다. Attach는 Fresh `HELD`, 확인된 Detach는 Fresh `RELEASED`, 이상은 `UNKNOWN`을 발행한다.
-
-Production·Validation의 Capture는 선언된 Frame에서 실제 TCP Pose를 Motion이 선택한 TCP Grasp Pose와 비교하고, Object Geometry로 판정한 폭 호환 Contact Face Pair에 Closing Axis가 정렬되는지 5절에 따라 확인해야 한다. Position·Orientation·Width·Volume의 기존 엄격 조건을 유지하며 Symmetry로 우회하지 않는다. 선택된 Side Face·Tilted Grasp가 유효할 경우 단지 Top-down이 아니라는 이유로 거부해서는 안 된다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 단일 적격 Object | Close·Capture Volume·Pose·Orientation·선언된 mm 단위 접촉 폭 비교를 충족하는 적격 Object 정확히 하나만 Attach할 수 있다. |
+| Attach 금지 | 먼 Object·부적격·모호·허용 폭 초과 Object는 Attach할 수 없다. |
+| Holding 발행 | Attach는 Fresh `HELD`, 확인된 Detach는 Fresh `RELEASED`, 이상은 `UNKNOWN`을 발행한다. |
+| Capture Pose·Contact Face | Production·Validation의 Capture는 선언된 Frame에서 실제 TCP Pose를 Motion이 선택한 TCP Grasp Pose와 비교하고, Object Geometry로 판정한 폭 호환 Contact Face Pair에 Closing Axis가 정렬되는지 5절에 따라 확인해야 한다. |
+| 엄격 조건·Symmetry | Position·Orientation·Width·Volume의 기존 엄격 조건을 유지하며 Symmetry로 우회하지 않는다. |
+| 유효 Side·Tilted Grasp | 선택된 Side Face·Tilted Grasp가 유효할 경우 단지 Top-down이 아니라는 이유로 거부해서는 안 된다. |
 
 ### VR-INT-PNP-09 — 회전된 정사각형 Capture와 완료된 Retract
 
-충분히 관측된 회전 RawPart에 대해 Motion이 실행 가능한 Representative와 Closing Axis를 선택했다면 Isaac Capture는 실제 TCP Pose와 해당 선택 Pose·폭 호환 Object Axis를 비교해야 한다. 5절의 엄격한 Position·Orientation·Width·Volume 조건을 유지하여 Attachment를 생성하고 Fresh `HELD`를 반환한다. Motion은 선택한 TCP Frame 기준으로 Retract를 실행하며 **측정된 Retract 완료 이후** PICK 성공을 보고해야 한다. 잘못된 Symmetry Class·허용치 초과 Pose·잘못된 Contact Width·모호 Candidate는 Attach나 Retract를 승인하지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 회전 RawPart Capture | 충분히 관측된 회전 RawPart에 대해 Motion이 실행 가능한 Representative와 Closing Axis를 선택했다면 Isaac Capture는 실제 TCP Pose와 해당 선택 Pose·폭 호환 Object Axis를 비교해야 한다. |
+| Attachment·HELD | 5절의 엄격한 Position·Orientation·Width·Volume 조건을 유지하여 Attachment를 생성하고 Fresh `HELD`를 반환한다. |
+| Retract 성공 시점 | Motion은 선택한 TCP Frame 기준으로 Retract를 실행하며 **측정된 Retract 완료 이후** PICK 성공을 보고해야 한다. |
+| 잘못된 Pose·후보 | 잘못된 Symmetry Class·허용치 초과 Pose·잘못된 Contact Width·모호 Candidate는 Attach나 Retract를 승인하지 않는다. |
 
 ### VR-INT-PNP-03 — Backend 격리
 
@@ -234,7 +254,18 @@ Fresh `HELD` 관측 이전에는 Retract와 PICK 성공을 수행할 수 없다.
 
 ### VR-INT-PNP-05 — PLACE 순서
 
-PLACE Motion 성공에는 승인된 Release TCP/Motion Tracking과 Approach 수락, Fresh `RELEASED`, 실제 Detach 확인이 필요하다. `UNKNOWN`은 Retreat·성공을 차단한다. 결과 확정 직후 Gravity를 활성화한다. 정상 Release 후 Cleanup에는 확인된 Detach와 모호하지 않은 Fixture 소유권이 필요하다. PlanningScene 제거는 설정된 Cleanup Delay와 `ABSENT` 확인을 따르며 Isaac Prim 삭제는 GO_HOME·Mission `FINISHED`를 요구하지 않는다. Run Abort·Attach·`UNKNOWN`·소유권 모호 시 정상 삭제를 강행하지 않는다. 별도의 Timeline Stop은 남은 Simulation Attach를 정리한 뒤 자재를 삭제하는 Reset이며 정상 Release 조건에 종속되지 않는다. Detached Fixture Center와 예상 Release Center 사이 `place.position_tolerance_m` 거리 관측은 PLACE 성공·Cleanup Gate가 아니다. 예상 Center는 `orchestration.mission_place_pose_xyz`/Quaternion과 기존 `motion.object_to_grasp_tcp_*`의 역변환으로 계산한다. 이는 WU-14 Validation 동작이며 Production 배치 품질 검증이 아니다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| PLACE 성공 | PLACE Motion 성공에는 승인된 Release TCP/Motion Tracking과 Approach 수락, Fresh `RELEASED`, 실제 Detach 확인이 필요하다. |
+| UNKNOWN | `UNKNOWN`은 Retreat·성공을 차단한다. |
+| 결과 확정·Gravity | 결과 확정 직후 Gravity를 활성화한다. |
+| 정상 Cleanup 전제 | 정상 Release 후 Cleanup에는 확인된 Detach와 모호하지 않은 Fixture 소유권이 필요하다. |
+| PlanningScene·Prim 삭제 | PlanningScene 제거는 설정된 Cleanup Delay와 `ABSENT` 확인을 따르며 Isaac Prim 삭제는 GO_HOME·Mission `FINISHED`를 요구하지 않는다. |
+| 정상 삭제 금지 | Run Abort·Attach·`UNKNOWN`·소유권 모호 시 정상 삭제를 강행하지 않는다. |
+| Timeline Stop Reset | 별도의 Timeline Stop은 남은 Simulation Attach를 정리한 뒤 자재를 삭제하는 Reset이며 정상 Release 조건에 종속되지 않는다. |
+| 거리 관측의 비보장 | Detached Fixture Center와 예상 Release Center 사이 `place.position_tolerance_m` 거리 관측은 PLACE 성공·Cleanup Gate가 아니다. |
+| 예상 Center 계산 | 예상 Center는 `orchestration.mission_place_pose_xyz`/Quaternion과 기존 `motion.object_to_grasp_tcp_*`의 역변환으로 계산한다. |
+| Validation 범위 | 이는 WU-14 Validation 동작이며 Production 배치 품질 검증이 아니다. |
 
 ### VR-INT-PNP-06 — HOME 관측
 
@@ -246,7 +277,12 @@ GO_HOME이 PLACE 이후에 실행되고 측정된 Joint가 선언된 Home Tolera
 
 ### VR-INT-PNP-08 — Capture 이전 안정화와 소유권 전환
 
-등록 수락 이후 Capture 수락 전까지 우발적인 비파지 접촉에도 등록 Object Pose는 선언된 허용 범위 안에 있어야 하고 Capture 판정에도 유효해야 한다. Adapter가 Attachment를 생성하고 Pre-capture Stability Ownership을 성공적으로 해제한 **후**에만 Capture 수락을 보고한다. 해제 실패는 새 Attachment를 제거하고 `HELD` 없이 Fail-closed한다. 수락 이후에는 Adapter Attachment와 Fresh `HELD`/`RELEASED`가 객체를 통제한다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Capture 전 Pose | 등록 수락 이후 Capture 수락 전까지 우발적인 비파지 접촉에도 등록 Object Pose는 선언된 허용 범위 안에 있어야 하고 Capture 판정에도 유효해야 한다. |
+| Capture 수락 순서 | Adapter가 Attachment를 생성하고 Pre-capture Stability Ownership을 성공적으로 해제한 **후**에만 Capture 수락을 보고한다. |
+| 소유권 해제 실패 | 해제 실패는 새 Attachment를 제거하고 `HELD` 없이 Fail-closed한다. |
+| 수락 이후 통제 | 수락 이후에는 Adapter Attachment와 Fresh `HELD`/`RELEASED`가 객체를 통제한다. |
 
 ### Motion Capture Reference 좌표계 계약
 

@@ -206,14 +206,28 @@ MotionPort 결과와 GripperPort 관측을 바탕으로 내리며, Orchestration
 | 내부 상황 | Task Execution 절차 | Motion 경계 | 최종 배치 사실 |
 |---|---|---|---|
 | Grasp 전 허용된 후보 계획 실패 | 기존 후보·단계별 탐색 예산과 전환 적격성을 유지한다. 실제 trajectory 실행, 삽입 이후 실패, Backend·Scene·Safety·Cancel·Gripper 오류를 후보 전환으로 감추지 않는다. | 후보별 IK·Planning·충돌·trajectory 결과를 소비한다. | 배치하지 않은 상태 |
-| PLACE `PLANNED` 전체 Approach planning 실패 | PICK Retreat 위치에서 기존 반환 절차를 수행한다. HOME/Tray 경유 전 불필요한 궤적을 제출하지 않고, 기존 OPEN 및 fresh `RELEASED` 확인 후 `RETURNED` 또는 기존 실패 결과를 확정한다. | 각 요청 이동과 작업별 실행 완료를 위임한다. | `material_placed=false` |
+| PLACE `PLANNED` 전체 Approach planning 실패 | 아래 유한 HOME 경유 재탐색을 적용하고 소진 시 HOME→Tray 반환 절차를 수행한다. 복구에 필요한 이동만 요청하며 OPEN 및 fresh `RELEASED` 확인 후 `RETURNED` 또는 기존 실패 결과를 확정한다. | 각 요청 이동과 작업별 실행 완료를 위임한다. | `material_placed=false` |
 | PLACE `WAYPOINT` clearance 이동 실패 | PLACE 목표를 제출하지 않고 기존 PLACE 실패·Recovery 경계로 전달한다. | 개별 movement 결과를 제공한다. | 실제 Holding/disposition 관측을 유지 |
-| PLACE 삽입 실패, 자재가 확인된 `HELD` | 기존 유한 pose/path 탐색을 먼저 수행하고 소진 시 기존 HOME→Tray→OPEN→새 Holding 관측 순서로 반환한다. 확인된 `RELEASED`만 `RETURNED`로 확정하며 새 `UNKNOWN`에는 OPEN을 반복하지 않는다. | 현재 측정 상태 기준 이동과 경로 실현을 위임한다. | `material_placed=false` |
+| PLACE 삽입 실패, 자재가 확인된 `HELD` | 기존 유한 pose/path 탐색을 먼저 수행하며, 삽입 계획 후보 소진에는 아래 HOME 경유 재탐색을 적용한다. 복구 소진 시 기존 HOME→Tray→OPEN→새 Holding 관측 순서로 반환한다. 확인된 `RELEASED`만 `RETURNED`로 확정하며 새 `UNKNOWN`에는 OPEN을 반복하지 않는다. | 현재 측정 상태 기준 이동과 경로 실현을 위임한다. | `material_placed=false` |
 | PLACE Retreat 실패, release와 scene update 완료 | 기존 측정 상태 기반 후퇴 복구를 수행할 수 있다. 복구 소진 시 실패 원인을 남기되 `PLACED` 사실을 반환하며 자재 반환·OPEN·재배치를 시작하지 않는다. | 후퇴/복구 movement 결과를 소비한다. | `material_placed=true`를 유지 |
 
 Task Execution의 단일 외부 결과 매핑은 내부 복구가 끝난 뒤 수행한다. Action Cancel과 Safety 선점의 기존
 우선순위는 이 표보다 우선하며, 그 전에 확정된 `material_placed`는 되돌리지 않는다. 세부 실패 원인·단계·
 Disposition은 기존 Result와 진단에 보존할 수 있지만 Orchestration retry predicate가 아니다.
+
+PLACE 접근 또는 삽입 **계획 후보 소진** 후 fresh `HELD`가 확인되면 설정된 유한 횟수만큼
+Payload HOME을 경유해 정상 PLACE 탐색을 다시 요청한다. 최초 탐색은 재시도 횟수에 포함하지
+않으며, 횟수가 0이면 바로 최종 반환 절차로 진행한다. 각 재탐색은 새 측정 상태에서 동일한
+새 계산 예산을 사용한다. Payload HOME 이동 실패, Cancel·Safety 중단 또는 Backend 오류를
+재탐색으로 감추지 않는다. 자재를 임의 위치에서 Release하지 않는다.
+
+Payload HOME의 Holding 확인과 이름 기반 이동 조합은 아래 **티칭 동작의 BT 조합**을 따른다.
+재시도 소진 뒤 HOME→Tray 반환 이동→OPEN→fresh `RELEASED` 순서로 반환하고, 확인된 반환은
+`RETURNED`와 원래 PLACE 실패 원인을 보존한다. 반환 실패는 해당 실패를 보고하며 `RETURNED`로
+확정하지 않는다. HOME과 Tray 반환 이동의 직접 궤적·충돌 탐색 미수행 범위는
+[Motion Execution FDS의 Named Joint Motion](../motion/fds-motion-execution.md#named-joint-motion과-티칭-설정)이
+소유하며 정상 계획 기반 PLACE의 충돌 검증 예외로 확대하지 않는다.
+
 
 ## 취소·Safety 선점
 
@@ -343,7 +357,12 @@ Task Execution의 파지 정책은 Simulator Ground Truth 대신 작업에 지�
 
 ### VR-TE-PNP-01 — 단일 Action과 공정 내부성
 
-하나의 PnP Goal은 내부 PICK, PLACE, 성공 PLACE 뒤 마지막 GO_HOME을 수행하되 Orchestration에서 독립 PICK/PLACE Action을 호출하지 않는다. 각 terminal execution은 하나의 PnP result만 반환한다. `COMPLETED`는 마지막 GO_HOME 성공 뒤에만 반환하고, GO_HOME 실패는 `FAILED` 또는 `SAFETY_PREEMPTED` terminal로 보고한다. 이때 이미 확정된 `material_placed=true`와 `PLACED` disposition을 보존한다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| 공정 경계 | 하나의 PnP Goal은 내부 PICK, PLACE, 성공 PLACE 뒤 마지막 GO_HOME을 수행하되 Orchestration에서 독립 PICK/PLACE Action을 호출하지 않는다. |
+| 단일 결과 | 각 terminal execution은 하나의 PnP result만 반환한다. |
+| 마지막 GO_HOME | `COMPLETED`는 마지막 GO_HOME 성공 뒤에만 반환하고, GO_HOME 실패는 `FAILED` 또는 `SAFETY_PREEMPTED` terminal로 보고한다. |
+| 배치 사실 | 이때 이미 확정된 `material_placed=true`와 `PLACED` disposition을 보존한다. |
 
 ### VR-TE-PNP-03 — Motion 실패와 후보 전환 구분
 
@@ -359,42 +378,55 @@ Action Cancel은 활성 MotionPort 실행에 전파되어야 한다. Safety dire
 
 ### VR-TE-PNP-06 — Gripper command 및 Holding 계약 보존
 
-기존 PnP 동작은 Gripper command, Holding observation 및 복구 의미를 보존해야 한다(SHALL). 통신 지연 대기, 실제 UNKNOWN 복구, 실제 파지 실패의 기존 OPEN 복구, 중복 OPEN/Holding 검증 제거와 새 Timeout/completion gate 금지는 이 FDS 및 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)의 정식 계약을 따른다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| Gripper·복구 | 기존 PnP 동작은 Gripper command, Holding observation 및 복구 의미를 보존해야 한다(SHALL). |
+| 관측·Gate 경계 | 통신 지연 대기, 실제 UNKNOWN 복구, 실제 파지 실패의 기존 OPEN 복구, 중복 OPEN/Holding 검증 제거와 새 Timeout/completion gate 금지는 이 FDS 및 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)의 정식 계약을 따른다. |
 
 ### VR-TE-PNP-07 — 내부 복구 후 상위 결과 매핑
 
-Task Execution은 위 내부 PICK/PLACE 복구를 같은 PnP Goal 안에서 완료한 다음 상위 `pnp_outcome`을 한 번 확정해야 한다(SHALL). 후보 전환, Gripper/holding 복구, 자재 반환, HOME/Tray 경유와 retreat 복구를 Orchestration이 지시하거나 세부 결과를 재검증하지 않아야 한다(SHALL NOT). 재관측이 필요한 기존 재시도 가능 작업 결과는 `RETRYABLE`로 매핑하고, Motion/Backend 실행 실패를 후보 전환으로 숨기지 않아야 한다(SHALL). 검증 근거는 PnP Goal identity, MotionPort 요청·결과, Gripper 관측·명령, 내부 recovery trace, 단일 terminal outcome 및 `material_placed`다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| 결과 확정 순서 | Task Execution은 위 내부 PICK/PLACE 복구를 같은 PnP Goal 안에서 완료한 다음 상위 `pnp_outcome`을 한 번 확정해야 한다(SHALL). |
+| 내부 복구 Owner | 후보 전환, Gripper/holding 복구, 자재 반환, HOME/Tray 경유와 retreat 복구를 Orchestration이 지시하거나 세부 결과를 재검증하지 않아야 한다(SHALL NOT). |
+| 실패 매핑 | 재관측이 필요한 기존 재시도 가능 작업 결과는 `RETRYABLE`로 매핑하고, Motion/Backend 실행 실패를 후보 전환으로 숨기지 않아야 한다(SHALL). |
+| 검증 근거 | 검증 근거는 PnP Goal identity, MotionPort 요청·결과, Gripper 관측·명령, 내부 recovery trace, 단일 terminal outcome 및 `material_placed`다. |
 
 ### VR-TE-PNP-08 — Trajectory 결과 소비와 파지 사실 보존
 
-PICK/PLACE Trajectory 완료 이후 Task Execution은 별도 안정화·정확도·Readiness 승인을 기다리지
-않아야 한다(SHALL NOT). 확인된 `HELD`·부착 사실을 Retract 안정화 미충족으로 파지 실패로
-재분류해서는 안 된다(SHALL NOT). 실제 후속 실행 오류, 기존 Holding·반환·Recovery,
-Gripper/부착·분리 및 마지막 GO_HOME 조건은 보존해야 한다(SHALL).
+| 판정 항목 | 요구사항 |
+|---|---|
+| 추가 Gate 금지 | PICK/PLACE Trajectory 완료 이후 Task Execution은 별도 안정화·정확도·Readiness 승인을 기다리지 않아야 한다(SHALL NOT). |
+| 파지 사실 보존 | 확인된 `HELD`·부착 사실을 Retract 안정화 미충족으로 파지 실패로 재분류해서는 안 된다(SHALL NOT). |
+| 독립 조건 보존 | 실제 후속 실행 오류, 기존 Holding·반환·Recovery, Gripper/부착·분리 및 마지막 GO_HOME 조건은 보존해야 한다(SHALL). |
 
 ### VR-TE-PNP-09 — 독립 전략과 PICK 경계
 
-운영 profile은 PICK/PLACE 전략을 독립 선택하고, 명시되지 않은 기본값은 각각 `PLANNED`로
-해석해야 한다(SHALL). 한 작업 중 전략을 바꾸지 않는다(SHALL NOT). 두 PICK 전략 모두 기존
-삽입 거리 계산과 독립 설정된 공통 Retreat 거리를 사용해 Retreat 완료까지 수행하고, PICK만의
-완료 조건으로 GO_HOME을 실행하지 않는다(SHALL NOT). Retreat 완료 전에는 PLACE로 전환하지 않는다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| 전략 기본값 | 운영 profile은 PICK/PLACE 전략을 독립 선택하고, 명시되지 않은 기본값은 각각 `PLANNED`로 해석해야 한다(SHALL). |
+| 전략 고정 | 한 작업 중 전략을 바꾸지 않는다(SHALL NOT). |
+| PICK 완료 경계 | 두 PICK 전략 모두 기존 삽입 거리 계산과 독립 설정된 공통 Retreat 거리를 사용해 Retreat 완료까지 수행하고, PICK만의 완료 조건으로 GO_HOME을 실행하지 않는다(SHALL NOT). |
+| PLACE 진입 | Retreat 완료 전에는 PLACE로 전환하지 않는다. |
 
 ### VR-TE-PNP-10 — PLACE WAYPOINT 경계와 목표 관계
 
-PLACE `WAYPOINT`는 PICK Retreat 뒤 현재 TCP의 안전 Y 경계를 확인하고 필요하면 경계 바깥을 향한
-위치 목표 기반 clearance 이동과 기존 GO_HOME 관절 명령을 순서대로 수행해야 한다(SHALL). HOME 도달 뒤에는 적용된 운영
-profile·HOME 상태에 대응하는 Backend 사전 계산 접근 경로를 재사용해야 한다(SHALL). PICK별 Grasp
-Relation 때문에 경로나 최종 TCP 목표를 다시 계산하지 않으며, 현재 시연에서는 지정 배치 영역에서의
-기존 정상 Release 확인을 우선하고 경로와 배치 영역의 관계를 운영 환경에서 검증한다.
-접근 경로 완료 뒤 기존 PLACE Insertion·Release 확인·Retreat를 수행한다. 이미 안전 경계를 충족하면
-clearance 이동을 생략하지만 GO_HOME은 생략하지 않는다. PICK 완료 자체는 GO_HOME을 요구하지 않는다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| Clearance·HOME 순서 | PLACE `WAYPOINT`는 PICK Retreat 뒤 현재 TCP의 안전 Y 경계를 확인하고 필요하면 경계 바깥을 향한 위치 목표 기반 clearance 이동과 기존 GO_HOME 관절 명령을 순서대로 수행해야 한다(SHALL). |
+| 사전 계산 경로 | HOME 도달 뒤에는 적용된 운영 profile·HOME 상태에 대응하는 Backend 사전 계산 접근 경로를 재사용해야 한다(SHALL). |
+| 목표·배치 영역 | PICK별 Grasp Relation 때문에 경로나 최종 TCP 목표를 다시 계산하지 않으며, 현재 시연에서는 지정 배치 영역에서의 기존 정상 Release 확인을 우선하고 경로와 배치 영역의 관계를 운영 환경에서 검증한다. |
+| 후속 단계 | 접근 경로 완료 뒤 기존 PLACE Insertion·Release 확인·Retreat를 수행한다. |
+| Clearance 생략 범위 | 이미 안전 경계를 충족하면 clearance 이동을 생략하지만 GO_HOME은 생략하지 않는다. |
+| PICK 완료 | PICK 완료 자체는 GO_HOME을 요구하지 않는다. |
 
 ### VR-TE-PNP-11 — WAYPOINT 실패와 기존 disposition
 
-clearance 실패·경계 미충족, GO_HOME 실패, 사전 계산 결과 부재·실패 시 후속 PLACE 단계를 실행하지
-않고 기존 PLACE 실패·Recovery 경계로 전파한다. 임의 관절 이동이나 전략 fallback, 새 무제한 재시도,
-임의 대기 또는 Safety 판정 계층을 만들지 않는다. 계획·이동 실패만으로 관측된 자재 `HELD` 상태를
-`RELEASED`나 `UNKNOWN`으로 바꾸지 않으며 기존 Cancel/Safety 우선순위와 배치 확정 사실을 보존한다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| 실패 전파 | clearance 실패·경계 미충족, GO_HOME 실패, 사전 계산 결과 부재·실패 시 후속 PLACE 단계를 실행하지 않고 기존 PLACE 실패·Recovery 경계로 전파한다. |
+| 추가 동작 금지 | 임의 관절 이동이나 전략 fallback, 새 무제한 재시도, 임의 대기 또는 Safety 판정 계층을 만들지 않는다. |
+| Holding·선점·배치 사실 | 계획·이동 실패만으로 관측된 자재 `HELD` 상태를 `RELEASED`나 `UNKNOWN`으로 바꾸지 않으며 기존 Cancel/Safety 우선순위와 배치 확정 사실을 보존한다. |
 
 ## 참조
 
@@ -416,4 +448,6 @@ fresh HELD 확인 → `return_material` 이동 → OPEN → fresh RELEASED 확�
 순서다. 이동 실패나 중단 시 이후 OPEN을 실행하지 않고 기존 실패 의미를 유지한다.
 Payload HOME의 Holding 확인 절차는 기존 `PayloadHome` SubTree가 유지하며, 관절 이동은
 같은 Registry의 `payload_home`을 공통 Named Joint Motion 실행기로 요청한다. 이를 위한
-MoveIt 계획 요청·예약은 만들지 않는다. 설정 저장·가르치기 UI는 이 경계에 포함하지 않는다.
+MoveIt 계획 요청·예약은 만들지 않는다. 이동의 목표·한계·완료·실패 계약은
+[Motion Execution FDS의 Named Joint Motion](../motion/fds-motion-execution.md#named-joint-motion과-티칭-설정)을
+따른다. 설정 저장·가르치기 UI는 이 경계에 포함하지 않는다.

@@ -8,7 +8,7 @@
 
 이 ICD는 현행 `/motion/execute_task`와 호환 adapter에서 사용하는 요청·관측·결과 의미 및 기존 Geometry·candidate 공유 의미를 보존한다. 정상 자재 처리의 목표 실행 경계는 [Orchestration–Task Execution ICD](icd-orchestration-task-execution.md)의 단일 `ExecutePnp`다. 그 Action은 여기 정의된 유효 candidate·Recipe field의 공유 의미를 재사용하지만 Motion ROS Action을 호출하지 않는다.
 
-**비책임:** Material Candidate 우선순위·PnP 내부 전환·Gripper·복구는 [Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md), IK·Planning Scene·충돌·Grasp/PLACE 경로와 movement 완료는 [Motion Execution FDS](../components/motion/fds-motion-execution.md), 정적 권한은 Motion CDS, Mission Retry·Lookahead·상위 시퀀스는 [Mission Cycle FDS](../components/orchestration/fds-mission-cycle.md)가 소유한다. 이 ICD는 해당 절차나 최적화 목적을 다시 정의하지 않는다.
+**비책임:** Material Candidate 우선순위·PnP 내부 전환·Gripper·복구는 [Task Execution PnP FDS](../components/task-execution/fds-pnp-execution.md), IK·Planning Scene·충돌·Grasp/PLACE 경로와 movement 완료는 [Motion Execution FDS](../components/motion/fds-motion-execution.md), 정적 권한은 Motion CDS, Mission Retry·다음 Acquisition·상위 시퀀스는 [Mission Cycle FDS](../components/orchestration/fds-mission-cycle.md)가 소유한다. 이 ICD는 해당 절차나 최적화 목적을 다시 정의하지 않는다.
 
 ## 2. 참여자와 인터페이스
 
@@ -167,6 +167,8 @@ Legacy ExecuteTask caller는 해당 Goal의 `task_type`과 Terminal `result_code
 
 ## 5. 검증 요구사항 (Verification Requirements)
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-ICD-ORCH-MOT-01 — 논리적 작업 계약
 Orchestration은 Backend 장치별 로봇 명령이 아닌 논리적 작업 의미로 Motion에 요청해야 한다.
 
@@ -182,33 +184,67 @@ Orchestration은 Backend 장치별 로봇 명령이 아닌 논리적 작업 의�
 Legacy ExecuteTask payload는 symmetry order `0/1/2/4`와 방향 evidence의 기존 직렬화 의미를 보존해야 한다(SHALL). Order 0은 target quaternion을 관측 방향으로 취급하지 않는다. 신규 ExecutePnp에서 Recipe fallback 허용·적용과 후보별 사용 여부는 Task Execution FDS가 소유하며 Orchestration은 Recipe snapshot과 Vision candidate를 변경 없이 전달한다.
 
 ### VR-ICD-ORCH-MOT-06 — Action 수락과 Terminal Result 구분
-Action 프로토콜에서 거절된 Goal에는 `ExecuteTask.Result`가 없으며, 이를 `TASK_RESULT_BUSY`나 도메인 실패로 추정해서는 안 된다. 수락된 Goal은 정규 Terminal `result_code`를 반환하며 `TASK_RESULT_BUSY`는 기존 공유 Result 값이다. Goal UUID는 Result·Feedback과 실행을 연관한다. Orchestration의 BUSY·실패 처리 및 재진입 절차는 [Mission Cycle FDS](../components/orchestration/fds-mission-cycle.md)가 소유한다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 프로토콜 거절 | Action 프로토콜에서 거절된 Goal에는 `ExecuteTask.Result`가 없으며, 이를 `TASK_RESULT_BUSY`나 도메인 실패로 추정해서는 안 된다. |
+| 수락된 Goal | 수락된 Goal은 정규 Terminal `result_code`를 반환하며 `TASK_RESULT_BUSY`는 기존 공유 Result 값이다. |
+| Goal 상관관계 | Goal UUID는 Result·Feedback과 실행을 연관한다. |
+| 재진입 절차 Owner | Orchestration의 BUSY·실패 처리 및 재진입 절차는 [Mission Cycle FDS](../components/orchestration/fds-mission-cycle.md)가 소유한다. |
 
 ### VR-ICD-ORCH-MOT-07 — 취소와 Safety 선점
 Cancel 수락만으로 Backend 비활성이나 Action 최종 완료가 증명되지 않는다. Safety의 직접 `StopMotion`은 요청자 Cancel과 독립적이며, Safety 선점에 따른 Action 결과는 일반 취소·작업 실패와 구분되어야 한다.
 
 ### VR-ICD-ORCH-MOT-08 — Action Feedback 관측
-수락된 활성 Motion Goal은 단계가 바뀌면 즉시, 그 외에는 500ms 간격으로 관측 단계를 Feedback으로 보고해야 한다. Orchestration은 해당 Action Goal UUID의 Feedback만 단조 시계 기준으로 관측하고, 1.5초 이상 수신 공백을 감지·기록하며 회복도 기록해야 한다. 과거 Goal 또는 이미 종료된 Goal의 Feedback은 현재 Goal 관측에 사용하지 않는다. Feedback 수신 공백만으로 Cancel 또는 재제출을 수행해서는 안 된다. Motion의 Gripper Holding 관측 지연은 기존 `GRIPPER` phase 안의 Action 내부 대기이며, 새 Terminal Result·Result 매핑·Orchestration 승인 Gate가 아니다. 검증 근거는 Goal UUID, Feedback 수신 시각, 공백·회복 판단, MotionStatus 대조와 최종 Action Result다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Feedback 발행 | 수락된 활성 Motion Goal은 단계가 바뀌면 즉시, 그 외에는 500ms 간격으로 관측 단계를 Feedback으로 보고해야 한다. |
+| 수신 공백·회복 | Orchestration은 해당 Action Goal UUID의 Feedback만 단조 시계 기준으로 관측하고, 1.5초 이상 수신 공백을 감지·기록하며 회복도 기록해야 한다. |
+| 과거·종료 Goal | 과거 Goal 또는 이미 종료된 Goal의 Feedback은 현재 Goal 관측에 사용하지 않는다. |
+| 공백의 비보장 | Feedback 수신 공백만으로 Cancel 또는 재제출을 수행해서는 안 된다. |
+| Gripper 관측 지연 | Motion의 Gripper Holding 관측 지연은 기존 `GRIPPER` phase 안의 Action 내부 대기이며, 새 Terminal Result·Result 매핑·Orchestration 승인 Gate가 아니다. |
+| 관찰 근거 | 검증 근거는 Goal UUID, Feedback 수신 시각, 공백·회복 판단, MotionStatus 대조와 최종 Action Result다. |
 
 ### VR-ICD-ORCH-MOT-09 — Geometry·직접 점유 입력의 인계 의미
-Orchestration은 Observation Pose, 객체 자체 두께와 presence를 변경 없이 전달해야 한다(SHALL). 적층 높이는 객체 자체 두께를 대신하지 않는다. 직접/non-Vision PICK Occupancy 입력의 availability Flag와 목록은 한 쌍으로 해석한다. `false/empty`는 계산된 빈 공간이 아니고, `true/empty`는 관측된 비대상 Primitive가 없는 계산 결과이며 `false/nonempty`는 무효 조합이다. Vision-derived PICK 후보 Occupancy는 Orchestration 입력이 아니며 후보 Pose·Geometry는 [Vision–Orchestration ICD](icd-vision-orchestration.md)에 따른다. 점유 증거를 Motion Planning 구간에 적용하는 규칙은 Motion FDS가 소유한다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Observation·두께 인계 | Orchestration은 Observation Pose, 객체 자체 두께와 presence를 변경 없이 전달해야 한다(SHALL). |
+| 적층 높이 | 적층 높이는 객체 자체 두께를 대신하지 않는다. |
+| 직접 Occupancy 입력 | 직접/non-Vision PICK Occupancy 입력의 availability Flag와 목록은 한 쌍으로 해석한다. |
+| Flag·목록 조합 | `false/empty`는 계산된 빈 공간이 아니고, `true/empty`는 관측된 비대상 Primitive가 없는 계산 결과이며 `false/nonempty`는 무효 조합이다. |
+| Vision PICK 경계 | Vision-derived PICK 후보 Occupancy는 Orchestration 입력이 아니며 후보 Pose·Geometry는 [Vision–Orchestration ICD](icd-vision-orchestration.md)에 따른다. |
+| Planning 적용 Owner | 점유 증거를 Motion Planning 구간에 적용하는 규칙은 Motion FDS가 소유한다. |
 
 ### VR-ICD-ORCH-MOT-10 — 후보 증거와 결과 식별
-Vision PICK에서 Orchestration은 동일 Acquisition의 SELECTED HIGH·MEDIUM 후보 목록과 증거를 변경 없이 한 PnP Goal에 전달해야 한다(SHALL). Action Payload는 confidence 등급을 추가하지 않는다. Task Execution의 Terminal Result는 실제 시도 순서 `attempted_candidate_ids`, 최종 결과 원인 후보 `selected_candidate_id`, 해당되는 경우 최종 실패 단계 `pick_failure_stage`를 구분해야 한다(SHALL). 입력 목록 순서는 실행 우선순위를 뜻하지 않는다. 후보 평가·전환은 Task Execution PnP FDS가, MotionPort 입력과 개별 movement 계약은 각 정식 ICD/FDS가 소유한다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 후보 전체 인계 | Vision PICK에서 Orchestration은 동일 Acquisition의 SELECTED HIGH·MEDIUM 후보 목록과 증거를 변경 없이 한 PnP Goal에 전달해야 한다(SHALL). |
+| Payload 등급 | Action Payload는 confidence 등급을 추가하지 않는다. |
+| Terminal 후보 식별 | Task Execution의 Terminal Result는 실제 시도 순서 `attempted_candidate_ids`, 최종 결과 원인 후보 `selected_candidate_id`, 해당되는 경우 최종 실패 단계 `pick_failure_stage`를 구분해야 한다(SHALL). |
+| 목록 순서의 비보장 | 입력 목록 순서는 실행 우선순위를 뜻하지 않는다. |
+| 실행 Owner | 후보 평가·전환은 Task Execution PnP FDS가, MotionPort 입력과 개별 movement 계약은 각 정식 ICD/FDS가 소유한다. |
 
 ### VR-ICD-ORCH-MOT-11 — Vision Occupancy 필드의 비소비
 Vision-derived PnP의 Planning은 `has_non_target_occupancy`와 `non_target_occupancy`를 사용하지 않아야 한다(SHALL NOT). 해당 경로는 전체 Candidate Geometry와 선택 ID를 [Task Execution–Motion ICD](icd-task-execution-motion.md)에 따라 전달한다. 이는 직접/non-Vision PICK의 기존 Occupancy field 의미를 바꾸지 않는다.
 
 ### VR-ICD-ORCH-MOT-12 — JointState 수신 공백 오류 보고
 
-유효한 JointState Callback이 500ms 이상 도착하지 않으면 Motion은 관측 경고를 남기고, 같은 공백이 5초에 도달하면 `MotionObservationError`를 한 번 보고해야 한다. Orchestration은 이벤트의 종류·지속 시간·Execution ID 존재 여부를 보존하고 비Terminal 진단으로 소비해야 한다. 해당 공백만으로 Action의 성공·실패·취소 또는 안전 정지를 확정하지 않는다. 500ms Action Feedback 주기와 1.5초 Feedback 수신 이상은 별도 계약이다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| JointState 공백 | 유효한 JointState Callback이 500ms 이상 도착하지 않으면 Motion은 관측 경고를 남기고, 같은 공백이 5초에 도달하면 `MotionObservationError`를 한 번 보고해야 한다. |
+| 진단 소비 | Orchestration은 이벤트의 종류·지속 시간·Execution ID 존재 여부를 보존하고 비Terminal 진단으로 소비해야 한다. |
+| 공백의 비보장 | 해당 공백만으로 Action의 성공·실패·취소 또는 안전 정지를 확정하지 않는다. |
+| Feedback 계약 분리 | 500ms Action Feedback 주기와 1.5초 Feedback 수신 이상은 별도 계약이다. |
 
 ### VR-ICD-ORCH-MOT-14 — 추정 Rectangle Geometry 소비
 Orchestration은 `has_observed_rectangle=false`인 부분 형상 TestCube Candidate의 유효 Side Length·Pose 방향·추정 자체 두께를 기존 필드에서 보존해 전달해야 한다. Motion은 presence/provenance flag만으로 이 값을 거부하지 않고 유한성·양수·형상 일관성을 검증해 grasp geometry와 Object Pose에 사용해야 한다. 메시지 필드는 추가하지 않는다.
 
 ## 6. 계약 의존성과 소비 관계
 - **Motion CDS/FDS:** [정적 책임](../components/motion/cds.md), [Motion movement](../components/motion/fds-motion-execution.md), [Task Execution PnP](../components/task-execution/fds-pnp-execution.md), [Stop 처리](../components/motion/fds-stop-recovery.md)
-- **Orchestration FDS:** [Mission 재시도·Lookahead·워크플로](../components/orchestration/fds-mission-cycle.md)
+- **Orchestration FDS:** [Mission 재시도·Acquisition·워크플로](../components/orchestration/fds-mission-cycle.md)
 - **공유 계약:** [Safety–Motion](icd-safety-motion.md), [Vision–Orchestration](icd-vision-orchestration.md), [Motion Backend](icd-motion-backend.md)
 
 각 소비자는 자신이 사용하는 공유 의미의 단일 설계 Owner를 참조한다. 구현 경로나 파일 탐색은 이 문서에서 규정하지 않는다.

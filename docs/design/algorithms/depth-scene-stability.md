@@ -1,86 +1,99 @@
 # Depth Scene Stability Algorithm
 
 - **Algorithm ID:** `depth-scene-stability`
-
 - **범위:** DetectTarget 요청별 원본 Camera Depth 관측의 안정화 판단
 - **Owner:** ARM Cell Material Detection
-- **상위 계약:** [Vision CDS](../components/vision/cds.md), [DetectTarget FDS](../components/vision/fds-detect-target.md), [Frame Ingress FDS](../components/vision/fds-frame-ingress.md), [TestCube FDS](../components/vision/fds-rawpart-depth-perception.md)
+- **실현 대상 계약:** [DetectTarget FDS](../components/vision/fds-detect-target.md), [Frame Ingress FDS](../components/vision/fds-frame-ingress.md)
 
-## 목적
+## 목적과 경계
 
-고정 카메라의 원본 Depth Grid를 이용하여 연속 5회 관측에서 자재의 가시적 움직임이 멈췄는지 판단한다. 자재 분할·적격성·후보 우선순위를 계산하거나 Detector 형상·Occupancy 계약을 변경하지 않는다. RGB 값, Tray 형상, Calibration 변환, 시뮬레이터 상태는 비교 입력이 아니다.
+보정된 트레이 작업 영역에서 원본 Depth의 변화율·연속 관측 횟수·촬영 시각 기준
+안정 유지 시간을 계산한다. 자재 분할·후보 적격성·유효 부재·파지 가능성은 판단하지
+않는다. STABLE 결과의 Detector 인계와 요청 Deadline은 DetectTarget FDS가 소유한다.
 
-## 입력 및 유효성
+## 입력과 비교 영역
 
-입력은 Source Stamp, 수신 시각, Frame 및 Acquisition 식별자가 연결된 필터링 전 Depth Frame(m 단위)이다. `32FC1`은 m, `16UC1`과 `mono16`은 mm에서 m로 변환한 값으로 해석한다. 양의 유한 Pixel만 유효하며 0·NaN·무한대는 미관측이다. 비교 Frame·해상도·Pixel 좌표가 같아야 한다. 기존 CameraInfo/Calibration 호환성, Source Stamp, Freshness, Watermark 및 단일 Acquisition Deadline 계약은 유지한다. RGB Pairing은 안정화 수락 조건이 아니다.
+| 입력 | 계산에 사용하는 의미 |
+|---|---|
+| 원본 Depth·Source Stamp | 필터링 전 Depth와 안정 구간의 촬영 시각 |
+| CameraInfo·선택 Calibration·설정 트레이 작업 영역 | 지지 평면 Tray Z=0의 작업 영역을 영상에 투영하여 고정 비교 영역 P를 정의 |
+| Frame·Acquisition·수신 시각 | 입력 호환성·Freshness·Watermark는 Frame Ingress FDS를 따름 |
+| 운영 Profile | Depth 차이 허용오차, 변화 Pixel 비율 허용오차, 필요 관측 횟수와 최소 안정 유지 시간 |
 
-이 판단에는 필터링·Rectification·투영·Resampling·ROI Crop·Heightmap·Foreground Mask 등 이미지 변환을 적용하지 않는다. STABLE 판정을 만든 **바로 그 Depth 관측**을 선택된 Detector에 한 번 인계하며 원본 관측 식별자를 유지한다.
+비교 영역 P는 현재 측정된 자재 Depth와 독립적이다. 영역 밖 Pixel은 변화율의
+분자·분모에 포함하지 않는다. Calibration과 Tray Geometry는 영역을 정하는 데만
+사용하며, 실제 비교값은 원본 Camera Depth다. RGB 값·Detector Heightmap·후보 출력·
+시뮬레이터 상태는 비교값이 아니다. 비교를 위해 Depth를 Filter·Rectification·
+Resampling하거나 Heightmap으로 변환하지 않는다.
+
+`32FC1`은 m, `16UC1`과 `mono16`은 mm에서 m로 변환해 해석한다. 양의 유한 Pixel만
+유효하며 0·NaN·무한대는 미관측이다. 비교 Frame·해상도·Pixel 좌표가 같아야 한다.
+호환 CameraInfo/Calibration과 유효 Source Stamp·Freshness는 기존 입력 계약을
+따른다. RGB Pairing은 안정화 수락 조건이 아니다.
 
 ## 알고리즘 흐름
 
 ```mermaid
 flowchart TD
-    A[원본 Depth 관측 입력] --> B{입력 유효·호환?}
-    B -- 아니요 --> X[UNOBSERVABLE · 연속 관측 중단]
+    A[원본 Depth·촬영 시각·고정 비교 영역] --> B{입력 유효·호환?}
+    B -- 아니요 --> X[UNOBSERVABLE · 연속 안정 구간 초기화]
     B -- 예 --> C{첫 관측인가?}
-    C -- 예 --> D[기준·이전 관측 저장 · count 1]
-    C -- 아니요 --> E[기준 및 직전 Depth와 각각 비교]
-    E --> F{두 비교 영역 모두 존재?}
+    C -- 예 --> D[기준·직전 관측과 구간 시작 시각 저장 · count 1]
+    C -- 아니요 --> E[영역 안에서 기준 및 직전 Depth와 각각 비교]
+    E --> F{두 비교 모두 유효 Pixel 존재?}
     F -- 아니요 --> X
     F -- 예 --> G{두 변화율 모두 허용 범위?}
-    G -- 아니요 --> H[UNSTABLE · 현재 관측으로 기준 재설정]
+    G -- 아니요 --> H[UNSTABLE · 현재 관측으로 기준·시작 시각 재설정 · count 1]
     G -- 예 --> I[연속 관측 count 증가]
-    I --> J{필요 관측 수 충족?}
-    J -- 예 --> K[STABLE · 현재 Depth 인계]
+    I --> J{필요 횟수와 촬영 시각 기준 유지 시간 충족?}
+    J -- 예 --> K[STABLE · 해당 Depth 관측 식별]
     J -- 아니요 --> L[다음 관측 대기]
 ```
 
-## 핵심 계산식
+## 핵심 계산과 판단 규칙
 
-각 비교 대상 `D_t`, `D_j`에 대해 동일 화소에서 유한하고 양수인 Depth만 비교한다.
+현재 관측 `D_t`와 비교 관측 `D_j`(기준 또는 직전)에 대해 다음을 계산한다.
 
 ```text
-C(t,j) = {p | D_t(p) > 0, D_j(p) > 0, 두 값 모두 유한}
+C(t,j) = {p in P | D_t(p) > 0, D_j(p) > 0, 두 값 모두 유한}
 delta(t,j,p) = |D_t(p) - D_j(p)|
 r(t,j) = |{p in C(t,j) | delta(t,j,p) > epsilon_d}| / |C(t,j)|
-stable(t) = (r(t,reference) <= epsilon_r)
-         AND (r(t,previous) <= epsilon_r)
+stable_observation(t) = (r(t,reference) <= epsilon_r)
+                    AND (r(t,previous) <= epsilon_r)
+STABLE(t) = stable_observation(t)
+         AND (count >= required_count)
+         AND (source_stamp(t) - stable_start_stamp >= minimum_stable_duration)
 ```
 
-`epsilon_d`는 `depth_difference_tolerance_m`, `epsilon_r`는 `changed_pixel_ratio_tolerance`다. 두 비교의 분모는 서로 독립적이며, 어느 하나라도 비교 가능 화소 수가 0이면 안정 판정은 성립하지 않는다. 실제 설정값의 소유권은 운영 Profile에 있다.
+| 변수·판단 | 의미·경계 |
+|---|---|
+| P | 보정된 지지 평면에서 투영한 고정 트레이 작업 영역 |
+| `epsilon_d` | `depth_difference_tolerance_m`; 절대차가 엄격히 큰 Pixel만 변화로 계산 |
+| `epsilon_r` | `changed_pixel_ratio_tolerance`; 두 변화율이 각각 허용치 이하여야 함 |
+| `C(t,reference)`, `C(t,previous)` | 각 비교의 독립적인 유효 Pixel 집합; 분모를 교집합·합집합으로 합치지 않음 |
+| 비교 가능 Pixel 부재 | 어느 한 비교라도 비어 있으면 UNOBSERVABLE; 미관측으로 안정성 추론 금지 |
+| `count`, `required_count` | 연속 유효 관측 수와 `scene_stability.stable_observation_count` |
+| `stable_start_stamp` | 현재 연속 안정 구간을 시작한 Depth 촬영 시각 |
+| `minimum_stable_duration` | `scene_stability.minimum_stable_duration_s`; Source Stamp 차이로 계산하고 wall/steady 경과시간으로 대체하지 않음 |
 
-## 관측 간 비교
+고정 비교 영역은 Pixel 선택 범위다. Pixel 최소 개수·Coverage 비율·Tray 가시성
+조건을 추가 Detector 진입 Gate로 만들지 않는다. 유효 부재에 필요한 Coverage는
+Detector의 별도 계약이다. 관측 횟수와 유지 시간은 운영 Profile에서 선택하며
+설계에서 기본값을 중복 소유하지 않는다.
 
-두 Depth Frame에서 모두 양의 유한값인 Pixel만 비교한다. Pixel별 절대차(m)를 계산하고 그 값이 `depth_difference_tolerance_m`보다 **엄격히 클 때만** 변화 Pixel로 센다:
+## 연속 관측과 종료
 
-```text
-difference_m = abs(current_depth_m - earlier_depth_m)
-changed = difference_m > depth_difference_tolerance_m
-changed_pixel_ratio = changed_pixels / comparable_pixels
-```
+| 관측·이벤트 | 결과·상태 갱신 |
+|---|---|
+| 첫 유효 Depth | 기준·직전 관측과 구간 시작 시각을 저장하고 Count=1, UNOBSERVABLE로 대기 |
+| 두 변화율 허용 범위 | Count 증가; 필요 횟수와 최소 유지 시간을 모두 충족하면 STABLE |
+| 변화율 초과 | UNSTABLE; 현재 관측을 기준·직전으로 삼고 Count=1 및 시작 시각 재설정 |
+| 무효·비호환 입력, 유효/비교 가능 Pixel 부재 | UNOBSERVABLE; 연속 안정 구간 초기화 |
+| 요청 시작·취소·Terminal 정리·관측 무효화 | 요청별 상태 초기화 |
 
-현재 Depth를 안정 기준 Reference 및 바로 이전 Depth와 각각 독립적으로 비교한다. 두 비율은 각 비교의 유효 Pixel 수를 분모로 사용하며 비교 영역을 교집합이나 합집합으로 합치지 않는다. 어느 하나라도 비교 가능한 Pixel이 없으면 UNOBSERVABLE이며 연속 관측을 중단한다. 미관측 Pixel로 안정성을 추론하지 않는다. Pixel 최소 개수·Coverage 비율·Tray 가시성·지역 Gate는 추가하지 않는다. 비교별 Pixel 수와 비교 영역 밖의 현재 유효 Depth 수를 기록해 제한된 증거를 드러낸다.
-
-두 변화율이 **각각** `changed_pixel_ratio_tolerance` 이하일 때에만 현재 관측이 안정적이다. 하나라도 초과하면 UNSTABLE로 판정하고 현재 Depth를 새로운 기준·직전 관측으로 정하며 Count를 1로 재설정한다.
-
-## 연속 관측 판정
-
-- 첫 유효 Depth를 기준·이전 관측으로 저장하고 Count=1, 상태=UNOBSERVABLE로 대기한다.
-- 두 변화율이 모두 허용 범위면 Count를 증가시킨다.
-- 허용 범위 초과는 UNSTABLE이며 현재 Depth로 기준과 이전 관측을 갱신하고 Count=1로 재시작한다.
-- 입력 무효·비호환, 유효 Depth Pixel 부재, 비교 불가능 시 UNOBSERVABLE이며 연속 관측을 중단한다.
-- 유효 관측 5회 연속 조건이 충족되면 STABLE이다. 판정에 사용한 현재 Depth를 해당 Acquisition의 Detector에 한 번 인계한다.
-- 요청 시작·취소·Terminal 정리·관측 무효화 때마다 요청별 상태를 초기화한다. 기존 단일 Acquisition Deadline을 공유한다.
-
-## 운영 파라미터
-
-| 파라미터 | 기본값 | 의미·선정 근거 |
-|---|---:|---|
-| `diagnostics.depth_scene_stability.depth_difference_tolerance_m` | `0.003` m | Pixel별 Depth 절대차 Deadband. 과거 Cuboid 높이 허용오차에서 유래한 3mm 기준을 계승하며 실측 Camera Noise 값은 아니다. |
-| `diagnostics.depth_scene_stability.changed_pixel_ratio_tolerance` | `0.01` | 비교별 최대 변화 Pixel 비율. 기존 20×20 단일 Pixel Fixture는 0.25%, 이동한 3×3 Fixture는 최소 4.5%를 보여 1% 기준을 뒷받침하나 실제 카메라 실측치는 아니다. |
-| `scene_stability.stable_observation_count` | `5` | 연속 유효 관측 필요 횟수. |
-
-두 허용오차는 독립적으로 설정할 수 있다. 과거 Heightmap 전용 `mask_change_tolerance`, `height_change_tolerance`, `height_deadband_m`은 Scene Stability에 사용하지 않는다. 다른 Detector·Calibration의 동명 설정은 해당 Owner에 남는다.
+요청의 단일 steady monotonic Deadline은 전체 Acquisition을 제한한다. 실제 시간이
+흘렀다는 이유만으로 안정 유지 시간을 충족하지 않는다. STABLE을 만든 정확한 Depth
+관측의 식별자를 보존하며 Detector를 위한 추가 관측이나 RGB Pairing을 요구하지 않는다.
 
 ## Snapshot 및 진단 근거
 

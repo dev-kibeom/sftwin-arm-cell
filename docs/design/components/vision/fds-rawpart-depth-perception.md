@@ -40,7 +40,7 @@ Recipe `vision.algorithm`은 알고리즘 선택의 SSOT이며 Vision Operationa
 "vision": {"algorithm": "cuboid_top_face"}
 ```
 
-Orchestration은 정상 DetectTarget·Retry·새 자재 Acquisition·PLACE Lookahead에 Mission Recipe의 선택을 그대로 전달한다. Vision은 요청별 선택을 확인하고 해당 Acquisition 전반에 단일 Strategy를 적용한다. Snapshot은 실제 선택한 Algorithm을 기록한다. Material Definition은 형상·공칭 치수를, Vision Profile은 Grid·Height Tolerance·Contour Fitting·Workspace·Observation·Calibration 설정을 소유한다. 추가 Registry·Plugin·Service 또는 Motion 정책을 도입하지 않는다. Recipe/Service 기본값 및 Fixed Validation과의 구현 정합성은 실현 단계에서 확인해야 한다.
+Orchestration은 정상 DetectTarget·Retry·새 자재 Acquisition에 Mission Recipe의 선택을 그대로 전달한다. Vision은 요청별 선택을 확인하고 해당 Acquisition 전반에 단일 Strategy를 적용한다. Snapshot은 실제 선택한 Algorithm을 기록한다. Material Definition은 형상·공칭 치수를, Vision Profile은 Grid·Height Tolerance·Contour Fitting·Workspace·Observation·Calibration 설정을 소유한다. 추가 Registry·Plugin·Service 또는 Motion 정책을 도입하지 않는다. Recipe/Service 기본값 및 Fixed Validation과의 구현 정합성은 실현 단계에서 확인해야 한다.
 
 ### 1.2 Strategy 지원 및 Producer 책임
 
@@ -48,7 +48,7 @@ Orchestration은 정상 DetectTarget·Retry·새 자재 Acquisition·PLACE Looka
 
 Success를 발행하기 전에 Vision은 선택 Strategy의 필수 후보 Geometry와 결과를 검증해야 한다(MUST). Cuboid Candidate Geometry 누락·무효는 기존 Result 의미상 Geometry Failure다. Planning Occupancy는 Vision 필수 출력이나 성공 조건이 아니다. Support-resting Object의 자체 두께 제약은 2.5절에 정의한다.
 
-Stacking Extension에서는 Material 치수를 변경하지 않은 채 Configured Workspace의 수직 범위가 허용된 적층 Envelope을 포함해야 한다. 정지한 경사 자재는 Algorithm의 평면·경계·체적 검증으로 평가한다. 불안정한 관측은 기존 Scene Stability를 통과해야 한다. 상부 객체에 덮인 것으로 관측된 하부 후보는 LOW로 진단에 보존하고 일반 PICK 목록으로 전달하지 않는다. 파지 가능성은 Vision 등급과 별개로 Motion이 판단한다. 미해결 Evidence는 Confirmed Absence를 확정하지 않는다. 선택한 Face 및 자체 두께 Hypothesis가 모호하지 않다면 가려진 Support Interface를 직접 관측할 필요는 없다.
+Stacking Extension에서는 Material 치수를 변경하지 않은 채 Configured Workspace의 수직 범위가 허용된 적층 Envelope을 포함해야 한다. 정지한 경사 자재는 Algorithm의 평면·경계·체적 검증으로 평가한다. 불안정한 관측은 기존 Scene Stability를 통과해야 한다. 상부 가림 자체로 후보를 강등하거나 제외하지 않으며, Algorithm의 형상·관측 근거 판정을 통과한 선택 HIGH·MEDIUM 후보를 반환한다. 파지 가능성은 Vision 등급과 별개로 Motion이 판단한다. 미해결 Evidence는 Confirmed Absence를 확정하지 않는다. 선택한 Face 및 자체 두께 Hypothesis가 모호하지 않다면 가려진 Support Interface를 직접 관측할 필요는 없다.
 
 ## 2. 처리 파이프라인
 
@@ -57,7 +57,7 @@ DetectTarget(target_id, algorithm)
 → 설정된 TestCube Profile 결정
 → Fresh Depth 및 호환 CameraInfo 취득. 표시용 호환 RGB만 선택적으로 보존
 → vision.calibration_file의 Transform 및 설정된 Tray Support Geometry 적용
-→ 연속 5회 유효 관측으로 Depth Scene Stability 완료
+→ Depth Scene Stability Algorithm의 관측 횟수·유지 시간 조건 충족
 → STABLE을 확정한 정확한 Depth Observation으로 Detector 1회 실행
 → Depth를 Tray Frame으로 역투영하고 Support 기준 상대 좌표 표현
 → 설정된 Workspace 및 Support-relative Geometry Band로 제한
@@ -68,11 +68,11 @@ DetectTarget(target_id, algorithm)
 → HIGH·MEDIUM 단일 목록의 전체 Qualified Material Candidate Geometry 반환
 ```
 
-각 활성 DetectTarget Acquisition에서 Vision은 공유 Tray Scene Stability Gate로 연속 5개 이상의 유효 Depth Sample과 설정된 안정 유지 시간(기본 0.5초)을 충족한 다음 Profile을 한 번 실행한다. 이 Gate는 RawPart를 Segmentation·Detection·Classification하지 않는다. Candidate Geometry 및 Valid Absence는 선택 Detector가 최종 Depth Observation 하나로 결정한다. 후보 적격성은 Temporal Tracking이 아닌 단일 Observation Geometry 판단이다. Acquisition이 없을 때 Camera Ingress는 활성화돼도 TestCube Profile Processing은 실행되지 않는다.
+각 활성 DetectTarget Acquisition에서 Vision은 [Depth Scene Stability Algorithm](../../algorithms/depth-scene-stability.md)의 STABLE 결과를 DetectTarget FDS의 인계 절차로 받은 다음 Profile을 한 번 실행한다. 이 Gate는 RawPart를 Segmentation·Detection·Classification하지 않는다. Candidate Geometry 및 Valid Absence는 선택 Detector가 최종 Depth Observation 하나로 결정한다. 후보 적격성은 Temporal Tracking이 아닌 단일 Observation Geometry 판단이다. Acquisition이 없을 때 Camera Ingress는 활성화돼도 TestCube Profile Processing은 실행되지 않는다.
 
 유효 Absence에는 최종 Detector Observation의 완전한 Projected Workspace Coverage와 충분한 Valid Depth가 필요하다. 이 조건은 Detector 실행 자체를 막거나 이미 관측된 유효 Candidate를 거부하는 조건이 아니다. Unobservable·Ambiguous·Insufficient Geometry는 Absence가 아니다. Scene Stability는 원본 Camera Depth Frame을 비교하며 Detector Heightmap이나 Support-relative Projection에 의존하지 않는다.
 
-Scene Stability의 관측 횟수·유지 시간 조건을 완료한 최종 Observation을 Detector Input으로 직접 사용한다. 추가 Frame을 취득하거나 Detection을 반복하지 않는다. 성공 인계는 Sensor Processing Slot을 해제하고 동일 DetectTarget Response에서 그 Observation의 정렬된 Candidate List와 Geometry를 반환한다. Vision은 Handoff 뒤 Candidate List를 보존하지 않는다. Orchestration은 List를 변경 없이 전달하고 Motion은 유한한 PICK Search 안에서 소비한다. Failed·Absent·Timed-out·Internally Cancelled Result는 Terminal Outcome에서 폐기한다.
+Scene Stability의 관측 횟수·유지 시간 조건을 완료한 최종 Observation을 Detector Input으로 직접 사용한다. 추가 Frame을 취득하거나 Detection을 반복하지 않는다. 성공 인계는 Sensor Processing Slot을 해제하고 동일 DetectTarget Response에서 그 Observation의 정렬된 Candidate List와 Geometry를 반환한다. Vision은 Handoff 뒤 Candidate List를 보존하지 않는다. Orchestration은 List를 변경 없이 Task Execution에 전달한다. Task Execution은 후보 우선순위·전환을 소유하고 Motion은 선택 후보의 계획·움직임을 수행한다. Failed·Absent·Timed-out·Internally Cancelled Result는 Terminal Outcome에서 폐기한다.
 
 단일 Request의 Monotonic Deadline은 Input Wait·Qualification·Detection·Handoff를 모두 포함한다. Caller가 ROS Service Request를 포기해도 기존 Service Shape에는 Server Cancellation 신호가 없으므로 Server의 Result는 같은 Deadline으로 제한되고 Terminal Completion에서 폐기된다. 이 제약이 별도 Lifecycle Owner를 추가하지 않는다. Qualified Candidate Geometry와 공통 Wire 의미는 ICD를 따른다.
 
@@ -84,7 +84,7 @@ Vision은 공유 Depth Scene Stability Gate의 State Change를 `/vision/scene_st
 
 이 Scene Stability Evaluator는 현재 Camera Depth Observation만 사용한다. Isaac Prim 좌표·Identity·물리적 Linear/Angular Velocity·Sleeping·기타 Simulator Physics State를 읽지 않는다. Stable Scene이 Target Absence나 Grasp Success를 보장하지 않는다. 새 Request는 독립 Acquisition Identity를 가지고 Scene Change Reset도 그 Acquisition 내부에서 발생한다.
 
-Candidate Identity는 Profile 내부에 한정된다. Retained Result는 Request Deadline에 연결돼 DetectTarget Response로 반환되고 별도 Pose TTL이나 Caller Generation Gate는 없다. Candidate 평가는 Acquisition의 최종 Observation에 고정돼 이후 Sensor Observation으로 재정렬·교체되지 않는다. Vision은 내부 평가에서 HIGH로 분류된 후보 전체을 하나의 Response로 반환하고 Orchestration은 변경 없이 전달하며 Motion은 PICK Search에서 소비한다. 외부 Material Movement는 Motion의 일반 PICK Outcome과 Orchestration의 유한 Retry Policy로 처리한다.
+Candidate Identity는 Profile 내부에 한정된다. Retained Result는 Request Deadline에 연결돼 DetectTarget Response로 반환되고 별도 Pose TTL이나 Caller Generation Gate는 없다. Candidate 평가는 Acquisition의 최종 Observation에 고정돼 이후 Sensor Observation으로 재정렬·교체되지 않는다. Vision은 내부 평가에서 선택된 적격 HIGH·MEDIUM 후보 전체를 하나의 Response로 반환하고 Orchestration은 변경 없이 Task Execution에 전달한다. Task Execution이 PICK 후보를 선택하고 Motion이 해당 움직임을 수행한다. 외부 Material Movement는 Motion의 일반 PICK Outcome과 Orchestration의 유한 Retry Policy로 처리한다.
 
 유효한 Configured Profile·Fresh Sensor Set·Valid Support Reference가 필요한 Stage는 Fail-closed다. 이를 Target Absence로 해석해서는 안 된다(SHALL NOT). Processing Result는 Parent의 Result Code 계약을 따른다. 설정 Target이 유효한 관측에서 부재한 경우에만 `DETECT_RESULT_OBJECT_NOT_FOUND`를 반환한다.
 
@@ -122,7 +122,7 @@ Algorithm은 모든 후보를 같은 최종 Observation에서 식별·정규화�
 
 Vision은 선택 상태가 SELECTED인 적격 HIGH와 MEDIUM 후보를 단일 `material_candidates` 목록으로 모두 반환한다. ALTERNATIVE·UNRESOLVED·REJECTED는 일반 PICK 목록에 넣지 않는다. LOW 후보와 REJECTED 가설은 내부 진단·Snapshot에 남기며 일반 PICK 목록에 반환하지 않는다. 단일 목록이 비어 있지 않으면 기존 Success 결과를 사용한다. 유효한 최종 관측에서도 개별 Geometry를 확정하지 못하면 기존 `DETECT_RESULT_GEOMETRY_ERROR`를 사용하고, 근거가 있는 미해결 영역은 별도 `disturbance_candidates`로 보존할 수 있다. `DETECT_RESULT_TEMPORARY_INVALID_TARGET`은 일시적인 관측 Evidence 부족에 한정한다. `DETECT_RESULT_OBJECT_NOT_FOUND`는 유효한 부재 Coverage와 Support Geometry가 부재를 확정한 경우에만 반환한다. 미해결 가설을 부재로 바꾸지 않는다. 기존 Candidate Pose·Geometry 계약을 사용하고 confidence 숫자나 Ranking Score를 추가하지 않는다. Action 후보 정렬과 작업 순서는 Motion/Task Execution이 소유한다. IK·로봇 접근 가능성·경로 계획은 Vision 적격성 Gate가 아니며 실제 파지 가능성은 기존 Task Execution/Motion이 판단한다.
 
-상부 가림 평가는 관측된 높이와 공간 관계를 사용한다. XY footprint 중첩만으로 가림을 확정하지 않는다. 부분 관측이지만 L자·높이·Recipe 근거로 개별 형상·자세가 확정되고 다른 객체 아래에 깔리지 않은 Candidate는 MEDIUM이다. 실제 상부 객체에 덮인 하부 Candidate는 LOW로 유지한다. 정규화·관측 적합도 비교 후에도 개별 객체를 확정할 수 없는 관측 부족은 LOW 근거다. 미선택 대안은 별도 선택 상태로 남기며 대안의 존재 자체로 정상 후보를 강등하지 않는다. 동일 객체의 복수 L자·대칭·동등 Pose 가설은 먼저 정규화하며 중복 proposal 수만으로 등급을 낮추지 않는다. 관측된 형상·높이와 직접 모순되는 가설만 REJECTED다. 미관측 ROI 밖 영역은 상부 가림이나 모순을 입증하지 않는다. 다른 후보와 LOW·미해결 객체의 신뢰 가능한 관측 높이·체적 근거는 Vision Diagnostic Record에 보존한다. 낮은 등급 가설을 HIGH/MEDIUM 반환 Candidate Geometry로 승격하지 않는다.
+상부 가림 평가는 관측된 높이와 공간 관계를 사용한다. XY footprint 중첩만으로 가림을 확정하지 않는다. 부분 관측 후보도 L자·높이·Recipe 근거로 개별 형상·자세가 확정되면 Algorithm의 관측 면적 기준으로 등급을 결정한다. 실제 상부 가림은 관측 근거로 보존하되 그 자체로 LOW를 부여하거나 확정 후보를 제외하지 않는다. 정규화·관측 적합도 비교 후에도 개별 객체를 확정할 수 없는 관측 부족은 LOW 근거다. 미선택 대안은 별도 선택 상태로 남기며 대안의 존재 자체로 정상 후보를 강등하지 않는다. 동일 객체의 복수 L자·대칭·동등 Pose 가설은 먼저 정규화하며 중복 proposal 수만으로 등급을 낮추지 않는다. 관측된 형상·높이와 직접 모순되는 가설만 REJECTED다. 미관측 ROI 밖 영역은 상부 가림이나 모순을 입증하지 않는다. 다른 후보와 LOW·미해결 객체의 신뢰 가능한 관측 높이·체적 근거는 Vision Diagnostic Record에 보존한다. 낮은 등급 가설을 HIGH/MEDIUM 반환 Candidate Geometry로 승격하지 않는다.
 
 후보별 등급과 판정 근거는 해당 Acquisition의 Vision Diagnostic Record와 연결된 Snapshot Metadata에 보존한다. 선택 상태·대안 ID·선택/거부 사유는 Confidence 및 그 근거와 별도로 보존한다. REJECTED는 Confidence가 아닌 명백한 모순의 판정 상태다. Stage Sidecar는 이 동일 평가를 재사용한다. Snapshot은 새 검출을 수행하지 않는다. 등급은 진단 정보이며 성공한 파지, 안전한 접근 또는 충돌 부재를 보증하지 않는다.
 
@@ -193,6 +193,8 @@ Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), 
 
 검증은 Sensor Observation·Fixture·선언된 Configuration을 입력과 Oracle로 사용한다. 정량 Tolerance는 해당 Configuration/Fixture Authority가 정의하며 이 FDS가 새 값을 정하지 않는다. 아래 Profile별 요구사항은 공통 DetectTarget 요구사항을 보완한다. Simulator Ground Truth 독립성은 `VR-VIS-DETECT-13`·`VR-ARM-SIM-ENV-10`, Profile 선택·미등록 결과는 `VR-VIS-DETECT-06~07`, Depletion 구분은 `VR-VIS-DETECT-01`·`VR-VIS-DETECT-08`·`VR-ICD-VIS-ORCH-02`, Object Reference/TCP 분리는 `VR-VIS-DETECT-04`·`VR-VIS-DETECT-14`·`VR-VIS-OWN-01`의 기존 Owner가 소유한다.
 
+각 표의 행은 해당 기존 VR의 조건별 확인 항목이며, 행 전체가 원래 식별자의 검증 범위를 유지한다. 행 분리는 새 VR이나 기존 Evidence의 적용 범위를 추가하지 않는다.
+
 ### VR-VIS-RAWPART-01 — Support Reference 성공
 
 호환 CameraInfo와 `vision.calibration_file`에서 선택한 파일이 있고 Fresh·Valid Depth Observation을 받았다면 Vision은 로드된 Camera-to-Tray Transform 및 설정 Tray Geometry로 선언된 Tolerance 안의 Support-relative Geometry를 확정해야 한다(SHALL).
@@ -207,7 +209,11 @@ Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), 
 
 ### VR-VIS-RAWPART-04 — 경쟁 Foreground 거부
 
-요청 TestCube 및 하나 이상의 무관한 Foreground Object가 있을 때 Vision은 요청 Profile Match만 선택해야 한다. 경쟁 Foreground가 선택 Geometry/Reference Pose를 이동·병합·재정의해서는 안 된다. Algorithm별 Generation·Stable Enumeration은 선택 Algorithm 문서를 따르고 Cuboid 직교 외곽선 복원·Candidate Isolation의 Oracle은 그 문서가 소유한다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 요청 Target 선택 | 요청 TestCube 및 하나 이상의 무관한 Foreground Object가 있을 때 Vision은 요청 Profile Match만 선택해야 한다. |
+| 경쟁 Geometry | 경쟁 Foreground가 선택 Geometry/Reference Pose를 이동·병합·재정의해서는 안 된다. |
+| Algorithm Owner | Algorithm별 Generation·Stable Enumeration은 선택 Algorithm 문서를 따르고 Cuboid 직교 외곽선 복원·Candidate Isolation의 Oracle은 그 문서가 소유한다. |
 
 ### VR-VIS-RAWPART-05 — Known Workpiece Geometry 검증
 
@@ -219,19 +225,45 @@ Failure와 Depletion 분류는 상위 [DetectTarget FDS](fds-detect-target.md), 
 
 ### VR-VIS-RAWPART-07 — Orientation 관측 가능·불가능 경우
 
-안정적이고 충분히 제약된 Asymmetric Geometry는 유효한 고유 Object Orientation을 제공해야 한다. Square Symmetry만 있는 경우 충분한 Edge Evidence가 있다면 고유 Yaw를 주장하지 않고 측정된 Order-4 Edge Angle Class를 제공해야 한다. Occluded·Insufficient·Ambiguous Edge Evidence는 가능한 Valid XYZ를 보존하고 Order 0과 사용할 수 없는 Pose Orientation을 보고하며 임의 Orientation을 유효하다고 노출해서는 안 된다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 비대칭 Geometry | 안정적이고 충분히 제약된 Asymmetric Geometry는 유효한 고유 Object Orientation을 제공해야 한다. |
+| 정사각형 Edge | Square Symmetry만 있는 경우 충분한 Edge Evidence가 있다면 고유 Yaw를 주장하지 않고 측정된 Order-4 Edge Angle Class를 제공해야 한다. |
+| 관측 불충분·모호 | Occluded·Insufficient·Ambiguous Edge Evidence는 가능한 Valid XYZ를 보존하고 Order 0과 사용할 수 없는 Pose Orientation을 보고하며 임의 Orientation을 유효하다고 노출해서는 안 된다. |
 
 ### VR-VIS-RAWPART-08 — Scene Gate 및 Geometry Candidate 적격성
 
-공유 Depth Scene Stability Gate는 선택 Detector 실행 전에 연속 5회 Fresh·Valid Depth Observation을 요구해야 한다. STABLE을 만든 정확한 Depth Observation을 Detector Input으로 사용해야 한다. Detector는 단일 관측 Geometry Eligibility와 confidence 평가를 수행하고 Cuboid의 HIGH·MEDIUM 후보를 단일 전체 목록으로 반환해야 한다. 단일 목록이 비고 유효한 최종 관측에서 개별 Geometry를 확정하지 못하면 기존 `DETECT_RESULT_GEOMETRY_ERROR`로 분류하고 미해결 관측과 근거 있는 교란 후보를 진단에 보존해야 하며 `OBJECT_NOT_FOUND`로 취급해서는 안 된다. 일시적인 관측 Evidence 부족은 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET`로 구분한다. Candidate에 Temporal Tracking/Qualification을 요구해서는 안 된다. Valid Absence에는 해당 Detector Observation의 완전한 Projected Workspace Visibility와 충분한 Valid Depth Coverage가 필요하다. Invalid/Ambiguous Evidence는 `OBJECT_NOT_FOUND`가 되어서는 안 된다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Detector 진입 | 공유 Depth Scene Stability Gate는 선택 Detector 실행 전에 [Depth Scene Stability Algorithm](../../algorithms/depth-scene-stability.md)의 연속 Fresh·Valid 관측 횟수와 촬영 시각 기준 유지 시간을 충족해야 한다. |
+| 관측 인계 | STABLE을 만든 정확한 Depth Observation을 Detector Input으로 사용해야 한다. |
+| 후보 평가·반환 | Detector는 단일 관측 Geometry Eligibility와 confidence 평가를 수행하고 Cuboid의 HIGH·MEDIUM 후보를 단일 전체 목록으로 반환해야 한다. |
+| 미해결 Geometry | 단일 목록이 비고 유효한 최종 관측에서 개별 Geometry를 확정하지 못하면 기존 `DETECT_RESULT_GEOMETRY_ERROR`로 분류하고 미해결 관측과 근거 있는 교란 후보를 진단에 보존해야 하며 `OBJECT_NOT_FOUND`로 취급해서는 안 된다. |
+| 일시적 근거 부족 | 일시적인 관측 Evidence 부족은 기존 `DETECT_RESULT_TEMPORARY_INVALID_TARGET`로 구분한다. |
+| Candidate 수명 | Candidate에 Temporal Tracking/Qualification을 요구해서는 안 된다. |
+| 유효 부재 | Valid Absence에는 해당 Detector Observation의 완전한 Projected Workspace Visibility와 충분한 Valid Depth Coverage가 필요하다. |
+| 무효·모호한 근거 | Invalid/Ambiguous Evidence는 `OBJECT_NOT_FOUND`가 되어서는 안 된다. |
 
 ### VR-VIS-RAWPART-09 — 최종 Observation Result Identity
 
-Scene Stability와 Candidate Geometry는 동일 Depth Observation Identity를 사용하고 Optional RGB Source Identity는 독립적으로 기록해야 한다. Detector Strategy는 STABLE 후 한 번만 실행하고 그 Acquisition의 정확한 Success·Valid Absence·구체 Geometry Failure를 보존해야 한다. Detector Failure 때문에 5회 Observation을 다시 시작하거나 Detection을 반복해서는 안 된다. Invalid Depth Freshness·CameraInfo·Calibration·유효 Depth Pixel 부재·원본 Frame 비교 중 어느 하나의 Comparable Pixel 부재는 STABLE을 Reset/보류하고 기존 Sensor/Configuration Failure 의미를 유지해야 한다. 모든 후보 Geometry는 최종 Observation 하나에서 계산해야 한다. Cuboid 응답에는 HIGH·MEDIUM 후보 전체를 단일 목록의 기존 열거 순서에 보존한다. Vision은 Handoff 후 Grasp Ranking이나 Candidate Motion Monitoring을 하지 않는다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Source Identity | Scene Stability와 Candidate Geometry는 동일 Depth Observation Identity를 사용하고 Optional RGB Source Identity는 독립적으로 기록해야 한다. |
+| Detector 실행·결과 | Detector Strategy는 STABLE 후 한 번만 실행하고 그 Acquisition의 정확한 Success·Valid Absence·구체 Geometry Failure를 보존해야 한다. |
+| Failure 이후 반복 | Detector Failure 때문에 5회 Observation을 다시 시작하거나 Detection을 반복해서는 안 된다. |
+| 무효 입력 | Invalid Depth Freshness·CameraInfo·Calibration·유효 Depth Pixel 부재·원본 Frame 비교 중 어느 하나의 Comparable Pixel 부재는 STABLE을 Reset/보류하고 기존 Sensor/Configuration Failure 의미를 유지해야 한다. |
+| 후보 계산 관측 | 모든 후보 Geometry는 최종 Observation 하나에서 계산해야 한다. |
+| 반환 목록 | Cuboid 응답에는 HIGH·MEDIUM 후보 전체를 단일 목록의 기존 열거 순서에 보존한다. |
+| Handoff 이후 책임 | Vision은 Handoff 후 Grasp Ranking이나 Candidate Motion Monitoring을 하지 않는다. |
 
 ### VR-VIS-RAWPART-13 — 명시적 Installation Calibration
 
-최초 Installation Calibration과 Maintenance Recalibration은 명시적인 Operator Request 이후에만 시작해야 한다. 선언된 Installation Input/Evidence Check를 사용해야 하며 새 Output File을 생성한 경우에만 Success를 보고해야 한다. 운영자가 Operational Profile에서 파일을 선택하고 Vision을 재시작할 때까지 선택 파일과 활성 Transform은 변경되지 않아야 한다. Process/Simulator/Mission Restart 및 정상 DetectTarget Activity는 Calibration을 시작해서는 안 된다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 시작 조건 | 최초 Installation Calibration과 Maintenance Recalibration은 명시적인 Operator Request 이후에만 시작해야 한다. |
+| Calibration 성공 | 선언된 Installation Input/Evidence Check를 사용해야 하며 새 Output File을 생성한 경우에만 Success를 보고해야 한다. |
+| 운영 활성화 | 운영자가 Operational Profile에서 파일을 선택하고 Vision을 재시작할 때까지 선택 파일과 활성 Transform은 변경되지 않아야 한다. |
+| 자동 보정 금지 | Process/Simulator/Mission Restart 및 정상 DetectTarget Activity는 Calibration을 시작해서는 안 된다. |
 
 ### VR-VIS-RAWPART-14 — Calibration Observation과 Material Stability 분리
 
@@ -243,35 +275,92 @@ Installation Calibration은 Runtime Depth Scene Stability와 독립적이다. �
 
 ### VR-VIS-RAWPART-11 — Candidate Qualification 및 Stable Enumeration
 
-반환 Candidate는 선택한 정식 Algorithm의 Single-observation Geometry Eligibility를 통과해야 한다. Cuboid는 동일 관측에서 유효 후보 전부를 평가하고 HIGH와 MEDIUM 후보 전체를 단일 목록의 Grasp Priority 의미 없는 Deterministic Enumeration으로 반환해야 한다. LOW·REJECTED와 미해결 근거는 진단에 남긴다. 단일 목록이 비었을 때 기존 미해결/부재 결과 계약을 따른다. Eligible Candidate에 Unique Complete Partition을 요구해서는 안 된다. 직접 모순의 Rejection은 해당 가설에 한정한다. 경쟁 그룹에는 Algorithm의 선택 원칙을 적용하고 상충을 이유로 적격 가설 양쪽을 자동 거부하거나 독립적으로 관측된 Top에 전파해서는 안 된다. Geometry Matching은 Rectangle의 동등한 180° 및 Square의 90° 표현을 정규화한다. ID는 Acquisition-local이고 DetectTarget 응답 뒤 Order/Geometry를 다시 계산하지 않는다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Geometry 적격성 | 반환 Candidate는 선택한 정식 Algorithm의 Single-observation Geometry Eligibility를 통과해야 한다. |
+| 전체 후보 반환 | Cuboid는 동일 관측에서 유효 후보 전부를 평가하고 HIGH와 MEDIUM 후보 전체를 단일 목록의 Grasp Priority 의미 없는 Deterministic Enumeration으로 반환해야 한다. |
+| 낮은 등급·미해결 | LOW·REJECTED와 미해결 근거는 진단에 남긴다. |
+| 빈 목록 | 단일 목록이 비었을 때 기존 미해결/부재 결과 계약을 따른다. |
+| Partition Gate | Eligible Candidate에 Unique Complete Partition을 요구해서는 안 된다. |
+| 직접 모순 | 직접 모순의 Rejection은 해당 가설에 한정한다. |
+| 경쟁 그룹·독립 후보 | 경쟁 그룹에는 Algorithm의 선택 원칙을 적용하고 상충을 이유로 적격 가설 양쪽을 자동 거부하거나 독립적으로 관측된 Top에 전파해서는 안 된다. |
+| 대칭 정규화 | Geometry Matching은 Rectangle의 동등한 180° 및 Square의 90° 표현을 정규화한다. |
+| ID·응답 이후 | ID는 Acquisition-local이고 DetectTarget 응답 뒤 Order/Geometry를 다시 계산하지 않는다. |
 
 ### VR-VIS-RAWPART-12 — Orientation Class 및 Snapshot Evidence
 
-Non-square Rectangle은 Symmetry Order 2의 Long Edge Representative를, 같은 Side의 Square는 Order 4의 동일 Fit을 보고해야 한다. Unobservable Direction은 사용할 수 없는 Pose Orientation과 Order 0을 보고해야 한다. Candidate ID는 영속 Object Identity가 아닌 Observation-local Diagnostic Label이다. Candidate별 Detector Snapshot Metadata와 Vision Diagnostic Record는 Measured Side·Optional Nominal Residual·Orientation Class·실제 Acceptance Evidence·Match/Rejection Reason·Enumeration Position·Evaluation Provenance와 confidence 등급·가림/모호성 판정 근거를 보존해야 한다. 계산하지 않은 Angular Uncertainty나 사용하지 않은 Fit Statistic을 발행하지 않는다. Rendered Snapshot과 Stage Sidecar는 최종 반환 등급·후보 집합을 해당 평가 근거와 함께 식별할 수 있어야 한다. 낮은 등급·Rejected 가설은 Diagnostic Record에 남기고 Snapshot에서도 기존 진단 Metadata/Stage evidence로 보존한다. Snapshot 생성·저장·발행·표시는 Vision 소유의 기존 읽기 전용 Hub 경로를 따른다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Rectangle·Square | Non-square Rectangle은 Symmetry Order 2의 Long Edge Representative를, 같은 Side의 Square는 Order 4의 동일 Fit을 보고해야 한다. |
+| 방향 미관측 | Unobservable Direction은 사용할 수 없는 Pose Orientation과 Order 0을 보고해야 한다. |
+| Candidate ID | Candidate ID는 영속 Object Identity가 아닌 Observation-local Diagnostic Label이다. |
+| Metadata·진단 | Candidate별 Detector Snapshot Metadata와 Vision Diagnostic Record는 Measured Side·Optional Nominal Residual·Orientation Class·실제 Acceptance Evidence·Match/Rejection Reason·Enumeration Position·Evaluation Provenance와 confidence 등급·가림/모호성 판정 근거를 보존해야 한다. |
+| 미계산 값 | 계산하지 않은 Angular Uncertainty나 사용하지 않은 Fit Statistic을 발행하지 않는다. |
+| 반환 후보 식별 | Rendered Snapshot과 Stage Sidecar는 최종 반환 등급·후보 집합을 해당 평가 근거와 함께 식별할 수 있어야 한다. |
+| 낮은 등급·거부 가설 | 낮은 등급·Rejected 가설은 Diagnostic Record에 남기고 Snapshot에서도 기존 진단 Metadata/Stage evidence로 보존한다. |
+| Snapshot Owner | Snapshot 생성·저장·발행·표시는 Vision 소유의 기존 읽기 전용 Hub 경로를 따른다. |
 
 ### VR-VIS-RAWPART-15 — Strategy 교체 및 Candidate Geometry
 
-Cuboid는 Complete Partition을 개별 Candidate Gate로 취급하거나 Grasp Access를 평가하거나 Legacy Hull/`minAreaRect` Gate를 추가하지 않고 동일 L자 기반 후보 생성·정규화·평가 절차를 충족해야 한다. Success는 반환된 HIGH/MEDIUM 후보 전체의 유효한 Geometry와 계산 근거를 제공한다. HIGH/MEDIUM 단일 목록이 비고 유효한 최종 관측에서 Geometry가 미해결이면 기존 Geometry Failure와 근거 있는 교란 후보 계약을 적용한다. 일시적인 관측 Evidence 부족은 기존 Temporary Invalid 결과로 구분하며, 부재 Coverage와 Support Geometry가 실제 부재를 확정할 때만 `OBJECT_NOT_FOUND`로 분류한다. 완전 상판과 부분 상판은 별도 일반·복원 경로로 나뉘지 않고 같은 절차에서 평가해야 한다. Scene Stability·Handoff·Diagnostic은 동일 최종 Depth Observation을 사용한다. Legacy의 기존 Single Candidate·Greedy Occupancy는 PoC 근거로만 남으며 정식 Strategy 검증 요구사항은 아니다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 공통 후보 절차 | Cuboid는 Complete Partition을 개별 Candidate Gate로 취급하거나 Grasp Access를 평가하거나 Legacy Hull/`minAreaRect` Gate를 추가하지 않고 동일 L자 기반 후보 생성·정규화·평가 절차를 충족해야 한다. |
+| Success 근거 | Success는 반환된 HIGH/MEDIUM 후보 전체의 유효한 Geometry와 계산 근거를 제공한다. |
+| 미해결 Geometry | HIGH/MEDIUM 단일 목록이 비고 유효한 최종 관측에서 Geometry가 미해결이면 기존 Geometry Failure와 근거 있는 교란 후보 계약을 적용한다. |
+| 일시적 부족·유효 부재 | 일시적인 관측 Evidence 부족은 기존 Temporary Invalid 결과로 구분하며, 부재 Coverage와 Support Geometry가 실제 부재를 확정할 때만 `OBJECT_NOT_FOUND`로 분류한다. |
+| 완전·부분 상판 | 완전 상판과 부분 상판은 별도 일반·복원 경로로 나뉘지 않고 같은 절차에서 평가해야 한다. |
+| 최종 관측 일치 | Scene Stability·Handoff·Diagnostic은 동일 최종 Depth Observation을 사용한다. |
+| Legacy 근거 범위 | Legacy의 기존 Single Candidate·Greedy Occupancy는 PoC 근거로만 남으며 정식 Strategy 검증 요구사항은 아니다. |
 
 ### VR-VIS-RAWPART-16 — Stacked Own Thickness
 
-Top Elevation과 Own Thickness가 다른 Fixture에서는 관측 Top XYZ를 보존하고 Support-to-top Stack Elevation이 아닌 선택 Hypothesis의 Own Thickness를 반환해야 한다. 두께에 영향을 주는 실질적 모호성은 confidence 등급과 진단에 반영해야 한다. L자 복원에서 Recipe로 추정한 두께는 추정 provenance를 보존해야 하며 관측 Top Elevation을 바꾸어서는 안 된다. 과거 Legacy Support-resting Fixture의 Height 기록은 PoC 호환 근거이며 Hidden-support Fixture의 유효 Own Thickness/Stacked Clearance 입증으로 사용하지 않는다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Top Elevation·Own Thickness | Top Elevation과 Own Thickness가 다른 Fixture에서는 관측 Top XYZ를 보존하고 Support-to-top Stack Elevation이 아닌 선택 Hypothesis의 Own Thickness를 반환해야 한다. |
+| 두께 모호성 | 두께에 영향을 주는 실질적 모호성은 confidence 등급과 진단에 반영해야 한다. |
+| 추정 provenance | L자 복원에서 Recipe로 추정한 두께는 추정 provenance를 보존해야 하며 관측 Top Elevation을 바꾸어서는 안 된다. |
+| Legacy 근거 범위 | 과거 Legacy Support-resting Fixture의 Height 기록은 PoC 호환 근거이며 Hidden-support Fixture의 유효 Own Thickness/Stacked Clearance 입증으로 사용하지 않는다. |
 
 ### VR-VIS-RAWPART-17 — Horizontal Top과 Candidate-local Ambiguity
 
-Cuboid는 동일 Connected Top Region 내부에서 기존 Sensor/Profile Tolerance를 넘는 연속적이고 일관된 Height Change가 관측될 때에만 수평 복원 가설을 Inclined로 분류해야 한다. 경사 복원 경로는 별도로 평가한다. Small Noise·Discontinuous Step·Overlapping Top·Occlusion을 하나의 Inclined Surface로 분류해서는 안 된다. Insufficient Height Evidence는 Observation Insufficient/Ambiguous로 유지해야 한다. 법선만으로 Inclined Object의 자세나 면 정체성을 확정해서는 안 된다. 관측 경계·공칭 치수·3D 체적 검증으로 확정된 경사 후보는 정상 목록으로 인계할 수 있다. Inclined·Identity Ambiguous·기타 Ineligible Candidate를 거부해도 독립적으로 Eligible한 Horizontal Candidate를 거부해서는 안 된다. 상부 가림 자체로 확정된 후보를 LOW로 낮추거나 PICK 목록에서 제외하지 않는다. XY 중첩만으로 가림을 확정하지 않는다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 수평 가설의 경사 분류 | Cuboid는 동일 Connected Top Region 내부에서 기존 Sensor/Profile Tolerance를 넘는 연속적이고 일관된 Height Change가 관측될 때에만 수평 복원 가설을 Inclined로 분류해야 한다. |
+| 경사 경로 | 경사 복원 경로는 별도로 평가한다. |
+| Noise·Step·가림 | Small Noise·Discontinuous Step·Overlapping Top·Occlusion을 하나의 Inclined Surface로 분류해서는 안 된다. |
+| 높이 근거 부족 | Insufficient Height Evidence는 Observation Insufficient/Ambiguous로 유지해야 한다. |
+| 법선만의 추론 | 법선만으로 Inclined Object의 자세나 면 정체성을 확정해서는 안 된다. |
+| 확정 경사 후보 | 관측 경계·공칭 치수·3D 체적 검증으로 확정된 경사 후보는 정상 목록으로 인계할 수 있다. |
+| 독립 수평 후보 | Inclined·Identity Ambiguous·기타 Ineligible Candidate를 거부해도 독립적으로 Eligible한 Horizontal Candidate를 거부해서는 안 된다. |
+| 상부 가림 | 상부 가림 자체로 확정된 후보를 LOW로 낮추거나 PICK 목록에서 제외하지 않는다. |
+| XY 중첩 | XY 중첩만으로 가림을 확정하지 않는다. |
 
 ### VR-VIS-OWN-10 — Recipe Strategy 선택
 
-Recipe의 유효한 알고리즘 선택은 Mission 전체에 유지되고 정상·Retry·새 자재·PLACE Lookahead 요청에서 동일하게 전달되어야 한다. 선택 생략 시에는 정해진 기본 선택을 적용하며, Empty·Non-string·Unsupported Recipe 값은 Mission 구성 오류다. Vision은 미지원 Service Selection을 Acquisition 수락 전에 거부하고 요청별 단일 Strategy를 실행해야 한다. 다른 Strategy로의 자동 Fallback·Strategy 혼합은 금지한다. Oracle은 Recipe Selection, 실제 Detector Strategy, 반환 Result와 Snapshot Diagnostic의 일치다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Mission 내 선택 유지 | Recipe의 유효한 알고리즘 선택은 Mission 전체에 유지되고 정상·Retry·새 자재 요청에서 동일하게 전달되어야 한다. |
+| 생략·무효 설정 | 선택 생략 시에는 정해진 기본 선택을 적용하며, Empty·Non-string·Unsupported Recipe 값은 Mission 구성 오류다. |
+| 수락 경계·단일 Strategy | Vision은 미지원 Service Selection을 Acquisition 수락 전에 거부하고 요청별 단일 Strategy를 실행해야 한다. |
+| Fallback·혼합 | 다른 Strategy로의 자동 Fallback·Strategy 혼합은 금지한다. |
+| Oracle | Oracle은 Recipe Selection, 실제 Detector Strategy, 반환 Result와 Snapshot Diagnostic의 일치다. |
 
 ### VR-VIS-STACK-01 — Observation Route와 단일 Object 보존
 
-Cuboid Strategy는 Algorithm 소유 Scene Interpretation을 적용하고 Unresolved Layer Evidence를 Unknown으로 보존하며, 자체 Layer Order·Identity·Physical Freedom이 해결되지 않은 Candidate만 거부해야 한다. 독립적인 Eligible Candidate는 사용 가능한 상태로 유지해야 한다. Unresolved Layer에서 Absence를 추론해서는 안 된다. Legacy Routing/Fitting/Greedy/Stability를 Cuboid의 추가 Gate로 실행하지 않는다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Scene 해석·미해결 후보 | Cuboid Strategy는 Algorithm 소유 Scene Interpretation을 적용하고 Unresolved Layer Evidence를 Unknown으로 보존하며, 자체 Layer Order·Identity·Physical Freedom이 해결되지 않은 Candidate만 거부해야 한다. |
+| 독립 후보 | 독립적인 Eligible Candidate는 사용 가능한 상태로 유지해야 한다. |
+| 부재 추론 | Unresolved Layer에서 Absence를 추론해서는 안 된다. |
+| Legacy Gate | Legacy Routing/Fitting/Greedy/Stability를 Cuboid의 추가 Gate로 실행하지 않는다. |
 
 ### VR-VIS-STACK-06 — Singleton Regression
 
-Cuboid는 동일 Acquisition에서 객체를 하나씩 인출하기 위한 적격 Candidate Sequence를 Single Object Scene에서도 유지해야 한다. Stack-related Ambiguity를 Verified Object Absence로 보고해서는 안 된다. 과거 Legacy의 Isolated Object Validity·Selection·Stability·Observation Geometry는 PoC 회귀 근거로 구분한다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Single Object 회귀 | Cuboid는 동일 Acquisition에서 객체를 하나씩 인출하기 위한 적격 Candidate Sequence를 Single Object Scene에서도 유지해야 한다. |
+| 적층 모호성 | Stack-related Ambiguity를 Verified Object Absence로 보고해서는 안 된다. |
+| Legacy 근거 범위 | 과거 Legacy의 Isolated Object Validity·Selection·Stability·Observation Geometry는 PoC 회귀 근거로 구분한다. |
 
 ### VR-VIS-STACK-02 — Shape-informed Object Thickness
 
@@ -279,22 +368,57 @@ Stacked Candidate는 검증된 Face Identity와 알려진 Material Geometry로 �
 
 ### VR-VIS-RAWPART-18 — 후보 Geometry와 Planning 책임 분리
 
-Vision은 성공한 각 Candidate의 유효한 관측 Pose·자체 두께·Rectangle Geometry 및 Source provenance를 같은 Acquisition에서 제공해야 한다. HIGH·MEDIUM 외 가설의 Confidence·선택 상태·미해결 근거는 기존 진단 경계에 남기고 Candidate Geometry로 승격해서는 안 된다. Vision의 성공 출력에는 Planning Occupancy가 필요하지 않다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Candidate Geometry | Vision은 성공한 각 Candidate의 유효한 관측 Pose·자체 두께·Rectangle Geometry 및 Source provenance를 같은 Acquisition에서 제공해야 한다. |
+| 진단과 반환 경계 | HIGH·MEDIUM 외 가설의 Confidence·선택 상태·미해결 근거는 기존 진단 경계에 남기고 Candidate Geometry로 승격해서는 안 된다. |
+| Planning 책임 | Vision의 성공 출력에는 Planning Occupancy가 필요하지 않다. |
 
 ### VR-VIS-RAWPART-19 — L자 가설과 관측 경계
 
-Cuboid Detector는 완전 관측과 부분 관측 모두에서 Heightmap에서 선행 추출한 Boundary·Contour·직선 및 Plane Map 근거의 직교 L자 모서리에 Recipe 치수를 적용해 후보를 생성·평가해야 한다(SHALL). 기존 일반 후보 유무를 복원 절차 호출 조건으로 사용해서는 안 된다(SHALL NOT). 복원된 전체 Footprint와 관측 Cell Mask를 구분하고, ROI/Grid 밖으로 이어지는 추정 Geometry를 격자 경계에서 잘린 작은 자재로 바꾸어서는 안 된다(SHALL NOT). ROI 경계 접촉·교차·돌출이나 복원 중심 포함 여부만으로 후보를 거부해서는 안 된다(SHALL NOT). 실제 상판 일부의 미관측은 MEDIUM으로 분류하며 경계 접촉만으로 완전 관측 상판을 강등해서는 안 된다(SHALL NOT). 이미지 경계에서 실제 잃은 관측 지지는 판단에 반영할 수 있으나 경계 접촉만으로 거부해서는 안 된다. 미관측 영역은 UNKNOWN으로 유지해야 한다(SHALL). Recipe 기반 변 길이는 추정 provenance를 보존하고 실측 Rectangle로 표시해서는 안 된다(SHALL NOT). Clipping·모호성·후보 부재만으로 `OBJECT_NOT_FOUND`를 반환해서는 안 된다(SHALL NOT).
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 완전·부분 관측 후보 생성 | Cuboid Detector는 완전 관측과 부분 관측 모두에서 Heightmap에서 선행 추출한 Boundary·Contour·직선 및 Plane Map 근거의 직교 L자 모서리에 Recipe 치수를 적용해 후보를 생성·평가해야 한다(SHALL). |
+| 복원 호출 조건 | 기존 일반 후보 유무를 복원 절차 호출 조건으로 사용해서는 안 된다(SHALL NOT). |
+| 전체 Footprint·관측 Mask | 복원된 전체 Footprint와 관측 Cell Mask를 구분하고, ROI/Grid 밖으로 이어지는 추정 Geometry를 격자 경계에서 잘린 작은 자재로 바꾸어서는 안 된다(SHALL NOT). |
+| ROI 접촉·돌출 | ROI 경계 접촉·교차·돌출이나 복원 중심 포함 여부만으로 후보를 거부해서는 안 된다(SHALL NOT). |
+| 실제 미관측·경계 접촉 | 실제 상판 일부의 미관측은 MEDIUM으로 분류하며 경계 접촉만으로 완전 관측 상판을 강등해서는 안 된다(SHALL NOT). |
+| 이미지 경계의 관측 손실 | 이미지 경계에서 실제 잃은 관측 지지는 판단에 반영할 수 있으나 경계 접촉만으로 거부해서는 안 된다. |
+| 미관측 영역 | 미관측 영역은 UNKNOWN으로 유지해야 한다(SHALL). |
+| Recipe 추정 provenance | Recipe 기반 변 길이는 추정 provenance를 보존하고 실측 Rectangle로 표시해서는 안 된다(SHALL NOT). |
+| 부재 결과 | Clipping·모호성·후보 부재만으로 `OBJECT_NOT_FOUND`를 반환해서는 안 된다(SHALL NOT). |
 
 ### VR-VIS-RAWPART-20 — Confidence와 진단 근거
 
-Vision은 객체 해석의 HIGH/MEDIUM/LOW Confidence와 SELECTED/ALTERNATIVE/UNRESOLVED/REJECTED 선택·판정 상태를 분리해야 한다(SHALL). REJECTED는 관측 기하와 직접 모순되는 가설의 상태이며 Confidence 등급이 아니다. 대안 미선택만으로 LOW로 강등하거나 IoU·선택 순위만으로 HIGH로 승격해서는 안 된다(SHALL NOT). HIGH와 MEDIUM은 개별 형상·자세·두께 확정 후 Algorithm의 실제 관측 면적 비율 임계값으로 구분해야 한다(SHALL). ROI/Grid 경계 자체로 거부하거나 완전 관측 상판을 강등해서는 안 되며(SHALL NOT), 실제 상판의 미관측 면적은 관측 비율에 반영하며, 상부 가림 자체로 LOW 또는 후보 제외를 결정해서는 안 된다(SHALL NOT). 상부 관측 근거는 Vision Diagnostic Record와 Snapshot에 보존해야 한다(SHALL). 상부 가림 판정은 관측 높이와 3D 공간 관계를 사용하고 단순 XY 중첩으로 확정해서는 안 된다(SHALL NOT). 등급 판정은 동일 객체의 중복 L자·대칭·동등 Pose 정규화 이후 수행해야 하며 proposal 개수만으로 모호성이나 감점을 만들지 않아야 한다(SHALL NOT). 후보 등급과 판정 근거는 Vision Diagnostic Record와 Snapshot에 남기되 Motion Action Payload에 새 confidence field를 요구해서는 안 된다(SHALL NOT). IK·로봇 접근·경로 계획을 Vision Gate로 추가하지 않는다. HIGH/MEDIUM은 파지 성공·충돌 없는 접근의 보증이 아니다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| Confidence·선택 상태 | Vision은 객체 해석의 HIGH/MEDIUM/LOW Confidence와 SELECTED/ALTERNATIVE/UNRESOLVED/REJECTED 선택·판정 상태를 분리해야 한다(SHALL). |
+| REJECTED 의미 | REJECTED는 관측 기하와 직접 모순되는 가설의 상태이며 Confidence 등급이 아니다. |
+| 선택 순위·IoU | 대안 미선택만으로 LOW로 강등하거나 IoU·선택 순위만으로 HIGH로 승격해서는 안 된다(SHALL NOT). |
+| HIGH·MEDIUM 구분 | HIGH와 MEDIUM은 개별 형상·자세·두께 확정 후 Algorithm의 실제 관측 면적 비율 임계값으로 구분해야 한다(SHALL). |
+| ROI·미관측·가림 | ROI/Grid 경계 자체로 거부하거나 완전 관측 상판을 강등해서는 안 되며(SHALL NOT), 실제 상판의 미관측 면적은 관측 비율에 반영하며, 상부 가림 자체로 LOW 또는 후보 제외를 결정해서는 안 된다(SHALL NOT). |
+| 상부 관측 근거 | 상부 관측 근거는 Vision Diagnostic Record와 Snapshot에 보존해야 한다(SHALL). |
+| 상부 가림 판정 | 상부 가림 판정은 관측 높이와 3D 공간 관계를 사용하고 단순 XY 중첩으로 확정해서는 안 된다(SHALL NOT). |
+| 중복 가설 정규화 | 등급 판정은 동일 객체의 중복 L자·대칭·동등 Pose 정규화 이후 수행해야 하며 proposal 개수만으로 모호성이나 감점을 만들지 않아야 한다(SHALL NOT). |
+| 진단·Motion Payload | 후보 등급과 판정 근거는 Vision Diagnostic Record와 Snapshot에 남기되 Motion Action Payload에 새 confidence field를 요구해서는 안 된다(SHALL NOT). |
+| Vision Gate | IK·로봇 접근·경로 계획을 Vision Gate로 추가하지 않는다. |
+| 보증 범위 | HIGH/MEDIUM은 파지 성공·충돌 없는 접근의 보증이 아니다. |
 
 ### VR-VIS-RAWPART-21 — 단일 목록의 후보 전체 반환
 
-Vision은 한 Acquisition의 모든 가설을 내부 평가하고 SELECTED인 적격 HIGH와 MEDIUM 전체를 단일 `material_candidates` Stable Enumeration 목록으로 반환해야 한다(SHALL). 미선택 대안·미해결·거부 상태는 Confidence와 분리하여 진단에 남기고 반환하지 않는다. LOW·REJECTED와 미해결 관측은 일반 PICK 목록에서 제외하고 진단·Snapshot에 보존해야 한다(SHALL). 단일 목록이 비었을 때 유효한 최종 관측의 Geometry 미해결은 기존 Geometry Failure, 일시적인 관측 Evidence 부족은 Temporary Invalid 결과로 구분하며, 유효 부재가 기존 Coverage·Support 조건으로 확인된 경우에만 `OBJECT_NOT_FOUND`를 반환한다(SHALL). 단일 목록 안에서 단일 후보 선택이나 PICK 작업 우선순위를 부여해서는 안 된다(SHALL NOT). Motion Action Payload에는 confidence field를 추가하지 않는다(SHALL NOT). Orchestration은 전체 후보를 변경 없이 전달하고 PICK 실행 우선순위는 Task Execution이 소유한다. Confidence는 PICK 우선순위 근거가 아니다.
+| 조건·검증 관점 | 관찰 가능한 기대 결과·금지 결과 |
+|---|---|
+| 전체 후보 반환 | Vision은 한 Acquisition의 모든 가설을 내부 평가하고 SELECTED인 적격 HIGH와 MEDIUM 전체를 단일 `material_candidates` Stable Enumeration 목록으로 반환해야 한다(SHALL). |
+| 미선택·미해결·거부 | 미선택 대안·미해결·거부 상태는 Confidence와 분리하여 진단에 남기고 반환하지 않는다. |
+| LOW·REJECTED | LOW·REJECTED와 미해결 관측은 일반 PICK 목록에서 제외하고 진단·Snapshot에 보존해야 한다(SHALL). |
+| 빈 목록의 결과 구분 | 단일 목록이 비었을 때 유효한 최종 관측의 Geometry 미해결은 기존 Geometry Failure, 일시적인 관측 Evidence 부족은 Temporary Invalid 결과로 구분하며, 유효 부재가 기존 Coverage·Support 조건으로 확인된 경우에만 `OBJECT_NOT_FOUND`를 반환한다(SHALL). |
+| 후보 선택·우선순위 | 단일 목록 안에서 단일 후보 선택이나 PICK 작업 우선순위를 부여해서는 안 된다(SHALL NOT). |
+| Motion Payload | Motion Action Payload에는 confidence field를 추가하지 않는다(SHALL NOT). |
+| 전달·실행 Owner | Orchestration은 전체 후보를 변경 없이 전달하고 PICK 실행 우선순위는 Task Execution이 소유한다. |
+| Confidence 범위 | Confidence는 PICK 우선순위 근거가 아니다. |
 
 ### 트레이 안정화 관측 범위와 유지 시간
 
-Scene Stability는 보정된 지지 평면(Tray Z=0)에서 설정된 트레이 작업 영역을 영상에 투영한 고정 영역 안의 원본 Camera Depth 픽셀만 비교한다. 이 영역은 현재 측정된 자재 깊이와 독립적이다. Changed-pixel Ratio의 분모는 해당 영역 안에서 비교 가능한 픽셀이며, 영역 밖 픽셀은 계산에 포함하지 않는다. 기준 프레임 및 직전 프레임과의 비교가 모두 설정된 허용치를 만족해야 한다.
-
-최신 관측을 Detector에 전달하려면 최소 `scene_stability.stable_observation_count`회의 관측과 Depth 촬영 시각 기준 `scene_stability.minimum_stable_duration_s`(배포 기본값 0.5초)의 안정 유지 시간을 모두 충족해야 한다. 움직임이나 무효 입력은 연속 안정 구간을 초기화한다. 요청의 기존 steady deadline은 전체 Acquisition을 계속 제한하며, 실제 시간의 경과만으로 안정 유지 시간을 충족하지 않는다.
+계산 규칙은 [Depth Scene Stability Algorithm](../../algorithms/depth-scene-stability.md),
+요청 Deadline과 Detector 인계는 [DetectTarget FDS](fds-detect-target.md)가 소유한다.
+TestCube Strategy는 인계된 STABLE 관측에서 후보 적격성·Geometry·유효 부재를 판단한다.

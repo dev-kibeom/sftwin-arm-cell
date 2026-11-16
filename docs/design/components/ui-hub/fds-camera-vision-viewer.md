@@ -61,12 +61,27 @@ Image-space Target Marker는 활성 Iteration의 유효하고 Fresh한 Reference
 
 ## 3. 검증 요구사항
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-INT-UI-04 — 현재 선택 Target 시각화
 
-활성 Iteration에서 실제 사용한 유효하고 Fresh한 선택 Target Reference만 Current Overlay로 표시할 수 있다. 해당 관측의 필요 TF·CameraInfo·호환 Calibration이 유효해야 한다. Stale·Unavailable·Invalid Target 데이터는 이전 Marker를 Current로 남겨서는 안 되며 Hub는 숨기거나 Stale/Unavailable로 명시할 수 있다. Annotation은 유한 Tolerance 안에서 현재 표시 Camera Frame의 Source Timestamp·Frame Identity와도 호환되어야 하고 Timestamp의 완전 일치는 요구하지 않는다. 비호환 Camera/Metadata Pair는 Marker를 숨기거나 Stale/Unavailable로 표시한다.
-
-Target 선택 Authority는 Hub에 없다. 검증 Oracle은 활성 Iteration의 선택 Target Feedback·Observation Stamp, Source Freshness/Validity, TF·CameraInfo/Calibration Validity와 현재 Overlay의 표시·숨김·Stale 표시 여부다. 특정 Widget·Layout·Rendering 방법은 요구하지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Current Overlay 입력 | 활성 Iteration에서 실제 사용한 유효하고 Fresh한 선택 Target Reference만 Current Overlay로 표시할 수 있다. |
+| TF·CameraInfo·Calibration | 해당 관측의 필요 TF·CameraInfo·호환 Calibration이 유효해야 한다. |
+| Stale·Unavailable·Invalid | Stale·Unavailable·Invalid Target 데이터는 이전 Marker를 Current로 남겨서는 안 되며 Hub는 숨기거나 Stale/Unavailable로 명시할 수 있다. |
+| Camera Frame 호환성 | Annotation은 유한 Tolerance 안에서 현재 표시 Camera Frame의 Source Timestamp·Frame Identity와도 호환되어야 하고 Timestamp의 완전 일치는 요구하지 않는다. |
+| 비호환 Pair | 비호환 Camera/Metadata Pair는 Marker를 숨기거나 Stale/Unavailable로 표시한다. |
+| Target 선택 권한 | Target 선택 Authority는 Hub에 없다. |
+| 관찰 근거 | 검증 Oracle은 활성 Iteration의 선택 Target Feedback·Observation Stamp, Source Freshness/Validity, TF·CameraInfo/Calibration Validity와 현재 Overlay의 표시·숨김·Stale 표시 여부다. |
+| 표현 방식 비지정 | 특정 Widget·Layout·Rendering 방법은 요구하지 않는다. |
 
 ### VR-INT-UI-05 — Vision Detector Snapshot Viewer
 
-Hub는 `/vision/detector_snapshot`의 완전한 Vision Snapshot Image·Metadata를 읽기 전용으로 표시해야 한다. Calibration 완료와 적격 Acquisition Revision이 View를 갱신하고 Terminal 성공/실패는 DetectTarget·ExecuteCycle 종료 이후에도 다음 Snapshot까지 보존한다. Viewer는 프레임별 Detector 판단과 다중 관측 Stability Summary를 구별하고 추론값을 표시해서는 안 된다. Camera Buffer로 Snapshot을 조립하거나 Raw Image를 분석해 Perception을 수행하거나 Vision 로컬 파일에 접근하거나 Detector를 재실행해서는 안 된다. Hub가 실행 중이지 않아도 Vision Snapshot 저장·발행이 가능해야 하며 Viewer 실패는 Snapshot Owner의 정규 결과나 Mission 판단을 변경하지 않는다.
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| 읽기 전용 표시 | Hub는 `/vision/detector_snapshot`의 완전한 Vision Snapshot Image·Metadata를 읽기 전용으로 표시해야 한다. |
+| 갱신·Terminal 보존 | Calibration 완료와 적격 Acquisition Revision이 View를 갱신하고 Terminal 성공/실패는 DetectTarget·ExecuteCycle 종료 이후에도 다음 Snapshot까지 보존한다. |
+| 판단·Summary 구분 | Viewer는 프레임별 Detector 판단과 다중 관측 Stability Summary를 구별하고 추론값을 표시해서는 안 된다. |
+| Perception·로컬 접근 금지 | Camera Buffer로 Snapshot을 조립하거나 Raw Image를 분석해 Perception을 수행하거나 Vision 로컬 파일에 접근하거나 Detector를 재실행해서는 안 된다. |
+| Viewer 독립성 | Hub가 실행 중이지 않아도 Vision Snapshot 저장·발행이 가능해야 하며 Viewer 실패는 Snapshot Owner의 정규 결과나 Mission 판단을 변경하지 않는다. |

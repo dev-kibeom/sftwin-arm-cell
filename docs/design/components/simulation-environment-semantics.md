@@ -37,6 +37,14 @@
 - **Acceptance 범위의 물리 Profile:** 물리·중력·충돌 설정은 각 Acceptance 시나리오가 주장하는 물리적 동작에 적합해야 한다. 특정 Profile을 사용했다는 이유만으로 증거를 넘어서는 주장을 할 수 없다.
 - **Fault 자극:** Scene 요소는 소유 경계를 통해 관측 가능한 조건을 만들거나 시나리오를 요청할 수 있다. 요소의 존재나 시각적 상태가 다른 컴포넌트의 정식 권한을 변경하지 않는다.
 
+### Cell·Stage Binding과 소비 일관성
+
+설정 Owner와 Bringup의 선택·조립 책임은 [Components Architecture](../architecture/components.md)가 소유한다. 선택된 Cell을 사용하는 환경 소비자는 다음 Binding 의미를 함께 보존한다.
+
+Stage Prim은 모델 식별자가 아니라 설치된 장치의 역할과 물리적 소속을 나타낸다. 독립 고정형 로봇팔은 `ARM`, 이동 로봇은 `AMR`, 다른 플랫폼에 탑재된 팔은 `Manipulator`, 휴머노이드 전체는 `Humanoid`, 말단 도구는 `Tool`, 작업 환경은 `Cell`로 구분한다. 현재 지원하는 고정형 Robot의 설치 경로는 Cell의 `cell.isaac.robot_prim_path`가 단독 소유하며, 모델 식별은 Robot의 `robot_id`와 Assembly의 `model_id`를 유지한다. 이 명명은 AMR·탑재형 팔·Humanoid의 실행 지원을 뜻하지 않는다.
+
+Bringup이 조립·검증·export한 Runtime Configuration의 Camera·Material Supply Binding은 Isaac Scene·Camera Graph·Snapshot·Material Supply와 ROS Camera Overlay가 같은 선택값으로 소비하며 별도 기본 Cell을 다시 선택하지 않는다. Camera 설치 및 공급 위치는 Cell의 기존 Geometry를 참조해 유도하고, Camera Geometry 도출·RGB-D 발행 및 자재 공급 알고리즘과 실행 생명주기는 기존 Owner에 남는다.
+
 ## 5. 소유권과 권한
 
 이 문서는 아래 횡단 환경 불변식만 소유하며 기존 소유자의 권한을 이전하지 않는다.

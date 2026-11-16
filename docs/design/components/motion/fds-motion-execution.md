@@ -90,7 +90,9 @@ Trajectory를 Motion이 실행한다. 결과는 적용된 운영 profile, HOME �
 대응 조건이 맞지 않으면 기존 Motion movement 실패로 반환하며 임의 관절 이동이나 다른 실행 전략으로
 전환하지 않는다. Motion은 PLACE `WAYPOINT` 전략이 활성화된 경우에만 저장된 Trajectory를 읽어야 하며,
 다른 전략에서는 해당 파일을 읽어서는 안 된다. 실행·완료·Cancel·Safety는 기존 Motion Trajectory
-lifecycle 계약을 그대로 따른다.
+lifecycle 계약을 그대로 따른다. 실제 자재를 보유한 상태에서 캐시된 PLACE 경로를 실행할 때에는
+최신 Scene과 부착 자재로 경로를 재검증한다. 자재가 없는 사전 경로 생성과 실행 시 부착 검증을
+구별하며, 아래 Named Joint Motion에는 이 계획 기반 경로 검증을 적용하지 않는다.
 
 분리된 계획 기능은 실행 명령 없이 Trajectory와 계획 시작·종료 상태를 반환한다. 다음 구간을
 앞서 계획하는 경우 앞 계획의 종료 상태를 시작 상태로 전달한다. 실행 기능은 계획을 만든 순서로
@@ -98,6 +100,34 @@ Trajectory를 제출하고, 앞 구간이 해당 작업의 실행 완료 계약�
 PnP 조합 API도 같은 계획·실행 기능을 한 예약 아래 사용한다.
 
 Motion은 PICK 계획·탐색에서 물체별 자세 후보 수와 자세별 Seed 시도 횟수로 탐색을 제한하며 전체·물체별 시간 deadline은 적용하지 않는다. 개별 IK·경로 계획 호출 timeout, 안전·취소 중단은 유지하고 첫 실행 가능 계획에서 탐색을 종료한다. 세부 규칙은 [PICK Candidate Algorithm](../../algorithms/motion-pick-candidate-search.md)을 따른다.
+
+PLACE의 유한 탐색과 개별 호출 timeout은 [PLACE Pose Search Algorithm](../../algorithms/motion-place-pose-search.md)을 따른다.
+HOME 경유 재탐색과 최종 자재 반환은 [Task Execution PnP FDS](../task-execution/fds-pnp-execution.md)가 소유한다.
+
+## Named Joint Motion과 티칭 설정
+
+GO_HOME·트레이 반환·payload HOME 및 추가 티칭 자세는 단일 Registry의 이름으로 조회한다.
+각 항목은 목표 관절 위치와 속도·가속도 비율을 소유한다. 목표는 선택 Robot의 기존 자세
+참조 또는 `arm_joint_names` 순서의 유한 관절 위치(rad)로 등록하며, 실행기는 이름별로
+분기하지 않는다. GO_HOME 등 기존 작업 요청을 이름으로 연결하는 부분은 호출 경계에 둔다.
+
+Named Joint Motion은 현재 측정 관절값에서 목표까지 직접 Joint Trajectory를 생성한다.
+MoveIt 경로 계획·IK·Planning Scene 조회·충돌 경로 탐색을 수행하지 않는다. Robot의
+위치·속도 한계와 설정된 관절 가속도 한계를 소비하고, 표준 동기화 속도 프로파일을 사용한다.
+별도의 보간기나 작업별 궤적 생성기를 두지 않으며 기존 simulation-clock sampler·명령
+전송·감시·Stop 실행기를 재사용한다. 티칭 자세 사이의 직접 관절 이동 경로 적합성은 운영
+티칭에서 확보하며, 이 실행 성공을 충돌 검사 완료로 표현하지 않는다.
+
+`velocity_scale`과 `acceleration_scale`은 각각 관절 속도·가속도 한계 대비 `(0, 1]`
+비율이다. PICK/PLACE planning scale과 독립적이며 현재 Safety envelope 비율을 곱해
+적용한다. 모든 티칭 동작은 같은 admission·execution identity·Cancel·Safety 경계를
+사용한다. 미등록 이름, 오래되거나 불완전한 관절 피드백, 잘못된 목표·한계 또는 실행 조건
+부재는 이동을 시작하지 않고 실패한다. 중단이 확정된 뒤 궤적을 시작하거나 재개하지 않는다.
+
+GO_HOME과 독립 티칭 이동은 궤적 전송 완료 이후에도 기존 연속 관절 피드백 기반 목표
+도달을 확인한다. Named Joint Motion은 Holding을 판단하거나 Gripper를 열고 닫지 않는다.
+자재 반환의 fresh HELD·OPEN·fresh RELEASED 및 객체 처리 확정은 Task Execution BT가
+소유한다. 설정된 시간 궤적 실행이 불가능하면 단일 목표 명령으로 대체하지 않는다.
 
 ## Planning 탐색과 요청 수명
 
@@ -123,7 +153,7 @@ sequenceDiagram
 
 각 단계의 실패는 원인과 함께 반환되며 후속 평가는 건너뛴다. 같은 Pose의 Seed 재시도, 후속 Pose, 보류 재방문 및 종료는 [PICK Algorithm](../../algorithms/motion-pick-candidate-search.md)의 기존 규칙을 따른다. Safety·Cancel·Backend 오류는 해당 기존 중단·결과 계약을 따른다.
 
-한 planning 요청은 현재 Candidate·Pose·Seed, 단계별 근거, Action 공통 deadline과 후보별 잔여 예산을 탐색 동안 보존한다. 재시도는 해당 시도 결과만 갱신한다. 요청이 취소·선점·종료된 뒤 도착한 계산 결과는 새 요청에 반영하지 않는다.
+한 planning 요청은 현재 Candidate·Pose·Seed, 단계별 근거, 작업별 후보·Seed·Planning 요청 잔여 예산과 개별 호출 timeout을 탐색 동안 보존한다. 재시도는 해당 시도 결과만 갱신한다. 요청이 취소·선점·종료된 뒤 도착한 계산 결과는 새 요청에 반영하지 않는다.
 
 각 Planning·충돌 검증은 아래 구간 정책을 적용한다. 후보 또는 요청 사이에 점유 설정이 이어지지 않으며 고정 환경·Robot Self Collision·Attachment 검사는 유지한다.
 
@@ -141,6 +171,18 @@ Vision-derived PICK의 Candidate Geometry 입력은 [Task Execution–Motion ICD
 | PLACE | PICK에서 사용한 임시 Occupancy는 적용하지 않음 | 검사 유지 |
 
 각 Vision-derived Candidate attempt는 target별 planning map을 사용하고 같은 map을 보여주는 Occupancy Snapshot 하나를 기본적으로 생성·저장한다. 이 생성은 `diagnostics.capture_enabled`, `log_level` 및 상세 진단 선택 여부와 독립적이다. Snapshot은 candidate ID와 `vision_acquisition_id`로 해당 시도와 연결한다. 그 attempt의 Pose·Seed 탐색은 같은 map과 Snapshot을 공유하며 Candidate 전환 때 새 map과 Snapshot을 사용한다. 이미지 파일은 Vision 인계 순번으로 정한 `snapshots/YYYYMMDD/HHMMSS/NN/` 폴더 안에 `occupancy-01.png`, `occupancy-02.png`처럼 저장한다. 파일명에 Goal UUID·Acquisition ID·Candidate ID를 넣지 않으며 이 식별자는 Motion Diagnostic Record에 Snapshot 경로와 함께 기록한다. 해당 기록은 `diagnostic_records/`에 저장하고 상세 Planning Diagnostic JSON과 Trace는 기존 Capture 정책을 따른다. Snapshot 생성·저장 실패는 planning 또는 실행 결과를 바꾸지 않는다.
+
+### 계획 기반 PLACE의 부착 충돌 모델
+
+계획 기반 PLACE 요청의 부착 충돌 모델은 PICK에서 수락한 Object-to-TCP 상대 변환과
+관측한 직육면체 치수로 구성한다. 공유 MoveIt Scene을 변경하지 않고 요청별 Scene과 시작
+상태에 동일한 Attached Body를 반영해 끝점·경로 계획·경로 유효성을 검사한다. 접촉 허용은
+Finger/Tip과 TCP에 한정하며 Scene 또는 수락된 Geometry가 없으면 해당 계획을 거절한다.
+
+이 규칙은 계획 기반 PLACE와 그 캐시 경로의 검증에 적용한다. `payload_home`·`home`·
+`return_material`의 Named Joint Motion에 MoveIt 계획이나 Scene 검사를 추가하지 않는다.
+관계의 준비·확정·해제는 [Task Execution–Motion ICD](../../interfaces/icd-task-execution-motion.md)의
+Grasp Relation 계약을 따르며, Task Execution이 fresh `RELEASED`를 확인한 뒤 관계와 치수를 정리한다.
 
 ### Grasp Occupancy 전략
 
@@ -284,14 +326,22 @@ Motion Result는 Gripper `HELD/RELEASED`나 PnP `PLACED`를 확정하지 않는�
 
 ### VR-MOT-EXEC-09 — PICK Planning Scene 정책
 
-동일 후보의 Grasp 끝점 충돌은 `GRASP_COLLISION` 근거로 분기하고 같은 Pose에 남은 Seed가 있으면 이를 우선해야 한다. Occupancy 구성은 [PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 구간별 사용은 이 절의 정책을 따라야 한다. Candidate attempt Snapshot은 동일 target의 실제 planning map 객체 집합을 표시해야 한다. Vision Acquisition과 연결된 Motion Occupancy Snapshot은 해당 Acquisition의 Vision Snapshot 및 Metadata와 같은 numbered 폴더에 `occupancy-NN.png`로 저장하고 Motion Diagnostic Record에 acquisition·candidate·goal 식별자와 상대 이미지 경로를 남긴다. 요청별 점유·Scene 정책이 다른 요청에 남거나 종료 뒤 늦은 계산 결과가 새 요청에 반영되어서는 안 된다. 단계별 실패 원인과 누적 예산을 구분해야 한다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| 충돌 분기 | 동일 후보의 Grasp 끝점 충돌은 `GRASP_COLLISION` 근거로 분기하고 같은 Pose에 남은 Seed가 있으면 이를 우선해야 한다. |
+| Occupancy Owner | Occupancy 구성은 [PICK Algorithm](../../algorithms/motion-pick-candidate-search.md), 구간별 사용은 이 절의 정책을 따라야 한다. |
+| Snapshot 내용 | Candidate attempt Snapshot은 동일 target의 실제 planning map 객체 집합을 표시해야 한다. |
+| Snapshot 연결 | Vision Acquisition과 연결된 Motion Occupancy Snapshot은 해당 Acquisition의 Vision Snapshot 및 Metadata와 같은 numbered 폴더에 `occupancy-NN.png`로 저장하고 Motion Diagnostic Record에 acquisition·candidate·goal 식별자와 상대 이미지 경로를 남긴다. |
+| 요청 격리 | 요청별 점유·Scene 정책이 다른 요청에 남거나 종료 뒤 늦은 계산 결과가 새 요청에 반영되어서는 안 된다. |
+| 실패·예산 | 단계별 실패 원인과 누적 예산을 구분해야 한다. |
 
 ### VR-MOT-EXEC-06 — PICK/PLACE Trajectory 완료와 Gate 배제
 
-위 네 조건이 모두 충족되면 최종 관절 오차·작은 진동·잔여 속도·안정화 샘플 부족과 무관하게
-Trajectory 완료를 반환해야 한다(SHALL). 시간 미경과, 명령 거부·중간 발행 실패·미완료,
-Clock 정체·역행·무효, Backend 오류 또는 유효한 중단이 있으면 완료로 반환해서는 안 된다(SHALL NOT).
-완료만을 위한 새 Joint State나 Watchdog Healthy·inactivity 승인을 기다려서는 안 된다(SHALL NOT).
+| 판정 항목 | 요구사항 |
+|---|---|
+| 완료 반환 | 위 네 조건이 모두 충족되면 최종 관절 오차·작은 진동·잔여 속도·안정화 샘플 부족과 무관하게 Trajectory 완료를 반환해야 한다(SHALL). |
+| 완료 금지 | 시간 미경과, 명령 거부·중간 발행 실패·미완료, Clock 정체·역행·무효, Backend 오류 또는 유효한 중단이 있으면 완료로 반환해서는 안 된다(SHALL NOT). |
+| 추가 Gate 금지 | 완료만을 위한 새 Joint State나 Watchdog Healthy·inactivity 승인을 기다려서는 안 된다(SHALL NOT). |
 
 ### VR-MOT-EXEC-07 — 감시 종료와 독립 계약 보존
 
@@ -301,10 +351,11 @@ Gripper·객체 부착/분리 조건은 이 완료로 대체돼서는 안 된다
 
 ### VR-MOT-EXEC-08 — 정확도 진단의 비차단성
 
-관절별·최대 관절 오차, TCP 위치·방향 오차, 측정 위치·속도·변화량과 시간·결과 근거를 기존 기록에
-best-effort로 남겨야 한다(SHALL). 진단 불가·쓰기 실패나 큰 오차가 정상 완료를 차단하거나
-성공·실패·정지 근거를 바꾸어서는 안 된다(SHALL NOT). 다음 Planning은 최신 측정 상태와 기존
-계획 검증을 사용하고, 앞선 완료에서 이를 중복 Gate로 요구해서는 안 된다(SHALL NOT).
+| 판정 항목 | 요구사항 |
+|---|---|
+| 진단 보존 | 관절별·최대 관절 오차, TCP 위치·방향 오차, 측정 위치·속도·변화량과 시간·결과 근거를 기존 기록에 best-effort로 남겨야 한다(SHALL). |
+| 결과 독립성 | 진단 불가·쓰기 실패나 큰 오차가 정상 완료를 차단하거나 성공·실패·정지 근거를 바꾸어서는 안 된다(SHALL NOT). |
+| 다음 Planning | 다음 Planning은 최신 측정 상태와 기존 계획 검증을 사용하고, 앞선 완료에서 이를 중복 Gate로 요구해서는 안 된다(SHALL NOT). |
 
 ### VR-MOT-EXEC-02 — Planning과 execution 분리
 
@@ -320,10 +371,11 @@ Cancel 및 Safety preemption은 기존 Backend stop 경계로 전달되고 실�
 
 ### VR-MOT-EXEC-05 — Stored trajectory와 operation 소유권
 
-`planMotion`은 실행 command 없이 Trajectory·start/end state를 반환해야 한다.
-`executePlannedMotion`은 동일 plan ID와 operation identity에 속한 Trajectory를 재계획 없이
-실행해야 한다. 여러 plan을 보유한 동안 다른 operation이 reservation을 선점해서는 안 되며,
-연속 계획은 앞 계획의 end state를 다음 계획의 start state로 사용할 수 있어야 한다.
+| 판정 항목 | 요구사항 |
+|---|---|
+| 계획 결과 | `planMotion`은 실행 command 없이 Trajectory·start/end state를 반환해야 한다. |
+| 동일 계획 실행 | `executePlannedMotion`은 동일 plan ID와 operation identity에 속한 Trajectory를 재계획 없이 실행해야 한다. |
+| 예약·연속 계획 | 여러 plan을 보유한 동안 다른 operation이 reservation을 선점해서는 안 되며, 연속 계획은 앞 계획의 end state를 다음 계획의 start state로 사용할 수 있어야 한다. |
 
 ## 참조
 

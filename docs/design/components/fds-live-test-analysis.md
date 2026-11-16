@@ -76,7 +76,6 @@ UUID, Goal ID, Acquisition ID, Execution ID는 내부 연결과 원본 참조에
 
 - [Observability Records ICD](../interfaces/icd-observability-records.md)
 - [Simulation Session FDS](simulation/fds-sim-session.md)
-- [Observability Record Inventory](observability-record-inventory.md)
 - [Simulator State, Time, and TF ICD](../interfaces/icd-sim-state-time-tf.md)
 - Live Test Analysis Report Template
 - Verification Policy

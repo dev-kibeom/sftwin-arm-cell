@@ -109,6 +109,8 @@ Gateway는 Isaac Prim 좌표·Identity·생성 객체 목록을 읽거나 Vision
 
 ## 7. Verification Requirements
 
+각 VR 아래 표의 행은 같은 기존 VR의 확인 항목이다. 행 전체가 해당 ID의 검증 범위를 구성하며 별도 Claim ID를 만들지 않는다.
+
 ### VR-GW-MAT-01 — Provider 완료 근거를 요구하는 Readiness
 긍정적 `MATERIAL_READY`는 **확정 시점에** 신선하고 유효하며 요청 Delivery와 상관된 공급자 완료 사실, 요청 Quantity 전체의 공급과 적절한 VDA 문맥을 요구한다. Timer·VDA·UI·정적 자재만으로 충분하지 않다. 이미 발행된 완료 사실은 전송 지연으로 만료되지 않는다.
 
@@ -125,7 +127,15 @@ Gateway만 원본 Trigger를 수락하고 승인된 필드를 인계한다. VDA 
 Supply Provider는 환경별 완료 알고리즘과 사실 보고를 소유하고 Gateway는 검증과 Readiness를 소유한다. Isaac Prim의 좌표·Identity·객체 생성 목록은 Vision 입력이 아니다.
 
 ### VR-GW-MAT-06 — Stop 취소 및 Delivery 해제
-진행 중인 Simulation Delivery 상태에서 Isaac Timeline Stop이 발생하면 Material Supply Adapter는 대기 Spawn 취소·Isaac 소유 Attach Reset·생성 자재 제거·상관된 Terminal Cancellation 발행을 수행해야 한다. Gateway는 계약에 맞게 Delivery Terminal Outcome을 발행하고 활성 점유를 해제해야 한다. 다음 실험의 신규 Bringup Accounting은 비어 있으며 과거 Ready·성공 PLACE 기록을 다시 쓰지 않는다. **Simulation에만 해당**하며 실장비 명령이 아니다. Oracle은 Delivery별 TransferCompletion, Gateway Terminal Receipt/Readiness와 후속 고유 Trigger 수락이다. Simulation Reset 실행 상세는 해당 Owner를 따른다.
+
+| 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
+|---|---|
+| Timeline Stop | 진행 중인 Simulation Delivery 상태에서 Isaac Timeline Stop이 발생하면 Material Supply Adapter는 대기 Spawn 취소·Isaac 소유 Attach Reset·생성 자재 제거·상관된 Terminal Cancellation 발행을 수행해야 한다. |
+| Gateway Terminal | Gateway는 계약에 맞게 Delivery Terminal Outcome을 발행하고 활성 점유를 해제해야 한다. |
+| 새 Bringup·과거 기록 | 다음 실험의 신규 Bringup Accounting은 비어 있으며 과거 Ready·성공 PLACE 기록을 다시 쓰지 않는다. |
+| Simulation 범위 | **Simulation에만 해당**하며 실장비 명령이 아니다. |
+| 관찰 근거 | Oracle은 Delivery별 TransferCompletion, Gateway Terminal Receipt/Readiness와 후속 고유 Trigger 수락이다. |
+| Reset Owner | Simulation Reset 실행 상세는 해당 Owner를 따른다. |
 
 ### VR-GW-MAT-07 — 기존 자재를 보존하는 추가 공급
 새 고유 Delivery 수락 시 Simulation Adapter는 기존 자재를 보존하고 신규 Quantity만 정확히 추가해야 한다. 신규 Delivery는 활성 Mission·기존 Material을 취소·삭제하지 않으며 전체 Scene Material Cleanup은 Isaac Timeline Stop만 소유한다. Oracle은 구·신 Delivery ID, 각 Delivery의 생성/Action 결과와 Stop 이전 보존 Scene Material이다. 공급 수행·보존 책임은 Simulation Owner가 소유한다.
