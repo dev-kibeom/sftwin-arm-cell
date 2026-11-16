@@ -144,7 +144,7 @@ Vision-derived PICK의 Candidate Geometry 입력은 [Task Execution–Motion ICD
 
 ### Grasp Occupancy 전략
 
-Grasp endpoint의 전체 Robot 검사에서는 고정 설치 접촉인 `base_link`–`robot_riser` 쌍만 요청 로컬 Scene에서 허용한다. 다른 Robot Link와 Riser의 충돌 및 공유 Scene의 ACM은 변경하지 않는다.
+Grasp endpoint의 전체 Robot 검사에서는 선택 Model Assembly가 선언한 설치 베이스 충돌 Link와 Cell이 선언한 설치 접촉 객체의 쌍만 요청 로컬 Scene에서 허용한다. 설치 Link는 충돌 형상을 가지며 canonical `base_link`와 고정 연결되어야 한다. 좌표계 이름만으로 실제 충돌 Link를 대체하거나 고정 연결된 모든 Link를 자동 허용하지 않는다. 설치 객체는 Cell의 원본 Geometry와 정적 Scene에 존재해야 한다. 선언된 객체가 요청 Scene에 없으면 접촉 예외를 적용하지 않는다. 다른 Robot Link·환경 객체의 충돌 및 공유 Scene의 ACM은 변경하지 않으며 Approach·Descent·Retract로 이 예외를 확대하지 않는다.
 
 Grasp endpoint 충돌 검증에서는 선택 후보의 Closing Axis에 대응하는 자재 치수(예상 접촉 폭)까지 닫힌 Gripper 관절 형상을 사용한다. 이 상태는 검증용이며 실제 Gripper Close 명령이나 Holding 성공 조건을 바꾸지 않는다. Robot Self Collision, 정적 Tray·Fixture 및 기존 고정 객체 충돌을 검사한 뒤 운영 Profile의 `grasp_occupancy_mode`로 선택된 Occupancy 전략을 적용한다.
 

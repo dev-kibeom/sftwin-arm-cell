@@ -1585,14 +1585,16 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   place_waypoint_trajectory_file_(std::move(place_waypoint_trajectory_file)),
   trajectory_watchdog_(trajectory_clock_liveness_timeout_s)
 {
-  for (const auto * name : {"planning_group", "model_id", "pick_retract_contact_object"}) {
+  for (const auto * name : {"planning_group", "model_id", "pick_retract_contact_object",
+      "grasp_mount_contact_object"})
+  {
     if (!node_->has_parameter(name)) {node_->declare_parameter<std::string>(name, "");}
   }
   planning_group_ = node_->get_parameter("planning_group").as_string();
   model_id_ = node_->get_parameter("model_id").as_string();
   for (const auto * name : {"wrap_equivalent_joints", "place_ik_seed_joints",
       "payload_touch_links", "pick_retract_contact_links", "pick_clearance_objects",
-      "tool_grasp_collision_links"})
+      "tool_grasp_collision_links", "grasp_mount_contact_links"})
   {
     if (!node_->has_parameter(name)) {
       node_->declare_parameter<std::vector<std::string>>(name, std::vector<std::string>{});
@@ -1608,6 +1610,8 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
   tool_grasp_collision_links_ =
     node_->get_parameter("tool_grasp_collision_links").as_string_array();
   payload_touch_links_ = node_->get_parameter("payload_touch_links").as_string_array();
+  grasp_mount_contact_.links = node_->get_parameter("grasp_mount_contact_links").as_string_array();
+  grasp_mount_contact_.object_id = node_->get_parameter("grasp_mount_contact_object").as_string();
   pick_retract_contact_object_ = node_->get_parameter("pick_retract_contact_object").as_string();
   pick_retract_contact_links_ =
     node_->get_parameter("pick_retract_contact_links").as_string_array();
@@ -5759,6 +5763,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
       planning_context->expected_joint_count = measured_start.size();
       planning_context->grasp_occupancy_mode = grasp_occupancy_mode_;
       planning_context->finger_clearance = finger_clearance_;
+      planning_context->grasp_mount_contact = grasp_mount_contact_;
       planning_context->pick_clearance_objects = pick_clearance_objects_;
       planning_context->tool_grasp_collision_links = tool_grasp_collision_links_;
       planning_context->non_target_occupancy = request.non_target_occupancy;

@@ -42,6 +42,7 @@ collision_objects:
   - amr_tray_rail_front
   - amr_tray_rail_rear
 contact_objects:
+  robot_mount: robot_riser
   pick_retract: amr_tray
 isaac:
   material_supply_factory: pnp_cnc_cell.cell_runtime:start_material_supply

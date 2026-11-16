@@ -146,6 +146,7 @@ struct PlanningContext
   planning_scene::PlanningScenePtr common_grasp_scene;
   GraspOccupancyMode grasp_occupancy_mode{GraspOccupancyMode::FULL_COLLISION};
   FingerClearanceParameters finger_clearance;
+  GraspMountContact grasp_mount_contact;
   std::vector<std::string> pick_clearance_objects;
   std::vector<std::string> tool_grasp_collision_links;
   std::vector<arm_cell_interfaces::msg::CollisionPrimitive> non_target_occupancy;

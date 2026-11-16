@@ -489,7 +489,7 @@ BT::NodeStatus ValidateGraspCollision::execute(PlanningContext & context)
     std::optional<Eigen::Vector3d>(
       Eigen::Vector3d(
         context.rectangle_long_side_m, context.rectangle_short_side_m, context.object_height_m)) :
-    std::nullopt);
+    std::nullopt, context.grasp_mount_contact);
   if (!validation.valid) {
     context.attempt.failure_stage = "GRASP_COLLISION";
     context.attempt.failure_reason = validation.reason;

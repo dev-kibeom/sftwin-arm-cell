@@ -68,6 +68,31 @@ def test_motion_consumes_selected_model_and_joint_policy():
         assert config['motion'][key] == config['robot']['joint_policy'][key]
 
 
+@pytest.mark.parametrize('profile,link', [
+    ('operational_profile.yaml', 'base_link'), ('rb5_850_profile.yaml', 'link0')])
+def test_mount_contact_uses_selected_assembly_and_cell(profile, link, tmp_path):
+    from arm_cell_bringup.runtime import export_runtime_configuration
+
+    snapshot = export_runtime_configuration(PROFILE.parent / profile, tmp_path / 'runtime.json')
+    config = load_profile(snapshot)
+    assert config['motion']['grasp_mount_contact_links'] == [link]
+    assert config['motion']['grasp_mount_contact_object'] == 'robot_riser'
+
+
+@pytest.mark.parametrize('links', [None, [], ['missing'], ['link_1'], ['base'],
+                                    ['base_link', 'base_link']])
+def test_mount_links_require_fixed_base_collision_geometry(selection, links):
+    with pytest.raises(ValueError, match='mount_collision_links'):
+        selection(lambda d: d['model'].__setitem__('mount_collision_links', links))
+
+
+@pytest.mark.parametrize('object_id', [None, '', 'missing'])
+def test_mount_object_must_exist_in_cell_geometry(selection, object_id):
+    with pytest.raises(ValueError, match='robot_mount'):
+        selection(lambda d: d['cell']['contact_objects'].__setitem__(
+            'robot_mount', object_id))
+
+
 @pytest.mark.parametrize('change,message', [
     (lambda d: d['robot']['motion']['arm_joint_names'].reverse(), 'planning group joints'),
     (lambda d: d['robot']['motion']['arm_joint_names'].append('joint_missing'), 'planning group joints'),

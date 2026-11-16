@@ -152,6 +152,8 @@ def compose_owner_profiles(config, path, *, tool_actuator=None, tool_grasp=None)
     for key in ('wrap_equivalent_joints', 'place_ik_seed_joints'):
         merge_owned(motion, {key: owners['robot']['joint_policy'][key]}, 'motion')
     merge_owned(motion, {
+        'grasp_mount_contact_links': model['mount_collision_links'],
+        'grasp_mount_contact_object': owners['cell']['contact_objects']['robot_mount'],
         'pick_clearance_objects': owners['cell']['collision_objects']['pick_clearance'],
         'tool_grasp_collision_links': owners['tool']['grasp_pose_collision_links'],
         'tool_width_control': 'width' in owners['tool']['runtime']['capabilities'],
