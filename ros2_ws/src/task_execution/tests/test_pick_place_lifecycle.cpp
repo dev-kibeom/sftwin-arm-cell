@@ -1633,29 +1633,24 @@ TEST(
     MotionTaskResultCode::TASK_RESULT_SUCCESS);
 
   const auto record_path = directory / "motion-goal-diagnostic-test.json";
-  std::string record;
+  nlohmann::json record;
   for (int attempt = 0; attempt < 100; ++attempt) {
     std::ifstream input(record_path);
-    record.assign((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    if (record.find("candidate_evaluation_status") != std::string::npos) {break;}
+    auto candidate = nlohmann::json::parse(input, nullptr, false);
+    if (!candidate.is_discarded() && candidate.contains("candidate_evaluation_status")) {
+      record = std::move(candidate);
+      break;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
-  ASSERT_NE(record.find("candidate_evaluation_status"), std::string::npos);
-  EXPECT_NE(record.find("motion-goal-diagnostic-test"), std::string::npos);
-  EXPECT_NE(record.find("\"schema_version\": 1"), std::string::npos);
-  EXPECT_NE(
-    record.find("\"motion_goal_uuid\": \"motion-goal-diagnostic-test\""),
-    std::string::npos);
-  EXPECT_NE(
-    record.find(
-      "\"capture_diagnostic_record_relative_path\": null"),
-    std::string::npos);
-  EXPECT_EQ(record.find("\"execution_id\""), std::string::npos);
-  EXPECT_NE(record.find("test-acquisition"), std::string::npos);
-  EXPECT_NE(record.find("candidate_evaluation"), std::string::npos);
-  EXPECT_NE(
-    record.find("\"candidate_evaluation_status\": \"unavailable\""),
-    std::string::npos);
+  ASSERT_TRUE(record.is_object());
+  EXPECT_EQ(record.at("schema_version"), 1);
+  EXPECT_EQ(record.at("motion_goal_uuid"), "motion-goal-diagnostic-test");
+  EXPECT_TRUE(record.at("capture_diagnostic_record_relative_path").is_null());
+  EXPECT_FALSE(record.contains("execution_id"));
+  EXPECT_EQ(record.at("vision_acquisition_id"), "test-acquisition");
+  EXPECT_TRUE(record.contains("candidate_evaluation"));
+  EXPECT_EQ(record.at("candidate_evaluation_status"), "unavailable");
 
   ASSERT_EQ(
     ::setenv(

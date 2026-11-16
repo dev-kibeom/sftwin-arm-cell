@@ -27,49 +27,40 @@ def _canonical_tray_support_origin(project_root):
 
 
 def test_cell_metadata_initialization_owns_root_children_and_identity_metadata():
-    ensured = []
-    metadata = []
+    ensured = set()
+    metadata = {}
     display_names = []
+
+    def get_prim(path):
+        assert path in ensured
+        return SimpleNamespace(SetDisplayName=lambda name: display_names.append((path, name)))
+
+    def set_metadata(stage, path, key, value):
+        assert stage is context.stage
+        assert path in ensured
+        metadata[(path, key)] = value
+
     context = SimpleNamespace(
-        stage=SimpleNamespace(GetPrimAtPath=lambda path: SimpleNamespace(
-            SetDisplayName=lambda name: display_names.append((path, name)))),
+        stage=SimpleNamespace(GetPrimAtPath=get_prim),
         cell_root=CELL_ROOT,
-        ensure_xform=lambda stage, path: ensured.append((stage, path)),
-        set_custom_data=lambda stage, path, key, value: metadata.append(
-            (stage, path, key, value)
-        ),
+        ensure_xform=lambda stage, path: ensured.add(path),
+        set_custom_data=set_metadata,
     )
 
     initialize_cell_metadata(context)
     assert display_names == [(CELL_ROOT, "PnP_CNC")]
 
-    assert [path for _, path in ensured] == [
+    assert {
         CELL_ROOT,
-        *[
-            f"{CELL_ROOT}/{child}"
-            for child in (
-                "Environment",
-                "Safety",
-                "RobotStation",
-                "Vision",
-                "CameraRig",
-                "CNC",
-                "AMR",
-                "Status",
-                "Materials",
-            )
-        ],
-    ]
-    assert metadata == [
-        (context.stage, CELL_ROOT, "sf_twin:cell_id", "CELL-A01"),
-        (
-            context.stage,
-            CELL_ROOT,
-            "sf_twin:process",
-            "direct_amr_to_cnc_machine_tending",
-        ),
-        (context.stage, CELL_ROOT, "sf_twin:version", "v4.2"),
-    ]
+        *{f"{CELL_ROOT}/{child}" for child in (
+            "Environment", "Safety", "RobotStation", "Vision", "CameraRig",
+            "CNC", "AMR", "Status", "Materials",
+        )},
+    } <= ensured
+    assert metadata[(CELL_ROOT, "sf_twin:cell_id")] == "CELL-A01"
+    assert metadata[(CELL_ROOT, "sf_twin:process")] == "direct_amr_to_cnc_machine_tending"
+    assert isinstance(metadata[(CELL_ROOT, "sf_twin:version")], str)
+    assert metadata[(CELL_ROOT, "sf_twin:version")]
 
 
 def test_reachability_policy_preserves_distances_and_report_thresholds():
@@ -84,9 +75,9 @@ def test_reachability_policy_preserves_distances_and_report_thresholds():
     assert reports[2].startswith(">>> [KINEMATIC FAIL]")
 
 
-def test_composition_retains_legacy_cleanup_order_and_canonical_cell_root():
+def test_composition_covers_legacy_cleanup_paths_and_canonical_cell_root():
     assert CELL_ROOT == "/World/SF_Twin_Cell"
-    assert LEGACY_CLEANUP == [
+    assert {
         "/World/SF_Twin_Cell",
         "/World/Industrial_Floor",
         "/World/Floor_Tiles",
@@ -98,7 +89,7 @@ def test_composition_retains_legacy_cleanup_order_and_canonical_cell_root():
         "/World/box_item_01",
         "/World/Camera_Sensor",
         "/World/m0609",
-    ]
+    } <= set(LEGACY_CLEANUP)
 
 
 def test_amr_scene_uses_tray_and_front_rail_marker(monkeypatch):

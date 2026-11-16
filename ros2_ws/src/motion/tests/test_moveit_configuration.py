@@ -1,7 +1,6 @@
 """Planning configuration must preserve robot semantics and exclude execution."""
 
 from pathlib import Path
-import ast
 import hashlib
 import importlib.util
 import json
@@ -173,37 +172,16 @@ def load_isaac_manifest_resolver():
         repo_root
         / "infra/isaac_sim/scripts/pnp_cnc_cell/scene_builder/static_environment.py"
     )
-    tree = ast.parse(source.read_text())
-    selected = [
-        node
-        for node in tree.body
-        if isinstance(node, (ast.Assign, ast.FunctionDef))
-        and getattr(node, "name", None)
-        in {"canonical_manifest_path", "load_canonical_static_geometry"}
-        or isinstance(node, ast.Assign)
-        and any(
-            getattr(target, "id", None)
-            in {"STATIC_MANIFEST_RELATIVE_PATH", "REQUIRED_STATIC_OBJECT_IDS"}
-            for target in node.targets
-        )
-    ]
-    namespace = {
-        "Path": Path,
-        "json": json,
-        "os": __import__("os"),
-        "__file__": str(source),
-    }
-    exec(
-        compile(ast.Module(body=selected, type_ignores=[]), str(source), "exec"),
-        namespace,
-    )
-    return namespace, repo_root
+    spec = importlib.util.spec_from_file_location("isaac_static_environment", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module, repo_root
 
 
 def test_isaac_builder_resolves_manifest_from_repository_source_path():
     resolver, repo_root = load_isaac_manifest_resolver()
     assert (
-        resolver["canonical_manifest_path"](
+        resolver.canonical_manifest_path(
             script_path=repo_root
             / "infra/isaac_sim/scripts/pnp_cnc_cell/runtime_steps/setup_scene.py"
         )
@@ -217,10 +195,10 @@ def test_isaac_builder_script_editor_path_requires_and_accepts_explicit_root(
     resolver, repo_root = load_isaac_manifest_resolver()
     temporary_script = Path("/tmp/carb/script_1789055439.py")
     with pytest.raises(RuntimeError, match="SFTWIN_PROJECT_ROOT"):
-        resolver["canonical_manifest_path"](script_path=temporary_script)
+        resolver.canonical_manifest_path(script_path=temporary_script)
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(repo_root))
     assert (
-        resolver["canonical_manifest_path"](script_path=temporary_script)
+        resolver.canonical_manifest_path(script_path=temporary_script)
         == repo_root / "config/pnp_cnc_static_environment.json"
     )
 
@@ -228,15 +206,15 @@ def test_isaac_builder_script_editor_path_requires_and_accepts_explicit_root(
 def test_isaac_builder_rejects_invalid_explicit_root_and_missing_manifest(tmp_path):
     resolver, _ = load_isaac_manifest_resolver()
     with pytest.raises(RuntimeError, match="not a directory"):
-        resolver["canonical_manifest_path"](project_root=tmp_path / "missing")
+        resolver.canonical_manifest_path(project_root=tmp_path / "missing")
     with pytest.raises(RuntimeError, match="does not contain"):
-        resolver["canonical_manifest_path"](project_root=tmp_path)
+        resolver.canonical_manifest_path(project_root=tmp_path)
 
 
 def test_isaac_builder_preserves_canonical_static_environment_semantics():
     resolver, repo_root = load_isaac_manifest_resolver()
-    objects = resolver["load_canonical_static_geometry"](project_root=repo_root)
-    manifest = json.loads(resolver['canonical_manifest_path'](project_root=repo_root).read_text())
+    objects = resolver.load_canonical_static_geometry(project_root=repo_root)
+    manifest = json.loads(resolver.canonical_manifest_path(project_root=repo_root).read_text())
     assert objects == {obj['id']: obj for obj in manifest['objects']}
 
 
