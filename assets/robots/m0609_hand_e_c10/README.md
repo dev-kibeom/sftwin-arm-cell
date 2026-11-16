@@ -52,3 +52,6 @@ Mission, GRASP/RELEASE, Vision, Payload, Physical Grasp, 신규 Cell 및 자재 
 측정 항목은 관절 한계, 목표 끝점 도달, 동기화, 방사형 변위, TCP 및 분리 충돌 형상의
 존재입니다. PASS에는 완전한 수축·확장 왕복이 필요합니다.
 창을 닫아 중단했거나 검사에 실패한 실행은 검증 완료로 보고하지 않습니다.
+
+사진을 참고한 100 mm 연장 핑거는 기본 모델과 별도인 `m0609_hand_e_c10_long` 실험입니다.
+[연장부 치수·물성 가정과 실행법](../../tools/hand_e_c10/README.md)을 참조하세요.

@@ -7,6 +7,27 @@ import os
 from pathlib import Path
 import runpy
 import sys
+import xml.etree.ElementTree as ET
+
+
+def aligned_fixed_translation(urdf, base, tip):
+    """C10's canonical TCP stays aligned with its housing +Z insertion axis."""
+    by_child = {joint.find('child').get('link'): joint for joint in urdf.findall('joint')}
+    result, visited = [0., 0., 0.], set()
+    while tip != base:
+        joint = by_child.get(tip)
+        if tip in visited or joint is None or joint.get('type') != 'fixed':
+            raise ValueError('Tool TCP must be fixed to its housing')
+        visited.add(tip)
+        origin = joint.find('origin')
+        if origin is not None:
+            rotation = list(map(float, origin.get('rpy', '0 0 0').split()))
+            offset = list(map(float, origin.get('xyz', '0 0 0').split()))
+            if rotation != [0., 0., 0.] or len(offset) != 3 or not all(map(math.isfinite, offset)):
+                raise ValueError('C10 TCP requires aligned finite translation')
+            result = [a+b for a, b in zip(result, offset)]
+        tip = joint.find('parent').get('link')
+    return result
 
 
 class ExperimentAborted(Exception):
@@ -46,6 +67,11 @@ def main():
         # All dependent SI targets below come from the URDF-owned mimic data.
         runpy.run_path(str(root / 'infra/isaac_sim/scripts/isaac_runtime/runtime_steps/build_robot_usd.py'),
                        init_globals={'runtime_configuration': config})
+        urdf = ET.parse(model.generated_urdf).getroot()
+        expected_tcp = aligned_fixed_translation(urdf, 'gripper_hand_e_c10_base_link', 'sf_grasp_tcp')
+        expected_collisions = {link.get('name'): len(link.findall('collision'))
+                               for link in urdf.findall('link')
+                               if link.get('name').startswith('gripper_') and link.findall('collision')}
         world = World(stage_units_in_meters=1., physics_dt=1/120, rendering_dt=1/60)
         stage = omni.usd.get_context().get_stage()
         robot_path = '/World/Robot'
@@ -66,6 +92,8 @@ def main():
         settings = config['tool']['runtime']
         linkage = settings['joint_model']
         names = list(linkage)
+        tip_links = settings.get('finger_tip_links', [
+            urdf.find(f"joint[@name='{name}']/child").get('link') for name in names])
         prims = {prim.GetName(): prim for prim in stage.Traverse() if str(prim.GetPath()).startswith(robot_path + '/')}
         drives = {}
         for name, joint in linkage.items():
@@ -152,19 +180,19 @@ def main():
             cache = UsdGeom.XformCache()
             base = cache.GetLocalToWorldTransform(prims['gripper_hand_e_c10_base_link']).GetInverse()
             positions = []
-            for index in range(1, 4):
-                transform = cache.GetLocalToWorldTransform(prims[f'gripper_hande_c10_finger_{index}']) * base
+            for name in tip_links:
+                transform = cache.GetLocalToWorldTransform(prims[name]) * base
                 positions.append(list(transform.ExtractTranslation()))
             tcp = cache.GetLocalToWorldTransform(prims['sf_grasp_tcp']) * base
-            if not np.allclose(tcp.ExtractTranslation(), [0, 0, .15477], atol=1e-5):
-                raise RuntimeError('Imported TCP differs from C10 CAD datum')
+            if not np.allclose(tcp.ExtractTranslation(), expected_tcp, atol=1e-5):
+                raise RuntimeError('Imported TCP differs from selected Tool URDF')
             return np.array(positions)
 
         collision_counts = {}
-        for name in ['gripper_hand_e_c10_base_link'] + [f'gripper_hande_c10_finger_{i}' for i in range(1, 4)]:
+        for name, expected_count in expected_collisions.items():
             count = sum(prim.HasAPI(UsdPhysics.CollisionAPI)
                         for prim in Usd.PrimRange(prims[name], Usd.TraverseInstanceProxies()))
-            if count < 2:
+            if count != expected_count:
                 raise RuntimeError(f'Collision decomposition lost on {name}')
             collision_counts[name] = count
         cycle = 0
@@ -199,6 +227,7 @@ def main():
             return
         report.update(status='PASS', model_id=model.model_id, articulation_dof_names=robot.dof_names,
                       max_synchronization_error_m=max_sync, collision_counts=collision_counts,
+                      tcp_translation_m=expected_tcp, observed_tip_links=tip_links,
                       observed_min_m=observed_min.tolist(), observed_max_m=observed_max.tolist(),
                       max_abs_velocity_m_s=max_velocity.tolist(), sample_count=sample_count,
                       usd_sha256=hashlib.sha256(model.usd.read_bytes()).hexdigest())

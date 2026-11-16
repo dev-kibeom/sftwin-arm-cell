@@ -1,16 +1,51 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:include filename="robotiq_hand_e_c10_macro.urdf.xacro"/>
-  <xacro:macro name="hand_e_c10_assembly" params="mesh_dir">
+  <xacro:macro name="hand_e_c10_assembly" params="mesh_dir extension_length:=0.0">
     <xacro:robotiq_gripper name="hand_e_c10" prefix="gripper_" parent="tool_mount"
         mesh_dir="${mesh_dir}" include_ros2_control="false">
       <!-- Direct housing-back-face mount: no unmodelled vendor coupling. -->
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </xacro:robotiq_gripper>
+    <!-- User-sized simulation extensions; vendor mesh and joints stay untouched. -->
+    <xacro:if value="${extension_length > 0}">
+      <xacro:macro name="c10_extension" params="index">
+        <xacro:property name="width" value="0.003"/>
+        <xacro:property name="depth" value="0.012"/>
+        <xacro:property name="mass" value="${2700 * width * depth * extension_length}"/>
+        <link name="gripper_hande_c10_extension_${index}">
+          <inertial>
+            <origin xyz="0 0 ${extension_length/2}"/>
+            <mass value="${mass}"/>
+            <inertia ixx="${mass*(depth**2+extension_length**2)/12}" ixy="0" ixz="0"
+                     iyy="${mass*(width**2+extension_length**2)/12}" iyz="0"
+                     izz="${mass*(width**2+depth**2)/12}"/>
+          </inertial>
+          <visual>
+            <origin xyz="0 0 ${extension_length/2}"/>
+            <geometry><box size="${width} ${depth} ${extension_length}"/></geometry>
+            <material name="c10_extension_metal"><color rgba="0.72 0.73 0.69 1"/></material>
+          </visual>
+          <collision>
+            <origin xyz="0 0 ${extension_length/2}"/>
+            <geometry><box size="${width} ${depth} ${extension_length}"/></geometry>
+          </collision>
+        </link>
+        <joint name="gripper_hande_c10_extension_${index}_mount" type="fixed">
+          <parent link="gripper_hande_c10_finger_${index}"/>
+          <child link="gripper_hande_c10_extension_${index}"/>
+          <!-- Centre of the top step in the vendor collision mesh, metres. -->
+          <origin xyz="0.06271698 0 0.15476571" rpy="0 0 0"/>
+        </joint>
+      </xacro:macro>
+      <xacro:c10_extension index="1"/>
+      <xacro:c10_extension index="2"/>
+      <xacro:c10_extension index="3"/>
+    </xacro:if>
     <link name="sf_grasp_tcp"/>
     <joint name="gripper_to_sf_grasp_tcp" type="fixed">
       <parent link="gripper_tcp_link"/><child link="sf_grasp_tcp"/>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 ${extension_length - 0.00000429 if extension_length > 0 else 0}" rpy="0 0 0"/>
     </joint>
   </xacro:macro>
 </robot>
