@@ -21,7 +21,7 @@ Mode ID는 기존 `actuator`/`grasp` 조합에서 파생한 표시 identity다. 
 
 `gripper_runtime/`은 Cell 밖 `scripts/`의 재사용 Tool 구현이다. `tool_plugin.py`의 기존 선택 경계가
 Actuator와 파지 구현을 조립한다. `GraspManager`는 기존 Fixed Attach를, `PhysicalGraspManager`는
-선택적 접촉 진단과 Object Detection 기반 보유 추정을 소유한다. Physical Snap은 Tool Capture 전략만 교체하고 기존 GraspManager를 재사용한다. 새 Tool은 이 선택 경계에 구현과 Tool Profile을 등록한다.
+선택적 접촉 진단과 Object Detection 기반 보유 추정을 소유한다. Physical Attach은 Tool Capture 전략만 교체하고 기존 GraspManager를 재사용한다. 새 Tool은 이 선택 경계에 구현과 Tool Profile을 등록한다.
 공통 Session은 주입된 Tool의 command/update/관측·파지 계약을 소비한다. 장치 전용 Cell·Robot·Motion·Orchestration 분기는 추가하지 않는다.
 현재 실제 지원 Tool은 2F-85뿐이다.
 
@@ -41,7 +41,7 @@ Physics는 Isaac Sim 5.1에 포함된 Dynamic Control의 `get_dof_properties`, `
 속도·최대 토크를 제한한다. 정상 명령이나 tick에서 DOF 상태를 쓰지 않는다. tick은 실제 Position/Velocity를 읽는다.
 CLOSE가 막혀도 제한된 closing target을 유지해 물리적 하중을 가한다. STOP은 측정 위치를 새 target으로 hold한다.
 Snap에서 사용하는 Full OPEN 구동·Release의 기존 0.1 mm 개방 폭 조건은 유지한다.
-Physical Real의 RELEASED는 아래 독립적인 Tool 목표 접근·위치 안정 관측으로 판정한다.
+Physics의 RELEASED는 아래 독립적인 Tool 목표 접근·위치 안정 관측으로 판정한다.
 Timeline Stop은 유효하지 않을 수 있는 PhysX handle에 쓰지 않고 로컬 명령/관측·접촉 버퍼를 비운다.
 재시작은 새 runtime handle과 새 관측 sequence를 사용한다.
 
@@ -104,7 +104,7 @@ STOP에는 추가 파라미터를 받지 않는다. Logical 구현은 grip_force
 추가 필드를 모든 Tool에 필수화하지 않는다. `ToolRuntime.observation()`은 제공하는 구현에서만 position/velocity,
 target, motion status, inferred object status와 설정을 반환한다.
 
-### Physical Snap Qualification
+### Physical Attach Qualification
 
 Physics Actuator를 사용하되 Qualification과 Attachment를 분리한다. 기존 Capture Reference의
 object observation을 이용한 유일 후보 association을 재사용하며, 그 대상과 **동일한 Rigid Body**에
@@ -121,7 +121,7 @@ Qualification 자체는 HELD가 아니다. 기존 GraspManager/Fixed Joint Owner
 확인한 이후에만 HELD다. Attach 실패는 HELD를 발행하지 않는다. 운반 중 유지는 Fixed Attach가 담당한다.
 최소 반력 0.1 N/finger는 미보정 초기값이며 제조사 force 사양이나 실제 유지력 증거가 아니다.
 
-### Physical Real Object Detection
+### Physics Object Detection
 
 Actuator가 실제 관절 위치 변화 범위와 목표 오차로 `in_motion`, `stopped_closing`,
 `stopped_opening`, `at_requested_position`을 계산한다. 순간 속도는 진단이며 정지 승인 조건이 아니다.
@@ -183,12 +183,14 @@ Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick
 
 ## 실행
 
-GUI 런처는 선택한 Tool에 연동된 단일 `Tool Mode`를 표시한다.
-병렬 그리퍼의 `Logical Snap`은 Logical + Fixed Attach(기본), `Physical Snap`은 Physics + Fixed Attach,
-`Physical Real`은 Physics + Physical이다. `Real`은 접촉·마찰 기반 시뮬레이션을 의미한다.
+GUI 런처는 선택한 Tool에 연동된 단일 `Grasp Mode`를 표시한다.
+병렬 그리퍼의 `Logical Attach`은 Logical + Fixed Attach(기본), `Physical Attach`은 Physics + Fixed Attach,
+`Physics`는 Physics + Physical로 접촉·마찰 기반 시뮬레이션을 의미한다.
 Tool Profile의 `runtime.launcher_modes`가 표시 이름·설명을 제공하며, 실제 지원 범위는 기존 `supported_combinations`가 소유한다.
 표시용 메타데이터가 미지원 조합을 추가하지 않는다. 내부 Actuator·Grasp 분리는 유지하고 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
 Isaac과 ROS에 같은 Runtime Configuration을 전달한다. 원본 Tool/Deployment YAML을 수정하거나 복사하지 않는다.
+
+GUI의 기본 설정과 접을 수 있는 고급 설정에서 선택 모드에 적용되는 값을 입력한다. 변경값은 굵은 색상으로 표시하며 기본값 복원으로 되돌린다. 모드·Tool 변경 시 입력값은 해당 Profile 기본값으로 초기화한다. 입력은 실행별로만 적용하며 저장하지 않는다. 초기 기본 파지력은 실행 시작 시 제어 기본값을 초기화하며, 일반 PICK에서는 자재별 GripForcePolicy가 계산해 전달하는 작업별 파지력 명령이 우선한다. GUI 값으로 작업 파지력을 고정하거나 자재별 힘 계산 정책을 변경하지 않는다. Bringup이 허용된 수치 항목과 범위, 마찰계수 관계를 검증한 뒤 동일한 실행 snapshot에 포함한다. 실행 중에는 편집과 복원을 잠근다. 미보정 물리 튜닝값은 실제 장치 보정값이나 파지 성공의 증거가 아니다.
 
 CLI/Script Editor에서는 기존 export CLI에 선택을 전달한다. RB5는 Profile을 `rb5_850_profile.yaml`로 바꾼다.
 

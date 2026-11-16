@@ -324,13 +324,13 @@ def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
 
 
 @pytest.mark.parametrize('label,pair', [
-    ('Logical Snap', ['logical', 'fixed_attach']),
-    ('Physical Snap', ['physics', 'fixed_attach']),
-    ('Physical Real', ['physics', 'physical']),
+    ('Logical Attach', ['logical', 'fixed_attach']),
+    ('Physical Attach', ['physics', 'fixed_attach']),
+    ('Physics', ['physics', 'physical']),
 ])
 def test_tool_mode_presets_export_one_shared_selection(window, monkeypatch, label, pair):
     combo = window.tool_mode
-    assert combo.currentText() == 'Logical Snap'
+    assert combo.currentText() == 'Logical Attach'
     combo.setCurrentIndex(combo.findText(label))
     assert combo.currentData() == pair
     assert window.isaac.isEnabled()
@@ -362,3 +362,33 @@ def test_mode_choices_follow_selected_tool_profile(window, tmp_path):
     assert window.tool_mode.count() == 1
     assert window.tool_mode.toolTip() == 'Selected Tool description'
     assert not window.isaac.isEnabled()  # No registered deployment claims this test Tool.
+
+
+def test_grasp_parameters_export_reset_and_mode_scope(window, tmp_path):
+    window.parameter_edits['move_duration_s'].setValue(0.75)
+    entry = window.selection()
+    destination = launcher.export_selection(entry, tmp_path / 'logical.json')
+    document = json.loads(destination.read_text())
+    assert document['configuration']['tool']['runtime']['move_duration_s'] == 0.75
+    window.reset_parameters.click()
+    assert window.parameter_edits['move_duration_s'].value() == 0.4
+    window.tool_mode.setCurrentText('Physics')
+    assert 'move_duration_s' not in window.parameter_edits
+    window.parameter_edits['physics.speed_fraction'].setValue(0.25)
+    window.parameter_edits['physics.contact_material.dynamic_friction'].setValue(2.)
+    assert not window.isaac.isEnabled()
+    window.parameter_edits['physics.contact_material.dynamic_friction'].setValue(0.5)
+    destination = launcher.export_selection(window.selection(), tmp_path / 'physics.json')
+    runtime = json.loads(destination.read_text())['configuration']['tool']['runtime']
+    assert runtime['physics']['speed_fraction'] == 0.25
+    assert runtime['mode_id'] == 'physical_real'
+    # Export does not rewrite the selected owner profile.
+    assert launcher.read(window.selectors['tool'].currentData())['runtime']['physics']['speed_fraction'] == 0.5
+
+
+def test_grasp_parameter_producer_rejects_invalid_overrides(window, tmp_path):
+    entry = window.selection()
+    for parameters in ({'physics.speed_fraction': 0.3}, {'move_duration_s': float('nan')},
+                       {'move_duration_s': -1}, {'primary_joint': 1}):
+        with pytest.raises(ValueError):
+            launcher.export_selection(dict(entry, tool_parameters=parameters), tmp_path / 'bad.json')
