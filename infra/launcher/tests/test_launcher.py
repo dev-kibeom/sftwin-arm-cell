@@ -159,11 +159,12 @@ def test_experimental_hcr14_is_selectable_without_replacing_default(tmp_path):
     assert exported['configuration']['tool']['tool_id'] == 'robotiq_2f85'
 
 
-def test_c10_model_experiment_is_separate_from_grasp_deployments():
+@pytest.mark.parametrize('robot_id', ['m0609', 'hcr14'])
+def test_c10_model_experiment_is_separate_from_grasp_deployments(robot_id):
     from launcher import model_experiments
     from arm_cell_bringup.model_experiment import load_model_experiment
     entries = model_experiments(ROOT)
-    c10 = next(entry for entry in entries if entry['profile'].stem == 'm0609_hand_e_c10')
+    c10 = next(entry for entry in entries if entry['profile'].stem == f'{robot_id}_hand_e_c10')
     config = load_model_experiment(c10['profile'])
     assert config['execution_scope'] == 'model_only'
     assert not config['tool']['runtime']['supported_combinations']

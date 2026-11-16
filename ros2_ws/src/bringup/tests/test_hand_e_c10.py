@@ -11,12 +11,13 @@ ROOT = Path(__file__).resolve().parents[4]
 EXPERIMENT = ROOT / 'ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10.yaml'
 
 
-def test_c10_assembly_and_radial_motion():
+@pytest.mark.parametrize('robot_id', ['m0609', 'hcr14'])
+def test_c10_assembly_and_radial_motion(robot_id):
     from arm_cell_bringup.model_experiment import load_model_experiment, joint_targets
-    config = load_model_experiment(EXPERIMENT)
+    config = load_model_experiment(EXPERIMENT.with_name(f'{robot_id}_hand_e_c10.yaml'))
     model = config['model_configuration']
     urdf = ET.fromstring(xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml())
-    assert urdf.get('name') == 'm0609_hand_e_c10'
+    assert urdf.get('name') == f'{robot_id}_hand_e_c10'
     assert len(config['tool']['runtime']['joint_model']) == 3
     assert config['tool']['runtime']['supported_combinations'] == []
     assert config['tool']['runtime']['capabilities'] == ['joint_position']
