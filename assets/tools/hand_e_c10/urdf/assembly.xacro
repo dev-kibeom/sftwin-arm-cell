@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="robotiq_hand_e_c10_macro.urdf.xacro"/>
+  <xacro:macro name="hand_e_c10_assembly" params="mesh_dir">
+    <xacro:robotiq_gripper name="hand_e_c10" prefix="gripper_" parent="tool_mount"
+        mesh_dir="${mesh_dir}" include_ros2_control="false">
+      <!-- Direct housing-back-face mount: no unmodelled vendor coupling. -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:robotiq_gripper>
+    <link name="sf_grasp_tcp"/>
+    <joint name="gripper_to_sf_grasp_tcp" type="fixed">
+      <parent link="gripper_tcp_link"/><child link="sf_grasp_tcp"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>

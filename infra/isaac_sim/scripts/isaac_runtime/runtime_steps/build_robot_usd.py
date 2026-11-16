@@ -262,9 +262,9 @@ def build_usd_from_urdf():
 def validate_isaac_gripper_import():
     """
     Verify the assumptions required by the simplified SF-Twin gripper model:
-      1) all selected Assembly revolute joints still exist;
+      1) all selected Assembly joints still exist;
       2) no PhysX mimic attributes were authored on those joints;
-      3) each joint remains a revolute joint for the next controller step.
+      3) each joint retains its selected revolute/prismatic type.
 
     This function intentionally does not alter the generated USD.
     """
@@ -279,12 +279,16 @@ def validate_isaac_gripper_import():
 
     mimic_attrs_found = []
 
-    for joint_name in MODEL.revolute_joints:
+    selected_joints = [(name, UsdPhysics.RevoluteJoint, 'angular')
+                       for name in MODEL.revolute_joints]
+    selected_joints += [(name, UsdPhysics.PrismaticJoint, 'linear')
+                        for name in MODEL.prismatic_joints]
+    for joint_name, schema, drive_type in selected_joints:
         prim = find_joint_prim(stage, joint_name)
-        joint = UsdPhysics.RevoluteJoint(prim)
+        joint = schema(prim)
 
         if not joint:
-            raise RuntimeError(f"[USD Validate] Not a revolute joint: {prim.GetPath()}")
+            raise RuntimeError(f"[USD Validate] Incorrect joint type ({drive_type}): {prim.GetPath()}")
 
         mimic_attrs = [
             attr.GetName()
@@ -295,7 +299,7 @@ def validate_isaac_gripper_import():
         if mimic_attrs:
             mimic_attrs_found.append((prim.GetPath(), mimic_attrs))
 
-        drive = UsdPhysics.DriveAPI.Get(prim, "angular")
+        drive = UsdPhysics.DriveAPI.Get(prim, drive_type)
         drive_state = "present" if drive else "none"
 
         print(
@@ -314,7 +318,7 @@ def validate_isaac_gripper_import():
 
     print(
         f">>> [SUCCESS] Assembly import validated: "
-        f"{len(MODEL.revolute_joints)} revolute joints present, PhysX mimic absent."
+        f"{len(selected_joints)} selected joints present, PhysX mimic absent."
     )
 
 

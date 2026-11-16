@@ -13,6 +13,7 @@ class ModelBuildConfiguration:
     generated_urdf: Path
     usd: Path
     revolute_joints: tuple
+    prismatic_joints: tuple = ()
 
     @classmethod
     def from_runtime(cls, configuration, project_root):
@@ -34,6 +35,7 @@ class ModelBuildConfiguration:
             assets / 'urdf/generated' / f'{identity}.urdf',
             assets / 'usd' / f'{identity}_generated.usd',
             tuple(binding.get('revolute_joints', ())),
+            tuple(binding.get('prismatic_joints', ())),
         )
 
     @property

@@ -226,6 +226,8 @@ def write_recipes(recipes, output_root=None):
 def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=None, tool_grasp=None, tool_parameters=None):
     path = Path(path).expanduser().resolve()
     config = read(path)
+    if config.get('kind') == 'arm-cell-model-experiment':
+        raise ValueError('Use the model experiment launcher; production runtime is unsupported')
     if config.get('kind') == 'arm-cell-runtime-configuration':
         if config.get('schema_version') != 1:
             raise ValueError('Unsupported runtime configuration schema')
