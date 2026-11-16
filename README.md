@@ -371,5 +371,9 @@ M0609의 기본형·연장형에는 `--internal-grasp`로 고정 티칭 자세 �
 실험(Logical Attach)을 실행할 수 있습니다.
 자세한 내용은 [C10 모델 및 라이브 실험 안내](assets/robots/m0609_hand_e_c10/README.md)를 참조하세요.
 
+17 mm Tape Roll의 수평 Physical Grasp는 별도 [Tape Roll 실험 플러그인](infra/isaac_sim/scripts/tape_roll_cell/README.md)으로
+실행합니다. M0609+C10 기본형·Long이 같은 접촉 기반 전략과 공통 Task BT를 사용하며,
+운영 Cell Profile·Vision·Mission 통합은 제공하지 않습니다.
+
 사진을 참고한 **100 mm 연장 핑거**는 별도 M0609·HCR-14 모델 실험 항목으로 제공합니다.
 기본 C10 모델은 유지하며, 치수·물성 가정과 실행법은 [연장 핑거 안내](assets/tools/hand_e_c10/README.md)를 참조하세요.

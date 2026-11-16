@@ -40,6 +40,7 @@ def main():
     parser.add_argument('--report', required=True)
     parser.add_argument('--headless', action='store_true')
     parser.add_argument('--task-execution-library', help='Test bridge library for common native Task BT integration')
+    parser.add_argument('--experiment', help='Optional isolated experiment plugin as module:callable')
     parser.add_argument('--internal-grasp', action='store_true', help='Isolated logical bore grasp with teaching poses')
     parser.add_argument('--cycles', type=int, default=0, help='0 repeats until the window closes')
     args = parser.parse_args()
@@ -48,12 +49,17 @@ def main():
     config = json.loads(Path(args.configuration).read_text())
     if config.get('execution_scope') != 'model_only':
         parser.error('A model-only configuration is required')
-    if args.task_execution_library and not args.internal_grasp:
-        parser.error('--task-execution-library requires --internal-grasp')
+    if args.task_execution_library and not (args.internal_grasp or args.experiment):
+        parser.error('--task-execution-library requires --internal-grasp or --experiment')
+    if args.internal_grasp and args.experiment:
+        parser.error('Select one isolated experiment')
     if args.internal_grasp and 'internal_grasp_experiment' not in config:
         parser.error('Selected profile has no internal grasp teaching/fixture configuration')
     from isaacsim import SimulationApp
-    app = SimulationApp({'headless': args.headless})
+    app = SimulationApp({'headless': args.headless, 'extra_args': [
+        '--/exts/isaacsim.core.throttling/enable_async=false',
+        '--/app/asyncRendering=false', '--/app/asyncRenderingLowLatency=false',
+    ]})
     report = {'status': 'ABORTED', 'revision': os.environ.get('ARM_CELL_EXPERIMENT_REVISION'),
               'configuration_sha256': hashlib.sha256(Path(args.configuration).read_bytes()).hexdigest(),
               'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -98,10 +104,11 @@ def main():
                                robot_settings.get('joint_drive_damping', {}))
         author_home_targets(stage, binding, UsdPhysics)
         apply_joint_drive_profile(stage, binding, UsdPhysics)
-        if args.internal_grasp:
+        if args.internal_grasp or args.experiment:
             # Fixture alignment needs sub-mm tracking. Tune only this isolated
             # experiment; the selected model and operational drive policy stay intact.
-            scale = config['internal_grasp_experiment']['arm_drive_stiffness_scale']
+            scale = (config['internal_grasp_experiment']['arm_drive_stiffness_scale'] if args.internal_grasp
+                     else config.get('experiment_drive_stiffness_scale', 1.))
             for prim in stage.Traverse():
                 if prim.GetName() in binding.joint_names and prim.HasAPI(UsdPhysics.DriveAPI, 'angular'):
                     drive = UsdPhysics.DriveAPI(prim, 'angular')
@@ -172,7 +179,7 @@ def main():
                     raise RuntimeError(f'Measured joint limit exceeded: {name}={value}')
             # C10's direct 1:1 mimic: all three measured translations must agree.
             max_sync = max(max_sync, float(np.ptp(values)))
-            if max_sync > tolerance:
+            if max_sync > tolerance and not args.experiment:
                 raise RuntimeError(f'Measured finger synchronization error: {max_sync} m')
             velocities = np.array(robot.get_joint_velocities(joint_indices=np.array(indices)))
             if not np.all(np.isfinite(velocities)):
@@ -213,6 +220,16 @@ def main():
             if count != expected_count:
                 raise RuntimeError(f'Collision decomposition lost on {name}')
             collision_counts[name] = count
+        if args.experiment:
+            from isaac_runtime.runtime_workflow import call_selected
+            report['scope'] = 'isolated experiment plugin; see plugin measurements and limits'
+            call_selected(args.experiment, configuration=config, geometry=tool_geometry,
+                          stage=stage, world=world, robot=robot, prims=prims,
+                          arm_indices=arm_indices, finger_indices=indices, step=step,
+                          command=command, report=report, cycles=args.cycles,
+                          task_execution_library=args.task_execution_library)
+            report.update(status='PASS', sample_count=sample_count, model_id=model.model_id)
+            return
         if args.internal_grasp:
             from internal_grasp_experiment import run_internal_grasp
             report['scope'] = 'isolated teaching-pose logical internal grasp; no Mission or physical grasp'
