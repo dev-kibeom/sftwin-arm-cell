@@ -11,12 +11,13 @@ import time
 
 from PySide6.QtCore import QLockFile, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
-                              QLabel, QMainWindow, QPushButton,
+                              QLabel, QMainWindow, QPushButton, QDoubleSpinBox, QGroupBox, QScrollArea,
                               QVBoxLayout, QWidget)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
+from arm_cell_bringup.tool_parameters import available_fields, parameter_value, apply_tool_parameters
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 
 
@@ -85,7 +86,7 @@ def tool_mode_choices(profile):
 def export_selection(entry, destination):
     # No parallel configuration engine or edited copies of source profiles.
     return export_runtime_configuration(entry['profile'], destination,
-        tool_actuator=entry.get('tool_actuator'), tool_grasp=entry.get('tool_grasp'))
+        tool_actuator=entry.get('tool_actuator'), tool_grasp=entry.get('tool_grasp'), tool_parameters=entry.get('tool_parameters'))
 
 
 def terminal_command(name, slave, master):
@@ -147,9 +148,20 @@ class Launcher(QMainWindow):
             combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
         self.tool_mode = QComboBox()
-        form.insertRow(2, 'Tool Mode', self.tool_mode)
+        form.insertRow(2, 'Grasp Mode', self.tool_mode)
         self.selectors['tool'].currentIndexChanged.connect(self.refresh_tool_modes)
-        self.tool_mode.currentIndexChanged.connect(self.validate)
+        self.tool_mode.currentIndexChanged.connect(self.refresh_parameters)
+        self.parameter_edits = {}
+        self.parameter_panel = QWidget()
+        self.parameter_layout = QVBoxLayout(self.parameter_panel)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.parameter_panel)
+        layout.addWidget(scroll)
+        self.reset_parameters = QPushButton('기본값 복원')
+        self.reset_parameters.clicked.connect(self.refresh_parameters)
+        layout.addWidget(self.reset_parameters)
+        self.resize(760, 650)
         self.refresh_tool_modes()
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
@@ -186,6 +198,44 @@ class Launcher(QMainWindow):
         default = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
         self.tool_mode.setCurrentIndex(self.tool_mode.findData(default))
         self.tool_mode.blockSignals(False)
+        self.refresh_parameters()
+
+    def refresh_parameters(self):
+        if not hasattr(self, 'parameter_layout'):
+            return
+        while self.parameter_layout.count():
+            item = self.parameter_layout.takeAt(0)
+            item.widget().deleteLater()
+        self.parameter_edits = {}
+        runtime = read(self.selectors['tool'].currentData())['runtime']
+        pair = self.tool_mode.currentData()
+        if pair:
+            runtime = dict(runtime, actuator=pair[0], grasp=pair[1])
+        basic = QGroupBox('기본 설정 — 이번 실행에 적용')
+        advanced = QGroupBox('고급 설정 — 시뮬레이션 튜닝')
+        advanced.setCheckable(True)
+        advanced.setChecked(False)
+        forms = [QFormLayout(basic), QFormLayout(advanced)]
+        for path, label, minimum, maximum, is_advanced, _ in available_fields(runtime):
+            edit = QDoubleSpinBox()
+            edit.setDecimals(6)
+            edit.setRange(minimum, maximum)
+            default = parameter_value(runtime, path)
+            edit.setValue(default)
+            edit.setToolTip(f'{path}\n기본값: {default} | 범위: {minimum}–{maximum}')
+            edit.valueChanged.connect(lambda value, widget=edit, initial=default: widget.setStyleSheet(
+                'font-weight: bold; color: #b06000;' if value != initial else ''))
+            edit.valueChanged.connect(self.validate)
+            forms[int(is_advanced)].addRow(label, edit)
+            self.parameter_edits[path] = edit
+        self.parameter_layout.addWidget(basic)
+        self.parameter_layout.addWidget(advanced)
+        # Collapsed advanced fields remain active settings, but are hidden.
+        def show_advanced(checked):
+            for row in range(forms[1].rowCount()):
+                forms[1].setRowVisible(row, checked)
+        advanced.toggled.connect(show_advanced)
+        show_advanced(False)
         if hasattr(self, 'status'):
             self.validate()
 
@@ -194,7 +244,12 @@ class Launcher(QMainWindow):
         pair = self.tool_mode.currentData()
         if pair not in self.mode_pairs:
             raise ValueError('Unsupported Tool actuator/grasp combination')
-        return dict(entry, tool_actuator=pair[0], tool_grasp=pair[1])
+        runtime = read(self.selectors['tool'].currentData())['runtime']
+        parameters = {path: edit.value() for path, edit in self.parameter_edits.items()
+                      if edit.value() != parameter_value(runtime, path)}
+        runtime.update(actuator=pair[0], grasp=pair[1])
+        apply_tool_parameters(runtime, parameters)
+        return dict(entry, tool_actuator=pair[0], tool_grasp=pair[1], tool_parameters=parameters)
 
     def validate(self):
         self.tool_mode.setToolTip(self.tool_mode.currentData(Qt.ToolTipRole) or '')
@@ -209,6 +264,8 @@ class Launcher(QMainWindow):
         active = bool(self.processes or self.terminals) or self.stopping
         for combo in (*self.selectors.values(), self.tool_mode):
             combo.setEnabled(not active)
+        self.parameter_panel.setEnabled(not active)
+        self.reset_parameters.setEnabled(not active)
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
         self.stop.setEnabled(active and not self.stopping)
