@@ -7,7 +7,7 @@ def author_presentation(stage, layout, roll, root, view, environment):
     path = root + '/Presentation'
     UsdGeom.Xform.Define(stage, path)
     palette = {
-        'floor': ((.045, .29, .16), .28, 0.),
+        'floor': ((.012, .11, .035), .60, 0.),
         'frame': ((.18, .21, .25), .45, .5),
         'steel': ((.48, .53, .58), .32, .7),
         'paper': ((.65, .43, .20), .85, 0.),
