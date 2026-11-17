@@ -69,9 +69,8 @@ int main(int argc, char ** argv)
   }
   const auto configured_cycles = arm_cell_task_execution::parse_configured_grasp_cycles(
     motion->declare_parameter<std::string>("configured_grasp_cycles_json", "{}", strategy_descriptor));
-  auto configured_action_server =
-    std::make_shared<arm_cell_task_execution::ExecuteConfiguredGraspActionServer>(
-    motion.get(), motion->motion_core(), task_executor, configured_cycles);
+  std::shared_ptr<arm_cell_task_execution::ExecuteConfiguredGraspActionServer>
+    configured_action_server;
   auto pnp_action_server = std::make_shared<arm_cell_task_execution::ExecutePnpActionServer>(
     motion.get(), motion->motion_core(), task_executor);
   auto disturb_action_server =
@@ -99,6 +98,17 @@ int main(int argc, char ** argv)
   std::thread executor_thread([&executor]() {executor.spin();});
   try {
     motion->initialize_backend();
+    while (rclcpp::ok() && !motion->backend_ready()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    // Configured work must not advertise a usable Task before the production
+    // Backend completes initialization. Other existing action lifecycles stay
+    // under their current owners.
+    if (rclcpp::ok()) {
+      configured_action_server =
+        std::make_shared<arm_cell_task_execution::ExecuteConfiguredGraspActionServer>(
+        motion.get(), motion->motion_core(), task_executor, configured_cycles);
+    }
   } catch (...) {
     initialization_error = std::current_exception();
     rclcpp::shutdown();

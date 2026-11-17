@@ -64,3 +64,56 @@ def test_ros_paths_begin_at_robot_home_and_use_native_configured_tasks(suffix):
     assert entry['joint_path'][0]!=config['home_joint_positions']
     assert config['execution_scope']=='operational'
     assert 'vision' not in config
+
+
+@pytest.mark.parametrize('suffix',['','_long'])
+def test_indexed_supply_reuses_fixed_datum_and_connected_return_path(suffix):
+    config,_=selected(suffix)
+    assert config['cell']['motion_preparation']['ready'],config['cell']['motion_preparation']
+    slots=config['cell']['tape_roll']['slots']
+    first=slots[0]
+    for slot in slots:
+        assert slot['supply_center_m']==first['supply_center_m']
+        assert slot['receiver_center_m']==first['receiver_center_m']
+    paths=slots[1]['trajectories']
+    previous=first['teaching']['retreat']
+    for segment in ('return_place','return_turn','return_clearance','return_forward','approach'):
+        assert paths[segment][0]==pytest.approx(previous,abs=1e-8)
+        previous=paths[segment][-1]
+    assert previous==pytest.approx(first['teaching']['approach'],abs=1e-8)
+
+
+@pytest.mark.parametrize('suffix',['','_long'])
+def test_tool_turn_keeps_the_actual_mount_position_fixed(suffix):
+    config,urdf=selected(suffix)
+    paths=config['cell']['tape_roll']['slots'][0]['trajectories']
+    names=config['robot']['motion']['arm_joint_names']
+    positions=[link_transforms(urdf,dict(zip(names,q)))['tool_mount'][:3,3] for q in paths['turn']]
+    assert positions==pytest.approx(np.repeat([positions[0]],len(positions),axis=0),abs=1e-5)
+
+
+def test_cartesian_timing_extends_to_fit_selected_robot_limits():
+    from tape_roll_cell.configuration import _timed_path
+    path=[[0.]*6,[.05,0.,0.,0.,0.,0.],[.4,0.,0.,0.,0.,0.]]
+    result=_timed_path([path,list(reversed(path))],1.,[1.]*6,[2.]*6)
+    samples=np.array(result['joint_path']);dt=result['duration_s']/(len(samples)-1)
+    velocity=np.diff(samples,axis=0)/dt
+    acceleration=np.diff(np.vstack([np.zeros(6),velocity,np.zeros(6)]),axis=0)/dt
+    assert result['duration_s']>=1.
+    assert samples[0]==pytest.approx(path[0])
+    assert samples[-1]==pytest.approx(path[0])
+    assert np.max(samples[:,0])==pytest.approx(path[-1][0])
+    assert np.max(abs(velocity))<=.3
+    assert np.max(abs(acceleration))<=.4
+
+
+def test_acceleration_retiming_does_not_scale_duration_as_acceleration():
+    from tape_roll_cell.configuration import _timed_path
+    result=_timed_path([[[0.],[1.]]],.1,[100.],[5.])
+    samples=np.array(result['joint_path']);dt=.02
+    velocity=np.diff(samples,axis=0)/dt
+    acceleration=np.diff(np.vstack([np.zeros(1),velocity,np.zeros(1)]),axis=0)/dt
+    assert np.max(abs(acceleration))<=1.
+    # A cubic unit stroke under 1 rad/s² needs about sqrt(6) seconds, not
+    # the tens of seconds produced by a linear acceleration-ratio multiplier.
+    assert 2.4 < result['duration_s'] < 3.5

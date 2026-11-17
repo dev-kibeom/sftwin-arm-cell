@@ -45,6 +45,18 @@ class ConfiguredTapeSupply(TapeSupply):
         self.epoch = uuid.uuid4().hex
         self.reservation_id = ''
         self._completed_token = None
+        self._loaded = True
+
+    def unload(self):
+        self._loaded = False
+        self._occupied = [False]*self._count
+        self._selected = None
+        self.reservation_id = ''
+
+    def snapshot(self):
+        state = super().snapshot()
+        if not getattr(self,'_loaded',True):state.update(completed=0,exhausted=False)
+        return state
 
     def _response(self, success, detail=''):
         snapshot = self.snapshot()

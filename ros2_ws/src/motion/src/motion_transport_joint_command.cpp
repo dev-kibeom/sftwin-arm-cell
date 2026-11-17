@@ -412,7 +412,8 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
         request, &taught.joint_path.front(), planning_time_s_, false, &entry, &scales))
     {
       const auto cause = interrupted();
-      RCLCPP_WARN(node_->get_logger(), "Named path entry planning failed motion=%s", motion.c_str());
+      RCLCPP_WARN(node_->get_logger(), "Named path entry planning failed motion=%s reason=%s",
+        motion.c_str(), place_recovery_waypoint_reason_.c_str());
       if (cause != Code::TASK_RESULT_SUCCESS) {return cause;}
       const auto failure = normalized_failure_result();
       return failure;

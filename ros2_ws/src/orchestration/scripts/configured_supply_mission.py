@@ -61,8 +61,14 @@ def main(args=None):
             self.create_subscription(ConfiguredSupplyState,'/cell/configured_supply/state',self.on_supply,10,callback_group=self.group)
             self.cell=self.create_client(ConfiguredSupply,'/cell/configured_supply',callback_group=self.group)
             self.task=ActionClient(self,ExecuteConfiguredGrasp,'/task_execution/execute_configured_grasp',callback_group=self.group)
-            self.server=ActionServer(self,ExecuteCycle,'/orchestration/execute_cycle',execute_callback=self.execute,
-                goal_callback=self.accept,cancel_callback=lambda _:CancelResponse.ACCEPT,callback_group=self.group)
+            self.server=None
+            self.startup_timer=self.create_timer(.1,self.advertise_when_ready)
+
+        def advertise_when_ready(self):
+            if self.server is None and self.task.server_is_ready() and self.cell.service_is_ready():
+                self.server=ActionServer(self,ExecuteCycle,'/orchestration/execute_cycle',execute_callback=self.execute,
+                    goal_callback=self.accept,cancel_callback=lambda _:CancelResponse.ACCEPT,callback_group=self.group)
+                self.startup_timer.cancel()
 
         def on_safety(self,state):self.safety=state;self.safety_at=time.monotonic()
         def on_supply(self,state):self.supply=state;self.supply_at=time.monotonic()
@@ -141,6 +147,12 @@ def main(args=None):
                         if handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
                         elif not self.ready() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                         if interrupted is not None and not cancel_sent:
+                            now=time.monotonic()
+                            self.get_logger().warning(
+                                f'Configured Mission interrupted: reason={interrupted} '
+                                f'safety_age_s={now-self.safety_at:.3f} '
+                                f'supply_age_s={now-self.supply_at:.3f} '
+                                f'safety={self.safety} supply={self.supply}')
                             child.cancel_goal_async();cancel_sent=True;cancel_deadline=time.monotonic()+10.
                         if cancel_deadline and time.monotonic()>cancel_deadline:
                             raise PendingTaskUncertain('Task terminal uncertain after interruption; reservation retained until Stop')

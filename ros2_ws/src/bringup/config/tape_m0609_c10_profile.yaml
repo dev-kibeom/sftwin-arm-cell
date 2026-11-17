@@ -17,5 +17,6 @@ motion_configuration: package://arm_cell_motion/config/planning.yaml
 mission: package://arm_cell_bringup/config/missions/tape/TapeRoll17.yaml
 motion:
   trajectory_goal_tolerance_rad: 0.003
+  holding_confirmation_timeout_ms: 8000
 launcher:
   validation_status: live-pending

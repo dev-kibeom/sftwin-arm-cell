@@ -10,6 +10,16 @@ import sys
 import time
 
 
+def supply_announced_for_mission(state, fresh, published_epoch):
+    """Advertise admission only after this valid epoch has been published.
+
+    The consumer still owns admission. A new docking observation must cross
+    the Cell state topic before its corresponding Mission request is sent.
+    """
+    return bool(fresh and state and state.get('valid') and state.get('supply_epoch')
+                and state['supply_epoch']==published_epoch)
+
+
 class ConfiguredSupplyClient:
     def __init__(self, sock, process=None):
         self.socket, self.process = sock, process
@@ -145,7 +155,7 @@ def serve(fd):
                             identity = packet.get('correlation_id')
                             if identity in pending:
                                 replies[identity] = packet['response']
-                        elif packet.get('op') == 'start_cycle':
+                        elif packet.get('op') in ('start_cycle','cancel_cycle'):
                             operator_requests.append(packet)
                         elif packet.get('op') == 'state':
                             cache.update(state=packet['state'], scene=packet.get('scene'), received_at=time.monotonic())
@@ -165,15 +175,18 @@ def serve(fd):
     from rclpy.action import ActionClient
     from arm_cell_interfaces.action import ExecuteCycle
     cycle = ActionClient(node, ExecuteCycle, '/orchestration/execute_cycle')
-    active_cycle = {'goal':None,'pending':False}
+    active_cycle = {'goal':None,'pending':False,'request_id':None,'cancel':False}
     def cycle_response(future):
         goal = future.result();active_cycle['pending']=False
         if goal is None or not goal.accepted:
-            send(dict(op='mission_status',text='Mission 요청 거부: ROS/Safety/공급 준비를 확인하세요.'));return
+            send(dict(op='mission_result',request_id=active_cycle['request_id'],success=False,detail='Mission 요청 거부: ROS/Safety/공급 준비를 확인하세요.'));return
         active_cycle['goal']=goal
+        if active_cycle['cancel']:goal.cancel_goal_async()
         result = goal.get_result_async()
         def finished(future):
             outcome=future.result();active_cycle['goal']=None
+            send(dict(op='mission_result',request_id=active_cycle['request_id'],
+                success=outcome.status==4 and outcome.result.exit_reason.value==7,detail=outcome.result.diagnostic_detail))
             send(dict(op='mission_status',text='Mission 종료: '+outcome.result.diagnostic_detail))
         result.add_done_callback(finished)
     def service(request, response):
@@ -203,16 +216,36 @@ def serve(fd):
             with condition:
                 pending.discard(identity)
         return response
+    from arm_cell_interfaces.msg import SafetyState
+    safety={'state':None,'at':0.}
+    def safety_received(message):safety.update(state=message,at=time.monotonic())
+    node.create_subscription(SafetyState,'/safety/state',safety_received,10)
     node.create_service(ConfiguredSupply, '/cell/configured_supply', service,
                         callback_group=ReentrantCallbackGroup())
+    published_supply={'epoch':None}
     def publish():
+        with condition:
+            announced=cache['state']
+            fresh=cache['connected'] and time.monotonic()-cache['received_at']<=.5
+        safe=safety['state']
+        available=(safe is not None and time.monotonic()-safety['at']<.5 and safe.valid and
+            safe.required_inputs_fresh and safe.motion_envelope_valid and safe.motion_capability.value==2 and
+            safe.max_velocity_scale>0 and safe.max_acceleration_scale>0 and cycle.server_is_ready() and
+            active_cycle['goal'] is None and not active_cycle['pending'] and
+            supply_announced_for_mission(announced,fresh,published_supply['epoch']))
+        send(dict(op='mission_available',ready=available))
         with condition:
             commands=list(operator_requests);operator_requests.clear()
         for packet in commands:
+            if packet.get('op')=='cancel_cycle':
+                active_cycle['cancel']=True
+                if active_cycle['goal'] is not None:active_cycle['goal'].cancel_goal_async()
+                continue
             if active_cycle['goal'] is not None or active_cycle['pending'] or not cycle.server_is_ready():
-                send(dict(op='mission_status',text='Mission 실행 중이거나 ROS 준비 전입니다.'));continue
+                send(dict(op='mission_result',request_id=packet.get('request_id'),success=False,detail='Mission 실행 중이거나 ROS 준비 전입니다.'));continue
             goal=ExecuteCycle.Goal();goal.target_id=str(packet['target_id']);goal.quantity=int(packet['quantity'])
-            active_cycle['pending']=True;cycle.send_goal_async(goal).add_done_callback(cycle_response)
+            active_cycle.update(pending=True,request_id=packet.get('request_id'),cancel=False)
+            cycle.send_goal_async(goal).add_done_callback(cycle_response)
         with condition:
             state = dict(cache['state']) if cache['state'] else None
             scene = cache['scene']
@@ -223,8 +256,12 @@ def serve(fd):
             if key in message.get_fields_and_field_types(): setattr(message,key,value)
         message.valid = message.valid and fresh
         if not fresh: message.diagnostic_detail = 'isaac_state_stale'
+        if published_supply['epoch'] is not None and not message.valid:
+            print('Configured supply validity lost: '+str(message.diagnostic_detail)+
+                  f' owner_state_age_s={time.monotonic()-cache["received_at"]:.3f}', flush=True)
         message.header.stamp = node.get_clock().now().to_msg()
         publisher.publish(message)
+        published_supply['epoch']=message.supply_epoch if message.valid else None
         if fresh and scene is not None: planning.publish(scene)
     node.create_timer(.1, publish)
     thread = threading.Thread(target=reader, daemon=True)

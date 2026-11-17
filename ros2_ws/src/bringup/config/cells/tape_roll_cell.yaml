@@ -11,12 +11,12 @@ isaac:
 tape_roll:
   insertion_depth_m: 0.02
   supply_center_m:
-  - 0.32
-  - 0.45
+  - 0.53
+  - 0.35
   - 0.5
   extract_lift_m: 0.015
   release_clearance_m: 0.004
-  move_duration_s: 5.0
+  move_duration_s: 1.0
   teaching:
     hand_e_c10:
       approach:
@@ -106,12 +106,16 @@ tape_roll:
       - -0.0459916126
   material: package://arm_cell_bringup/config/materials/tape_roll/17mm.yaml
   place:
-    columns: 3
-    spacing_m: 0.18
-    first_center_xy_m: [0.25, -0.5]
-    surface_z_m: 0.28
-    approach_clearance_m: 0.12
+    first_center_xy_m: [0.3, -0.25]
+    surface_z_m: 0.3
+    approach_clearance_m: 0.08
     transport_height_m: 0.72
+    yaw_rad: 0.0
+    turn_position_m: [0.3, -0.25, 0.38]
+    tool_overrides:
+      hand_e_c10:
+        surface_z_m: 0.38
+        turn_position_m: [0.3, -0.25, 0.46]
   cartridge:
     slot_count: 15
     slot_spacing_m: 0.03
@@ -131,11 +135,28 @@ configured_supply:
   material_id: TapeRoll17
 presentation:
   overview:
-    eye: [1.45, -1.55, 1.2]
-    target: [0.3, 0.0, 0.25]
+    eye: [2.2, -2.1, 1.7]
+    target: [0.6, -0.35, 0.3]
 environment:
   floor_z_m: -0.3
   floor_thickness_m: 0.06
   floor_size_m: [6.0, 6.0]
   robot_support_top_z_m: 0.0
   robot_support_size_m: [0.32, 0.32]
+conveyor:
+  max_cartridges: 8
+  movement_timeout_s: 90.0
+  inlet_front_x_m: 1.12
+  minimum_front_x_m: 0.05
+  speed_m_s: 0.04
+  acceleration_m_s2: 0.06
+  position_tolerance_m: 0.002
+  settle_s: 0.25
+  drive_stiffness_n_m: 3000.0
+  drive_damping_ns_m: 300.0
+  drive_force_n: 120.0
+  infeed_length_m: 1.06
+  infeed_center_x_m: 1.09
+  outfeed_length_m: 1.3
+  outfeed_speed_m_s: 0.06
+  outfeed_pitch_m: 0.18

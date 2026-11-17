@@ -22,7 +22,7 @@ class PhysicalContactObserver:
                 collider1=str(self._path(header.collider1)) if hasattr(header, 'collider1') else None,
                 lost=header.type == self._lost,
                 points=[dict(position=tuple(point.position), normal=tuple(point.normal),
-                             impulse=tuple(point.impulse))
+                             impulse=tuple(point.impulse), separation_m=float(point.separation))
                         for point in data[header.contact_data_offset:header.contact_data_offset + header.num_contact_data]]))
 
     def advance(self):

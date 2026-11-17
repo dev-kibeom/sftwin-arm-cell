@@ -45,6 +45,7 @@ contact_objects:
   robot_mount: robot_riser
   pick_retract: amr_tray
 isaac:
+  ui_adapter: pnp_cnc_cell.ui_adapter:capabilities
   material_supply_factory: pnp_cnc_cell.cell_runtime:start_material_supply
   camera_snapshot: pnp_cnc_cell.runtime_entrypoints:snapshot_camera
   action_graph_builder: pnp_cnc_cell.runtime_entrypoints:build_action_graph

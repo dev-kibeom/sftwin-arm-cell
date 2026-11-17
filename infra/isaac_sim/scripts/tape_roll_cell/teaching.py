@@ -2,7 +2,11 @@
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation, Slerp
-from gripper_runtime.radial_geometry import origin_transform
+from gripper_runtime.radial_geometry import origin_transform, link_transforms
+
+
+class TeachingUnavailable(ValueError):
+    """A valid scene can exist without an executable Cartesian teaching."""
 
 
 class TeachingSolver:
@@ -43,34 +47,38 @@ class TeachingSolver:
                          Rotation.from_matrix(target[:3, :3].T @ actual[:3, :3]).as_rotvec()]
         solution = least_squares(error, seed, bounds=self.bounds, ftol=1e-12, xtol=1e-12, gtol=1e-12)
         if not solution.success or np.max(np.abs(error(solution.x))) > 1e-6:
-            raise ValueError('Unreachable Cell Cartesian teaching')
+            raise TeachingUnavailable('Unreachable Cell Cartesian teaching')
         return solution.x.tolist()
 
-    def path(self, start, finish):
+    def path(self, start, finish, *, pivot=None, mount_offset=None):
         a, b = self.fk(start), self.fk(finish)
         rotation = Slerp([0, 1], Rotation.from_matrix(np.array([a[:3, :3], b[:3, :3]])))
+        def target_at(fraction):
+            target=np.eye(4)
+            target[:3,:3]=rotation(fraction).as_matrix()
+            target[:3,3]=(a[:3,3]+fraction*(b[:3,3]-a[:3,3]) if pivot is None else
+                         pivot+target[:3,:3]@mount_offset)
+            return target
         # At most 2 mm Cartesian knots. Check interpolated joint midpoints too;
         # endpoints alone cannot establish straight axial insertion/extraction.
         angle = Rotation.from_matrix(a[:3, :3].T @ b[:3, :3]).magnitude()
         segments = max(1, int(np.ceil(np.linalg.norm(b[:3, 3]-a[:3, 3])/.002)),
                        int(np.ceil(angle/.05)))
+        if pivot is not None:
+            segments=max(segments,int(np.ceil(np.linalg.norm(mount_offset)*angle/.002)))
         knots = [list(start)]
         for fraction in np.linspace(0, 1, segments+1)[1:]:
-            target = np.eye(4)
-            target[:3, 3] = a[:3, 3]+fraction*(b[:3, 3]-a[:3, 3])
-            target[:3, :3] = rotation(fraction).as_matrix()
+            target = target_at(fraction)
             knots.append(self.solve(target, knots[-1]))
         def refine(left, right, low, high, depth=0):
             fraction = (low+high)/2
             actual = self.fk((np.array(left)+right)/2)
-            target = np.eye(4)
-            target[:3,3] = a[:3,3]+fraction*(b[:3,3]-a[:3,3])
-            target[:3,:3] = rotation(fraction).as_matrix()
+            target = target_at(fraction)
             angle_error = Rotation.from_matrix(target[:3,:3].T @ actual[:3,:3]).magnitude()
             if np.linalg.norm(actual[:3,3]-target[:3,3]) <= 5e-5 and angle_error <= 5e-5:
                 return [right]
             if depth >= 10:
-                raise ValueError('Cell Cartesian trajectory interpolation exceeds 50 um / 50 urad')
+                raise TeachingUnavailable('Cell Cartesian trajectory interpolation exceeds 50 um / 50 urad')
             middle = self.solve(target,(np.array(left)+right)/2)
             return (refine(left,middle,low,fraction,depth+1)+
                     refine(middle,right,fraction,high,depth+1))
@@ -97,30 +105,33 @@ def vertical_place_teaching(solver, reference, supply_center, receiver_center, l
     clearance = layout['place']['transport_height_m']
     target = solver.fk(taught['extract']).copy();target[2,3] = clearance
     taught['carry_lift'] = solver.solve(target,taught['extract'])
-    target[:3,:3] = Rotation.from_euler('x',np.pi).as_matrix()
-    taught['turn'] = solver.solve(target,taught['carry_lift'])
+    mount=link_transforms(solver.urdf,dict(zip(solver.names,taught['carry_lift'])))['tool_mount']
+    offset=target[:3,:3].T@(target[:3,3]-mount[:3,3])
+    downward=Rotation.from_euler('z',layout['place'].get('yaw_rad',0.)).as_matrix() @ Rotation.from_euler('x',np.pi).as_matrix()
+    pivot=np.array(layout['place']['turn_position_m'])-downward@offset
+    target[:3,3] = pivot+target[:3,:3]@offset
+    forward=solver.fk(taught['carry_lift']).copy()
+    forward[0,3]=target[0,3]
+    taught['carry_forward']=solver.solve(forward,taught['carry_lift'])
+    taught['turn_clearance'] = solver.solve(target,taught['carry_forward'])
+    target[:3,:3] = downward
+    target[:3,3] = layout['place']['turn_position_m']
+    taught['turn'] = solver.solve(target,taught['turn_clearance'])
     place = target.copy()
     place[:3,3] = np.array(receiver_center)+np.array([0.,0.,layout['release_clearance_m']-depth])
     target = place.copy();target[2,3] += layout['place']['approach_clearance_m']
     taught['transfer_clearance'] = solver.solve(target,taught['turn'])
     taught['transfer'] = solver.solve(place,taught['transfer_clearance'])
     taught['retreat'] = list(taught['transfer_clearance'])
-    starts = dict(lift=taught['insert'],extract=taught['lift'],carry_lift=taught['extract'],
-        turn=taught['carry_lift'],transfer_clearance=taught['turn'],transfer=taught['transfer_clearance'],
-        retreat=taught['transfer'])
-    if previous is None:
-        target = solver.fk(taught['approach']).copy();target[2,3] = clearance
-        entry = solver.solve(target,taught['approach'])
-        starts['approach'] = entry
-    else:
-        target = solver.fk(previous['retreat']).copy();target[2,3] = clearance
-        taught['return_clearance'] = solver.solve(target,previous['retreat'])
-        target[:3,:3] = solver.fk(taught['approach'])[:3,:3]
-        taught['return_turn'] = solver.solve(target,taught['return_clearance'])
-        target = solver.fk(taught['approach']).copy();target[2,3] = clearance
-        taught['supply_clearance'] = solver.solve(target,taught['return_turn'])
-        starts.update(return_clearance=previous['retreat'],return_turn=taught['return_clearance'],
-            supply_clearance=taught['return_turn'],approach=taught['supply_clearance'])
-    paths = {name:solver.path(start,taught[name]) for name,start in starts.items()}
-    paths['insert'] = solver.path(taught['approach'],taught['insert'])
+    target = solver.fk(taught['approach']).copy();target[2,3] = clearance
+    current = solver.solve(target,taught['approach'])
+    paths = {}
+    for name in ('approach','insert','lift','extract','carry_lift','carry_forward','turn_clearance','turn','transfer_clearance','transfer'):
+        paths[name] = solver.path(current,taught[name],pivot=pivot,mount_offset=offset) if name=='turn' else solver.path(current,taught[name])
+        # A Cartesian pose can have multiple joint solutions. Carry the actual
+        # continuous path endpoint forward, never an independently solved branch.
+        current = paths[name][-1]
+        taught[name] = list(current)
+    paths['retreat'] = list(reversed(paths['transfer']))
+    taught['retreat'] = list(paths['retreat'][-1])
     return taught,paths

@@ -12,20 +12,6 @@ def enable_operator_ui(*, configuration, namespace):
     viewport = get_active_viewport()
     if viewport is not None:
         viewport.camera_path = '/World/TapeRollCell/Presentation/OverviewCamera'
-    adapter=namespace['_material_supply_adapter']
-    window=ui.Window('Tape Handling Cell',width=400,height=160)
-    def start():
-        adapter.sidecar.send(dict(op='start_cycle',target_id=configuration['orchestration']['mission_target_id'],
-            quantity=sum(adapter.supply.snapshot()['occupied'])))
-        adapter.sidecar.flush_outgoing()
-    with window.frame:
-        with ui.VStack():
-            ui.Label('Tape Roll · Physical Real')
-            ui.Label('주황: 15롤 카트리지 · 청록: 수직 Place 수령대')
-            ui.Label('ROS와 Safety가 준비된 후 작업을 시작하세요.')
-            ui.Button('남은 카트리지 처리',clicked_fn=start)
-            ui.Label('진행 결과는 ROS Mission 로그에서 확인합니다.')
-    namespace['cell_operator_window']=window
 
 
 def graph_declaration(binding):

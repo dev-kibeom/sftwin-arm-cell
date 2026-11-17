@@ -108,3 +108,40 @@ def test_reserve_rejects_previous_session_and_active_lease():
     assert not second['success']
     assert supply.reservation_id == first['reservation_id']
     assert supply.snapshot()['completed'] == 0
+
+
+def test_empty_infeed_is_not_exhaustion_or_fifteen_completed_rolls():
+    supply=ConfiguredTapeSupply(15)
+    epoch=supply.epoch
+    supply.unload()
+    assert supply.snapshot()==dict(occupied=[False]*15,completed=0,selected=None,exhausted=False)
+    supply.reset()
+    assert supply.epoch!=epoch
+    assert supply.snapshot()['occupied']==[True]*15
+    assert supply.snapshot()['completed']==0
+
+
+def test_mission_advice_waits_for_published_valid_epoch():
+    from tape_roll_cell.configured_supply_sidecar import supply_announced_for_mission
+    state=dict(valid=True,supply_epoch='new-cartridge')
+    assert not supply_announced_for_mission(state,True,None)
+    assert not supply_announced_for_mission(state,True,'old-cartridge')
+    assert supply_announced_for_mission(state,True,'new-cartridge')
+    assert not supply_announced_for_mission(state,False,'new-cartridge')
+    assert not supply_announced_for_mission(dict(state,valid=False),True,'new-cartridge')
+
+
+def test_predictive_contact_reports_are_distinct_from_physical_contact():
+    from tape_roll_cell.cell_runtime import physical_contact_observed
+    def report(separation, impulse=(0., 0., 0.)):
+        return {'points': [{'separation_m': separation, 'impulse': impulse}]}
+    assert not physical_contact_observed(report(.0015587))
+    assert physical_contact_observed(report(0.))
+    assert physical_contact_observed(report(-.00001))
+    assert physical_contact_observed(report(.001, (.000001, 0., 0.)))
+    assert physical_contact_observed({'points': []})
+    assert physical_contact_observed({'points': [{'impulse': (0., 0., 0.)}]})
+    assert physical_contact_observed(report(float('nan')))
+    assert physical_contact_observed(report(.001, (float('nan'), 0., 0.)))
+    assert physical_contact_observed({'points': [
+        report(.001)['points'][0], report(-.00001)['points'][0]]})

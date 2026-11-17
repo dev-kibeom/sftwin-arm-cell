@@ -1,4 +1,4 @@
-"""Cell scene: epoxy floor, robot pedestal, axial cartridge and vertical Place nests."""
+"""Cell scene: epoxy floor, robot pedestal, indexed infeed and vertical outfeed."""
 from tape_roll_cell.material import TapeRoll
 
 
@@ -25,6 +25,7 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
             physics = UsdPhysics.Scene.Define(stage, '/physicsScene')
             physics.CreateGravityDirectionAttr(Gf.Vec3f(0,0,-1))
             physics.CreateGravityMagnitudeAttr(9.81)
+            PhysxSchema.PhysxSceneAPI.Apply(physics.GetPrim()).CreateTimeStepsPerSecondAttr(120)
         model = ModelBuildConfiguration.from_runtime(configuration, Path(os.environ['SFTWIN_PROJECT_ROOT']))
         if add_reference_to_stage is None:
             from isaacsim.core.utils.stage import add_reference_to_stage
@@ -71,36 +72,7 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
         dict(eye=[1.4, -1.25, 1.1], target=[.28, .18, .36]))
     looks = author_presentation(stage, config, roll, root, view, configuration['cell']['environment'])
 
-    roll_paths = []
-    for slot in config['slots']:
-        path = f'{root}/Roll{slot["index"]:03d}'
-        body = UsdGeom.Xform.Define(stage, path)
-        body.AddTranslateOp().Set(Gf.Vec3d(*slot['supply_center_m']))
-        # Local annulus Z becomes horizontal world X; local Y remains world Y.
-        body.AddRotateYOp().Set(90.)
-        UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
-        mass = UsdPhysics.MassAPI.Apply(body.GetPrim())
-        mass.CreateMassAttr(roll.mass_kg)
-        mass.CreateCenterOfMassAttr(Gf.Vec3f(0,0,0))
-        mass.CreateDiagonalInertiaAttr(Gf.Vec3f(*roll.inertia()))
-        mass.CreatePrincipalAxesAttr(Gf.Quatf(1.))
-        rb = PhysxSchema.PhysxRigidBodyAPI.Apply(body.GetPrim())
-        rb.CreateSolverPositionIterationCountAttr(32)
-        rb.CreateSolverVelocityIterationCountAttr(8)
-        PhysxSchema.PhysxContactReportAPI.Apply(body.GetPrim()).CreateThresholdAttr(0.)
-        faces = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
-        for index, vertices in enumerate(roll.convex_segments()):
-            mesh = UsdGeom.Mesh.Define(stage, f'{path}/Sector{index:03d}')
-            mesh.CreatePointsAttr([Gf.Vec3f(*p) for p in vertices])
-            mesh.CreateFaceVertexCountsAttr([4]*6)
-            mesh.CreateFaceVertexIndicesAttr([v for face in faces for v in face])
-            mesh.CreateSubdivisionSchemeAttr('none')
-            mesh.CreateDisplayColorAttr([Gf.Vec3f(.74,.55,.24)])
-            UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(looks['paper'])
-            collision(mesh.GetPrim())
-            UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr('convexHull')
-        roll_paths.append(path)
-
+    roll_paths = []  # Supply creates full cartridges on the physical infeed belt.
     for item in config['static_boxes']:
         cube = UsdGeom.Cube.Define(stage, item['id'])
         cube.CreateSizeAttr(1.)
@@ -112,10 +84,9 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
         UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(looks[look])
         collision(cube.GetPrim())
     from tape_roll_cell.supply import ConfiguredTapeSupply
-    from tape_roll_cell.cell_runtime import update_identity_attributes
-    supply = ConfiguredTapeSupply(len(roll_paths),
+    supply = ConfiguredTapeSupply(len(config['slots']),
         supply_id=configuration['cell']['configured_supply']['supply_id'],
         material_id=configuration['cell']['configured_supply']['material_id'])
-    update_identity_attributes(stage, roll_paths, supply)
+    supply.unload()
     return dict(stage=stage, world=world, robot=robot, configuration=configuration,
-                roll_path=roll_paths[0], roll_paths=roll_paths, root_path=root, roll=roll, supply=supply)
+                roll_path=None, roll_paths=roll_paths, root_path=root, roll=roll, supply=supply)

@@ -47,3 +47,35 @@ def test_startup_keeps_before_play_play_after_play_order(monkeypatch, headless):
         loop.close()
     assert events == ['prepare', 'update', (SCRIPTS, '1_before_play.py'), 'play', 'update',
                       (SCRIPTS, '2_after_play_headless.py' if headless else '2_after_play.py')]
+
+
+@pytest.mark.parametrize('initialized',[False,True])
+def test_missing_sdk_context_is_initialized_before_play(monkeypatch,initialized):
+    events=[]
+    class World:
+        ready=initialized
+        def get_physics_context(self):return object() if self.ready else None
+        async def initialize_simulation_context_async(self):
+            events.append('physics_ready');self.ready=True
+    world=World()
+    async def update():pass
+    def play():
+        assert world.ready
+        events.append('play')
+    timeline=SimpleNamespace(play=play,is_playing=lambda:True)
+    omni=ModuleType('omni');omni.kit=ModuleType('omni.kit');omni.kit.app=ModuleType('omni.kit.app')
+    omni.kit.app.get_app=lambda:SimpleNamespace(next_update_async=update)
+    omni.timeline=ModuleType('omni.timeline');omni.timeline.get_timeline_interface=lambda:timeline
+    for name,module in [('omni',omni),('omni.kit',omni.kit),('omni.kit.app',omni.kit.app),('omni.timeline',omni.timeline)]:monkeypatch.setitem(sys.modules,name,module)
+    monkeypatch.setitem(sys.modules,'carb',SimpleNamespace(log_info=lambda _:None,log_error=lambda e:pytest.fail(e)))
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT',str(SCRIPTS.parents[2]))
+    from isaac_runtime import runtime_workflow
+    monkeypatch.setattr(runtime_workflow,'startup_namespace',{'context':{'world':world}},raising=False)
+    monkeypatch.setattr(runtime_workflow,'prepare_startup_model',lambda *_:None)
+    loop=asyncio.new_event_loop();monkeypatch.setattr(asyncio,'ensure_future',loop.create_task)
+    try:
+        namespace=runpy.run_path(str(SCRIPTS/'isaac_arm_cell_startup.py'))
+        monkeypatch.setitem(namespace['_start_arm_cell'].__globals__,'_run_entrypoint',lambda _:None)
+        loop.run_until_complete(namespace['_ARM_CELL_STARTUP_TASK'])
+    finally:loop.close()
+    assert events==(['play'] if initialized else ['physics_ready','play'])

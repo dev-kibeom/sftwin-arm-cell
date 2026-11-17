@@ -13,13 +13,17 @@ COMPLETE는 Task의 material_placed 입력과 Cell의 실제 수령 위치·안�
 
 `/cell/configured_supply/state`는 ID·epoch·슬롯 점유·예약·완료 수량·valid·소진 상태를 발행한다.
 수신 신선도와 valid를 함께 평가하며, Topic 수신이나 슬롯 생성 자체를 파지 성공으로 취급하지 않는다.
-Stop은 새 epoch와 초기 카트리지·완료 0을 만들며 이전 예약·결과를 이월하지 않는다.
+Stop은 새 epoch와 Cell 초기 공급 상태·완료 0을 복원하며 이전 예약·결과를 이월하지 않는다.
+Tape Cell의 초기 상태는 빈 컨베이어와 공급 대기다.
 
 ## Mission과 단일 Task
 
 Configured-source Mission은 기존 `/orchestration/execute_cycle`을 사용한다. target_id는 등록 자재,
 quantity는 양의 처리 수량이다. 이 source의 delivery_id는 zero UUID이며 외부 Delivery/AMR 인계를 가장하지 않는다.
 Orchestration은 fresh 정상 Safety와 fresh 유효 공급을 요구하고 슬롯을 예약한 뒤 단일 Task를 요청한다.
+Configured Task Action은 운영 Backend 초기화가 완료된 뒤 제공하며, configured Mission Action은
+그 Task와 Cell 공급 service가 발견된 뒤 제공한다. 프로세스 시작이나 Safety 정상 상태만으로
+하위 실행 준비를 가정하지 않는다. 이 준비는 장면 시작이나 Supply 요청 수락을 차단하지 않는다.
 
 `/task_execution/execute_configured_grasp`의 `ExecuteConfiguredGrasp` goal은 공급·슬롯·epoch·예약 ID만 가진다.
 Task Execution이 배포된 registry에서 기하·티칭을 찾는다. 호출자가 관절값·임의 Tool 기하·Vision 후보를 주입하지 않는다.

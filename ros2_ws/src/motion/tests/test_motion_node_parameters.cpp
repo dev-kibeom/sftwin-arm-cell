@@ -10,6 +10,21 @@
 #include "arm_cell_motion/fake_motion_backend.hpp"
 #include "arm_cell_motion/motion_node.hpp"
 
+TEST(MotionNodeParameters, BackendReadinessTracksTheActualBackend)
+{
+  if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
+  auto backend = std::make_shared<arm_cell_motion::FakeMotionBackend>();
+  backend->set_available(false);
+  auto node = std::make_shared<arm_cell_motion::MotionNode>(backend);
+  EXPECT_FALSE(node->backend_ready());
+  backend->set_available(true);
+  EXPECT_TRUE(node->backend_ready());
+  backend->set_available(false);
+  EXPECT_FALSE(node->backend_ready());
+  node.reset();
+  rclcpp::shutdown();
+}
+
 TEST(MotionNodeParameters, ValidatesRuntimeTuningAndRejectsStaticParameters)
 {
   if (!rclcpp::ok()) {

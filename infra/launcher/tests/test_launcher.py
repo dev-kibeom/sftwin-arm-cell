@@ -170,3 +170,16 @@ def test_c10_is_registered_as_formal_physical_real_deployment(suffix):
     assert [mode['id'] for mode in modes]==['physical_real']
     selection={key:entry[key] for key in profile_choices(ROOT)}
     assert selected_deployment(deployments(ROOT),selection)==entry
+
+
+def test_live_validation_note_uses_profile_evidence_and_marks_parameter_overrides():
+    from launcher import validation_note
+    entry=dict(validation_status='baseline',tool_actuator='physics',tool_parameters={})
+    assert '검증 전' in validation_note(entry)
+    entry['validation_status']='live-verified'
+    assert '라이브 확인' in validation_note(entry)
+    assert '검증 전' not in validation_note(entry)
+    entry['tool_parameters']={'max_velocity_fraction':.3}
+    assert '변경 설정 미검증' in validation_note(entry)
+    entry['validation_status']='live-pending'
+    assert '검증 전' in validation_note(entry)

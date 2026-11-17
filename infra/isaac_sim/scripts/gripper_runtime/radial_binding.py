@@ -7,6 +7,30 @@ import xml.etree.ElementTree as ET
 IDENTITY_KEYS = ('material_id', 'supply_id', 'slot_id', 'supply_epoch', 'reservation_id')
 
 
+def contact_links_by_joint(urdf, joint_names, tip_links):
+    """Resolve selected contact tips through fixed links, in measured DOF order."""
+    parents={joint.find('child').get('link'):joint for joint in urdf.findall('joint')}
+    if len(set(tip_links))!=len(joint_names):
+        raise ValueError('One distinct contact tip per radial joint is required')
+    result=[]
+    for name in joint_names:
+        joint=urdf.find(f"joint[@name='{name}']")
+        if joint is None:raise ValueError(f'Unknown radial joint: {name}')
+        child=joint.find('child').get('link')
+        matches=[]
+        for tip in tip_links:
+            cursor=tip
+            while cursor!=child:
+                parent=parents.get(cursor)
+                if parent is None or parent.get('type')!='fixed':break
+                cursor=parent.find('parent').get('link')
+            if cursor==child:matches.append(tip)
+        if len(matches)!=1:
+            raise ValueError(f'Contact tip must belong to radial joint: {name}')
+        result.append(matches[0])
+    return result
+
+
 def reserved_identity_matches(read_attribute, reference):
     return (read_attribute('arm_cell:occupied') is True and
             all(read_attribute('arm_cell:' + key) == reference[key] for key in IDENTITY_KEYS))
@@ -121,8 +145,7 @@ class IsaacRadialBinding:
         fingers = []
         # Match finger order to measured joint order, independently of dict sorting.
         urdf = self.geometry.urdf
-        for name in self.names:
-            link = urdf.find(f"joint[@name='{name}']/child").get('link')
+        for link in contact_links_by_joint(urdf,self.names,self.settings['finger_tip_links']):
             prim = unique(link)
             while prim and not prim.HasAPI(UsdPhysics.RigidBodyAPI):
                 prim = prim.GetParent()

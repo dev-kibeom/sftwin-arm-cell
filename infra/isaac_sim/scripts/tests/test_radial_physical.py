@@ -103,3 +103,17 @@ def test_stopped_actuator_stays_suspended_until_new_binding_on_play():
     assert radial.holding_observation().state.value == 'unknown'
     with pytest.raises(ValueError):
         radial.command(ToolIntent.GRASP)
+
+
+def test_long_contact_links_follow_fixed_extensions_in_measured_joint_order():
+    import xml.etree.ElementTree as ET
+    from gripper_runtime.radial_binding import contact_links_by_joint
+    urdf=ET.fromstring('<robot>'+''.join(
+        f'<joint name="j{i}" type="prismatic"><parent link="base"/><child link="slider{i}"/></joint>'
+        f'<joint name="ext{i}" type="fixed"><parent link="slider{i}"/><child link="tip{i}"/></joint>'
+        for i in range(1,4))+'</robot>')
+    assert contact_links_by_joint(urdf,['j3','j1','j2'],['tip1','tip2','tip3'])==['tip3','tip1','tip2']
+    assert contact_links_by_joint(urdf,['j1','j2','j3'],['slider3','slider2','slider1'])==['slider1','slider2','slider3']
+    with pytest.raises(ValueError):contact_links_by_joint(urdf,['j1','j2','j3'],['tip1','tip2','base'])
+    urdf.find("joint[@name='ext3']").set('type','revolute')
+    with pytest.raises(ValueError):contact_links_by_joint(urdf,['j1','j2','j3'],['tip1','tip2','tip3'])

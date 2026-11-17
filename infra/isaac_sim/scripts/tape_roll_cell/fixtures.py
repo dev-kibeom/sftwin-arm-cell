@@ -2,9 +2,15 @@
 import math
 
 ROOT = '/World/TapeRollCell'
+CARTRIDGE_BED_THICKNESS_M = .02
 
 
-def static_fixtures(layout, roll, environment):
+def cartridge_bed_bottom_z(layout, roll):
+    """Leave 35 mm below the roll for the V cradle, then the bed thickness."""
+    return layout['supply_center_m'][2]-roll.outer_radius_m-.035-CARTRIDGE_BED_THICKNESS_M
+
+
+def static_fixtures(layout, roll, environment, conveyor):
     boxes = []
 
     def box(name, center, dimensions, angle=0.):
@@ -16,23 +22,13 @@ def static_fixtures(layout, roll, environment):
     box('EpoxyFloor', [0.,0.,floor-thickness/2], [*environment['floor_size_m'],thickness])
     top = float(environment['robot_support_top_z_m'])
     box('RobotPedestal', [0.,0.,(floor+top)/2], [*environment['robot_support_size_m'],top-floor])
-    for slot in layout['slots']:
-        x,y,z = slot['supply_center_m']
-        r,w = roll.outer_radius_m,roll.width_m
-        prefix = f"Cartridge{slot['index']:03d}"
-        box(prefix+'Floor', [x,y,z-r-.005], [w+.008,2*r+.024,.01])
-        for side,sign in [('Left',-1),('Right',1)]:
-            box(prefix+side+'Guide', [x,y+sign*(r+.009),z-r+.015], [w+.008,.01,.04])
-        x,y,z = slot['receiver_center_m']
-        # An open annular nest supports the outer rim. Fingers can contract and
-        # retreat through the bore without crossing a solid plate.
-        radius = (roll.inner_radius_m+roll.outer_radius_m)/2+.002
-        radial = (roll.outer_radius_m-roll.inner_radius_m)*.5
-        tangent = 2*radius*math.tan(math.pi/8)*.65
-        support_top = z-roll.width_m/2
-        for index in range(8):
-            angle = 2*math.pi*index/8
-            box(f"Receiver{slot['index']:03d}Pad{index}",
-                [x+radius*math.cos(angle),y+radius*math.sin(angle),support_top-.006],
-                [radial,tangent,.012],angle)
+    x,y,z = layout['supply_center_m']
+    belt_top = cartridge_bed_bottom_z(layout,roll)
+    box('InfeedBelt',[conveyor['infeed_center_x_m'],y,belt_top-.0125],
+        [conveyor['infeed_length_m'],2*roll.outer_radius_m+.04,.025])
+    px,py=layout['place']['first_center_xy_m'];top=layout['place']['surface_z_m']
+    # Two narrow moving belts support the outer rim and leave the bore open.
+    for name,sign in [('OutfeedLeft',-1),('OutfeedRight',1)]:
+        box(name,[px+sign*(roll.outer_radius_m-.005),py-conveyor['outfeed_length_m']/2+.09,top-.01],
+            [.008,conveyor['outfeed_length_m'],.02])
     return boxes

@@ -88,6 +88,20 @@ def tool_mode_choices(profile):
             for pair in runtime.get('supported_combinations', [['logical', 'fixed_attach']])]
 
 
+def validation_note(entry):
+    status = entry['validation_status']
+    message = ''
+    if status == 'experimental':
+        message += ' — 실험적 모델 · 단순화 형상 · 실물 일치 미검증'
+    if status == 'live-verified':
+        message += ' — 기본 설정 Isaac 라이브 확인'
+        if entry.get('tool_parameters'):
+            message += ' · 변경 설정 미검증'
+    elif entry['tool_actuator'] == 'physics' or status == 'live-pending':
+        message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
+    return message
+
+
 def export_selection(entry, destination):
     # No parallel configuration engine or edited copies of source profiles.
     return export_runtime_configuration(entry['profile'], destination,
@@ -282,10 +296,7 @@ class Launcher(QMainWindow):
         try:
             entry = self.selection()
             message = f"Profile: {entry['profile'].name} | {self.tool_mode.currentText()}"
-            if entry['validation_status'] == 'experimental':
-                message += ' — 실험적 모델 · 단순화 형상 · 실물 일치 미검증'
-            if entry['tool_actuator'] == 'physics' or entry['validation_status'] == 'live-pending':
-                message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
+            message += validation_note(entry)
         except ValueError as exc:
             valid, message = False, str(exc)
         active = bool(self.processes or self.terminals) or self.stopping

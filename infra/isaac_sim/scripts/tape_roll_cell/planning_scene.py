@@ -13,6 +13,7 @@ class ConfiguredPlanningScene:
         self.publisher=node.create_publisher(PlanningScene,'/planning_scene',10)
         self.client=node.create_client(GetPlanningScene,'/get_planning_scene')
         self.acm=None;self.query=None;self.attached=None;self.relation=None
+        self._world_ids=set()
 
     def _base_acm(self):
         if self.acm is None and self.query is None and self.client.service_is_ready():
@@ -53,6 +54,11 @@ class ConfiguredPlanningScene:
         scene=PlanningScene();scene.is_diff=True;scene.robot_state.is_diff=True
         relation=packet.get('accepted_relation');selected=packet.get('selected_slot_id')
         rolls=packet['rolls'];finger_links=packet['finger_links']
+        current_ids={row['id'] for row in rolls}|{box['id'] for box in packet.get('static_boxes',[])}
+        for identity in self._world_ids-current_ids:
+            remove=CollisionObject();remove.id=identity;remove.header.frame_id='world';remove.operation=remove.REMOVE
+            scene.world.collision_objects.append(remove)
+        self._world_ids=current_ids
         selected_row=next((row for row in rolls if row['slot_id']==selected),None)
         if packet.get('holding_state')=='held' and selected_row is not None and relation is not None:
             self.attached=selected_row['id'];self.relation=np.array(relation).reshape(4,4)
@@ -94,7 +100,8 @@ class ConfiguredPlanningScene:
             for row in rolls:
                 for finger in finger_links:allow(row['id'],finger,row['slot_id']==selected)
                 for box in packet.get('static_boxes',[]):
-                    own_support=f"Cartridge{int(row['slot_id'].split('_')[-1]):03d}Floor" in box['id']
+                    prefix=row.get('support_prefix')
+                    own_support=bool(prefix and box['id'].startswith(prefix+'/'))
                     allow(row['id'],box['id'],row['slot_id']==selected and own_support)
             acm.entry_names=names;acm.entry_values=[]
             for values in matrix:

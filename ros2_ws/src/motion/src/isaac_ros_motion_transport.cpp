@@ -3204,8 +3204,13 @@ bool IsaacRosMotionTransport::retime_taught_entry(
 {
   robot_trajectory::RobotTrajectory timed(model, group);
   timed.setRobotTrajectoryMsg(start, trajectory);
-  trajectory_processing::TimeOptimalTrajectoryGeneration parameterization;
-  if (!parameterization.computeTimeStamps(timed, scales.max_velocity, scales.max_acceleration))
+  // Entry planning has already established the collision-free joint path.
+  // Do not round its corners into unplanned configurations while retiming.
+  trajectory_processing::TimeOptimalTrajectoryGeneration parameterization(0.0, 0.02);
+  // Leave room for numerical differentiation in the execution sampler; the
+  // requested scales remain upper bounds, never relaxed validation limits.
+  if (!parameterization.computeTimeStamps(timed, scales.max_velocity * 0.95,
+      scales.max_acceleration * 0.95))
   {return false;}
   timed.getRobotTrajectoryMsg(trajectory);
   return true;
@@ -4068,7 +4073,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     if (planning_succeeded) {
       const auto finalized = finalize_raw_trajectory(plan.trajectory_);
       planning_succeeded = finalized.success;
-      if (!finalized.success) {place_recovery_waypoint_reason_ = finalized.reason;}
+      if (!finalized.success) {
+        place_recovery_waypoint_reason_ = finalized.reason;
+        RCLCPP_WARN(node_->get_logger(), "Waypoint time parameterization rejected: %s",
+          finalized.reason.c_str());
+      }
     }
     if (result.val == moveit_msgs::msg::MoveItErrorCodes::PLANNING_FAILED ||
       result.val == moveit_msgs::msg::MoveItErrorCodes::TIMED_OUT)
@@ -4098,6 +4107,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         planning_succeeded = false;
         place_recovery_candidate_fatal_ = false;
         place_recovery_waypoint_reason_ = "waypoint_path_invalid";
+        RCLCPP_WARN(node_->get_logger(), "Waypoint trajectory failed collision validation");
       } else {place_recovery_waypoint_reason_ = "trajectory_validation_or_submission_failed";}
     }
     selected_global_goal = *waypoint;

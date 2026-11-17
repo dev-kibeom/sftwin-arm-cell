@@ -66,25 +66,18 @@ class SimulationUIHubExtension(_ExtensionBase):
         from omni.kit.menu.utils import MenuHelperExtensionFull
 
         scripts_path = str(Path(__file__).resolve().parents[4] / "scripts")
-        cell_scripts_path = str(Path(scripts_path) / "pnp_cnc_cell")
-        for path in (scripts_path, cell_scripts_path):
-            if path not in sys.path:
-                sys.path.insert(0, path)
-        from graph_builder.ros_action_graph import apply_rgbd_source_scenario
-        from gripper_runtime.holding_scenario import set_holding_unknown
-
-        bind_owner_scenario_port(
-            "rgbd_source",
-            lambda intent: apply_rgbd_source_scenario(intent.scenario, intent.active),
-        )
-        bind_owner_scenario_port(
-            "motion_backend",
-            lambda intent: (
-                set_holding_unknown(intent.active)
-                if intent.scenario == "holding_unknown"
-                else False
-            ),
-        )
+        if scripts_path not in sys.path:sys.path.insert(0,scripts_path)
+        from isaac_runtime.runtime_configuration import load_runtime_configuration
+        profile = load_runtime_configuration()
+        self._cell_capabilities = {}
+        adapter = profile.get('cell',{}).get('isaac',{}).get('ui_adapter')
+        if adapter:
+            import importlib
+            module,name = adapter.split(':')
+            self._cell_capabilities = getattr(importlib.import_module(module),name)()
+        for owner in ('rgbd_source','motion_backend'):
+            if owner in self._cell_capabilities:
+                bind_owner_scenario_port(owner,self._cell_capabilities[owner])
 
         from .runtime import (
             DEFAULT_ANNOTATION_SOURCE_TOLERANCE_SECONDS,
@@ -97,9 +90,8 @@ class SimulationUIHubExtension(_ExtensionBase):
         retry_detection_target_id = "TestCube"
         project_root = os.environ.get("SFTWIN_PROJECT_ROOT")
         if project_root:
-            from runtime_configuration import load_runtime_configuration, selected_configuration
-            profile = load_runtime_configuration(selected_configuration(project_root))
-            handoff_material_types = sorted(profile["material_catalog"])
+            target_id = profile.get("orchestration", {}).get("mission_target_id", "TestCube")
+            handoff_material_types = sorted(profile.get("material_catalog") or {target_id: {}})
             simulation_profile = profile.get("simulation", {})
             handoff_material_type = str(
                 simulation_profile.get("external_handoff_material_type", "TestCube")
@@ -110,6 +102,15 @@ class SimulationUIHubExtension(_ExtensionBase):
             retry_detection_target_id = str(
                 profile.get("orchestration", {}).get("mission_target_id", "TestCube")
             )
+
+        from isaac_runtime.cell_supply import supply_descriptor
+        self._supply_descriptor = supply_descriptor()
+        if self._supply_descriptor:
+            handoff_material_types=[row['id'] for row in self._supply_descriptor['materials']]
+            handoff_material_type=handoff_material_types[0]
+            handoff_default_quantity=self._supply_descriptor.get('default_count',1)
+        elif handoff_material_type not in handoff_material_types:
+            handoff_material_type=handoff_material_types[0]
 
         try:
             import carb
@@ -187,6 +188,7 @@ class SimulationUIHubExtension(_ExtensionBase):
         self._demonstration_loaded_this_session = False
         self._last_demonstration_state_refresh = 0.0
         self._handoff_trigger_status: Any | None = None
+        self._supply_owner_status = None
         self._retry_detection_button: Any | None = None
         self._retry_detection_status: Any | None = None
         self._operator_request_ids: dict[str, str] = {}
@@ -259,6 +261,10 @@ class SimulationUIHubExtension(_ExtensionBase):
     def _on_update(self, _event: Any) -> None:
         self.runtime.spin_once()
         self._refresh_demonstration_state()
+        if self._supply_owner_status is not None and self._supply_descriptor is not None:
+            from isaac_runtime.cell_supply import supply_status
+            status=supply_status()
+            self._supply_owner_status.text=str(status.get('detail',''))+' · '+str(status.get('mission',''))
         frame = self.runtime.camera_frame_rgba()
         now = __import__("time").monotonic()
         target_status, target_pixel = self.runtime.selected_target_pixel(now=now)
@@ -411,10 +417,12 @@ class SimulationUIHubExtension(_ExtensionBase):
 
     def _build_contents(self, ui: Any) -> None:
         ui.Label("ARM Cell · Simulation Hub")
-        with ui.CollapsableFrame("External Handoff Trigger", collapsed=False):
+        with ui.CollapsableFrame("Supply", collapsed=False):
             with ui.VStack(spacing=4):
                 ui.Label(
-                    "The Hub reports local publication only; owner acceptance and supply state are not shown here.",
+                    ("공급 요청과 Cell의 응답을 표시합니다. 요청 수락은 이송·작업 완료를 뜻하지 않습니다."
+                     if self._supply_descriptor else
+                     "공급 요청 발행 상태를 표시합니다. Cell 수락·이송 완료는 공급 Owner가 확인합니다."),
                     word_wrap=True,
                 )
                 ui.Label("Material type")
@@ -422,28 +430,28 @@ class SimulationUIHubExtension(_ExtensionBase):
                     self._handoff_material_types.index(self._handoff_default_material_type),
                     *self._handoff_material_types,
                 )
-                ui.Label("Quantity")
+                ui.Label((self._supply_descriptor or {}).get("count_label","Quantity"))
                 self._handoff_quantity_field = ui.IntField()
                 self._handoff_quantity_field.model.set_value(
                     self._handoff_default_quantity
                 )
                 ui.Button(
-                    "Random Drop",
+                    "Supply",
                     clicked_fn=self._publish_handoff_trigger,
                 )
                 self._handoff_trigger_status = ui.Label(
-                    "No trigger stimulus published.", word_wrap=True
+                    "No supply request published.", word_wrap=True
                 )
+                self._supply_owner_status=ui.Label("",word_wrap=True)
 
-        with ui.CollapsableFrame("Cuboid Demonstration", collapsed=False):
+        with ui.CollapsableFrame("Cuboid Demonstration", collapsed=True):
             with ui.VStack(spacing=4):
                 ui.Label(
                     "Load one preset during each Play session. Stop, then Play to choose another.",
                     word_wrap=True,
                 )
-                from scene_builder.cuboid_demonstrations import display_name, scenarios
-
-                self._demonstration_scenarios = scenarios()
+                display_name=self._cell_capabilities.get('display_name',lambda scenario,name:name)
+                self._demonstration_scenarios=self._cell_capabilities.get('scenarios',lambda:())()
                 self._demonstration_combo = ui.ComboBox(
                     0,
                     *(
@@ -452,7 +460,7 @@ class SimulationUIHubExtension(_ExtensionBase):
                     ),
                 )
                 self._demonstration_button = ui.Button(
-                    "Load Demonstration", clicked_fn=self._load_demonstration
+                    "Load Demonstration", clicked_fn=self._load_demonstration,enabled=bool(self._demonstration_scenarios)
                 )
                 self._demonstration_status = ui.Label(
                     "Waiting for Timeline Play.", word_wrap=True
@@ -913,6 +921,11 @@ class SimulationUIHubExtension(_ExtensionBase):
                 ]
             )
             quantity = self._handoff_quantity_field.model.get_value_as_int()
+            from isaac_runtime.cell_supply import supply_descriptor,request_supply
+            if supply_descriptor() is not None:
+                result=request_supply(material_type,quantity)
+                label.text=('Supply 수락: ' if result['accepted'] else 'Supply 거부: ')+result['detail']
+                return
             delivery_id = self.runtime.publish_handoff_trigger(material_type, quantity)
             label.text = (
                 f"Trigger stimulus published · delivery_id={delivery_id} · "
@@ -934,14 +947,14 @@ class SimulationUIHubExtension(_ExtensionBase):
             import omni.timeline
 
             playing = omni.timeline.get_timeline_interface().is_playing()
-            from scene_builder.cuboid_demonstration import (
-                demonstration_loaded,
-                load_unavailable_reason,
-            )
+            demonstration_loaded=self._cell_capabilities.get('demonstration_loaded',lambda:False)
+            load_unavailable_reason=self._cell_capabilities.get('load_unavailable_reason',lambda:'Selected Cell does not provide demonstrations')
 
             self._demonstration_loaded_this_session |= demonstration_loaded()
             unavailable = load_unavailable_reason()
-            self._demonstration_button.enabled = playing and unavailable is None
+            self._demonstration_button.enabled = (
+                playing and unavailable is None and not self._demonstration_loaded_this_session
+            )
             if self._demonstration_combo is not None:
                 self._demonstration_combo.enabled = (
                     not self._demonstration_loaded_this_session
@@ -972,7 +985,7 @@ class SimulationUIHubExtension(_ExtensionBase):
                 self._demonstration_combo.model.get_item_value_model().get_value_as_int()
             )
             scenario_id, name, _description = self._demonstration_scenarios[selected]
-            from scene_builder.cuboid_demonstration import load_demonstration
+            load_demonstration=self._cell_capabilities['load_demonstration']
 
             count = load_demonstration(scenario_id)
             self._demonstration_loaded_this_session = True
@@ -981,6 +994,7 @@ class SimulationUIHubExtension(_ExtensionBase):
         except (
             RuntimeError,
             ValueError,
+            KeyError,
             IndexError,
             AttributeError,
             ImportError,
