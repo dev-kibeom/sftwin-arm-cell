@@ -415,3 +415,19 @@ def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch)
     assert len(calls)==2
     window.begin_stop()
     until(app,window,lambda:not window.stopping)
+
+
+def test_switching_between_radial_and_parallel_tools_has_no_signal_exceptions(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(sys, 'excepthook', lambda kind, error, tb: errors.append(error))
+    selector = window.selectors['tool']
+    parallel = selector.currentData()
+    for name in ('hand_e_c10_long.yaml', 'hand_e_c10.yaml'):
+        target = next(selector.itemData(i) for i in range(selector.count())
+                      if Path(selector.itemData(i)).name == name)
+        selector.setCurrentIndex(selector.findData(target))
+        assert 'move_duration_s' not in window.parameter_edits
+        assert 'max_velocity_fraction' in window.parameter_edits
+        selector.setCurrentIndex(selector.findData(parallel))
+        assert 'move_duration_s' in window.parameter_edits
+    assert errors == []

@@ -149,7 +149,8 @@ class Launcher(QMainWindow):
                 label = read(path).get('display_name', Path(path).stem)
                 combo.addItem(('Isaac / ' if key == 'backend' else '') + label, path)
             self.selectors[key] = combo
-            combo.currentIndexChanged.connect(self.validate)
+            if key != 'tool':
+                combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
         self.tool_mode = QComboBox()
         form.insertRow(2, 'Grasp Mode', self.tool_mode)
