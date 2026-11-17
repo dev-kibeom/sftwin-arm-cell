@@ -45,12 +45,12 @@ def test_abandon_requires_exact_token_and_never_consumes():
 def test_completion_requires_settled_real_pose_and_finite_measurements():
     from tape_roll_cell.cell_runtime import receiver_settled
     target = (.5,.3,.6)
-    assert receiver_settled(target, (0,0,0), (0,0,0), (1,0,0), target)
-    assert not receiver_settled((.52,.3,.6), (0,0,0), (0,0,0), (1,0,0), target)
-    assert not receiver_settled(target, (.03,0,0), (0,0,0), (1,0,0), target)
-    assert not receiver_settled(target, (0,0,0), (.3,0,0), (1,0,0), target)
-    assert not receiver_settled(target, (0,0,0), (0,0,0), (0,0,1), target)
-    assert not receiver_settled(target, (float('nan'),0,0), (0,0,0), (1,0,0), target)
+    assert receiver_settled(target, (0,0,0), (0,0,0), (0,0,1), target)
+    assert not receiver_settled((.52,.3,.6), (0,0,0), (0,0,0), (0,0,1), target)
+    assert not receiver_settled(target, (.03,0,0), (0,0,0), (0,0,1), target)
+    assert not receiver_settled(target, (0,0,0), (.3,0,0), (0,0,1), target)
+    assert not receiver_settled(target, (0,0,0), (0,0,0), (1,0,0), target)
+    assert not receiver_settled(target, (float('nan'),0,0), (0,0,0), (0,0,1), target)
 
 
 def test_socket_relay_preserves_request_correlation_and_state():

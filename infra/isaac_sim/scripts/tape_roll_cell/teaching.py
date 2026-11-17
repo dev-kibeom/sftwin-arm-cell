@@ -51,52 +51,76 @@ class TeachingSolver:
         rotation = Slerp([0, 1], Rotation.from_matrix(np.array([a[:3, :3], b[:3, :3]])))
         # At most 2 mm Cartesian knots. Check interpolated joint midpoints too;
         # endpoints alone cannot establish straight axial insertion/extraction.
-        segments = max(1, int(np.ceil(np.linalg.norm(b[:3, 3]-a[:3, 3])/.002)))
+        angle = Rotation.from_matrix(a[:3, :3].T @ b[:3, :3]).magnitude()
+        segments = max(1, int(np.ceil(np.linalg.norm(b[:3, 3]-a[:3, 3])/.002)),
+                       int(np.ceil(angle/.05)))
         knots = [list(start)]
         for fraction in np.linspace(0, 1, segments+1)[1:]:
             target = np.eye(4)
             target[:3, 3] = a[:3, 3]+fraction*(b[:3, 3]-a[:3, 3])
             target[:3, :3] = rotation(fraction).as_matrix()
             knots.append(self.solve(target, knots[-1]))
-        for index, (left, right) in enumerate(zip(knots, knots[1:])):
+        def refine(left, right, low, high, depth=0):
+            fraction = (low+high)/2
             actual = self.fk((np.array(left)+right)/2)
-            fraction = (index+.5)/segments
-            expected = a[:3, 3]+fraction*(b[:3, 3]-a[:3, 3])
-            angle = Rotation.from_matrix(rotation(fraction).as_matrix().T @ actual[:3, :3]).magnitude()
-            if np.linalg.norm(actual[:3, 3]-expected) > 5e-5 or angle > 5e-5:
-                raise ValueError('Cell Cartesian trajectory interpolation error exceeds 50 um / 50 urad')
-        return knots
+            target = np.eye(4)
+            target[:3,3] = a[:3,3]+fraction*(b[:3,3]-a[:3,3])
+            target[:3,:3] = rotation(fraction).as_matrix()
+            angle_error = Rotation.from_matrix(target[:3,:3].T @ actual[:3,:3]).magnitude()
+            if np.linalg.norm(actual[:3,3]-target[:3,3]) <= 5e-5 and angle_error <= 5e-5:
+                return [right]
+            if depth >= 10:
+                raise ValueError('Cell Cartesian trajectory interpolation exceeds 50 um / 50 urad')
+            middle = self.solve(target,(np.array(left)+right)/2)
+            return (refine(left,middle,low,fraction,depth+1)+
+                    refine(middle,right,fraction,high,depth+1))
+        refined = [knots[0]]
+        for index,(left,right) in enumerate(zip(knots,knots[1:])):
+            refined.extend(refine(left,right,index/segments,(index+1)/segments))
+        return refined
 
 
-def translated_teaching(solver, reference, supply_offset, receiver_offset, extract_lift_m):
-    result = {}
-    reference = dict(reference, lift=reference['insert'])
-    orientation = solver.fk(reference['insert'])[:3, :3]
-    for name, seed in reference.items():
-        target = solver.fk(seed).copy()
-        # Every slot extracts fully past the FRONT of the entire cartridge.
-        if name in ('approach', 'insert', 'lift'):
-            target[:3, 3] += supply_offset
-        elif name != 'extract':
-            target[:3, 3] += receiver_offset
-        if name in ('lift', 'extract'):
-            target[2, 3] += extract_lift_m
-        target[:3, :3] = orientation
-        result[name] = solver.solve(target, seed)
-    return result
-
-
-def trajectories(solver, teaching, previous=None):
-    starts = dict(approach=teaching['approach'], insert=teaching['approach'],
-                  lift=teaching['insert'], extract=teaching['lift'],
-                  transfer_clearance=teaching['extract'], transfer=teaching['transfer_clearance'],
-                  retreat=teaching['transfer'])
-    if previous is not None:
-        for name, seed in (('return_clearance', previous['retreat']),
-                           ('supply_clearance', teaching['approach'])):
-            target = solver.fk(seed).copy()
-            target[2, 3] = max(solver.fk(teaching['transfer_clearance'])[2, 3], target[2, 3])
-            teaching[name] = solver.solve(target, seed)
-        starts.update(return_clearance=previous['retreat'],
-                      supply_clearance=teaching['return_clearance'], approach=teaching['supply_clearance'])
-    return {name: solver.path(start, teaching[name]) for name, start in starts.items()}
+def vertical_place_teaching(solver, reference, supply_center, receiver_center, layout, previous=None):
+    depth = layout['insertion_depth_m']
+    source = solver.fk(reference['insert'])
+    original_center = (source @ np.array([0.,0.,-depth,1.]))[:3]
+    delta = np.array(supply_center)-original_center
+    taught = {}
+    for name in ('approach','insert','extract'):
+        target = solver.fk(reference[name]).copy()
+        target[:3,3] += delta
+        if name == 'extract':target[2,3] += layout['extract_lift_m']
+        taught[name] = solver.solve(target,(previous or reference)[name])
+    target = solver.fk(taught['insert']).copy()
+    target[2,3] += layout['extract_lift_m']
+    taught['lift'] = solver.solve(target,taught['insert'])
+    clearance = layout['place']['transport_height_m']
+    target = solver.fk(taught['extract']).copy();target[2,3] = clearance
+    taught['carry_lift'] = solver.solve(target,taught['extract'])
+    target[:3,:3] = Rotation.from_euler('x',np.pi).as_matrix()
+    taught['turn'] = solver.solve(target,taught['carry_lift'])
+    place = target.copy()
+    place[:3,3] = np.array(receiver_center)+np.array([0.,0.,layout['release_clearance_m']-depth])
+    target = place.copy();target[2,3] += layout['place']['approach_clearance_m']
+    taught['transfer_clearance'] = solver.solve(target,taught['turn'])
+    taught['transfer'] = solver.solve(place,taught['transfer_clearance'])
+    taught['retreat'] = list(taught['transfer_clearance'])
+    starts = dict(lift=taught['insert'],extract=taught['lift'],carry_lift=taught['extract'],
+        turn=taught['carry_lift'],transfer_clearance=taught['turn'],transfer=taught['transfer_clearance'],
+        retreat=taught['transfer'])
+    if previous is None:
+        target = solver.fk(taught['approach']).copy();target[2,3] = clearance
+        entry = solver.solve(target,taught['approach'])
+        starts['approach'] = entry
+    else:
+        target = solver.fk(previous['retreat']).copy();target[2,3] = clearance
+        taught['return_clearance'] = solver.solve(target,previous['retreat'])
+        target[:3,:3] = solver.fk(taught['approach'])[:3,:3]
+        taught['return_turn'] = solver.solve(target,taught['return_clearance'])
+        target = solver.fk(taught['approach']).copy();target[2,3] = clearance
+        taught['supply_clearance'] = solver.solve(target,taught['return_turn'])
+        starts.update(return_clearance=previous['retreat'],return_turn=taught['return_clearance'],
+            supply_clearance=taught['return_turn'],approach=taught['supply_clearance'])
+    paths = {name:solver.path(start,taught[name]) for name,start in starts.items()}
+    paths['insert'] = solver.path(taught['approach'],taught['insert'])
+    return taught,paths

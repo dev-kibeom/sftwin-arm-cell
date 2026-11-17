@@ -32,7 +32,8 @@ def test_each_slot_has_compatible_bore_and_correct_horizontal_endpoints(suffix):
         for name,center in [('insert','supply_center_m'),('transfer','receiver_center_m')]:
             pose=slot['teaching'][name]
             transform=link_transforms(urdf,dict(zip(config['robot']['motion']['arm_joint_names'],pose)))['sf_grasp_tcp']
-            assert transform[:3,2]==pytest.approx([1,0,0],abs=1e-6)
+            axis=[1,0,0] if name=='insert' else [0,0,-1]
+            assert transform[:3,2]==pytest.approx(axis,abs=1e-6)
             actual=transform@np.array([0,0,-layout['insertion_depth_m'],1])
             expected=np.array(slot[center])
             if name=='transfer':expected[2]+=layout['release_clearance_m']

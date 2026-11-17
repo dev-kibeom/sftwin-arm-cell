@@ -9,7 +9,8 @@ from arm_cell_bringup.runtime import read, resolve, project_root
 from arm_cell_bringup.model_validation import validate_assembly_configuration, joint_pose, planning_limits
 from tape_roll_cell.material import TapeRoll
 from tape_roll_cell.supply import TapeSupply
-from tape_roll_cell.teaching import TeachingSolver, translated_teaching, trajectories
+from tape_roll_cell.teaching import TeachingSolver, vertical_place_teaching
+from tape_roll_cell.fixtures import static_fixtures
 from gripper_runtime.radial_geometry import ToolGeometry
 
 
@@ -53,24 +54,31 @@ def compile_cell(*, configuration):
     solution=geometry.solve_bore(layout['insertion_depth_m'],roll.width_m,roll.inner_radius_m)
     registry={};motions=dict(home=dict(target='home',velocity_scale=.3,acceleration_scale=.2))
     layout['slots']=[]
+    place = layout['place']
+    columns = place['columns']
+    if isinstance(columns,bool) or not isinstance(columns,int) or columns < 1:
+        raise ValueError('Place columns must be a positive integer')
+    pitch = place['spacing_m']
+    if not np.isfinite(pitch) or pitch < 2*roll.outer_radius_m+.015:
+        raise ValueError('Vertical Place nests must not overlap')
+    if place['transport_height_m'] <= max(layout['supply_center_m'][2]+roll.outer_radius_m,
+                                         place['surface_z_m']+roll.width_m)+.08:
+        raise ValueError('Transport height must clear stored and placed rolls')
+    if config['cell']['world_to_base']['z'] != config['cell']['environment']['robot_support_top_z_m']:
+        raise ValueError('Robot support top and base frame must agree')
     for index in range(count):
-        offset=index*spacing*axis
-        receiver_offset=(count-1-index)*spacing*axis
-        taught=translated_teaching(solver,reference,offset,receiver_offset,layout['extract_lift_m'])
-        paths=trajectories(solver,taught,layout['slots'][-1]['teaching'] if index else None)
-        if not index:
-            # Production starts at Robot HOME. This entry path is collision checked
-            # by Motion against the current planning scene before any command.
-            target=solver.fk(taught['approach']).copy();target[2,3]=.72
-            entry=solver.solve(target,taught['approach'])
-            paths['approach']=solver.path(entry,taught['approach'])
+        supply_center = (np.array(layout['supply_center_m'])+index*spacing*axis).tolist()
+        receiver_center = [place['first_center_xy_m'][0]+(index%columns)*pitch,
+            place['first_center_xy_m'][1]+(index//columns)*pitch,place['surface_z_m']+roll.width_m/2]
+        previous = layout['slots'][-1]['teaching'] if index else None
+        taught,paths = vertical_place_teaching(solver,reference,supply_center,receiver_center,layout,previous)
         for name,knots in paths.items():
             for pose in knots:joint_pose(pose,name,arm,joints,overrides)
-        slot=dict(index=index,slot_id=f'slot_{index}',supply_center_m=(np.array(layout['supply_center_m'])+offset).tolist(),
-                  receiver_center_m=(np.array(layout['receiver_center_m'])+receiver_offset).tolist(),teaching=taught,trajectories=paths)
+        slot=dict(index=index,slot_id=f'slot_{index}',supply_center_m=supply_center,
+                  receiver_center_m=receiver_center,teaching=taught,trajectories=paths)
         layout['slots'].append(slot)
-        groups=dict(approach=['approach'] if not index else ['return_clearance','supply_clearance','approach'],
-                    insert=['insert'],transfer=['lift','extract','transfer_clearance','transfer'],retreat=['retreat'])
+        groups=dict(approach=['approach'] if not index else ['return_clearance','return_turn','supply_clearance','approach'],
+                    insert=['insert'],transfer=['lift','extract','carry_lift','turn','transfer_clearance','transfer'],retreat=['retreat'])
         refs={}
         for name,segments in groups.items():
             key=f'tape_slot_{index}_{name}'
@@ -83,14 +91,8 @@ def compile_cell(*, configuration):
             approach_motion=refs['approach'],insertion_motion=refs['insert'],transfer_motion=refs['transfer'],retreat_motion=refs['retreat'])
     config['motion']['configured_grasp_cycles_json']=json.dumps(registry,allow_nan=False)
     config['motion']['taught_motions_json']=json.dumps(motions,allow_nan=False)
-    boxes=[]
-    for slot in layout['slots']:
-        for label,key in [('Cartridge','supply_center_m'),('Receiver','receiver_center_m')]:
-            x,y,z=slot[key];r=roll.outer_radius_m;w=roll.width_m
-            prefix=f"/World/TapeRollCell/{label}{slot['index']:03d}"
-            boxes.append(dict(id=prefix+'Floor',geometry=dict(type='box',dimensions_m=[w+.008,2*r+.024,.01]),pose=dict(position_m=[x,y,z-r-.005],quaternion_xyzw=[0.,0.,0.,1.])))
-            for side,sign in [('left',-1),('right',1)]:
-                boxes.append(dict(id=prefix+side.title()+'Guide',geometry=dict(type='box',dimensions_m=[w+.008,.01,.04]),pose=dict(position_m=[x,y+sign*(r+.009),z-r+.015],quaternion_xyzw=[0.,0.,0.,1.])))
+    boxes = static_fixtures(layout,roll,config['cell']['environment'])
+    layout['static_boxes'] = boxes
     static=dict(schema_version=1,frame_id='world',objects=boxes)
     encoded=json.dumps(static,sort_keys=True)
     directory=project_root()/'.run_records/configuration';directory.mkdir(parents=True,exist_ok=True)

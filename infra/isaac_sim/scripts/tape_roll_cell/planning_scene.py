@@ -71,7 +71,9 @@ class ConfiguredPlanningScene:
                 scene.world.collision_objects.append(self._annulus(row['id'],packet['material'],row['position'],row['orientation_xyzw'],packet['frame_id']))
         for box in packet.get('static_boxes',[]):
             obj=CollisionObject();obj.id=box['id'];obj.header.frame_id=packet['frame_id'];obj.operation=obj.ADD
-            obj.pose.position.x,obj.pose.position.y,obj.pose.position.z=box['position'];obj.pose.orientation.w=1.
+            obj.pose.position.x,obj.pose.position.y,obj.pose.position.z=box['position']
+            q=box.get('orientation_xyzw',[0.,0.,0.,1.])
+            obj.pose.orientation.x,obj.pose.orientation.y,obj.pose.orientation.z,obj.pose.orientation.w=q
             primitive=SolidPrimitive();primitive.type=primitive.BOX;primitive.dimensions=box['dimensions']
             local=Pose();local.orientation.w=1.;obj.primitives=[primitive];obj.primitive_poses=[local]
             scene.world.collision_objects.append(obj)
@@ -79,7 +81,7 @@ class ConfiguredPlanningScene:
         if base is not None:
             acm=copy.deepcopy(base)
             names=list(acm.entry_names)
-            dynamic=[row['id'] for row in rolls]+finger_links+[box['id'] for box in packet.get('static_boxes',[])]
+            dynamic=[row['id'] for row in rolls]+finger_links+packet.get('mount_links',[])+[box['id'] for box in packet.get('static_boxes',[])]
             for name in dynamic:
                 if name not in names:names.append(name)
             matrix=[[False]*len(names) for _ in names]
@@ -87,6 +89,8 @@ class ConfiguredPlanningScene:
                 for j,other in enumerate(acm.entry_names):matrix[names.index(old)][names.index(other)]=acm.entry_values[i].enabled[j]
             def allow(a,b,value):
                 i,j=names.index(a),names.index(b);matrix[i][j]=matrix[j][i]=value
+            if packet.get('mount_object') in names:
+                for link in packet.get('mount_links',[]):allow(link,packet['mount_object'],True)
             for row in rolls:
                 for finger in finger_links:allow(row['id'],finger,row['slot_id']==selected)
                 for box in packet.get('static_boxes',[]):

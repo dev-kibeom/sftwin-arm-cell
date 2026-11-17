@@ -11,7 +11,7 @@ def receiver_settled(position, velocity, angular_velocity, axis, expected):
     length = norm(axis)
     return (norm([a-b for a,b in zip(position, expected)]) <= .01
             and norm(velocity) <= .02 and norm(angular_velocity) <= .2 and length > 0
-            and math.acos(min(1., abs(axis[0])/length)) <= .05)
+            and math.acos(min(1., abs(axis[2])/length)) <= .05)
 
 
 def update_identity_attributes(stage, paths, supply):
@@ -141,6 +141,10 @@ class ConfiguredSupplyAdapter:
                 if other != selected or robot not in fingers:
                     if not self.failure:print(f'Tape Cell unexpected contact: {a} / {b}',flush=True)
                     self.failure = 'unexpected_robot_material_contact'
+            elif (other == self.context['root_path']+'/RobotPedestal'
+                    and robot == self.configuration['cell']['isaac']['robot_prim_path']+'/'+
+                        self.configuration['model_configuration']['isaac']['articulation_base']):
+                continue
             elif other.startswith(root):
                 if not self.failure:print(f'Tape Cell fixture contact: {a} / {b}',flush=True)
                 self.failure = 'robot_fixture_collision'
@@ -173,7 +177,7 @@ class ConfiguredSupplyAdapter:
         self.sidecar.flush_outgoing()
 
     def scene_packet(self):
-        from pxr import UsdGeom, UsdPhysics
+        from pxr import Gf, UsdGeom, UsdPhysics
         from dataclasses import asdict
         cache = UsdGeom.XformCache()
         rolls = []
@@ -194,15 +198,18 @@ class ConfiguredSupplyAdapter:
                     and prim.IsA(UsdGeom.Cube) and prim.HasAPI(UsdPhysics.CollisionAPI)):
                 transform = cache.GetLocalToWorldTransform(prim)
                 scale = prim.GetAttribute('xformOp:scale').Get()
+                quaternion = Gf.Transform(transform).GetRotation().GetQuat()
                 static.append(dict(id=str(prim.GetPath()), position=list(transform.ExtractTranslation()),
-                                   dimensions=list(scale)))
+                    orientation_xyzw=[*quaternion.GetImaginary(),quaternion.GetReal()],dimensions=list(scale)))
         return dict(frame_id=self.configuration['robot']['motion'].get('world_frame', 'world'), rolls=rolls,
             material=asdict(self.context['roll']), selected_slot_id=state['selected_slot_id'],
             reservation_id=state['reservation_id'], supply_epoch=self.supply.epoch,
             holding_state=observation.state.value if observation is not None and observation.fresh() else 'unknown',
             accepted_relation=getattr(manager, 'accepted_relation', None),
             accepted_execution_id=getattr(manager, 'accepted_execution_id', None),
-            finger_links=list(self.configuration['tool']['runtime']['finger_tip_links']), static_boxes=static)
+            finger_links=list(self.configuration['tool']['runtime']['finger_tip_links']), static_boxes=static,
+            mount_links=self.configuration['model_configuration']['mount_collision_links'],
+            mount_object=self.context['root_path']+'/RobotPedestal')
 
     def reset_generated_materials(self, attachment_reset):
         from pxr import Gf, UsdGeom, UsdPhysics

@@ -11,13 +11,9 @@ isaac:
 tape_roll:
   insertion_depth_m: 0.02
   supply_center_m:
-  - 0.53
-  - 0.15
-  - 0.5
-  receiver_center_m:
-  - 0.53
   - 0.32
-  - 0.56
+  - 0.45
+  - 0.5
   extract_lift_m: 0.015
   release_clearance_m: 0.004
   move_duration_s: 5.0
@@ -109,9 +105,16 @@ tape_roll:
       - -1.3237627101
       - -0.0459916126
   material: package://arm_cell_bringup/config/materials/tape_roll/17mm.yaml
+  place:
+    columns: 3
+    spacing_m: 0.18
+    first_center_xy_m: [0.25, -0.5]
+    surface_z_m: 0.28
+    approach_clearance_m: 0.12
+    transport_height_m: 0.72
   cartridge:
-    slot_count: 3
-    slot_spacing_m: 0.04
+    slot_count: 15
+    slot_spacing_m: 0.03
     axis:
     - 1.0
     - 0.0
@@ -128,5 +131,11 @@ configured_supply:
   material_id: TapeRoll17
 presentation:
   overview:
-    eye: [1.4, -1.25, 1.1]
-    target: [0.28, 0.18, 0.36]
+    eye: [1.45, -1.55, 1.2]
+    target: [0.3, 0.0, 0.25]
+environment:
+  floor_z_m: -0.3
+  floor_thickness_m: 0.06
+  floor_size_m: [6.0, 6.0]
+  robot_support_top_z_m: 0.0
+  robot_support_size_m: [0.32, 0.32]

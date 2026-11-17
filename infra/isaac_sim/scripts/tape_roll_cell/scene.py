@@ -1,4 +1,4 @@
-"""Cell scene: dynamic hollow rolls, axial cartridge and passive conveyor receiver."""
+"""Cell scene: epoxy floor, robot pedestal, axial cartridge and vertical Place nests."""
 from tape_roll_cell.material import TapeRoll
 
 
@@ -41,9 +41,12 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
         if old is not None:
             world.scene.remove_object('selected_robot', registry_only=True)
         robot = world.scene.add(SingleArticulation(prim_path=robot_path, name='selected_robot'))
-        if not world.scene.get_object('default_ground_plane'):
-            world.scene.add_default_ground_plane()
+        ground = world.scene.get_object('default_ground_plane')
+        if ground is not None:
+            world.scene.remove_object('default_ground_plane')
         UsdLux.DomeLight.Define(stage, '/World/Light').CreateIntensityAttr(1000.)
+    if stage.GetPrimAtPath('/World/defaultGroundPlane'):
+        stage.RemovePrim('/World/defaultGroundPlane')
     config = configuration['cell']['tape_roll']
     roll = TapeRoll(**config['material'])
     root = '/World/TapeRollCell'
@@ -66,7 +69,7 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
     from tape_roll_cell.presentation import author_presentation
     view = configuration['cell'].get('presentation', {}).get('overview',
         dict(eye=[1.4, -1.25, 1.1], target=[.28, .18, .36]))
-    looks = author_presentation(stage, config, roll, root, view)
+    looks = author_presentation(stage, config, roll, root, view, configuration['cell']['environment'])
 
     roll_paths = []
     for slot in config['slots']:
@@ -98,26 +101,16 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
             UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr('convexHull')
         roll_paths.append(path)
 
-    def box(name, center, dimensions):
-        cube = UsdGeom.Cube.Define(stage, root+'/'+name)
+    for item in config['static_boxes']:
+        cube = UsdGeom.Cube.Define(stage, item['id'])
         cube.CreateSizeAttr(1.)
-        cube.AddTranslateOp().Set(Gf.Vec3d(*center))
-        cube.AddScaleOp().Set(Gf.Vec3f(*dimensions))
-        cube.CreateDisplayColorAttr([Gf.Vec3f(.2,.3,.4)])
-        UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(looks['steel'])
+        cube.AddTranslateOp().Set(Gf.Vec3d(*item['pose']['position_m']))
+        q = item['pose']['quaternion_xyzw']
+        cube.AddOrientOp().Set(Gf.Quatf(q[3],Gf.Vec3f(*q[:3])))
+        cube.AddScaleOp().Set(Gf.Vec3f(*item['geometry']['dimensions_m']))
+        look = 'floor' if item['id'].endswith('/EpoxyFloor') else 'steel'
+        UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(looks[look])
         collision(cube.GetPrim())
-
-    # No axial cap: extraction and retreat can leave along -X. Side guides
-    # constrain the outside diameter; the bore remains clear for all fingers.
-    for slot in config['slots']:
-        for label, center in ((f'Cartridge{slot["index"]:03d}',slot['supply_center_m']),
-                              (f'Receiver{slot["index"]:03d}',slot['receiver_center_m'])):
-            x,y,z = center
-            r, width = roll.outer_radius_m, roll.width_m
-            box(label+'Floor', (x,y,z-r-.005), (width+.008,2*r+.024,.01))
-            for side, sign in (('Left',-1),('Right',1)):
-                box(label+side+'Guide', (x,y+sign*(r+.009),z-r+.015),
-                    (width+.008,.01,.04))
     from tape_roll_cell.supply import ConfiguredTapeSupply
     from tape_roll_cell.cell_runtime import update_identity_attributes
     supply = ConfiguredTapeSupply(len(roll_paths),

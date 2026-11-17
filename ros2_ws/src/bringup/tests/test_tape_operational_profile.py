@@ -18,7 +18,7 @@ def test_tape_profile_selects_real_radial_tool_and_ros_work_source(suffix, tmp_p
     assert config['orchestration']['material_source'] == 'configured_slots'
     assert 'vision' not in config
     operations = json.loads(config['motion']['configured_grasp_cycles_json'])
-    assert set(operations) == {'slot_0', 'slot_1', 'slot_2'}
+    assert set(operations) == {f'slot_{i}' for i in range(config['cell']['tape_roll']['cartridge']['slot_count'])}
     assert all(op['material_id'] == 'TapeRoll17' for op in operations.values())
     result = json.loads(export_runtime_configuration(profile, tmp_path/'runtime.json').read_text())
     assert result['configuration']['_mission_recipe']['source']['type'] == 'configured_slots'
