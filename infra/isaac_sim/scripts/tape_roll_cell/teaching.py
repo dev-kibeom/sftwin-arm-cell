@@ -2,7 +2,7 @@
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation, Slerp
-from internal_grasp_geometry import origin_transform
+from gripper_runtime.radial_geometry import origin_transform
 
 
 class TeachingSolver:

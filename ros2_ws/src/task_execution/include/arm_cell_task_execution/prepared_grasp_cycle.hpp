@@ -11,6 +11,7 @@ namespace arm_cell_task_execution
 struct PreparedGraspCycle
 {
   arm_cell_motion::GraspSpecification grasp;
+  arm_cell_motion::GraspExecutionIdentity identity;
   std::string approach_motion;
   std::string insertion_motion;
   std::string transfer_motion;

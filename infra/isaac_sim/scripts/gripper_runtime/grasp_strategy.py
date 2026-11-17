@@ -80,7 +80,7 @@ class InternalRadialGraspStrategy:
     name = 'internal_radial'
 
     def __init__(self, geometry, requirement, tolerance):
-        from internal_grasp_geometry import qualify_capture
+        from gripper_runtime.radial_geometry import qualify_capture
         self._qualify = qualify_capture
         self.tolerance = float(tolerance)
         if not math.isfinite(self.tolerance) or self.tolerance < 0:

@@ -117,6 +117,10 @@ public:
   virtual bool measured_joint_state(sensor_msgs::msg::JointState &) const {return false;}
   virtual bool measured_tcp_pose(geometry_msgs::msg::PoseStamped &) const {return false;}
   virtual bool command_normalized_gripper(double opening) = 0;
+  virtual bool supports_grasp_strategy(GraspStrategy strategy) const
+  {return strategy == GraspStrategy::BOX_EXTERIOR;}
+  virtual bool prepare_configured_grasp(const GraspSpecification &, const GraspExecutionIdentity &)
+  {return false;}
   virtual bool command_gripper_close() {return false;}
   virtual bool command_gripper_close(double /* grip_force_n */) {return false;}
   virtual bool command_gripper_release() {return command_normalized_gripper(1.0);}

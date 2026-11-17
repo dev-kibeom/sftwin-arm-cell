@@ -1,20 +1,57 @@
 tool_id: hand_e_c10_long
-display_name: Hand-E C10 + 100 mm 핑거 (모델·관절 실험 전용)
+display_name: Hand-E C10 + 100 mm 핑거
 tool_type: radial_gripper
 runtime:
-  grasp_strategies: [internal_radial]
-  actuator: joint_position
-  grasp: none
-  supported_combinations: []
-  launcher_modes: []
+  grasp_strategies:
+  - internal_radial
+  actuator: physics
+  grasp: physical
+  supported_combinations:
+  - - physics
+    - physical
+  launcher_modes:
+  - id: physical_real
+    label: Physical Real
+    combination:
+    - physics
+    - physical
+    description: 세 핑거의 실제 접촉·팽창으로 보유를 확인하고 마찰로 유지합니다. 수축과 접촉 소실로 해제를 확인합니다.
   capabilities:
   - joint_position
+  - actuator_observation
   primary_joint: gripper_hande_c10_finger_1_joint
   drive_stiffness: 10000.0
   drive_damping: 100.0
   sweep_duration_s: 2.0
   position_tolerance_m: 0.0002
-  finger_tip_links:
+  finger_tip_links: &id001
   - gripper_hande_c10_extension_1
   - gripper_hande_c10_extension_2
   - gripper_hande_c10_extension_3
+  implementation: hand_e_c10_physical
+  isaac_prepare: gripper_runtime.radial_bootstrap:prepare
+  isaac_bootstrap: gripper_runtime.radial_bootstrap:bootstrap
+  max_velocity_fraction: 0.5
+  physical:
+    preload_m: 0.001
+    tolerance_m: 0.0002
+    contact_threshold_n: 0.2
+    dwell_s: 0.15
+contact_links:
+  payload_touch_links: *id001
+  pick_retract: *id001
+grasp_pose_collision_links:
+- gripper_hand_e_c10_base_link
+- gripper_hande_c10_extension_1
+- gripper_hande_c10_extension_2
+- gripper_hande_c10_extension_3
+motion:
+  tool_axis_quaternion_xyzw:
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  insertion_axis_tcp:
+  - 0.0
+  - 0.0
+  - 1.0

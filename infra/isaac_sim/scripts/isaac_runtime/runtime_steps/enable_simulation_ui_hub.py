@@ -61,5 +61,10 @@ def enable_simulation_ui_hub():
 
 
 if __name__ == "__main__":
-    enabled = enable_simulation_ui_hub()
-    print("Simulation UI Hub is enabled and available in this Kit session.")
+    selected_ui = globals().get('runtime_configuration', {}).get('cell', {}).get('isaac', {}).get('operator_ui')
+    if selected_ui:
+        from isaac_runtime.runtime_workflow import call_selected
+        call_selected(selected_ui, configuration=runtime_configuration, namespace=globals())
+    else:
+        enabled = enable_simulation_ui_hub()
+        print('Simulation UI Hub is enabled and available in this Kit session.')

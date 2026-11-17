@@ -1,12 +1,13 @@
 display_name: Tape Handling Cell
-execution_support:
-  models: [m0609_hand_e_c10, m0609_hand_e_c10_long]
-  scene_build: true
-  native_task_bt_physical_fixture: true
-  ros_mission: false
 isaac:
   scene_builder: tape_roll_cell.scene:build_scene
   robot_prim_path: /World/Robot
+  configuration_compiler: tape_roll_cell.configuration:compile_cell
+  material_supply_factory: tape_roll_cell.cell_runtime:create_adapter
+  action_graph_builder: tape_roll_cell.runtime:build_action_graph
+  camera_snapshot: tape_roll_cell.runtime:snapshot_camera
+  action_graph_path: /World/TapeRollCell/ROS2/ActionGraph
+  operator_ui: tape_roll_cell.runtime:enable_operator_ui
 tape_roll:
   insertion_depth_m: 0.02
   supply_center_m:
@@ -20,11 +21,6 @@ tape_roll:
   extract_lift_m: 0.015
   release_clearance_m: 0.004
   move_duration_s: 5.0
-  physical:
-    preload_m: 0.001
-    tolerance_m: 0.0002
-    contact_threshold_n: 0.2
-    dwell_s: 0.15
   teaching:
     hand_e_c10:
       approach:
@@ -120,3 +116,13 @@ tape_roll:
     - 1.0
     - 0.0
     - 0.0
+world_to_base:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  roll: 0.0
+  pitch: 0.0
+  yaw: 0.0
+configured_supply:
+  supply_id: tape_cartridge
+  material_id: TapeRoll17

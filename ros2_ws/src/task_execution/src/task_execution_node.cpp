@@ -8,6 +8,8 @@
 
 #include "arm_cell_motion/motion_node.hpp"
 #include "arm_cell_task_execution/execute_pnp_action_server.hpp"
+#include "arm_cell_task_execution/execute_configured_grasp_action_server.hpp"
+#include "arm_cell_task_execution/configured_grasp_catalog.hpp"
 #include "arm_cell_task_execution/execute_disturb_action_server.hpp"
 #include "arm_cell_task_execution/legacy_execute_task_action_server.hpp"
 #include "arm_cell_task_execution/task_execution_strategy.hpp"
@@ -65,6 +67,11 @@ int main(int argc, char ** argv)
     }
     task_executor->set_grip_force_policy(std::move(grip_policy));
   }
+  const auto configured_cycles = arm_cell_task_execution::parse_configured_grasp_cycles(
+    motion->declare_parameter<std::string>("configured_grasp_cycles_json", "{}", strategy_descriptor));
+  auto configured_action_server =
+    std::make_shared<arm_cell_task_execution::ExecuteConfiguredGraspActionServer>(
+    motion.get(), motion->motion_core(), task_executor, configured_cycles);
   auto pnp_action_server = std::make_shared<arm_cell_task_execution::ExecutePnpActionServer>(
     motion.get(), motion->motion_core(), task_executor);
   auto disturb_action_server =

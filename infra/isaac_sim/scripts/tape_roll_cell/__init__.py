@@ -1,1 +1,1 @@
-"""Minimal horizontal tape-roll experiment plugin; independent of CNC Cell."""
+"""Horizontal Tape Handling Cell plugin with configured cartridge supply."""

@@ -78,3 +78,28 @@ def test_stop_near_joint_limit_uses_a_legal_hold_target():
     values[:] = [.01920001]*3  # finite PhysX solver residual, not a new limit
     radial.command(ToolIntent.STOP)
     assert writes[-1] == .0192
+
+
+def test_operational_update_consumes_injected_fresh_contacts_without_width_api():
+    radial, values, _ = tool()
+    samples = iter(([1.,1.,1.], None))
+    radial.read_contacts = lambda dt: next(samples)
+    radial.command(ToolIntent.GRASP)
+    values[:] = [.009]*3
+    radial.target = .008
+    radial.update(.2)
+    assert radial.holding_observation().state.value == 'held'
+    radial.update(.01)
+    assert radial.holding_observation().state.value == 'unknown'
+    assert not hasattr(radial, 'get_width')
+
+
+def test_stopped_actuator_stays_suspended_until_new_binding_on_play():
+    radial, _, _ = tool()
+    radial.reset_stopped_state()
+    radial.measure = lambda: (_ for _ in ()).throw(RuntimeError('old DC handle'))
+    radial.update(.01)
+    assert radial.observation()['positions_m'] is None
+    assert radial.holding_observation().state.value == 'unknown'
+    with pytest.raises(ValueError):
+        radial.command(ToolIntent.GRASP)

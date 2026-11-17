@@ -159,23 +159,14 @@ def test_experimental_hcr14_is_selectable_without_replacing_default(tmp_path):
     assert exported['configuration']['tool']['tool_id'] == 'robotiq_2f85'
 
 
-@pytest.mark.parametrize('robot_id', ['m0609', 'hcr14'])
+
+
 @pytest.mark.parametrize('suffix', ['', '_long'])
-def test_c10_model_experiment_is_separate_from_grasp_deployments(robot_id, suffix):
-    from launcher import model_experiments
-    from arm_cell_bringup.model_experiment import load_model_experiment
-    entries = model_experiments(ROOT)
-    c10 = next(entry for entry in entries if entry['profile'].stem == f'{robot_id}_hand_e_c10{suffix}')
-    config = load_model_experiment(c10['profile'])
-    assert config['execution_scope'] == 'model_only'
-    assert not config['tool']['runtime']['supported_combinations']
-    assert all('hand_e_c10' not in str(entry['tool']) for entry in deployments(ROOT))
-
-
-def test_tape_cell_registers_only_native_physical_fixture_execution():
-    from launcher import cell_fixtures
-    entries = cell_fixtures(ROOT)
-    assert {entry['profile'].stem for entry in entries} == {
-        'm0609_hand_e_c10_tape', 'm0609_hand_e_c10_long_tape'}
-    assert all(entry['execution'] == 'native_task_bt_physical_fixture' for entry in entries)
-    assert all(Path(entry['cell']).stem != 'tape_roll_cell' for entry in deployments(ROOT))
+def test_c10_is_registered_as_formal_physical_real_deployment(suffix):
+    from launcher import tool_mode_choices
+    entry=next(item for item in deployments(ROOT) if item['profile'].stem==f'tape_m0609_c10{suffix}_profile')
+    from arm_cell_bringup.runtime import read
+    modes=tool_mode_choices(read(entry['tool']))
+    assert [mode['id'] for mode in modes]==['physical_real']
+    selection={key:entry[key] for key in profile_choices(ROOT)}
+    assert selected_deployment(deployments(ROOT),selection)==entry

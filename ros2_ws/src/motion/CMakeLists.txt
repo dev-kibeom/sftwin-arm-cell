@@ -178,6 +178,8 @@ ament_export_dependencies(
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_taught_entry_timing tests/test_taught_entry_timing.cpp)
+  target_link_libraries(test_taught_entry_timing ${PROJECT_NAME}_core)
   ament_add_gtest(test_taught_motion_trajectory tests/test_taught_motion_trajectory.cpp)
   target_link_libraries(test_taught_motion_trajectory ${PROJECT_NAME}_core)
   ament_add_gtest(test_taught_motion tests/test_taught_motion.cpp)

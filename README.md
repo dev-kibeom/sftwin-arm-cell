@@ -99,7 +99,7 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 ## Tape Handling Cell
 
-M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Cell Profile로 배치·티칭·공급 상태를 분리하며, 지원 실행은 native 공통 Task BT fixture입니다. ROS Mission 연결은 지원하지 않습니다.
+M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Launcher의 정식 Physical Real 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.
 
 ## 설계 기록과 Sim-to-Real 방향
 

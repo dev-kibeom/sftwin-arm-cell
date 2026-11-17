@@ -686,6 +686,9 @@ def compose(context):
     )
     profile_path = Path(LaunchConfiguration("profile").perform(context))
     config = load_profile(profile_path)
+    if config.get('orchestration', {}).get('material_source') == 'configured_slots':
+        from arm_cell_bringup.configured_supply_launch import compose as compose_configured_supply
+        return compose_configured_supply(config, profile_path, selected_log_level)
     material_handoff_config = dict(config.get("material_handoff", {}))
     motion_parameters = profile_parameters(config, "motion")
     motion_share = Path(get_package_share_directory("arm_cell_motion"))

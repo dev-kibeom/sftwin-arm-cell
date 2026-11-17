@@ -20,10 +20,12 @@
   <depend>nlohmann-json-dev</depend>
 
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
   </export>
+  <exec_depend>rclpy</exec_depend>
 </package>

@@ -19,6 +19,7 @@ public:
   std::uint8_t failure{Code::TASK_RESULT_PATH_OBSTRUCTED};
   int committed{0};
   int cleared{0};
+  bool fail_clear{false};
   MotionPortResult planAndExecuteMotion(const MotionPortRequest &) override
   {
     return MotionPortResult();
@@ -40,7 +41,7 @@ public:
     ++committed;
     return true;
   }
-  void clearGraspRelationAfterRelease() override { ++cleared; }
+  void clearGraspRelationAfterRelease() override {if (fail_clear) {throw std::runtime_error("scene sync failed");} ++cleared; }
 };
 class FixtureTool : public GripperPort
 {
@@ -50,6 +51,7 @@ public:
   HoldingState state{HoldingState::UNKNOWN};
   std::uint64_t sequence{0};
   bool confirm_grasp{true};
+  GraspExecutionIdentity configured_identity;
   explicit FixtureTool(FixtureMotion & m, GraspStrategy s) : motion(m), strategy(s) {}
   bool supportsGraspStrategy(GraspStrategy requested) const override
   {
@@ -59,6 +61,12 @@ public:
   {
     return supportsGraspStrategy(spec.strategy) ? Code::TASK_RESULT_SUCCESS
                                                 : Code::TASK_RESULT_INVALID_GOAL;
+  }
+  std::uint8_t prepareConfiguredGrasp(
+    const GraspSpecification & spec, const GraspExecutionIdentity & identity) override
+  {
+    configured_identity = identity;
+    return prepareGrasp(spec);
   }
   std::uint8_t grasp() override
   {
@@ -227,3 +235,71 @@ TEST(GraspCycle, RejectedNextOperationDoesNotExposePreviousInsertionEvidence)
   EXPECT_FALSE(executor.pick_grasp_insertion_started());
 }
 } // namespace arm_cell_task_execution
+
+#include "arm_cell_task_execution/configured_grasp_catalog.hpp"
+TEST(ConfiguredGraspCatalog, RejectsUntrustedCallerSlotAndMalformedTrustedGeometry)
+{
+  using namespace arm_cell_task_execution;
+  EXPECT_THROW(parse_configured_grasp_cycles(R"({"slot":{}})"), std::invalid_argument);
+  EXPECT_TRUE(parse_configured_grasp_cycles("{}").empty());
+}
+
+namespace arm_cell_task_execution
+{
+TEST(ConfiguredGraspExecution, SuppliesTrustedMetadataAndPreservesReleaseOnRetreatFailure)
+{
+  using namespace arm_cell_task_execution;
+  using namespace arm_cell_motion;
+  const auto catalog = parse_configured_grasp_cycles(R"({"slot_0":{
+    "supply_id":"tape", "material_id":"Tape17",
+    "grasp":{"strategy":"internal_radial","insertion_depth_m":0.012,"thickness_m":0.017,
+      "inner_radius_m":0.025,"release_position_m":0.02,"grasp_position_m":0.01},
+    "approach_motion":"fixture_approach","insertion_motion":"fixture_insert",
+    "transfer_motion":"fixture_transfer","retreat_motion":"fixture_retreat"}})");
+  auto request = catalog.at("slot_0");
+  request.identity.execution_id = execution_id;
+  request.identity.supply_epoch = "epoch";
+  request.identity.reservation_id = "reservation";
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  motion->fail_motion = "fixture_retreat";
+  TaskExecutor executor(motion, tool);
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_PATH_OBSTRUCTED);
+  EXPECT_EQ(tool->configured_identity.slot_id, "slot_0");
+  EXPECT_EQ(tool->configured_identity.material_id, "Tape17");
+  EXPECT_EQ(tool->configured_identity.execution_id, execution_id);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+}
+
+}  // namespace arm_cell_task_execution
+
+namespace arm_cell_task_execution
+{
+TEST(ConfiguredGraspExecution, RejectsPartialOrMismatchedExecutionIdentityBeforeActuation)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  TaskExecutor executor(motion, tool);
+  auto request = cycle(GraspStrategy::INTERNAL_RADIAL);
+  request.identity.slot_id = "slot_0";
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_INVALID_GOAL);
+  request.identity = {"11111111111111111111111111111111", "Tape", "supply", "slot_0", "epoch", "reservation"};
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id), Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_TRUE(motion->events.empty());
+}
+}
+
+namespace arm_cell_task_execution
+{
+TEST(ConfiguredGraspExecution, PhysicalReleaseRemainsPlacedWhenSceneSynchronizationFails)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  motion->fail_clear = true;
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
+  TaskExecutor executor(motion, tool);
+  auto request = cycle(GraspStrategy::INTERNAL_RADIAL);
+  request.identity = {execution_id, "Tape", "supply", "slot_0", "epoch", "reservation"};
+  EXPECT_THROW(executor.execute_grasp_cycle(request, execution_id), std::runtime_error);
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+}
+}

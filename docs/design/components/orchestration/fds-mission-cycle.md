@@ -583,3 +583,7 @@ Task Execution Action이 취소 terminal status를 반환하면 Orchestration이
 - [Observability Records ICD](../../interfaces/icd-observability-records.md)
 - [Simulation Environment Semantics](../simulation-environment-semantics.md)
 - [Controlled Recovery FDS](fds-controlled-recovery.md)
+
+## Configured source
+
+정렬 슬롯 Mission은 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)의 별도 작업 원천으로 Cell 예약·실제 수령 확인을 사용한다. 이 source는 Vision Acquisition을 발행하지 않으며, 기존 Vision source의 관측·후보 정책은 유지한다.

@@ -250,3 +250,7 @@ Real 접촉 진단은 Physics dt와 robot/body별 좌우 반력을 남기며 한
 기존 양손가락 Qualification과 별개이며 Real Held 조건을 강화하거나 완화하지 않는다.
 Actuator 진단의 max_drive_effort_nm은 구동 상한이고 joint_effort_nm은 중력 등을 포함한 관측값이다.
 실제 유지력·마찰·관통/진동은 라이브 검증이 필요하다.
+
+## C10 Physical Real
+
+M0609 Tape Cell은 일반 Launcher의 Physical Real 모드로 C10/Long을 선택한다. 실제 prismatic drive와 세 예약 대상 접촉·팽창 obstruction/dwell을 사용하며, 수축·접촉 소실 뒤 RELEASED를 발행한다. 폭·두 손가락 힘 정책은 사용하지 않는다. 정식 ROS Task/Mission은 configured 슬롯 예약을 사용하고 Vision 결과를 합성하지 않는다. 자세한 실행은 [Tape Cell 안내](scripts/tape_roll_cell/README.md)를 따른다.

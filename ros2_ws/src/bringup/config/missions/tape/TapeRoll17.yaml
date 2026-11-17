@@ -1,0 +1,7 @@
+schema_version: 3
+mission_id: tape_roll_transfer
+target_id: TapeRoll17
+source:
+  type: configured_slots
+  supply_id: tape_cartridge
+material: ../../materials/tape_roll/17mm.yaml

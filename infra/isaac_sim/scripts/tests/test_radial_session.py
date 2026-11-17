@@ -1,0 +1,161 @@
+"""Operational radial transactions correlate reserved targets and measured Holding."""
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+import pytest
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from gripper_runtime.radial_manager import RadialCapture, RadialGraspManager
+from gripper_runtime.grasp_attachment import HoldingObservation, HoldingState
+
+PACKET = dict(motion_goal_uuid='a'*32, strategy='internal_radial', material_id='TapeRoll17',
+              supply_id='tape_cartridge', slot_id='slot_0', supply_epoch='b'*32,
+              reservation_id='c'*32, insertion_depth_m=.02, thickness_m=.017, inner_radius_m=.06)
+
+class Geometry:
+    def solve_bore(self, *args):
+        return dict(grasp_position_m=.009, release_position_m=.0192)
+
+class Binding:
+    valid = True
+    def resolve_target(self, packet): return '/material' if self.valid else None
+    def relative_transform(self, path): return [1.,0.,0.,.1,0.,1.,0.,0.,0.,0.,1.,0.,0.,0.,0.,1.]
+
+class Actuator:
+    strategy = None
+    intent = None
+    sample = HoldingObservation(HoldingState.UNKNOWN, 0., 1)
+    def holding_observation(self): return self.sample
+    def cancel_motion(self): self.intent = 'STOP'
+
+
+def make():
+    binding, actuator = Binding(), Actuator()
+    capture = RadialCapture(dict(grasp_strategies=['internal_radial'], position_tolerance_m=.0002), Geometry())
+    manager = RadialGraspManager(actuator, tool=SimpleNamespace(capture=capture), binding=binding)
+    return manager, binding, actuator
+
+
+def test_decoder_rejects_missing_identity_and_nonfinite_geometry():
+    manager, _, _ = make()
+    assert manager.tool.capture.decode_reference(PACKET) == PACKET
+    for replacement in ({'reservation_id':''}, {'motion_goal_uuid':'bad'}, {'inner_radius_m':float('nan')}):
+        assert manager.tool.capture.decode_reference({**PACKET, **replacement}) is None
+
+
+def test_only_correlated_reserved_target_can_publish_holding_and_relation():
+    manager, binding, actuator = make()
+    assert manager.configure_selected_grasp_reference(PACKET)
+    assert not manager.arm_close_transaction('d'*32)
+    assert manager.arm_close_transaction('a'*32)
+    actuator.sample = HoldingObservation(HoldingState.HELD, 1., 2)
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.HELD
+    assert manager.accepted_execution_id == 'a'*32
+    assert manager.accepted_relation[3] == .1
+    binding.valid = False
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.UNKNOWN
+    assert manager.accepted_relation is None
+
+
+def test_invalidation_and_release_do_not_reuse_prior_held():
+    manager, _, actuator = make()
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction('a'*32)
+    manager.note_open_release_command_applied(2, None)
+    actuator.sample = HoldingObservation(HoldingState.HELD, 1., 2)
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.UNKNOWN
+    actuator.sample = HoldingObservation(HoldingState.RELEASED, 1., 3)
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.RELEASED
+    manager.configure_selected_grasp_reference(dict(motion_goal_uuid='a'*32, invalidate=True))
+    assert manager.capture_reference_id is None
+    assert manager.attachment_owned() is False
+
+
+def test_target_identity_requires_live_reservation_and_unique_body():
+    from gripper_runtime.radial_binding import reserved_identity_matches, target_contact_forces
+    attrs = {f'arm_cell:{key}': PACKET[key] for key in
+             ('material_id','supply_id','slot_id','supply_epoch','reservation_id')}
+    attrs['arm_cell:occupied'] = True
+    assert reserved_identity_matches(attrs.get, PACKET)
+    attrs['arm_cell:reservation_id'] = 'd'*32
+    assert not reserved_identity_matches(attrs.get, PACKET)
+    contacts = [dict(actor0='/target',actor1='/finger1',lost=False,
+                     points=[dict(impulse=(.01,0.,0.))]),
+                dict(actor0='/other',actor1='/finger2',lost=False,
+                     points=[dict(impulse=(99.,0.,0.))])]
+    assert target_contact_forces(contacts, '/target', ('/finger1','/finger2','/finger3'), .01) == [1.,0.,0.]
+    assert target_contact_forces(None, '/target', ('/finger1','/finger2','/finger3'), .01) is None
+
+
+def test_prior_transaction_observation_cannot_prove_new_close():
+    manager, _, actuator = make()
+    actuator.sample = HoldingObservation(HoldingState.HELD, 1., 20)
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction('a'*32)
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.UNKNOWN
+
+
+def test_retired_ack_can_still_be_invalidated_by_its_execution_identity():
+    manager, _, actuator = make()
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction('a'*32)
+    manager.configure_selected_grasp_reference(dict(motion_goal_uuid='a'*32, invalidate=True, retire_pending=True))
+    manager.configure_selected_grasp_reference(dict(motion_goal_uuid='a'*32, invalidate=True))
+    assert manager._close_id is None
+    assert actuator.intent == 'STOP'
+
+
+def test_release_receipt_survives_reference_retirement_but_not_new_command():
+    manager, _, actuator = make()
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction('a'*32)
+    manager.note_open_release_command_applied(2, None)
+    actuator.sample = HoldingObservation(HoldingState.RELEASED, 1., 30)
+    manager.update(.01)
+    receipt = manager.release_receipt()
+    assert receipt['reservation_id'] == 'c'*32
+    assert receipt['execution_id'] == 'a'*32
+    manager.configure_selected_grasp_reference(dict(motion_goal_uuid='a'*32, invalidate=True))
+    actuator.sample = HoldingObservation(HoldingState.RELEASED, 1., 31)
+    manager.update(.01)
+    assert manager.release_receipt()['reservation_id'] == 'c'*32
+    manager.cancel_tool_transaction()
+    assert manager.release_receipt() is None
+
+
+def test_stopped_reset_does_not_touch_destroyed_dynamic_control_handles():
+    manager, binding, actuator = make()
+    writes = []
+    binding.reset_stopped_tool = lambda tool: writes.append('stopped_reset') or True
+    actuator.cancel_motion = lambda: (_ for _ in ()).throw(RuntimeError('DC destroyed'))
+    assert manager.reset_for_simulation_stop()
+    assert writes == ['stopped_reset']
+    assert not manager.ready
+    assert manager.release_receipt() is None
+    # A replacement bootstrap runs after the next Play, while this old manager
+    # still has obsolete DC handles. Its shutdown must remain idempotent.
+    assert manager.shutdown()
+    assert writes == ['stopped_reset']
+
+
+def test_unselected_release_observes_all_fingers_without_accepting_invalid_lease():
+    from types import SimpleNamespace
+    from gripper_runtime.radial_binding import IsaacRadialBinding
+    binding = IsaacRadialBinding.__new__(IsaacRadialBinding)
+    binding.finger_bodies = ('/finger1', '/finger2', '/finger3')
+    binding.target_reference = None
+    binding.observer = SimpleNamespace(snapshot=[], advance=lambda:None)
+    assert binding.read_contacts(.01) == [0., 0., 0.]
+    binding.observer.snapshot = [dict(actor0='/fixture',actor1='/finger2',lost=False,
+        points=[dict(impulse=(.01,0.,0.))])]
+    assert binding.read_contacts(.01) == [0., 1., 0.]
+    binding.observer.snapshot = None
+    assert binding.read_contacts(.01) is None
+    binding.observer.snapshot = []
+    binding.target_reference = {'reservation_id':'invalid'}
+    binding.resolve_target = lambda _:None
+    assert binding.read_contacts(.01) is None

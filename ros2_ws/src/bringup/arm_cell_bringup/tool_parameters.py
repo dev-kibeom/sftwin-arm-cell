@@ -2,6 +2,15 @@
 import math
 
 # path, display label with unit, minimum, maximum, advanced, modes
+RADIAL_FIELDS = [
+    ('drive_stiffness', 'Drive 강성 (N/m)', 1e-6, 1e7, True, ('physics',)),
+    ('drive_damping', 'Drive 감쇠 (N·s/m)', 1e-6, 1e7, True, ('physics',)),
+    ('max_velocity_fraction', '관절 속도 제한 비율', .001, 1., False, ('physics',)),
+    ('physical.preload_m', '내측 접촉 Preload (m)', 1e-6, .01, True, ('physics',)),
+    ('physical.contact_threshold_n', '핑거별 접촉력 임계값 (N)', 1e-6, 1000., True, ('physics',)),
+    ('physical.dwell_s', '접촉 유지 판정 시간 (s)', .001, 60., True, ('physics',)),
+]
+
 FIELDS = [
     ('move_duration_s', '논리 구동 시간 (s)', 0.001, 60., False, ('logical',)),
     ('physics.speed_fraction', '구동 속도 비율', 0.001, 1., False, ('physics',)),
@@ -26,7 +35,8 @@ FIELDS = [
 
 def available_fields(runtime):
     actuator, grasp = runtime['actuator'], runtime['grasp']
-    for field in FIELDS:
+    fields = RADIAL_FIELDS if 'internal_radial' in runtime.get('grasp_strategies', []) else FIELDS
+    for field in fields:
         modes = field[5]
         if actuator in modes or (actuator == 'physics' and grasp in modes):
             try:
@@ -56,7 +66,7 @@ def apply_tool_parameters(runtime, overrides):
         for key in keys[:-1]:
             target = target[key]
         target[keys[-1]] = value
-    if runtime['actuator'] == 'physics':
+    if runtime['actuator'] == 'physics' and 'physics' in runtime:
         material = runtime['physics']['contact_material']
         if material['dynamic_friction'] > material['static_friction']:
             raise ValueError('동적 마찰계수는 정지 마찰계수 이하여야 합니다.')

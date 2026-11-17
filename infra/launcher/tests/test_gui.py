@@ -398,36 +398,20 @@ def test_grasp_parameter_producer_rejects_invalid_overrides(window, tmp_path):
             launcher.export_selection(dict(entry, tool_parameters=parameters), tmp_path / 'bad.json')
 
 
-def test_model_experiment_cannot_start_ros(app, window, monkeypatch):
-    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
-    entry = launcher.model_experiments()[0]
-    window.start_model_experiment(entry)
-    assert len(calls) == 1
-    assert calls[0][1][1].endswith('run_model_experiment.sh')
-    assert not window.ros.isEnabled()
-    assert '파지 미지원' in window.status.text()
-    assert all(not button.isEnabled() for button in window.experiment_buttons)
-    window.start_ros()
-    assert len(calls) == 1
-    window.begin_stop()
-    until(app, window, lambda: not window.stopping)
-    assert all(button.isEnabled() for button in window.experiment_buttons)
 
-
-def test_cell_fixture_runs_one_cartridge_and_cannot_start_ros(app, window, monkeypatch, tmp_path):
-    entry = launcher.cell_fixtures()[0]
-    library = tmp_path / 'ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so'
-    library.parent.mkdir(parents=True)
-    library.touch()
-    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
-    monkeypatch.setattr(launcher, 'ROOT', tmp_path)
-    window.start_cell_fixture(entry)
-    assert len(calls) == 1
-    assert calls[0][1][1].endswith('tape_roll_cell/run.sh')
-    assert calls[0][1][-2:] == ['--cycles', '1']
-    assert not window.ros.isEnabled()
-    assert '물리 이송' in window.status.text()
+def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch):
+    entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
+    for key,combo in window.selectors.items():
+        combo.setCurrentIndex(combo.findData(entry[key]))
+    assert window.tool_mode.currentData()==['physics','physical']
+    assert window.isaac.isEnabled()
+    assert not hasattr(window,'experiment_buttons')
+    assert not hasattr(window,'start_model_experiment')
+    calls=fake_spawn(window,monkeypatch,{'isaac':WAIT,'ros':WAIT})
+    window.start_isaac()
+    assert calls[0][1][1].endswith('isaac_arm_cell.sh')
+    assert window.ros.isEnabled()
     window.start_ros()
-    assert len(calls) == 1
+    assert len(calls)==2
     window.begin_stop()
-    until(app, window, lambda: not window.stopping)
+    until(app,window,lambda:not window.stopping)

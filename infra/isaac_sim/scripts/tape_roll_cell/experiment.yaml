@@ -1,4 +1,0 @@
-# Single-roll experiment reuses the Cell-owned layout, material and teaching.
-cell: package://arm_cell_bringup/config/cells/tape_roll_cell.yaml
-slot_count: 1
-tool_drive: package://arm_cell_motion/config/tools/physical_fixture/hand_e_c10_drive.yaml

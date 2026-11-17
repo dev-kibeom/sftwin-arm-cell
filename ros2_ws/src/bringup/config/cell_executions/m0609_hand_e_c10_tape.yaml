@@ -1,7 +1,0 @@
-kind: arm-cell-physical-fixture
-schema_version: 1
-display_name: Tape Handling Cell / M0609 + hand_e_c10 / native Task BT physical fixture
-model_experiment: ../model_experiments/m0609_hand_e_c10.yaml
-cell: ../cells/tape_roll_cell.yaml
-execution: native_task_bt_physical_fixture
-tool_drive: package://arm_cell_motion/config/tools/physical_fixture/hand_e_c10_drive.yaml

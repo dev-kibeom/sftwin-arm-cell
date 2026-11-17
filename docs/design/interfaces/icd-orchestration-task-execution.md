@@ -169,3 +169,7 @@ Task Execution의 내부 복구는 같은 Goal에 남는다. 다음 Target의 Ac
 - [Vision–Orchestration ICD](icd-vision-orchestration.md)
 - [Task Execution–Motion ICD](icd-task-execution-motion.md)
 - [ExecuteCycle ICD](icd-orchestration-execute-cycle.md)
+
+## Configured-source 작업
+
+Vision Acquisition을 사용하는 ExecutePnp와 별도로 정렬 슬롯은 [Configured Supply ICD](icd-configured-supply.md)의 ExecuteConfiguredGrasp를 사용한다. 동일 Task Execution·Motion instance와 공통 GraspCycle BT를 사용하며, 슬롯을 Vision 후보로 변환하지 않는다.

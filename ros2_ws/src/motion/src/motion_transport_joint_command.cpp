@@ -337,6 +337,17 @@ bool IsaacRosMotionTransport::named_joint_motion_available() const
          current_state_fresh();
 }
 
+bool IsaacRosMotionTransport::execute_taught_entry(
+  const NormalizedTrajectoryPlan & entry, const std::function<bool()> & discard_if_interrupted,
+  const std::vector<JointMotionLimit> & effective_limits)
+{
+  // A named path's global entry must retain the planned trajectory even when
+  // legacy direct-target execution is configured for ordinary movements.
+  return execute_planned_trajectory(
+    entry.request, entry.trajectory, false, false, entry.planning_scales,
+    discard_if_interrupted, &effective_limits);
+}
+
 uint8_t IsaacRosMotionTransport::execute_taught_motion(
   const std::string & motion, const std::string & execution_id,
   const std::function<uint8_t()> & interruption)
@@ -370,24 +381,7 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
   if (!envelope.valid) {return Code::TASK_RESULT_PERMISSION_DENIED;}
   const auto scales = apply_motion_envelope_to_planning_scales(
     found->second.velocity_scale, found->second.acceleration_scale, envelope);
-  const auto generated = make_taught_joint_trajectory(
-    arm_joint_names_, start, found->second.joint_positions, taught_joint_limits_,
-    scales.max_velocity, scales.max_acceleration);
-  if (!generated.valid) {
-    RCLCPP_WARN(node_->get_logger(), "Named joint motion rejected: %s", generated.reason.c_str());
-    return Code::TASK_RESULT_INVALID_GOAL;
-  }
-  if (diagnostics_capture_enabled_) {
-    const auto & final_time = generated.trajectory.points.back().time_from_start;
-    set_pending_motion_planning_evidence(
-      execution_id, arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME,
-      nlohmann::json{
-        {"decision", "named_joint_motion"}, {"motion_name", motion},
-        {"planner", "not_used"}, {"start_joint_positions", start},
-        {"target_joint_positions", found->second.joint_positions},
-        {"velocity_scale", scales.max_velocity}, {"acceleration_scale", scales.max_acceleration},
-        {"duration_s", final_time.sec + final_time.nanosec * 1e-9}}.dump());
-  }
+  const auto & taught = found->second;
   auto effective_limits = taught_joint_limits_;
   for (auto & limit : effective_limits) {
     limit.max_velocity *= scales.max_velocity;
@@ -406,6 +400,85 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
       normalized_failure_result_ = result;
       return true;
     };
+  if (taught.plan_to_start && !taught.joint_path.empty()) {
+    // Validate the trusted final path before issuing any entry movement.
+    const auto valid_path = make_taught_path_trajectory(
+      arm_joint_names_, taught.joint_path.front(), taught.joint_path, taught_joint_limits_,
+      taught.duration_s, scales.max_velocity, scales.max_acceleration);
+    if (!valid_path.valid) {return Code::TASK_RESULT_INVALID_GOAL;}
+    request.observation_pose.header.frame_id = "base_link";
+    NormalizedTrajectoryPlan entry;
+    if (!submit_normalized_once(
+        request, &taught.joint_path.front(), planning_time_s_, false, &entry, &scales))
+    {
+      const auto cause = interrupted();
+      RCLCPP_WARN(node_->get_logger(), "Named path entry planning failed motion=%s", motion.c_str());
+      if (cause != Code::TASK_RESULT_SUCCESS) {return cause;}
+      const auto failure = normalized_failure_result();
+      return failure;
+    }
+    if (!execute_taught_entry(entry, discard_if_interrupted, effective_limits))
+    {
+      const auto cause = interrupted();
+      return cause != Code::TASK_RESULT_SUCCESS ? cause : Code::TASK_RESULT_BACKEND_ERROR;
+    }
+    const auto entry_result = wait_for_joint_target_result();
+    if (entry_result != Code::TASK_RESULT_SUCCESS) {return entry_result;}
+    // The ordinary strict start check below consumes measured completion,
+    // never the planner's promised endpoint or a substituted joint state.
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (!latest_joint_state_ ||
+        std::chrono::steady_clock::now() - latest_state_receipt_ > kStateFreshness ||
+        !extract_arm_positions(*latest_joint_state_, start))
+      {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+    }
+  }
+  const auto generated = taught.joint_path.empty() ? make_taught_joint_trajectory(
+    arm_joint_names_, start, taught.joint_positions, taught_joint_limits_,
+    scales.max_velocity, scales.max_acceleration) : make_taught_path_trajectory(
+    arm_joint_names_, start, taught.joint_path, taught_joint_limits_, taught.duration_s,
+    scales.max_velocity, scales.max_acceleration);
+  if (!generated.valid) {
+    RCLCPP_WARN(node_->get_logger(), "Named joint motion rejected: %s", generated.reason.c_str());
+    return Code::TASK_RESULT_INVALID_GOAL;
+  }
+  // Configured Cartesian paths are trusted inputs, not collision exemptions.
+  // Validate every sampled state against the actual complete planning scene.
+  if (!taught.joint_path.empty()) {
+    if (!planning_scene_client_ ||
+      !planning_scene_client_->wait_for_service(std::chrono::milliseconds(500)))
+    {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+    auto query = std::make_shared<moveit_msgs::srv::GetPlanningScene::Request>();
+    query->components.components = pick_retract_planning_scene_components();
+    auto future = planning_scene_client_->async_send_request(query);
+    if (future.wait_for(std::chrono::seconds(1)) != std::future_status::ready)
+    {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+    const auto response = future.get();
+    std::lock_guard<std::mutex> group_lock(move_group_state_->mutex);
+    if (!response || !move_group_state_->move_group) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+    planning_scene::PlanningScene scene(move_group_state_->move_group->getRobotModel());
+    if (!scene.setPlanningSceneMsg(response->scene)) {return Code::TASK_RESULT_BACKEND_ERROR;}
+    moveit_msgs::msg::RobotState start_state;
+    moveit::core::robotStateToRobotStateMsg(scene.getCurrentState(), start_state, true);
+    start_state.joint_state.name = arm_joint_names_;
+    start_state.joint_state.position = start;
+    moveit_msgs::msg::RobotTrajectory trajectory;
+    trajectory.joint_trajectory = generated.trajectory;
+    if (!scene.isPathValid(start_state, trajectory, planning_group_))
+    {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
+  }
+  if (diagnostics_capture_enabled_) {
+    const auto & final_time = generated.trajectory.points.back().time_from_start;
+    set_pending_motion_planning_evidence(
+      execution_id, arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME,
+      nlohmann::json{
+        {"decision", "named_joint_motion"}, {"motion_name", motion},
+        {"planner", taught.plan_to_start ? "moveit_entry" : "not_used"}, {"start_joint_positions", start},
+        {"target_joint_positions", found->second.joint_positions},
+        {"velocity_scale", scales.max_velocity}, {"acceleration_scale", scales.max_acceleration},
+        {"duration_s", final_time.sec + final_time.nanosec * 1e-9}}.dump());
+  }
   if (!execute_planned_trajectory(
       request, generated.trajectory, false, false, scales, discard_if_interrupted,
       &effective_limits))

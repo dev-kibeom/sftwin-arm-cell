@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME}_core
   src/object_state_tracker.cpp
   src/task_execution_support.cpp
   src/task_executor.cpp
+  src/execute_configured_grasp_action_server.cpp
   src/execute_pnp_action_server.cpp
   src/execute_disturb_action_server.cpp
   src/legacy_execute_task_action_server.cpp
@@ -82,6 +83,10 @@ if(BUILD_TESTING)
   target_link_libraries(grasp_cycle_fixture_bridge ${PROJECT_NAME}_core)
   ament_add_pytest_test(test_grasp_cycle_fixture tests/test_grasp_cycle_fixture.py
     ENV "ARM_CELL_GRASP_FIXTURE_LIBRARY=$<TARGET_FILE:grasp_cycle_fixture_bridge>")
+  ament_add_gtest(test_configured_grasp_admission tests/test_configured_grasp_admission.cpp)
+  target_link_libraries(test_configured_grasp_admission ${PROJECT_NAME}_core)
+  ament_add_gtest(test_configured_supply_lease tests/test_configured_supply_lease.cpp)
+  target_link_libraries(test_configured_supply_lease ${PROJECT_NAME}_core)
   ament_add_gtest(test_grasp_cycle tests/test_grasp_cycle.cpp)
   target_link_libraries(test_grasp_cycle ${PROJECT_NAME}_core)
   ament_add_gtest(test_taught_motion_action tests/test_taught_motion_action.cpp)

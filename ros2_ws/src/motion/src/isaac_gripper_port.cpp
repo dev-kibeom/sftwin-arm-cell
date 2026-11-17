@@ -12,6 +12,20 @@ IsaacGripperPort::IsaacGripperPort(std::shared_ptr<IsaacMotionTransport> transpo
 {
 }
 
+bool IsaacGripperPort::supportsGraspStrategy(GraspStrategy strategy) const
+{return transport_ && transport_->supports_grasp_strategy(strategy);}
+
+uint8_t IsaacGripperPort::prepareConfiguredGrasp(
+  const GraspSpecification & spec, const GraspExecutionIdentity & identity)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  if (!spec.valid() || !identity.valid() || !supportsGraspStrategy(spec.strategy)) {
+    return Code::TASK_RESULT_INVALID_GOAL;
+  }
+  return transport_->prepare_configured_grasp(spec, identity) ? Code::TASK_RESULT_SUCCESS :
+    Code::TASK_RESULT_BACKEND_UNAVAILABLE;
+}
+
 uint8_t IsaacGripperPort::close()
 {
   if (!transport_) {

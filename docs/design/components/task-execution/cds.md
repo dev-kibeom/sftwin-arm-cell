@@ -127,3 +127,7 @@ Task Execution은 Motion C++ port를 사용할 수 있으나 Motion package/buil
 ### VR-TE-OWN-02 — 단일 런타임 인스턴스
 
 Bringup은 Task Execution Action server와 Motion runtime을 동일 ROS process에 조립하고 별도 `motion_node` 실행을 병행하지 않아야 한다. 정적 의존 방향은 Task Execution → Motion이어야 한다.
+
+## Configured-source 작업 조립
+
+정렬 공급의 ExecuteConfiguredGrasp server는 배포된 슬롯 registry와 예약 identity를 검증하고 동일 TaskExecutor·MotionCore·GripperPort로 공통 GraspCycle을 수행한다. 공유 의미는 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)가 소유한다. 시험용 MotionPort를 운영 조립에 사용하지 않는다.

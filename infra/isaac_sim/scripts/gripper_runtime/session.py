@@ -4,7 +4,7 @@ import logging
 import time
 from pathlib import Path
 
-from graph_builder.graph_contract import GRAPH_PATH
+from isaac_runtime.graph_contract import GRAPH_PATH
 from isaac_runtime.run_records import diagnostic_component_directory, run_records_root
 from isaac_runtime.environment_setup import resolve_diagnostics_selection
 
@@ -55,13 +55,13 @@ class GripperRuntimeSession:
             from isaac_runtime.robot_binding import RobotBinding
             configuration = configuration if configuration is not None else load_runtime_configuration()
             tool = select_tool_runtime(
-                configuration['tool'], RobotBinding.from_runtime(configuration)
+                configuration['tool'], RobotBinding.from_runtime(configuration), configuration=configuration
             )
         self.tool = tool
         self.gripper = tool.actuator if tool is not None else actuator_cls(verbose=True)
         self.sim_adapter = adapter_cls(
             gripper=self.gripper,
-            graph_path=GRAPH_PATH,
+            graph_path=(configuration or {}).get('cell', {}).get('isaac', {}).get('action_graph_path', GRAPH_PATH),
             move_duration=tool.move_duration if tool is not None else 0.40,
             **({"tool": tool} if tool is not None else {}),
             verbose=True,
@@ -348,7 +348,10 @@ class GripperRuntimeSession:
                 "READY" if runtime_ready else "UNREADY",
             )
             self._last_runtime_ready = runtime_ready
+        relation = getattr(self.grasp_manager, 'accepted_relation', None)
+        relation_status = dict(grasp_relation=relation, relation_execution_id=getattr(self.grasp_manager, 'accepted_execution_id', '')) if relation is not None else {}
         self.sim_adapter.publish_status(
+            **relation_status,
             runtime_ready=runtime_ready,
             grasp_confirmed=held,
             attached=attached,

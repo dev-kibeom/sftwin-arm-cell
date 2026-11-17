@@ -68,6 +68,7 @@ public:
   void set_object_state(MotionObjectState object_state);
   MotionObjectState object_state() const;
   bool pick_grasp_insertion_started() const;
+  void fence_configured_grasp(const unique_identifier_msgs::msg::UUID & execution_id);
   MotionCancelResult cancel_active_motion(const unique_identifier_msgs::msg::UUID & execution_id);
   std::uint8_t object_disposition() const {return last_report_.object_disposition;}
   std::string last_failure_stage() const {return last_report_.failure_stage;}
@@ -78,6 +79,8 @@ public:
   void reset_candidate_search_result();
 
 private:
+  std::mutex configured_execution_mutex_;
+  std::string configured_execution_id_;
   std::shared_ptr<TaskExecutionSupport> support_;
   PickPlaceStrategies strategies_;
   std::optional<GripForcePolicy> grip_force_policy_;

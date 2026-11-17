@@ -8,6 +8,8 @@ planning_group: arm
 mount_collision_links:
 - base_link
 isaac:
+  robot_drive_profile: radial_precision
+  build_missing_on_startup: true
   articulation_root: root_joint
   articulation_base: base_link
   prismatic_joints:

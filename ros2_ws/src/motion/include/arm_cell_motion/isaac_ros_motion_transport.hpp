@@ -139,6 +139,9 @@ public:
     uint8_t result_code, double elapsed_s, const std::string & failure_stage,
     const std::string & failure_detail) override;
   uint8_t normalized_failure_result() const override;
+  bool supports_grasp_strategy(GraspStrategy strategy) const override;
+  bool prepare_configured_grasp(
+    const GraspSpecification &, const GraspExecutionIdentity &) override;
   void begin_pick_grasp_relation() override;
   void stage_selected_pick_grasp_relation(const geometry_msgs::msg::Transform & relation) override;
   bool stage_pick_capture_reference(
@@ -177,7 +180,15 @@ private:
     const NormalizedMotionRequest & request,
     const std::vector<double> * waypoint = nullptr, double budget_s = 0.0,
     bool qualify_place_target = false,
-    NormalizedTrajectoryPlan * plan_output = nullptr);
+    NormalizedTrajectoryPlan * plan_output = nullptr,
+    const MotionPlanningScales * supplied_scales = nullptr);
+  static bool retime_taught_entry(
+    const moveit::core::RobotModelConstPtr & model, const std::string & group,
+    const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,
+    const MotionPlanningScales & scales);
+  bool execute_taught_entry(
+    const NormalizedTrajectoryPlan & entry, const std::function<bool()> & discard_if_interrupted,
+    const std::vector<JointMotionLimit> & effective_limits);
   bool execute_planned_trajectory(
     const NormalizedMotionRequest & request,
     const trajectory_msgs::msg::JointTrajectory & trajectory,
@@ -331,6 +342,14 @@ private:
   std::vector<std::string> pick_clearance_objects_;
   std::vector<std::string> tool_grasp_collision_links_;
   bool tool_width_control_{true};
+  std::vector<std::string> tool_grasp_strategies_{"box_exterior"};
+  bool radial_prepared_{false};
+  std::string radial_execution_id_;
+  std::string radial_object_id_;
+  bool wait_configured_payload_scene(const std::string & object_id, bool attached);
+  std::string measured_relation_execution_id_;
+  bool measured_relation_valid_{false};
+  geometry_msgs::msg::Transform measured_relation_;
   std::vector<std::string> payload_touch_links_;
   std::string pick_retract_contact_object_;
   std::vector<std::string> pick_retract_contact_links_;
