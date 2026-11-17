@@ -1,5 +1,6 @@
 """Profile selection and host process control; Bringup owns configuration semantics."""
 import os
+import json
 from pathlib import Path
 import select
 import shutil
@@ -93,6 +94,15 @@ def export_selection(entry, destination):
         tool_actuator=entry.get('tool_actuator'), tool_grasp=entry.get('tool_grasp'), tool_parameters=entry.get('tool_parameters'))
 
 
+def preparation_command(entry, destination):
+    command = [sys.executable, str(ROOT/'ros2_ws/src/bringup/scripts/export_runtime_configuration'),
+               '--profile', str(entry['profile']), '--output', str(destination),
+               '--tool-parameters-json', json.dumps(entry.get('tool_parameters', {}))]
+    for option, key in [('--tool-actuator','tool_actuator'),('--tool-grasp','tool_grasp')]:
+        if entry.get(key) is not None:command.extend([option,entry[key]])
+    return command
+
+
 def terminal_command(name, slave, master):
     terminal = shutil.which('xterm')
     if terminal is None:
@@ -133,6 +143,9 @@ class Launcher(QMainWindow):
         self.phase = 0
         self.run = None
         self.error = ''
+        self.preparing = False
+        self.preparation_output = b''
+        self.preparation_started_at = 0.
         # One host simulation uses fixed ports even across repository checkouts.
         self.lock = QLockFile(str(Path(tempfile.gettempdir()) / f'arm-cell-launcher-{os.getuid()}.lock'))
         self.lock.setStaleLockTime(0)
@@ -280,12 +293,16 @@ class Launcher(QMainWindow):
             combo.setEnabled(not active)
         self.parameter_panel.setEnabled(not active)
         self.reset_parameters.setEnabled(not active)
+        self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
-        if states:
+        if self.preparing:
+            elapsed = int(time.monotonic()-self.preparation_started_at)
+            message = f'설정·슬롯 티칭 경로 준비 중… ({elapsed}초) 중지 버튼으로 취소할 수 있습니다.'
+        elif states:
             message = states + ' | ' + message
         self.status.setText(self.error or ('종료 중…' if self.stopping else message))
 
@@ -321,18 +338,54 @@ class Launcher(QMainWindow):
             return
         try:
             self.run = tempfile.TemporaryDirectory(prefix='arm-cell-launcher-')
-            runtime = export_selection(self.selection(), Path(self.run.name) / 'runtime_configuration.json')
+            entry = self.selection()
+            self.runtime = Path(self.run.name)/'runtime_configuration.json'
             # Both consumers retain this one snapshot until all owned groups exit.
             self.environment = dict(os.environ, SFTWIN_PROJECT_ROOT=str(ROOT),
-                                    ARM_CELL_PROFILE=str(runtime),
-                                    ARM_CELL_RUNTIME_CONFIG=str(runtime), PYTHONUNBUFFERED='1')
-            self.runtime = runtime
-            self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
-                                 '--runtime-config', str(runtime)], self.environment)
+                ARM_CELL_PROFILE=str(self.runtime), ARM_CELL_RUNTIME_CONFIG=str(self.runtime), PYTHONUNBUFFERED='1')
+            if read(entry['profile']).get('kind') == 'arm-cell-configured-supply-profile':
+                producer_environment = dict(self.environment,
+                    PYTHONPATH=str(ROOT/'ros2_ws/src/bringup')+os.pathsep+os.environ.get('PYTHONPATH',''))
+                process = subprocess.Popen(preparation_command(entry,self.runtime),cwd=ROOT,
+                    env=producer_environment,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
+                os.set_blocking(process.stdout.fileno(),False)
+                self.processes['prepare'] = process
+                self.preparation_output = b''
+                self.preparing = True
+                self.preparation_started_at = time.monotonic()
+            else:
+                export_selection(entry,self.runtime)
+                self._start_prepared_isaac()
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
         self.validate()
+
+    def _start_prepared_isaac(self):
+        self.spawn('isaac', ['bash', str(ROOT/'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
+                            '--runtime-config', str(self.runtime)], self.environment)
+
+    def _poll_preparation(self):
+        process = self.processes['prepare']
+        while True:
+            try:chunk = os.read(process.stdout.fileno(),65536)
+            except BlockingIOError:break
+            if not chunk:break
+            self.preparation_output = (self.preparation_output+chunk)[-65536:]
+        code = process.poll()
+        if code is None or groups_alive([process]):return
+        self.preparing = False
+        process.stdout.close()
+        if code != 0 or not self.runtime.is_file():
+            lines = self.preparation_output.decode(errors='replace').strip().splitlines()
+            self.error = '설정 준비 실패: '+(lines[-1] if lines else f'프로세스 종료 코드 {code}')
+            self.begin_stop()
+            return
+        del self.processes['prepare']
+        try:self._start_prepared_isaac()
+        except Exception as exc:
+            self.error = str(exc)
+            self.begin_stop()
 
     def start_ros(self):
         if ('isaac' not in self.processes
@@ -350,6 +403,7 @@ class Launcher(QMainWindow):
         signal_processes(self.processes.values(), sig)
 
     def begin_stop(self):
+        self.preparing = False
         if not self.stopping:
             self.stopping = True
             self.phase = 0
@@ -359,6 +413,8 @@ class Launcher(QMainWindow):
         self.validate()
 
     def poll(self):
+        if self.preparing and not self.stopping:
+            self._poll_preparation()
         if not self.stopping:
             for name, process in self.processes.items():
                 code = process.poll()
@@ -390,6 +446,8 @@ class Launcher(QMainWindow):
                     if time.monotonic() >= self.deadline:
                         signal_processes(self.terminals.values(), signal.SIGKILL)
                 else:
+                    for process in self.processes.values():
+                        if process.stdout is not None:process.stdout.close()
                     self.processes.clear()
                     self.terminals.clear()
                     if self.run is not None:

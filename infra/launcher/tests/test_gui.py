@@ -408,7 +408,12 @@ def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch)
     assert not hasattr(window,'experiment_buttons')
     assert not hasattr(window,'start_model_experiment')
     calls=fake_spawn(window,monkeypatch,{'isaac':WAIT,'ros':WAIT})
+    monkeypatch.setattr(launcher,'preparation_command',lambda entry,destination:
+        [sys.executable,'-c','from pathlib import Path; import sys; Path(sys.argv[1]).write_text("{}")',str(destination)])
     window.start_isaac()
+    assert window.preparing and not calls
+    assert '준비 중' in window.status.text()
+    until(app,window,lambda:bool(calls))
     assert calls[0][1][1].endswith('isaac_arm_cell.sh')
     assert window.ros.isEnabled()
     window.start_ros()
@@ -431,3 +436,28 @@ def test_switching_between_radial_and_parallel_tools_has_no_signal_exceptions(wi
         selector.setCurrentIndex(selector.findData(parallel))
         assert 'move_duration_s' in window.parameter_edits
     assert errors == []
+
+
+def test_configured_preparation_can_be_canceled_before_isaac_starts(app, window, monkeypatch):
+    entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
+    for key,combo in window.selectors.items():combo.setCurrentIndex(combo.findData(entry[key]))
+    monkeypatch.setattr(launcher,'preparation_command',lambda *_:WAIT)
+    calls=fake_spawn(window,monkeypatch,{'isaac':WAIT})
+    window.start_isaac()
+    assert window.preparing and window.stop.isEnabled() and not window.ros.isEnabled()
+    app.processEvents()
+    window.begin_stop()
+    until(app,window,lambda:not window.stopping)
+    assert not calls and window.run is None and not window.preparing
+
+
+def test_configured_preparation_failure_is_visible_and_does_not_start_isaac(app, window, monkeypatch):
+    entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
+    for key,combo in window.selectors.items():combo.setCurrentIndex(combo.findData(entry[key]))
+    monkeypatch.setattr(launcher,'preparation_command',lambda *_:
+        [sys.executable,'-c','print("unreachable teaching",flush=True); raise SystemExit(2)'])
+    calls=fake_spawn(window,monkeypatch,{'isaac':WAIT})
+    window.start_isaac()
+    until(app,window,lambda:window.run is None)
+    assert 'unreachable teaching' in window.status.text()
+    assert not calls

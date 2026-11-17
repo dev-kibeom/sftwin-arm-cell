@@ -70,3 +70,5 @@ C10 조립 모델은 M0609 Robot 설정의 `radial_precision` drive profile을 �
 기본 카트리지는 30 mm 피치로 17 mm 롤 15개를 한 줄 보관한다. Pick은 수평이며, 이탈 후 높은 위치에서 Tool을 아래 방향으로 회전하고 3×5 수령대에 수직 하강하여 Place한다. Release 후 수직 상승한다. 수령대는 내경 아래가 열린 외주 지지 패드이며, 완료 판정은 평평하게 안착한 실제 위치·자세·속도와 Release 관측을 함께 요구한다.
 
 SDK default Ground Plane은 생성하지 않고 기존 기본 prim도 제거한다. Cell 소유 초록 에폭시 바닥과 로봇 pedestal은 물리·계획 충돌 Scene에 함께 등록한다. Robot base frame은 지지대 상면에 유지한다. 프레임·다리 외관은 표시용이며 기존 자재 물리 파지를 대체하지 않는다.
+
+Launcher의 Tape 설정·15슬롯 티칭 산출은 별도 프로세스에서 수행한다. 준비 중 표시와 중지 버튼은 GUI에서 유지하며, 성공한 스냅샷이 생성된 후에만 Isaac을 시작한다. 산출 실패는 런처 상태에 표시하고 Isaac을 실행하지 않는다.
