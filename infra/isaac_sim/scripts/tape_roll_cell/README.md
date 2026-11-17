@@ -64,3 +64,5 @@ ros2 action send_goal /orchestration/execute_cycle arm_cell_interfaces/action/Ex
 HCR-14는 정적 모델 검증 범위이며 C10 운영 배포로 등록하지 않는다. 동적 컨베이어 구동은 포함하지 않는다.
 
 C10 조립 모델은 M0609 Robot 설정의 `radial_precision` drive profile을 선택한다. 중력 처짐을 줄여 좁은 내경 삽입과 0.003 rad 관절 도달 기준을 만족시키기 위한 Isaac 구동 설정이며, 기본 M0609·2F-85 조립에는 적용하지 않는다.
+
+장면은 무광 바닥, 주황 카트리지, 청록 컨베이어 수령부와 슬롯 번호를 표시한다. GUI는 Cell 설정의 조감 카메라로 시작한다. 프레임·다리·벨트·롤러는 외관이며, 기존 지지판·가이드와 롤의 물리 Collision을 유지한다. 외관 전용 형상은 MoveIt 충돌 Scene으로 발행하지 않는다.

@@ -63,6 +63,11 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
         contact.CreateRestOffsetAttr(0.)
         UsdShade.MaterialBindingAPI.Apply(prim).Bind(material, materialPurpose='physics')
 
+    from tape_roll_cell.presentation import author_presentation
+    view = configuration['cell'].get('presentation', {}).get('overview',
+        dict(eye=[1.4, -1.25, 1.1], target=[.28, .18, .36]))
+    looks = author_presentation(stage, config, roll, root, view)
+
     roll_paths = []
     for slot in config['slots']:
         path = f'{root}/Roll{slot["index"]:03d}'
@@ -88,6 +93,7 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
             mesh.CreateFaceVertexIndicesAttr([v for face in faces for v in face])
             mesh.CreateSubdivisionSchemeAttr('none')
             mesh.CreateDisplayColorAttr([Gf.Vec3f(.74,.55,.24)])
+            UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(looks['paper'])
             collision(mesh.GetPrim())
             UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr('convexHull')
         roll_paths.append(path)
@@ -98,6 +104,7 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
         cube.AddTranslateOp().Set(Gf.Vec3d(*center))
         cube.AddScaleOp().Set(Gf.Vec3f(*dimensions))
         cube.CreateDisplayColorAttr([Gf.Vec3f(.2,.3,.4)])
+        UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(looks['steel'])
         collision(cube.GetPrim())
 
     # No axial cap: extraction and retreat can leave along -X. Side guides

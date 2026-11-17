@@ -126,3 +126,7 @@ world_to_base:
 configured_supply:
   supply_id: tape_cartridge
   material_id: TapeRoll17
+presentation:
+  overview:
+    eye: [1.4, -1.25, 1.1]
+    target: [0.28, 0.18, 0.36]

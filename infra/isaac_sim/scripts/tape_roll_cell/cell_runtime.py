@@ -173,7 +173,7 @@ class ConfiguredSupplyAdapter:
         self.sidecar.flush_outgoing()
 
     def scene_packet(self):
-        from pxr import UsdGeom
+        from pxr import UsdGeom, UsdPhysics
         from dataclasses import asdict
         cache = UsdGeom.XformCache()
         rolls = []
@@ -190,7 +190,8 @@ class ConfiguredSupplyAdapter:
         # from a rotation matrix whose scale extraction could vary by SDK.
         static = []
         for prim in self.stage.Traverse():
-            if str(prim.GetPath()).startswith(self.context['root_path']+'/') and prim.IsA(UsdGeom.Cube):
+            if (str(prim.GetPath()).startswith(self.context['root_path']+'/')
+                    and prim.IsA(UsdGeom.Cube) and prim.HasAPI(UsdPhysics.CollisionAPI)):
                 transform = cache.GetLocalToWorldTransform(prim)
                 scale = prim.GetAttribute('xformOp:scale').Get()
                 static.append(dict(id=str(prim.GetPath()), position=list(transform.ExtractTranslation()),
