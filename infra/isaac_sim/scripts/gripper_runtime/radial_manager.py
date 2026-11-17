@@ -65,6 +65,9 @@ class RadialGraspManager:
         self.accepted_execution_id = None
         self._writer = None
         self._diagnostic_elapsed = 0.
+        self._detailed_diagnostics = False
+        self._diagnostic_samples = 0
+        self._diagnostic_key = None
         self._reset_completed = False
 
     def _record(self, state):
@@ -145,6 +148,7 @@ class RadialGraspManager:
             self.gripper.cancel_motion()
             return False
         self._close_id = execution_id
+        self._diagnostic_samples = 0
         self._sample_floor = self.gripper.holding_observation().sequence
         return True
 
@@ -162,6 +166,7 @@ class RadialGraspManager:
         self.cancel_tool_transaction()
         self._release_reference = reference
         self._opening = True
+        self._diagnostic_samples = 0
         self._sample_floor = self.gripper.holding_observation().sequence
         return True
 
@@ -188,18 +193,47 @@ class RadialGraspManager:
         if state is not HoldingState.HELD:
             self.accepted_relation = self.accepted_execution_id = None
         self._record(state)
-        self._diagnostic_elapsed += max(0., dt)
-        if self._writer is not None and self._diagnostic_elapsed >= .1:
-            self._diagnostic_elapsed = 0.
+        try:
+            self._capture_diagnostic(dt)
+        except Exception:
+            self._writer = None
             try:
-                self._writer.submit(dict(schema_version=1, record_type='physical_grasp',
-                    record_id=f'radial-{time.monotonic_ns()}', observed_monotonic_ns=time.monotonic_ns(),
-                    execution_id=self._close_id or self.capture_reference_id,
-                    coverage={'contacts':'latest_physics_step_only'}, **self.diagnostics()))
-            except Exception as error:
-                LOGGER.warning('Radial diagnostics unavailable: %s', error)
-                self._writer = None
+                LOGGER.warning('Radial diagnostics unavailable; tool operation is unchanged')
+            except Exception:
+                pass
         return self.state
+
+    def set_detailed_diagnostics_enabled(self, enabled):
+        self._detailed_diagnostics = bool(enabled)
+
+    def _capture_diagnostic(self, dt):
+        reference = self._release_reference if self._opening else self._reference
+        execution = (reference or {}).get('motion_goal_uuid')
+        if self._writer is None or not execution:
+            return
+        key = (execution, self._opening, self._holding.state, self._failure)
+        changed = key != self._diagnostic_key
+        self._diagnostic_elapsed += max(0., dt)
+        detailed = (self._detailed_diagnostics and self._diagnostic_samples < 128
+                    and self._diagnostic_elapsed >= .1)
+        if not changed and not detailed:
+            return
+        self._diagnostic_key = key
+        record = dict(schema_version=1, record_type='physical_grasp',
+            record_id=f'radial-{time.monotonic_ns()}', observed_monotonic_ns=time.monotonic_ns(),
+            execution_id=execution, reference=dict(reference),
+            holding_state=self._holding.state.value, phase='release' if self._opening else 'capture',
+            failure_reason=self._failure,
+            coverage={'detailed_enabled':self._detailed_diagnostics,
+                      'detail_sample_limit_per_command':128,
+                      'detail_samples_submitted':self._diagnostic_samples})
+        if detailed:
+            self._diagnostic_elapsed = 0.
+            self._diagnostic_samples += 1
+            record['coverage']['detail_samples_submitted'] = self._diagnostic_samples
+            record.update(self.diagnostics())
+            record['coverage']['contacts'] = 'latest_physics_step_only'
+        self._writer.submit(record)
 
     def release_receipt(self):
         if (self.ready and self._confirmed_release is not None

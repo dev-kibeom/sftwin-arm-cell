@@ -97,19 +97,29 @@ int main(int argc, char ** argv)
   std::exception_ptr initialization_error;
   std::thread executor_thread([&executor]() {executor.spin();});
   try {
+    RCLCPP_DEBUG(motion->get_logger(), "Task startup waiting for Motion backend initialization");
     motion->initialize_backend();
+    bool waiting_for_ready = false;
     while (rclcpp::ok() && !motion->backend_ready()) {
+      if (!waiting_for_ready) {
+        RCLCPP_DEBUG(motion->get_logger(), "Task startup waiting for Motion backend readiness");
+        waiting_for_ready = true;
+      }
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     // Configured work must not advertise a usable Task before the production
     // Backend completes initialization. Other existing action lifecycles stay
     // under their current owners.
     if (rclcpp::ok()) {
+      RCLCPP_DEBUG(motion->get_logger(), "Task startup wait ended: Motion backend ready");
       configured_action_server =
         std::make_shared<arm_cell_task_execution::ExecuteConfiguredGraspActionServer>(
         motion.get(), motion->motion_core(), task_executor, configured_cycles);
+    } else {
+      RCLCPP_DEBUG(motion->get_logger(), "Task startup wait ended: process shutdown");
     }
   } catch (...) {
+    RCLCPP_ERROR(motion->get_logger(), "Task startup failed during Motion backend initialization");
     initialization_error = std::current_exception();
     rclcpp::shutdown();
   }

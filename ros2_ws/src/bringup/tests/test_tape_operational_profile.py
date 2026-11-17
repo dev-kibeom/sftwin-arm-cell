@@ -45,3 +45,36 @@ def test_operational_task_description_keeps_collision_meshes_loadable():
     meshes = parseString(description).getElementsByTagName('mesh')
     assert meshes
     assert all(mesh.getAttribute('filename').startswith(('file://','package://')) for mesh in meshes)
+
+
+def test_configured_launch_preserves_common_observation_settings(tmp_path, monkeypatch):
+    import importlib.util
+    from launch import LaunchContext
+    from launch.actions import SetEnvironmentVariable, RegisterEventHandler
+    from launch_ros.actions import Node
+    from launch_ros.utilities import evaluate_parameters
+    path=ROOT/'ros2_ws/src/bringup/launch/arm_cell_operational.launch.py'
+    spec=importlib.util.spec_from_file_location('tape_operational_launch',path)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    (tmp_path/'ros2_ws/src').mkdir(parents=True)
+    (tmp_path/'infra/isaac_sim/scripts/pnp_cnc_cell').mkdir(parents=True)
+    monkeypatch.syspath_prepend(str(ROOT/'infra/isaac_sim/scripts'))
+    monkeypatch.setenv('SFTWIN_PROJECT_ROOT',str(tmp_path))
+    context=LaunchContext()
+    context.launch_configurations.update(profile=str(ROOT/'ros2_ws/src/bringup/config/tape_m0609_c10_long_profile.yaml'),
+        include_simulation='true', log_level='error', action_logger_level='warn',
+        planning_scene_log_level='warn', diagnostics='motion,safety,orchestration')
+    actions=module.compose(context)
+    nodes=[action for action in actions if isinstance(action,Node)]
+    for node in nodes:
+        assert node._ExecuteLocal__output_format==module.CONSOLE_OUTPUT_FORMAT
+        assert node._Node__ros_arguments[:2]==['--log-level','error']
+        if node.node_package=='arm_cell_vda':continue
+        parameters=evaluate_parameters(context,node._Node__parameters)[0]
+        assert parameters['diagnostics.capture_enabled'] is True
+        assert str(tmp_path) in parameters['diagnostics.output_directory']
+    assert any(isinstance(action,RegisterEventHandler) for action in actions)
+    environment={context.perform_substitution(action.name[0]):action for action in actions
+                 if isinstance(action,SetEnvironmentVariable)}
+    assert 'ARM_CELL_RECORDING_SESSION_PATH' in environment
+    assert 'RCUTILS_CONSOLE_OUTPUT_FORMAT' in environment

@@ -14,15 +14,28 @@ class ConfiguredPlanningScene:
         self.client=node.create_client(GetPlanningScene,'/get_planning_scene')
         self.acm=None;self.query=None;self.attached=None;self.relation=None
         self._world_ids=set()
+        self._frame_transform=None
 
-    def _base_acm(self):
+    def _base_acm(self, frame):
         if self.acm is None and self.query is None and self.client.service_is_ready():
             from moveit_msgs.srv import GetPlanningScene
             from moveit_msgs.msg import PlanningSceneComponents
-            request=GetPlanningScene.Request();request.components.components=PlanningSceneComponents.ALLOWED_COLLISION_MATRIX
+            request=GetPlanningScene.Request();request.components.components=(PlanningSceneComponents.ALLOWED_COLLISION_MATRIX | PlanningSceneComponents.TRANSFORMS | PlanningSceneComponents.ROBOT_STATE)
             self.query=self.client.call_async(request)
             def received(future):
-                try:self.acm=future.result().scene.allowed_collision_matrix
+                try:
+                    scene=future.result().scene
+                    # MoveIt must acknowledge the producer frame before it can
+                    # interpret these collision poses. TF arrival is asynchronous.
+                    model_frames=(scene.robot_state.joint_state.header.frame_id,
+                                  scene.robot_state.multi_dof_joint_state.header.frame_id)
+                    transform=next((t for t in scene.fixed_frame_transforms if t.child_frame_id==frame),None)
+                    if frame in model_frames or transform is not None:
+                        self.acm=scene.allowed_collision_matrix
+                        self._frame_transform=transform
+                except Exception:
+                    # Retry an unavailable scene without sending uninterpretable poses.
+                    pass
                 finally:self.query=None
             self.query.add_done_callback(received)
         return self.acm
@@ -51,14 +64,14 @@ class ConfiguredPlanningScene:
         from moveit_msgs.msg import PlanningScene,AttachedCollisionObject,CollisionObject,AllowedCollisionEntry
         from shape_msgs.msg import SolidPrimitive
         from geometry_msgs.msg import Pose
+        base=self._base_acm(packet['frame_id'])
+        if base is None:
+            return
         scene=PlanningScene();scene.is_diff=True;scene.robot_state.is_diff=True
         relation=packet.get('accepted_relation');selected=packet.get('selected_slot_id')
         rolls=packet['rolls'];finger_links=packet['finger_links']
+        previous_attached=self.attached
         current_ids={row['id'] for row in rolls}|{box['id'] for box in packet.get('static_boxes',[])}
-        for identity in self._world_ids-current_ids:
-            remove=CollisionObject();remove.id=identity;remove.header.frame_id='world';remove.operation=remove.REMOVE
-            scene.world.collision_objects.append(remove)
-        self._world_ids=current_ids
         selected_row=next((row for row in rolls if row['slot_id']==selected),None)
         if packet.get('holding_state')=='held' and selected_row is not None and relation is not None:
             self.attached=selected_row['id'];self.relation=np.array(relation).reshape(4,4)
@@ -66,10 +79,15 @@ class ConfiguredPlanningScene:
             detach=AttachedCollisionObject();detach.link_name='sf_grasp_tcp';detach.object.id=self.attached;detach.object.operation=CollisionObject.REMOVE
             scene.robot_state.attached_collision_objects.append(detach)
             self.attached=None;self.relation=None
+        current_ids.discard(self.attached)
+        for identity in self._world_ids-current_ids:
+            remove=CollisionObject();remove.id=identity;remove.header.frame_id=packet['frame_id'];remove.operation=remove.REMOVE
+            scene.world.collision_objects.append(remove)
+        self._world_ids=current_ids
         for row in rolls:
             if row['id']==self.attached:
-                remove=CollisionObject();remove.id=row['id'];remove.header.frame_id='world';remove.operation=remove.REMOVE
-                scene.world.collision_objects.append(remove)
+                if self.attached==previous_attached:
+                    continue
                 attached=AttachedCollisionObject();attached.link_name='sf_grasp_tcp';attached.touch_links=finger_links
                 attached.object=self._annulus(row['id'],packet['material'],self.relation[:3,3].tolist(),Rotation.from_matrix(self.relation[:3,:3]).as_quat().tolist(),'sf_grasp_tcp')
                 scene.robot_state.attached_collision_objects.append(attached)
@@ -83,7 +101,6 @@ class ConfiguredPlanningScene:
             primitive=SolidPrimitive();primitive.type=primitive.BOX;primitive.dimensions=box['dimensions']
             local=Pose();local.orientation.w=1.;obj.primitives=[primitive];obj.primitive_poses=[local]
             scene.world.collision_objects.append(obj)
-        base=self._base_acm()
         if base is not None:
             acm=copy.deepcopy(base)
             names=list(acm.entry_names)
@@ -107,4 +124,13 @@ class ConfiguredPlanningScene:
             for values in matrix:
                 entry=AllowedCollisionEntry();entry.enabled=values;acm.entry_values.append(entry)
             scene.allowed_collision_matrix=acm
+        if self._frame_transform is not None:
+            from tf2_geometry_msgs import do_transform_pose
+            # Each Motion/MoveGroup scene receives TF independently. Use the
+            # model frame so none needs an external frame to apply this diff.
+            for obj in scene.world.collision_objects:
+                if obj.header.frame_id==packet['frame_id']:
+                    if obj.operation!=obj.REMOVE:
+                        obj.pose=do_transform_pose(obj.pose,self._frame_transform)
+                    obj.header.frame_id=self._frame_transform.header.frame_id
         self.publisher.publish(scene)

@@ -790,25 +790,11 @@ MotionNode::MotionNode(
   }
   status_timer_ = create_wall_timer(
     std::chrono::milliseconds(20),
-    [this, previous = std::make_shared<std::chrono::steady_clock::time_point>(
-        std::chrono::steady_clock::now())]() {
-      const auto begin = std::chrono::steady_clock::now();
+    [this]() {
       core_->refresh_stop_state();
-      const auto refreshed = std::chrono::steady_clock::now();
       auto status = core_->status();
-      const auto sampled = std::chrono::steady_clock::now();
       status.header.stamp = now();
       status_publisher_->publish(status);
-      const auto end = std::chrono::steady_clock::now();
-      const auto ms = [](auto duration) {
-          return std::chrono::duration<double, std::milli>(duration).count();
-        };
-      if (ms(end - *previous) > 200.0) {
-        RCLCPP_WARN(get_logger(),
-          "Motion status delay gap_ms=%.1f refresh_ms=%.1f sample_ms=%.1f publish_ms=%.1f",
-          ms(begin - *previous), ms(refreshed - begin), ms(sampled - refreshed), ms(end - sampled));
-      }
-      *previous = end;
     });
 }
 

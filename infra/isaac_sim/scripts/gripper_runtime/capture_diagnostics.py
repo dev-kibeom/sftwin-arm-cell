@@ -40,6 +40,9 @@ class BoundedCaptureDiagnosticWriter:
         )
         self._started = False
         self._closed = False
+        self._drop_cause = None
+        self._drop_count = 0
+        self._reported_drop_cause = None
         self.dropped_count = 0
         self.write_failure_count = 0
         self._write_log_cause = None
@@ -53,10 +56,8 @@ class BoundedCaptureDiagnosticWriter:
             if self._closed:
                 self.dropped_count += 1
                 self._mark_submission(record, queued=False)
-                LOGGER.warning(
-                    "Capture diagnostic record dropped record_id=%s reason=writer_closed",
-                    self._record_label(record),
-                )
+                self._drop_cause = 'writer_closed'
+                self._drop_count += 1
                 return False
             self._mark_submission(record, queued=True)
             if not self._started:
@@ -68,10 +69,8 @@ class BoundedCaptureDiagnosticWriter:
             except queue.Full:
                 self.dropped_count += 1
                 self._mark_submission(record, queued=False)
-                LOGGER.warning(
-                    "Capture diagnostic record dropped record_id=%s reason=writer_queue_full",
-                    self._record_label(record),
-                )
+                self._drop_cause = 'writer_queue_full'
+                self._drop_count += 1
                 return False
 
     def _mark_submission(self, record, *, queued):
@@ -84,12 +83,27 @@ class BoundedCaptureDiagnosticWriter:
         coverage["writer_dropped_count_at_submit"] = self.dropped_count
 
     @staticmethod
-    def _record_label(record):
-        if not isinstance(record, dict):
-            return "unavailable"
-        return (
-            record.get("motion_goal_uuid") or record.get("record_id") or "unavailable"
-        )
+    def _log(level, message, *args):
+        try:
+            LOGGER.log(level, message, *args)
+        except Exception:
+            # A closed/broken log sink cannot affect control or the writer.
+            pass
+
+    def _report_drops(self, recovered=False):
+        with self._state_lock:
+            cause, count = self._drop_cause, self._drop_count
+            onset = cause is not None and cause != self._reported_drop_cause
+            self._reported_drop_cause = cause
+            if recovered:
+                self._drop_cause = self._reported_drop_cause = None
+                self._drop_count = 0
+        if onset:
+            self._log(logging.WARNING,
+                "Capture diagnostic evidence is being dropped / reason=%s", cause)
+        if recovered and count:
+            self._log(logging.INFO,
+                "Capture diagnostic drop episode ended / reason=%s dropped=%d", cause, count)
 
     def close(self, timeout=1.0):
         with self._state_lock:
@@ -97,6 +111,7 @@ class BoundedCaptureDiagnosticWriter:
             started = self._started
         if not started:
             self.shutdown_status = "complete"
+            self._report_drops(recovered=True)
             return True
         self._thread.join(timeout=max(0.0, float(timeout)))
         complete = not self._thread.is_alive() and self._queue.empty()
@@ -108,9 +123,11 @@ class BoundedCaptureDiagnosticWriter:
             try:
                 record = self._queue.get(timeout=0.05)
             except queue.Empty:
+                self._report_drops(recovered=True)
                 if self._closed:
                     return
                 continue
+            self._report_drops()
             try:
                 serialized = json.dumps(
                     record, indent=2, sort_keys=True, allow_nan=False
@@ -121,7 +138,7 @@ class BoundedCaptureDiagnosticWriter:
                     self._write_record(record)
                 self.written_count += 1
                 if self._write_log_cause is not None:
-                    LOGGER.info(
+                    self._log(logging.INFO,
                         "Capture diagnostic storage recovered after %d failed records",
                         self._write_log_count,
                     )
@@ -129,14 +146,12 @@ class BoundedCaptureDiagnosticWriter:
                     self._write_log_count = 0
             except Exception as error:
                 self.write_failure_count += 1
-                cause = (type(error).__name__, str(error))
+                detail = error.strerror if isinstance(error, OSError) and error.strerror else str(error)
+                cause = (type(error).__name__, detail)
                 self._write_log_count += 1
                 if cause != self._write_log_cause:
-                    LOGGER.warning(
-                        "Capture diagnostic storage unavailable record_id=%s; operation results are unchanged: %s",
-                        self._record_label(record),
-                        error,
-                    )
+                    self._log(logging.WARNING,
+                        "Capture diagnostic storage unavailable; operation results are unchanged / %s", detail)
                     self._write_log_cause = cause
             finally:
                 self._queue.task_done()
@@ -167,7 +182,7 @@ class BoundedCaptureDiagnosticWriter:
         temporary = destination.with_suffix(".json.tmp")
         if destination.exists():
             raise FileExistsError(
-                f"Capture Diagnostic Record already exists: {destination}"
+                "Capture Diagnostic Record already exists"
             )
         with temporary.open("w", encoding="utf-8") as stream:
             stream.write(serialized)
@@ -175,7 +190,7 @@ class BoundedCaptureDiagnosticWriter:
         if destination.exists():
             temporary.unlink(missing_ok=True)
             raise FileExistsError(
-                f"Capture Diagnostic Record already exists: {destination}"
+                "Capture Diagnostic Record already exists"
             )
         os.replace(temporary, destination)
 

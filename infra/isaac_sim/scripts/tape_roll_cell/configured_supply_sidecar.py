@@ -257,8 +257,10 @@ def serve(fd):
         message.valid = message.valid and fresh
         if not fresh: message.diagnostic_detail = 'isaac_state_stale'
         if published_supply['epoch'] is not None and not message.valid:
-            print('Configured supply validity lost: '+str(message.diagnostic_detail)+
-                  f' owner_state_age_s={time.monotonic()-cache["received_at"]:.3f}', flush=True)
+            try:
+                node.get_logger().warning('Configured supply became unavailable / '+str(message.diagnostic_detail))
+            except Exception:
+                pass
         message.header.stamp = node.get_clock().now().to_msg()
         publisher.publish(message)
         published_supply['epoch']=message.supply_epoch if message.valid else None

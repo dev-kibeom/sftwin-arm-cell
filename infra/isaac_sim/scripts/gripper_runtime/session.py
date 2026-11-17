@@ -152,6 +152,9 @@ class GripperRuntimeSession:
                     "Gripper diagnostics could not be attached; gripper behavior is unchanged: %s",
                     error,
                 )
+        configure_detail = getattr(self.grasp_manager, "set_detailed_diagnostics_enabled", None)
+        if callable(configure_detail):
+            configure_detail(detailed_enabled)
         restore_sequence = getattr(self.grasp_manager, "restore_holding_sequence", None)
         if callable(restore_sequence):
             self._status_sequence = int(restore_sequence(initial_status_sequence))

@@ -145,3 +145,20 @@ def test_predictive_contact_reports_are_distinct_from_physical_contact():
     assert physical_contact_observed(report(.001, (float('nan'), 0., 0.)))
     assert physical_contact_observed({'points': [
         report(.001)['points'][0], report(-.00001)['points'][0]]})
+
+
+def test_contact_failure_survives_log_sink_failure(monkeypatch):
+    from types import SimpleNamespace as S
+    from tape_roll_cell.cell_runtime import ConfiguredSupplyAdapter
+    adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
+    adapter.conveyor=S(on_physics_step=lambda dt:None)
+    adapter.timeline=S(is_playing=lambda:True)
+    adapter.observer=S(advance=lambda:None,snapshot=[dict(actor0='/robot',actor1='/roll',lost=False,points=[])])
+    adapter.failure='';adapter.tool_session=S(grasp_manager=None)
+    adapter.paths=['/roll'];adapter.supply=S(_selected=None)
+    adapter.context={'root_path':'/cell'};adapter.robot_bodies={'/robot'}
+    def broken(*args,**kwargs):raise BrokenPipeError('closed sink')
+    monkeypatch.setattr('builtins.print',broken)
+    monkeypatch.setattr('logging.Logger.error',broken)
+    adapter._on_physics_step(.01)
+    assert adapter.failure=='unexpected_robot_material_contact'

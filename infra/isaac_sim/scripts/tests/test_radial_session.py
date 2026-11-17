@@ -159,3 +159,56 @@ def test_unselected_release_observes_all_fingers_without_accepting_invalid_lease
     binding.target_reference = {'reservation_id':'invalid'}
     binding.resolve_target = lambda _:None
     assert binding.read_contacts(.01) is None
+
+
+def test_radial_records_are_sparse_by_default_and_release_keeps_identity():
+    manager, _, actuator = make()
+    records=[]
+    actuator.observation=lambda:{'position':.01}
+    manager.set_diagnostic_observers(SimpleNamespace(submit=lambda record:records.append(record)))
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction(PACKET['motion_goal_uuid'])
+    for sequence in range(2,102):
+        actuator.sample=HoldingObservation(HoldingState.HELD,1.,sequence)
+        manager.update(.1)
+    assert len(records)<10
+    manager.note_open_release_command_applied(2,None)
+    actuator.sample=HoldingObservation(HoldingState.RELEASED,1.,102)
+    manager.update(.1)
+    manager.configure_selected_grasp_reference(dict(motion_goal_uuid=PACKET['motion_goal_uuid'],invalidate=True))
+    actuator.sample=HoldingObservation(HoldingState.RELEASED,1.,103)
+    manager.update(.1)
+    released=[r for r in records if r['holding_state']=='released']
+    assert released and released[-1]['execution_id']==PACKET['motion_goal_uuid']
+    assert released[-1]['reference']['reservation_id']==PACKET['reservation_id']
+    assert all('actuator' not in r for r in records)
+
+
+def test_selected_radial_details_end_after_bounded_command_window():
+    manager, _, actuator=make()
+    records=[]
+    actuator.observation=lambda:{'position':.01}
+    manager.set_diagnostic_observers(SimpleNamespace(submit=lambda record:records.append(record)))
+    manager.set_detailed_diagnostics_enabled(True)
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction(PACKET['motion_goal_uuid'])
+    for sequence in range(2,502):
+        actuator.sample=HoldingObservation(HoldingState.HELD,1.,sequence)
+        manager.update(.1)
+    details=[record for record in records if 'actuator' in record]
+    assert 0<len(details)<500
+    assert len(details)<=details[-1]['coverage']['detail_sample_limit_per_command']
+
+
+def test_diagnostic_observation_failure_preserves_physical_holding():
+    manager, _, actuator=make()
+    manager.set_diagnostic_observers(SimpleNamespace(submit=lambda record:True))
+    manager.set_detailed_diagnostics_enabled(True)
+    def broken():raise RuntimeError('diagnostic observation unavailable')
+    actuator.observation=broken
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction(PACKET['motion_goal_uuid'])
+    actuator.sample=HoldingObservation(HoldingState.HELD,1.,2)
+    manager.update(.1)
+    assert manager.holding_observation().state is HoldingState.HELD
+    assert manager.accepted_execution_id==PACKET['motion_goal_uuid']

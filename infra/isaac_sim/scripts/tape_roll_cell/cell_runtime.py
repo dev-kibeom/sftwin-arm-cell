@@ -1,7 +1,10 @@
 """Configured Tape Cell runtime: inventory, measured completion and contact validity."""
+import logging
 import math
 import time
 
+
+LOGGER = logging.getLogger(__name__)
 
 def physical_contact_observed(report):
     """PhysX also reports separated shapes inside their contact offsets.
@@ -183,6 +186,16 @@ class ConfiguredSupplyAdapter:
         return receiver_settled((pose.p.x,pose.p.y,pose.p.z),
             (velocity.x,velocity.y,velocity.z), (angular.x,angular.y,angular.z), axis, expected)
 
+    def _contact_failure(self, reason, message):
+        previous = self.failure
+        self.failure = reason
+        if not previous:
+            try:
+                LOGGER.error(message)
+            except Exception:
+                # Logging cannot suppress the Cell's fail-closed observation.
+                pass
+
     def _on_physics_step(self, dt):
         if not hasattr(self,'conveyor'):return
         if not self.timeline.is_playing():
@@ -191,9 +204,7 @@ class ConfiguredSupplyAdapter:
         self.conveyor.on_physics_step(dt)
         self.observer.advance()
         if self.observer.snapshot is None:
-            if not self.failure:
-                print('Tape Cell contact observation crossed physics steps', flush=True)
-            self.failure = 'ambiguous_contact_step'
+            self._contact_failure('ambiguous_contact_step', 'Tape Cell contact observation crossed physics steps')
             return
         manager = getattr(self.tool_session, 'grasp_manager', None)
         binding = getattr(manager, 'binding', None)
@@ -210,15 +221,14 @@ class ConfiguredSupplyAdapter:
                 continue
             if other in self.paths:
                 if other != selected or robot not in fingers:
-                    if not self.failure:print(f'Tape Cell unexpected contact: {a} / {b} selected={selected} fingers={sorted(fingers)} points={contact["points"][:3]}',flush=True)
-                    self.failure = 'unexpected_robot_material_contact'
+                    self._contact_failure('unexpected_robot_material_contact',
+                        'Tape Cell stopped: robot contacted an unselected roll or contacted a roll outside the fingers')
             elif (other == self.context['root_path']+'/RobotPedestal'
                     and robot == self.configuration['cell']['isaac']['robot_prim_path']+'/'+
                         self.configuration['model_configuration']['isaac']['articulation_base']):
                 continue
             elif other.startswith(root):
-                if not self.failure:print(f'Tape Cell fixture contact: {a} / {b}',flush=True)
-                self.failure = 'robot_fixture_collision'
+                self._contact_failure('robot_fixture_collision', 'Tape Cell stopped: robot contacted a cell fixture')
 
     def spin_once(self):
         if self._closed:

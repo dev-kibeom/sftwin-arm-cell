@@ -469,9 +469,10 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
 def record_session_configuration(root, config, profile_path, selection, include_simulation):
     """Index selected inputs; recording failures never affect runtime results."""
     descriptor = Path(root) / "session.json"
-    calibration = Path(vision_profile_parameters(config, profile_path)["calibration_file"])
+    calibration = (Path(vision_profile_parameters(config, profile_path)["calibration_file"])
+                   if config.get("vision") else None)
     try:
-        calibration_hash = hashlib.sha256(calibration.read_bytes()).hexdigest()
+        calibration_hash = hashlib.sha256(calibration.read_bytes()).hexdigest() if calibration else None
     except OSError:
         calibration_hash = None
     vision = config.get("vision", {})
@@ -486,8 +487,8 @@ def record_session_configuration(root, config, profile_path, selection, include_
             "camera_info_topic": camera_topic,
             "rgb_topic": vision.get("rgb_topic"),
             "depth_topic": vision.get("depth_topic"),
-            "vision_calibration": {"path": str(calibration), "sha256": calibration_hash,
-                                   "status": "available" if calibration_hash else "unavailable"},
+            "vision_calibration": {"path": str(calibration) if calibration else None, "sha256": calibration_hash,
+                                   "status": "not_applicable" if calibration is None else "available" if calibration_hash else "unavailable"},
         },
     }
     try:
@@ -686,9 +687,72 @@ def compose(context):
     )
     profile_path = Path(LaunchConfiguration("profile").perform(context))
     config = load_profile(profile_path)
+    include_simulation = (
+        LaunchConfiguration("include_simulation").perform(context).lower() == "true"
+    )
+    if live_session_root:
+        record_session_configuration(live_session_root, config, profile_path,
+                                     selected_diagnostics, include_simulation)
+    common_actions = [
+        SetEnvironmentVariable("SFTWIN_PROJECT_ROOT", str(project_checkout_root())),
+        SetEnvironmentVariable(
+            "RCUTILS_CONSOLE_OUTPUT_FORMAT",
+            "[{severity}] [{name}] {message}",
+        ),
+        SetEnvironmentVariable("TZ", "UTC"),
+        LogInfo(
+            msg=(
+                f"ARM Cell observation settings: log_level={selected_log_level} "
+                f"MoveIt Planning Scene logger={selected_planning_scene_log_level} "
+                f"diagnostics={','.join(sorted(selected_diagnostics)) if selected_diagnostics else 'none'}; "
+                f"Vision capture={'not applicable' if not config.get('vision') else 'enabled' if 'vision' in selected_diagnostics else 'disabled'}, "
+                f"Motion Clock/Watchdog capture={'enabled' if 'motion' in selected_diagnostics else 'disabled'}, "
+                f"Motion profile trace capture={'enabled' if 'motion' in selected_diagnostics else 'disabled'}, "
+                f"Motion planning/execution detail loggers={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
+                f"Safety detail logger={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
+                f"Orchestration detail logger={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
+                "Isaac Gripper baseline capture is always enabled; detailed PhysX selection is session-local, "
+                f"ROS session association={'created' if owns_recording_session and live_session_root else 'joined' if live_session_root else 'unassociated'}, "
+                f"artifact_root={artifact_directory}"
+            )
+        ),
+    ]
+    if live_session_root:
+        common_actions.insert(1, SetEnvironmentVariable(
+            "ARM_CELL_RECORDING_SESSION_PATH", str(live_session_root / "session.json")))
+        common_actions.insert(1, SetEnvironmentVariable(
+            "ARM_CELL_GRIPPER_RECORD_DIR", str(gripper_record_directory)))
+    if live_session_root and owns_recording_session:
+        common_actions.append(RegisterEventHandler(OnShutdown(
+            on_shutdown=[OpaqueFunction(function=finish_recording_session,
+                                        args=[live_session_root])]
+        )))
+    if not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
+        common_actions.insert(
+            1,
+            SetEnvironmentVariable(
+                "ARM_CELL_PICK_EXECUTION_RECORD_DIR",
+                str(motion_artifact_directory / "pick_execution_records"),
+            ),
+        )
+
     if config.get('orchestration', {}).get('material_source') == 'configured_slots':
         from arm_cell_bringup.configured_supply_launch import compose as compose_configured_supply
-        return compose_configured_supply(config, profile_path, selected_log_level)
+        directories = {'motion': motion_artifact_directory, 'safety': safety_artifact_directory,
+                       'orchestration': orchestration_artifact_directory}
+        def configured_node_options(package):
+            return dict(output_format=CONSOLE_OUTPUT_FORMAT,
+                ros_arguments=node_ros_arguments(package, selected_log_level,
+                    selected_action_logger_level, selected_planning_scene_log_level))
+        diagnostic_parameters = {
+            component: {'diagnostics.capture_enabled': component in selected_diagnostics,
+                        'diagnostics.output_directory': str(directory)}
+            for component, directory in directories.items()}
+        diagnostic_parameters['motion']['diagnostics.snapshot_run_directory'] = str(
+            snapshot_run_directory or artifact_directory / record_directory_name('snapshots'))
+        return common_actions + compose_configured_supply(config, profile_path, selected_log_level,
+            node_options=configured_node_options, diagnostics=diagnostic_parameters,
+            include_simulation=include_simulation)
     material_handoff_config = dict(config.get("material_handoff", {}))
     motion_parameters = profile_parameters(config, "motion")
     motion_share = Path(get_package_share_directory("arm_cell_motion"))
@@ -729,12 +793,6 @@ def compose(context):
         raise RuntimeError(
             "mission detector profile must declare its observation_reference"
         )
-    include_simulation = (
-        LaunchConfiguration("include_simulation").perform(context).lower() == "true"
-    )
-    if live_session_root:
-        record_session_configuration(live_session_root, config, profile_path,
-                                     selected_diagnostics, include_simulation)
     if not readiness.get("fail_closed_until_inputs_fresh", False):
         raise RuntimeError("operational profile must keep Safety fail-closed")
     if readiness.get("required_motion_backend", False) and not include_simulation:
@@ -742,29 +800,7 @@ def compose(context):
             "mission-capable operational profile requires the external Isaac/MoveIt composition"
         )
 
-    actions = [
-        SetEnvironmentVariable("SFTWIN_PROJECT_ROOT", str(project_checkout_root())),
-        SetEnvironmentVariable(
-            "RCUTILS_CONSOLE_OUTPUT_FORMAT",
-            "[{severity}] [{name}] {message}",
-        ),
-        SetEnvironmentVariable("TZ", "UTC"),
-        LogInfo(
-            msg=(
-                f"ARM Cell observation settings: log_level={selected_log_level} "
-                f"MoveIt Planning Scene logger={selected_planning_scene_log_level} "
-                f"diagnostics={','.join(sorted(selected_diagnostics)) if selected_diagnostics else 'none'}; "
-                f"Vision capture={'enabled' if 'vision' in selected_diagnostics else 'disabled'}, "
-                f"Motion Clock/Watchdog capture={'enabled' if 'motion' in selected_diagnostics else 'disabled'}, "
-                f"Motion profile trace capture={'enabled' if 'motion' in selected_diagnostics else 'disabled'}, "
-                f"Motion planning/execution detail loggers={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
-                f"Safety detail logger={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
-                f"Orchestration detail logger={'enabled' if selected_log_level == 'debug' else 'disabled'}, "
-                "Isaac Gripper baseline capture is always enabled; detailed PhysX selection is session-local, "
-                f"ROS session association={'created' if owns_recording_session and live_session_root else 'joined' if live_session_root else 'unassociated'}, "
-                f"artifact_root={artifact_directory}"
-            )
-        ),
+    actions = common_actions + [
         Node(
             package="arm_cell_vda",
             executable="external_state_mock_node",
@@ -879,25 +915,6 @@ def compose(context):
             ],
         ),
     ]
-    if live_session_root:
-        actions.insert(1, SetEnvironmentVariable(
-            "ARM_CELL_RECORDING_SESSION_PATH", str(live_session_root / "session.json")))
-        actions.insert(1, SetEnvironmentVariable(
-            "ARM_CELL_GRIPPER_RECORD_DIR", str(gripper_record_directory)))
-    if live_session_root and owns_recording_session:
-        actions.append(RegisterEventHandler(OnShutdown(
-            on_shutdown=[OpaqueFunction(function=finish_recording_session,
-                                        args=[live_session_root])]
-        )))
-    if not os.environ.get("ARM_CELL_PICK_EXECUTION_RECORD_DIR"):
-        actions.insert(
-            1,
-            SetEnvironmentVariable(
-                "ARM_CELL_PICK_EXECUTION_RECORD_DIR",
-                str(motion_artifact_directory / "pick_execution_records"),
-            ),
-        )
-
     if include_simulation:
         planning_profile = config.get("simulation", {}).get("planning_profile")
         if not planning_profile:
