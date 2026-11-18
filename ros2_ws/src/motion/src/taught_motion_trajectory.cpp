@@ -11,6 +11,65 @@
 
 namespace arm_cell_motion
 {
+bool stretch_taught_trajectory_to_limits(
+  trajectory_msgs::msg::JointTrajectory & trajectory,
+  const std::vector<double> & velocities, const std::vector<double> & accelerations)
+{
+  const auto count = trajectory.joint_names.size();
+  if (count == 0 || velocities.size() != count || accelerations.size() != count ||
+    trajectory.points.size() < 2) {return false;}
+  double stretch = 1.0;
+  std::int64_t previous_ns = -1;
+  for (std::size_t i = 0; i < trajectory.points.size(); ++i) {
+    const auto & point = trajectory.points[i];
+    const auto ns = static_cast<std::int64_t>(point.time_from_start.sec) * 1000000000LL +
+      point.time_from_start.nanosec;
+    if (point.time_from_start.sec < 0 || point.time_from_start.nanosec >= 1000000000U ||
+      ns <= previous_ns || point.positions.size() != count ||
+      point.velocities.size() != count || point.accelerations.size() != count) {return false;}
+    for (std::size_t j = 0; j < count; ++j) {
+      if (!std::isfinite(velocities[j]) || velocities[j] <= 0 ||
+        !std::isfinite(accelerations[j]) || accelerations[j] <= 0 ||
+        !std::isfinite(point.positions[j]) || !std::isfinite(point.velocities[j]) ||
+        !std::isfinite(point.accelerations[j])) {return false;}
+      stretch = std::max(stretch, std::abs(point.velocities[j]) / velocities[j]);
+      stretch = std::max(stretch, std::sqrt(std::abs(point.accelerations[j]) / accelerations[j]));
+      if (i > 0) {
+        const double dt = (ns - previous_ns) * 1e-9;
+        const auto segment_velocity =
+          (point.positions[j] - trajectory.points[i - 1].positions[j]) / dt;
+        stretch = std::max(stretch, std::abs(segment_velocity) / velocities[j]);
+      }
+    }
+    previous_ns = ns;
+  }
+  if (!std::isfinite(stretch) || previous_ns <= 0) {return false;}
+  if (stretch == 1.0) {return true;}
+  // Dilation changes only time: velocity scales by 1/s and acceleration by
+  // 1/s^2. Keep every collision-checked position and round timestamps upward.
+  auto adjusted = trajectory;
+  std::int64_t original_previous_ns = 0, adjusted_previous_ns = 0;
+  for (auto & point : adjusted.points) {
+    const auto ns = static_cast<std::int64_t>(point.time_from_start.sec) * 1000000000LL +
+      point.time_from_start.nanosec;
+    const auto scaled_ns = adjusted_previous_ns +
+      std::ceil(static_cast<long double>(ns - original_previous_ns) * stretch);
+    constexpr auto max_seconds = std::numeric_limits<std::int32_t>::max();
+    if (scaled_ns > static_cast<long double>(max_seconds) * 1000000000LL) {return false;}
+    const auto duration_ns = static_cast<std::int64_t>(scaled_ns);
+    original_previous_ns = ns;
+    adjusted_previous_ns = duration_ns;
+    point.time_from_start.sec = static_cast<std::int32_t>(duration_ns / 1000000000LL);
+    point.time_from_start.nanosec = static_cast<std::uint32_t>(duration_ns % 1000000000LL);
+    for (std::size_t j = 0; j < count; ++j) {
+      point.velocities[j] /= stretch;
+      point.accelerations[j] = point.accelerations[j] / stretch / stretch;
+    }
+  }
+  trajectory = std::move(adjusted);
+  return true;
+}
+
 std::vector<JointMotionLimit> joint_motion_limits_from_urdf(
   const std::string & description, const std::vector<std::string> & joint_names,
   double max_acceleration)

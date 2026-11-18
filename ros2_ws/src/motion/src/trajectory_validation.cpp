@@ -65,7 +65,10 @@ TrajectoryValidationResult validate_time_parameterized_trajectory(
         std::abs(acceleration) > acceleration_limit + 1e-6)
       {
         std::ostringstream reason;
-        reason << "trajectory velocity or acceleration limit violation at point " << point_index;
+        reason << "trajectory velocity or acceleration limit violation at point " << point_index
+               << " joint=" << trajectory.joint_names[joint_index]
+               << " velocity=" << velocity << " limit=" << velocity_limits[joint_index]
+               << " acceleration=" << acceleration << " limit=" << acceleration_limit;
         return {false, reason.str()};
       }
     }

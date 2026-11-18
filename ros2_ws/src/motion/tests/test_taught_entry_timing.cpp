@@ -72,10 +72,81 @@ TEST(TaughtEntryTiming, KeepsThePlannedJointPathThroughCorners)
   ASSERT_TRUE(arm_cell_motion::IsaacRosMotionTransport::retime_taught_entry(
     model,"arm",start,trajectory,{.3,.2}));
   for(const auto & point:trajectory.joint_trajectory.points) {
+    for (double velocity : point.velocities) {EXPECT_LE(std::abs(velocity), .3 + 1e-6);}
+    for (double acceleration : point.accelerations) {EXPECT_LE(std::abs(acceleration), .2 + 1e-6);}
     const auto x=point.positions[0],y=point.positions[1];
     // Retiming may resample on either original segment, but cannot round
     // the corner into joint states that the planner never validated.
     EXPECT_TRUE((std::abs(y)<1e-10 && x>=0. && x<=1.) ||
       (std::abs(x-1.)<1e-10 && y>=0. && y<=1.));
+  }
+}
+
+TEST(TaughtEntryTiming, ScalesAccelerationWhenTheRobotModelHasNoAccelerationBounds)
+{
+  moveit::core::RobotModelBuilder builder("missing_acceleration", "base_link");
+  builder.addChain("base_link->sf_grasp_tcp", "prismatic");
+  builder.addGroupChain("base_link", "sf_grasp_tcp", "arm");
+  auto model = builder.build();
+  const auto names = model->getJointModelGroup("arm")->getVariableNames();
+  auto bounds = model->getVariableBounds(names.front());
+  bounds.velocity_bounded_ = true;
+  bounds.max_velocity_ = 1.; bounds.min_velocity_ = -1.;
+  bounds.acceleration_bounded_ = false;
+  model->getJointModel(names.front())->setVariableBounds(names.front(), bounds);
+  moveit::core::RobotState start(model);
+  start.setToDefaultValues(); start.update();
+  moveit_msgs::msg::RobotTrajectory trajectory;
+  trajectory.joint_trajectory.joint_names = names;
+  for (double q : {0., .005}) {
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.positions = {q};
+    trajectory.joint_trajectory.points.push_back(point);
+  }
+  const auto raw = trajectory;
+  const std::vector<arm_cell_motion::JointMotionLimit> configured{{-1., 1., .2, .4}};
+  for (bool explicit_limits : {false, true}) {
+    SCOPED_TRACE(explicit_limits);
+    trajectory = raw;
+    ASSERT_TRUE(arm_cell_motion::IsaacRosMotionTransport::retime_taught_entry(
+        model, "arm", start, trajectory, {.1, .1}, explicit_limits ? &configured : nullptr));
+    for (const auto & point : trajectory.joint_trajectory.points) {
+      EXPECT_LE(std::abs(point.velocities.front()), (explicit_limits ? .02 : .1) + 1e-6);
+      EXPECT_LE(std::abs(point.accelerations.front()), (explicit_limits ? .04 : .1) + 1e-6);
+    }
+  }
+  EXPECT_FALSE(model->getVariableBounds(names.front()).acceleration_bounded_);
+}
+
+TEST(TaughtEntryTiming, PreservesTheStricterDirectionOfAsymmetricModelBounds)
+{
+  moveit::core::RobotModelBuilder builder("asymmetric", "base_link");
+  builder.addChain("base_link->sf_grasp_tcp", "prismatic");
+  builder.addGroupChain("base_link", "sf_grasp_tcp", "arm");
+  auto model = builder.build();
+  const auto names = model->getJointModelGroup("arm")->getVariableNames();
+  auto bounds = model->getVariableBounds(names.front());
+  bounds.velocity_bounded_ = bounds.acceleration_bounded_ = true;
+  bounds.max_velocity_ = bounds.max_acceleration_ = 1.;
+  bounds.min_velocity_ = -.1; bounds.min_acceleration_ = -.05;
+  model->getJointModel(names.front())->setVariableBounds(names.front(), bounds);
+  moveit::core::RobotState start(model);
+  start.setToDefaultValues(); start.update();
+  moveit_msgs::msg::RobotTrajectory raw;
+  raw.joint_trajectory.joint_names = names;
+  for (double q : {0., -.1}) {
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.positions = {q};
+    raw.joint_trajectory.points.push_back(point);
+  }
+  const std::vector<arm_cell_motion::JointMotionLimit> configured{{-1., 1., 1., 1.}};
+  for (bool explicit_limits : {false, true}) {
+    auto trajectory = raw;
+    ASSERT_TRUE(arm_cell_motion::IsaacRosMotionTransport::retime_taught_entry(
+        model, "arm", start, trajectory, {1., 1.}, explicit_limits ? &configured : nullptr));
+    for (const auto & point : trajectory.joint_trajectory.points) {
+      EXPECT_LE(std::abs(point.velocities.front()), .1 + 1e-6);
+      EXPECT_LE(std::abs(point.accelerations.front()), .05 + 1e-6);
+    }
   }
 }

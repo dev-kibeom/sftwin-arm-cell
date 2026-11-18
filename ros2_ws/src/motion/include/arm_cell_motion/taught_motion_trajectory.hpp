@@ -22,6 +22,13 @@ struct TaughtJointTrajectoryResult
   trajectory_msgs::msg::JointTrajectory trajectory;
 };
 
+// Uniform time dilation keeps the planned path while bounding timed fields
+// and the piecewise-linear executor's segment velocities.
+bool stretch_taught_trajectory_to_limits(
+  trajectory_msgs::msg::JointTrajectory & trajectory,
+  const std::vector<double> & velocity_limits,
+  const std::vector<double> & acceleration_limits);
+
 std::vector<JointMotionLimit> joint_motion_limits_from_urdf(
   const std::string & description, const std::vector<std::string> & joint_names,
   double max_acceleration);

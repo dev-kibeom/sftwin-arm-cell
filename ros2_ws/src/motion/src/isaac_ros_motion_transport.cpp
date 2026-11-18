@@ -3200,8 +3200,30 @@ bool IsaacRosMotionTransport::pick_grasp_insertion_started() const
 bool IsaacRosMotionTransport::retime_taught_entry(
   const moveit::core::RobotModelConstPtr & model, const std::string & group,
   const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,
-  const MotionPlanningScales & scales)
+  const MotionPlanningScales & scales, const std::vector<JointMotionLimit> * limits)
 {
+  const auto * joints = model->getJointModelGroup(group);
+  if (!joints) {return false;}
+  const auto & names = joints->getVariableNames();
+  if (limits && limits->size() != names.size()) {return false;}
+  std::unordered_map<std::string, double> velocities, accelerations;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    const auto & bounds = model->getVariableBounds(names[i]);
+    const double model_velocity = bounds.velocity_bounded_ ?
+      std::min(std::abs(bounds.min_velocity_), std::abs(bounds.max_velocity_)) : 1.0;
+    const double model_acceleration = bounds.acceleration_bounded_ ?
+      std::min(std::abs(bounds.min_acceleration_), std::abs(bounds.max_acceleration_)) : 1.0;
+    double velocity = limits ? (*limits)[i].max_velocity : model_velocity;
+    double acceleration = limits ? (*limits)[i].max_acceleration : model_acceleration;
+    if (bounds.velocity_bounded_) {velocity = std::min(velocity, model_velocity);}
+    if (bounds.acceleration_bounded_) {
+      acceleration = std::min(acceleration, model_acceleration);
+    }
+    if (!std::isfinite(velocity) || velocity <= 0 ||
+      !std::isfinite(acceleration) || acceleration <= 0) {return false;}
+    velocities[names[i]] = velocity * scales.max_velocity * 0.95;
+    accelerations[names[i]] = acceleration * scales.max_acceleration * 0.95;
+  }
   robot_trajectory::RobotTrajectory timed(model, group);
   timed.setRobotTrajectoryMsg(start, trajectory);
   // Entry planning has already established the collision-free joint path.
@@ -3209,11 +3231,22 @@ bool IsaacRosMotionTransport::retime_taught_entry(
   trajectory_processing::TimeOptimalTrajectoryGeneration parameterization(0.0, 0.02);
   // Leave room for numerical differentiation in the execution sampler; the
   // requested scales remain upper bounds, never relaxed validation limits.
-  if (!parameterization.computeTimeStamps(timed, scales.max_velocity * 0.95,
-      scales.max_acceleration * 0.95))
+  // Humble's scalar overload does not scale its fallback acceleration when
+  // the model omits acceleration bounds. Supply absolute limits explicitly.
+  if (!parameterization.computeTimeStamps(timed, velocities, accelerations))
   {return false;}
   timed.getRobotTrajectoryMsg(trajectory);
-  return true;
+  std::vector<double> velocity_limits, acceleration_limits;
+  for (const auto & name : trajectory.joint_trajectory.joint_names) {
+    const auto velocity = velocities.find(name), acceleration = accelerations.find(name);
+    if (velocity == velocities.end() || acceleration == accelerations.end()) {return false;}
+    velocity_limits.push_back(velocity->second);
+    acceleration_limits.push_back(acceleration->second);
+  }
+  // TOTG resampling can overshoot at sharp joint-path direction changes.
+  // Bound the resulting timed fields without changing the validated path.
+  return stretch_taught_trajectory_to_limits(
+    trajectory.joint_trajectory, velocity_limits, acceleration_limits);
 }
 
 bool IsaacRosMotionTransport::submit_normalized_once(

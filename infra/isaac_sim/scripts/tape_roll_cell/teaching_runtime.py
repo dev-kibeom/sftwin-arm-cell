@@ -127,8 +127,8 @@ class TeachingSession:
             raise ValueError('Select Manual Teaching first.')
         if self._cell_busy() or self.pending is not None:
             raise ValueError('Wait for the active Mission or teaching request to finish.')
-        if self.motion_uncertain and not recovery:
-            raise ValueError('Movement outcome is unknown. Confirm idle Motion and Apply before another movement.')
+        if (self.apply_uncertain or self.motion_uncertain) and not recovery:
+            raise ValueError('Teaching synchronization is uncertain. Confirm idle Motion and Apply before another movement.')
         if (self.requires_restart and self.motion_instance == self.uncertain_instance):
             raise ValueError('Movement acceptance is unknown. Restart ROS, then Apply to resynchronize teaching.')
 

@@ -189,7 +189,8 @@ private:
   static bool retime_taught_entry(
     const moveit::core::RobotModelConstPtr & model, const std::string & group,
     const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,
-    const MotionPlanningScales & scales);
+    const MotionPlanningScales & scales,
+    const std::vector<JointMotionLimit> * limits = nullptr);
   uint8_t execute_cartesian_teaching(
     const TaughtMotion &, const std::string &, const std::function<uint8_t()> &);
   bool execute_taught_entry(
