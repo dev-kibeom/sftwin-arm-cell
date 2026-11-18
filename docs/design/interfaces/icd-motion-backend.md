@@ -42,7 +42,7 @@ Tool 작업 의도 GRASP는 자재 확보 요청, RELEASE는 자재 해제 요�
 Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction과 합계 파지력(N)인 grip_force_n을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
 
 모드별 Qualification·보유·Attachment 의미는 아래 표를 따른다. ROS status의 grasp는 보유 관측이고
-attached는 실제 Fixed Joint 소유 여부다. 현재 지원 Profile은 Robotiq뿐이며 Fake Vacuum은 테스트에서만
+attached는 실제 Fixed Joint 소유 여부다. 현재 지원 Profile은 Robotiq 2F-85와 M0609 Tape Cell의 C10/Long이며 Fake Vacuum은 테스트에서만
 주입한다. 다른 Tool의 실제 센서·물리·Capture Reference Geometry 구현은 이 계약만으로 지원 완료가 되지 않는다.
 
 ### Backend 비종속 파지력 요청
@@ -135,3 +135,16 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 - [Safety–Motion ICD](icd-safety-motion.md): 외부 정지 완료 및 Safety 권한 의미
 
 Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`는 해당 실행의 물리 보유 추정 근거도 무효화한다. 파지 승인 후 pending 참조의 정상 퇴역은 `invalidate:true, retire_pending:true`로 구별한다. 이 퇴역만 수락된 CLOSE의 실행 ID·예상 폭 근거를 유지하며 새 CLOSE를 허가하지 않는다. 유지된 근거도 실제 관절 관측과 계속 대조하며 STOP/OPEN/새 선택·Reset/Shutdown에서 폐기한다. 이는 자재 World Pose 추적이나 Attachment를 대신 생성하는 계약이 아니다.
+
+## Configured radial Tool
+
+C10 Physical Real은 `internal_radial` 요구와 선택 Tool의 기하를 검증한다. 세 개의 예약 대상 접촉,
+측정 팽창 obstruction 및 dwell을 사용하며 폭·두 핑거 힘 API를 요구하지 않는다. 실제 수축과 접촉 소실이
+확인돼야 RELEASED다. 공통 Holding의 신선도·UNKNOWN·STOP·실행 상관 규칙은 유지한다.
+
+`/gripper/capture_reference`의 radial 참조는 motion_goal_uuid, strategy, material_id, supply_id, slot_id,
+supply_epoch, reservation_id와 insertion_depth_m/thickness_m/inner_radius_m을 전달한다. 예약 대상의
+Stage identity와 일치하고 선택 Tool의 기하가 유효한 경우만 ACK한다. status의 선택적
+relation_execution_id와 grasp_relation(JSON 16개 row-major 수치)은 측정 TCP→자재 관계다.
+Motion은 새로운 HELD 및 같은 실행 관계와 Planning Scene의 중공 payload 반영을 확인한 후 이송하며,
+새 RELEASED와 world geometry 복귀를 확인한 후 후퇴한다. Planning Attachment는 PhysX 부착을 뜻하지 않는다.

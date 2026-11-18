@@ -20,25 +20,12 @@
   하우징 뒷면부터 **254.76571 mm**이며, 기존 제조사 TCP와 연장부 장착면 사이의
   약 0.00429 mm 차이도 반영합니다. 도구 삽입 방향은 +Z로 유지합니다.
 
-Launcher에서 **M0609/HCR-14 + Hand-E C10 + 100 mm 핑거 · 모델·관절 실험** 항목을
-선택합니다. 기존 짧은 C10 모델도 별도로 실행할 수 있습니다.
-ROS 2 Humble 환경을 적용한 뒤 저장소 루트에서 직접 실행할 수도 있습니다.
-
-```bash
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/hcr14_hand_e_c10_long.yaml
-# 한 번의 왕복 동작으로 종료하는 라이브 검증:
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/hcr14_hand_e_c10_long.yaml \
-  --headless --cycles 1
-```
-
-M0609에서는 파일 이름을 `m0609_hand_e_c10_long.yaml`로 바꿉니다.
-검증은 연장부의 방사형 왕복 이동·동기화, 관절 한계, 새 TCP와 연장 Collision의 존재를
-확인합니다. Self-collision은 기존 정책대로 비활성입니다.
-긴 봉의 휨·강성·체결부 응력, 보정된 파지력, 자재와의 실제 접촉·간섭·유지 성능은
-검증하지 않습니다. 원형 자재, 파지 알고리즘, Vision, Physical Grasp 또는 신규 Cell은
-포함하지 않으며 ROS Mission·파지는 지원하지 않습니다.
+Launcher의 정식 Robot·Tool·Cell·Grasp Mode 선택으로 M0609 Tape Cell을 실행합니다.
+지원 모드는 Physical Real이며 세 핑거의 실제 접촉·팽창과 수축/접촉 소실을 관측합니다.
+실험 전용 버튼·왕복 구동 실행기는 제거했습니다. 실행 절차와 ROS Task/Mission 경계는
+[Tape Handling Cell 안내](../../../infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요.
+HCR-14는 정적 조립 모델 검증 범위이며 운영 C10 배포에 등록하지 않습니다.
+긴 핑거의 휨·체결부 응력·보정된 파지력이나 실제 제작 적합성은 검증하지 않습니다.
 
 공식 C10 자산의 출처·라이선스는 [UPSTREAM](third_party/robotiq/UPSTREAM.md),
 기본 모델의 동작·실행 제한은 [기본 C10 모델 안내](../../robots/m0609_hand_e_c10/README.md)를

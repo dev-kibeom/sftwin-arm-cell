@@ -10,6 +10,21 @@
 #include "arm_cell_motion/fake_motion_backend.hpp"
 #include "arm_cell_motion/motion_node.hpp"
 
+TEST(MotionNodeParameters, BackendReadinessTracksTheActualBackend)
+{
+  if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
+  auto backend = std::make_shared<arm_cell_motion::FakeMotionBackend>();
+  backend->set_available(false);
+  auto node = std::make_shared<arm_cell_motion::MotionNode>(backend);
+  EXPECT_FALSE(node->backend_ready());
+  backend->set_available(true);
+  EXPECT_TRUE(node->backend_ready());
+  backend->set_available(false);
+  EXPECT_FALSE(node->backend_ready());
+  node.reset();
+  rclcpp::shutdown();
+}
+
 TEST(MotionNodeParameters, ValidatesRuntimeTuningAndRejectsStaticParameters)
 {
   if (!rclcpp::ok()) {
@@ -300,6 +315,25 @@ TEST(MotionNodeParameters, AcceptsReadOnlyGripForceStartupAndRejectsUpdates)
       rclcpp::Parameter("grip_force.actuation", "logical")).successful);
   EXPECT_FALSE(node->set_parameter(
       rclcpp::Parameter("grip_force.materials.TestCube.mass_kg", 0.5)).successful);
+  node.reset();
+  rclcpp::shutdown();
+}
+
+TEST(MotionNodeParameters, AcceptsConfiguredCatalogOverrideAtTaskCompositionAndRejectsRuntimeUpdates)
+{
+  if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
+  const std::string catalog = R"({"slot_0":{"supply_id":"tape"}})";
+  rclcpp::NodeOptions options;
+  options.parameter_overrides({rclcpp::Parameter("configured_grasp_cycles_json", catalog)});
+  auto node = std::make_shared<arm_cell_motion::MotionNode>(
+    std::make_shared<arm_cell_motion::FakeMotionBackend>(), options);
+  rcl_interfaces::msg::ParameterDescriptor descriptor;
+  descriptor.read_only = true;
+  EXPECT_NO_THROW(node->declare_parameter<std::string>("configured_grasp_cycles_json", "{}", descriptor));
+  if (node->has_parameter("configured_grasp_cycles_json")) {
+    EXPECT_EQ(node->get_parameter("configured_grasp_cycles_json").as_string(), catalog);
+    EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("configured_grasp_cycles_json", "{}")).successful);
+  }
   node.reset();
   rclcpp::shutdown();
 }

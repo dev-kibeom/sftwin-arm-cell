@@ -99,7 +99,7 @@ def selected_profiles(references, base):
                 owner['validation_planning_scene']['static_scene_file'], path.parent))
         if 'camera' in owner:
             owner['camera']['snapshot'] = str(resolve(owner['camera']['snapshot'], path.parent))
-        if name == 'cell':
+        if name == 'cell' and 'configured_supply' not in owner:
             supply = owner['material_supply']
             supply['profile'] = read(resolve(supply['profile'], path.parent))
             geometry = {item['id']: item for item in json.loads(Path(owner['geometry']).read_text())['objects']}
@@ -226,10 +226,11 @@ def write_recipes(recipes, output_root=None):
 def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=None, tool_grasp=None, tool_parameters=None):
     path = Path(path).expanduser().resolve()
     config = read(path)
-    if config.get('kind') == 'arm-cell-physical-fixture':
-        raise ValueError('Use tape_roll_cell/run.sh; ROS Mission execution is unsupported for this Cell fixture')
-    if config.get('kind') == 'arm-cell-model-experiment':
-        raise ValueError('Use the model experiment launcher; production runtime is unsupported')
+    if config.get('kind') == 'arm-cell-configured-supply-profile':
+        from .configured_supply import load_configured_profile
+        return load_configured_profile(config,path,tool_actuator=tool_actuator,tool_grasp=tool_grasp,tool_parameters=tool_parameters)
+    if config.get('kind') in ('arm-cell-physical-fixture','arm-cell-model-experiment'):
+        raise ValueError('Experiment operator profiles were removed; select a registered deployment and Grasp Mode')
     if config.get('kind') == 'arm-cell-runtime-configuration':
         if config.get('schema_version') != 1:
             raise ValueError('Unsupported runtime configuration schema')

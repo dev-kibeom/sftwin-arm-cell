@@ -21,16 +21,27 @@ TaughtMotions parse_taught_motions(
   for (const auto & entry : motions.items()) {
     const auto & value = entry.value();
     if (!std::regex_match(entry.key(), std::regex("[a-z][a-z0-9_]*")) ||
-      !value.is_object() || value.size() != 3U ||
+      !value.is_object() || value.size() != (value.contains("joint_path") ? 4U + value.contains("plan_to_start") : 3U) ||
       !value.contains("velocity_scale") || !value.contains("acceleration_scale") ||
-      value.contains("target") == value.contains("joint_positions"))
+      (static_cast<int>(value.contains("target")) + static_cast<int>(value.contains("joint_positions")) +
+      static_cast<int>(value.contains("joint_path"))) != 1)
     {
       throw std::invalid_argument("Invalid taught motion definition: " + entry.key());
     }
     TaughtMotion motion;
     motion.velocity_scale = value.at("velocity_scale").get<double>();
     motion.acceleration_scale = value.at("acceleration_scale").get<double>();
-    if (value.contains("target")) {
+    if (value.contains("joint_path")) {
+      motion.plan_to_start = value.value("plan_to_start", false);
+      motion.joint_path = value.at("joint_path").get<std::vector<std::vector<double>>>();
+      motion.duration_s = value.at("duration_s").get<double>();
+      if (motion.joint_path.size() < 2 || !std::isfinite(motion.duration_s) || motion.duration_s <= 0 ||
+        !std::all_of(motion.joint_path.begin(), motion.joint_path.end(), [joint_count](const auto & knot) {
+          return knot.size() == joint_count && std::all_of(knot.begin(), knot.end(),
+            [](double q) {return std::isfinite(q);});
+        })) {throw std::invalid_argument("Invalid taught joint path: " + entry.key());}
+      motion.joint_positions = motion.joint_path.back();
+    } else if (value.contains("target")) {
       const auto target = value.at("target").get<std::string>();
       if (target != "home" && target != "tray_return") {
         throw std::invalid_argument("Unknown taught target: " + target);

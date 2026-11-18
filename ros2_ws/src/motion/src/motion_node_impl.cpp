@@ -241,6 +241,8 @@ MotionNode::MotionNode(
   const auto tool_grasp_collision_links = declare_parameter<std::vector<std::string>>(
     "tool_grasp_collision_links", std::vector<std::string>{});
   const auto tool_width_control = declare_parameter<bool>("tool_width_control", true);
+  const auto tool_grasp_strategies = declare_parameter<std::vector<std::string>>(
+    "tool_grasp_strategies", {"box_exterior"});
   const auto payload_touch_links = declare_parameter<std::vector<std::string>>(
     "payload_touch_links", std::vector<std::string>{});
   const auto grasp_mount_contact_links = declare_parameter<std::vector<std::string>>(
@@ -465,6 +467,7 @@ MotionNode::MotionNode(
         rclcpp::Parameter("pick_clearance_objects", pick_clearance_objects),
         rclcpp::Parameter("tool_grasp_collision_links", tool_grasp_collision_links),
         rclcpp::Parameter("tool_width_control", tool_width_control),
+        rclcpp::Parameter("tool_grasp_strategies", tool_grasp_strategies),
         rclcpp::Parameter("payload_touch_links", payload_touch_links),
         rclcpp::Parameter("grasp_mount_contact_links", grasp_mount_contact_links),
         rclcpp::Parameter("grasp_mount_contact_object", grasp_mount_contact_object),
@@ -603,6 +606,7 @@ MotionNode::MotionNode(
     }
   }
 
+  backend_readiness_ = backend;
   core_ = std::make_shared<MotionCore>(
     backend, std::chrono::milliseconds(500), motion_geometry,
     std::chrono::milliseconds(holding_confirmation_timeout_ms));
@@ -631,9 +635,10 @@ MotionNode::MotionNode(
       for (const auto & parameter : parameters) {
         const auto & name = parameter.get_name();
         if (name == "pick_strategy" || name == "place_strategy" ||
-          (name.rfind("grip_force.", 0) == 0 && !has_parameter(name)))
+          ((name.rfind("grip_force.", 0) == 0 || name == "configured_grasp_cycles_json") &&
+          !has_parameter(name)))
         {
-          // Task Execution declares read-only strategy and grip-force parameters after
+          // Task Execution declares read-only strategy, catalog and grip-force inputs after
           // MotionNode construction. Accept their initial declaration here;
           // the descriptor rejects subsequent runtime updates.
           strategy_declaration = true;
@@ -798,6 +803,12 @@ void MotionNode::initialize_backend()
   if (isaac_transport_) {
     isaac_transport_->initialize_move_group();
   }
+}
+
+bool MotionNode::backend_ready() const
+{
+  const auto backend = backend_readiness_.lock();
+  return backend && backend->available();
 }
 
 void MotionNode::configure_waypoint_mode(bool pick_waypoint, bool place_waypoint)

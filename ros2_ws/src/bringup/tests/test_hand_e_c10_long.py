@@ -5,19 +5,19 @@ import xml.etree.ElementTree as ET
 import pytest
 import xacro
 
-from arm_cell_bringup.model_experiment import load_model_experiment
+from arm_cell_bringup.assembly_model import load_assembly_model
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
 @pytest.mark.parametrize('robot_id', ['m0609', 'hcr14'])
 def test_long_fingers_preserve_mechanism_and_move_tcp(robot_id):
-    directory = ROOT / 'ros2_ws/src/bringup/config/model_experiments'
-    stock = load_model_experiment(directory / f'{robot_id}_hand_e_c10.yaml')
-    long = load_model_experiment(directory / f'{robot_id}_hand_e_c10_long.yaml')
+    stock = load_assembly_model(robot_id, 'hand_e_c10')
+    long = load_assembly_model(robot_id, 'hand_e_c10_long')
     assert long['robot'] == stock['robot']
     assert long['tool']['runtime']['joint_model'] == stock['tool']['runtime']['joint_model']
-    assert long['tool']['runtime']['supported_combinations'] == []
+    assert long['tool']['runtime']['supported_combinations'] == [['physics', 'physical']]
+    assert long['tool']['runtime']['mode_id'] == 'physical_real'
     def expand(config):
         model = config['model_configuration']
         return ET.fromstring(xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml())

@@ -1607,6 +1607,10 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
     node_->declare_parameter("tool_width_control", true);
   }
   tool_width_control_ = node_->get_parameter("tool_width_control").as_bool();
+  if (!node_->has_parameter("tool_grasp_strategies")) {
+    node_->declare_parameter<std::vector<std::string>>("tool_grasp_strategies", {"box_exterior"});
+  }
+  tool_grasp_strategies_ = node_->get_parameter("tool_grasp_strategies").as_string_array();
   tool_grasp_collision_links_ =
     node_->get_parameter("tool_grasp_collision_links").as_string_array();
   payload_touch_links_ = node_->get_parameter("payload_touch_links").as_string_array();
@@ -1903,6 +1907,40 @@ IsaacRosMotionTransport::~IsaacRosMotionTransport()
   }
 }
 
+bool IsaacRosMotionTransport::supports_grasp_strategy(GraspStrategy strategy) const
+{
+  const auto name = strategy == GraspStrategy::INTERNAL_RADIAL ? "internal_radial" : "box_exterior";
+  return std::find(tool_grasp_strategies_.begin(), tool_grasp_strategies_.end(), name) !=
+    tool_grasp_strategies_.end() && (strategy != GraspStrategy::INTERNAL_RADIAL || !tool_width_control_);
+}
+
+bool IsaacRosMotionTransport::prepare_configured_grasp(
+  const GraspSpecification & spec, const GraspExecutionIdentity & identity)
+{
+  if (!spec.valid() || !identity.valid() || spec.strategy != GraspStrategy::INTERNAL_RADIAL ||
+    !supports_grasp_strategy(spec.strategy) || !capture_reference_publisher_) {return false;}
+  std_msgs::msg::String message;
+  message.data = nlohmann::json{
+    {"motion_goal_uuid", identity.execution_id}, {"strategy", "internal_radial"},
+    {"material_id", identity.material_id}, {"supply_id", identity.supply_id},
+    {"slot_id", identity.slot_id}, {"supply_epoch", identity.supply_epoch},
+    {"reservation_id", identity.reservation_id}, {"insertion_depth_m", spec.insertion_depth_m},
+    {"thickness_m", spec.thickness_m}, {"inner_radius_m", spec.bore_radius_m}}.dump();
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    capture_reference_id_ = identity.execution_id;
+    applied_capture_reference_id_.clear();
+    radial_prepared_ = true;
+    radial_execution_id_ = identity.execution_id;
+    radial_object_id_ = identity.supply_id + "_" + identity.slot_id;
+    measured_relation_valid_ = false;
+    pending_object_to_tcp_valid_ = false;
+    accepted_object_to_tcp_valid_ = false;
+  }
+  capture_reference_publisher_->publish(message);
+  return true;
+}
+
 void IsaacRosMotionTransport::begin_pick_grasp_relation()
 {
   std::string execution_id;
@@ -1998,14 +2036,71 @@ void IsaacRosMotionTransport::discard_pending_grasp_relation()
   }
 }
 
+bool IsaacRosMotionTransport::wait_configured_payload_scene(
+  const std::string & object_id, bool attached)
+{
+  if (!planning_scene_client_ || object_id.empty()) {return false;}
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+  const auto has_geometry = [](const auto & object) {
+      return !object.primitives.empty() || !object.meshes.empty() || !object.planes.empty();
+    };
+  while (std::chrono::steady_clock::now() < deadline &&
+    rclcpp::ok(node_->get_node_base_interface()->get_context()))
+  {
+    if (!planning_scene_client_->wait_for_service(std::chrono::milliseconds(50))) {continue;}
+    auto query = std::make_shared<moveit_msgs::srv::GetPlanningScene::Request>();
+    query->components.components = pick_retract_planning_scene_components();
+    auto future = planning_scene_client_->async_send_request(query);
+    if (future.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {
+      planning_scene_client_->remove_pending_request(future);
+      continue;
+    }
+    const auto response = future.get();
+    if (response) {
+      bool attached_present = false, attached_geometry = false;
+      bool world_present = false, world_geometry = false;
+      for (const auto & payload : response->scene.robot_state.attached_collision_objects) {
+        if (payload.object.id == object_id) {
+          attached_present = true; attached_geometry = has_geometry(payload.object);
+        }
+      }
+      for (const auto & object : response->scene.world.collision_objects) {
+        if (object.id == object_id) {world_present = true; world_geometry = has_geometry(object);}
+      }
+      if (attached ? attached_present && attached_geometry && !world_present :
+        !attached_present && world_present && world_geometry) {return true;}
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  return false;
+}
+
 bool IsaacRosMotionTransport::commit_pending_grasp_relation()
 {
+  std::string object_id;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (radial_prepared_) {
+      if (!measured_relation_valid_ || measured_relation_execution_id_ != radial_execution_id_ ||
+        !grasp_confirmed_ || release_confirmed_ ||
+        std::chrono::steady_clock::now() - latest_gripper_status_receipt_ > kGripperStatusFreshness)
+      {return false;}
+      object_id = radial_object_id_;
+    }
+  }
+  if (!object_id.empty() && !wait_configured_payload_scene(object_id, true)) {return false;}
   std::string execution_id;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!pending_object_to_tcp_valid_) {
-      return false;
+    if (radial_prepared_) {
+      if (!measured_relation_valid_ || measured_relation_execution_id_ != radial_execution_id_ ||
+        !grasp_confirmed_ || release_confirmed_ ||
+        std::chrono::steady_clock::now() - latest_gripper_status_receipt_ > kGripperStatusFreshness)
+      {return false;}
+      pending_object_to_tcp_ = measured_relation_;
+      pending_object_to_tcp_valid_ = true;
     }
+    if (!pending_object_to_tcp_valid_) {return false;}
     accepted_payload_dimensions_ = pending_payload_dimensions_;
     accepted_object_to_tcp_ = pending_object_to_tcp_;
     accepted_object_to_tcp_valid_ = true;
@@ -2027,10 +2122,27 @@ bool IsaacRosMotionTransport::commit_pending_grasp_relation()
 
 void IsaacRosMotionTransport::clear_grasp_relation_after_release()
 {
+  std::string object_id;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (radial_prepared_) {
+      if (!release_confirmed_ || grasp_confirmed_ ||
+        std::chrono::steady_clock::now() - latest_gripper_status_receipt_ > kGripperStatusFreshness)
+      {throw std::runtime_error("configured_release_observation_unavailable");}
+      object_id = radial_object_id_;
+    }
+  }
+  if (!object_id.empty() && !wait_configured_payload_scene(object_id, false)) {
+    throw std::runtime_error("configured_release_scene_synchronization_timeout");
+  }
   std::lock_guard<std::mutex> lock(mutex_);
   pending_object_to_tcp_valid_ = false;
   accepted_object_to_tcp_valid_ = false;
   accepted_payload_dimensions_.clear();
+  radial_prepared_ = false;
+  measured_relation_valid_ = false;
+  radial_execution_id_.clear();
+  radial_object_id_.clear();
 }
 
 void IsaacRosMotionTransport::configure_waypoint_mode(
@@ -3085,9 +3197,29 @@ bool IsaacRosMotionTransport::pick_grasp_insertion_started() const
   return pick_grasp_insertion_started_;
 }
 
+bool IsaacRosMotionTransport::retime_taught_entry(
+  const moveit::core::RobotModelConstPtr & model, const std::string & group,
+  const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,
+  const MotionPlanningScales & scales)
+{
+  robot_trajectory::RobotTrajectory timed(model, group);
+  timed.setRobotTrajectoryMsg(start, trajectory);
+  // Entry planning has already established the collision-free joint path.
+  // Do not round its corners into unplanned configurations while retiming.
+  trajectory_processing::TimeOptimalTrajectoryGeneration parameterization(0.0, 0.02);
+  // Leave room for numerical differentiation in the execution sampler; the
+  // requested scales remain upper bounds, never relaxed validation limits.
+  if (!parameterization.computeTimeStamps(timed, scales.max_velocity * 0.95,
+      scales.max_acceleration * 0.95))
+  {return false;}
+  timed.getRobotTrajectoryMsg(trajectory);
+  return true;
+}
+
 bool IsaacRosMotionTransport::submit_normalized_once(
   const NormalizedMotionRequest & input_request, const std::vector<double> * waypoint,
-  double budget_s, bool qualify_place_target, NormalizedTrajectoryPlan * plan_output)
+  double budget_s, bool qualify_place_target, NormalizedTrajectoryPlan * plan_output,
+  const MotionPlanningScales * supplied_scales)
 {
 
   auto request = input_request;
@@ -3397,7 +3529,8 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   }
   const auto envelope = applied_motion_envelope();
   auto planning_scales = apply_motion_envelope_to_planning_scales(
-    planning_velocity_scaling_factor_, planning_acceleration_scaling_factor_, envelope);
+    supplied_scales ? supplied_scales->max_velocity : planning_velocity_scaling_factor_,
+    supplied_scales ? supplied_scales->max_acceleration : planning_acceleration_scaling_factor_, envelope);
   if (request.is_disturbance) {
     planning_scales.max_velocity *= request.motion_speed_fraction;
     planning_scales.max_acceleration *= request.motion_speed_fraction;
@@ -3470,7 +3603,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
   const bool vision_collision_scope_required = vision_derived_pick ||
     (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
     request.has_non_target_occupancy && !request.non_target_occupancy.empty());
-  const bool planning_scene_context_required =
+  const bool planning_scene_context_required = waypoint != nullptr ||
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK ||
     request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PLACE;
   if (request.task_type.value == arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_PICK &&
@@ -3796,6 +3929,10 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         trajectory, arm_joint_names_, trajectory_velocity_limits,
         trajectory_acceleration_limit,
         [&](moveit_msgs::msg::RobotTrajectory & raw_trajectory) {
+          if (supplied_scales) {
+            return retime_taught_entry(robot_model, planning_group_, planning_start_state,
+              raw_trajectory, planning_scales);
+          }
           robot_trajectory::RobotTrajectory timed_trajectory(robot_model, planning_group_);
           timed_trajectory.setRobotTrajectoryMsg(planning_start_state, raw_trajectory);
           trajectory_processing::TimeOptimalTrajectoryGeneration time_parameterization;
@@ -3936,7 +4073,11 @@ bool IsaacRosMotionTransport::submit_normalized_once(
     if (planning_succeeded) {
       const auto finalized = finalize_raw_trajectory(plan.trajectory_);
       planning_succeeded = finalized.success;
-      if (!finalized.success) {place_recovery_waypoint_reason_ = finalized.reason;}
+      if (!finalized.success) {
+        place_recovery_waypoint_reason_ = finalized.reason;
+        RCLCPP_WARN(node_->get_logger(), "Waypoint time parameterization rejected: %s",
+          finalized.reason.c_str());
+      }
     }
     if (result.val == moveit_msgs::msg::MoveItErrorCodes::PLANNING_FAILED ||
       result.val == moveit_msgs::msg::MoveItErrorCodes::TIMED_OUT)
@@ -3966,6 +4107,7 @@ bool IsaacRosMotionTransport::submit_normalized_once(
         planning_succeeded = false;
         place_recovery_candidate_fatal_ = false;
         place_recovery_waypoint_reason_ = "waypoint_path_invalid";
+        RCLCPP_WARN(node_->get_logger(), "Waypoint trajectory failed collision validation");
       } else {place_recovery_waypoint_reason_ = "trajectory_validation_or_submission_failed";}
     }
     selected_global_goal = *waypoint;
@@ -8193,6 +8335,36 @@ void IsaacRosMotionTransport::on_gripper_status(
         if (!capture_reference_id_.empty() && reference_id == capture_reference_id_) {
           applied_capture_reference_id_ = reference_id;
           gripper_status_condition_.notify_all();
+        }
+        if (radial_prepared_) {
+          measured_relation_valid_ = false;
+          const auto relation = fields.find("grasp_relation");
+          const auto identity = fields.find("relation_execution_id");
+          if (grasp && !released && relation != fields.end() && identity != fields.end() &&
+            identity->second == radial_execution_id_) {
+            try {
+              const auto values = nlohmann::json::parse(relation->second).get<std::vector<double>>();
+              if (values.size() == 16 && std::all_of(values.begin(), values.end(),
+                [](double v) {return std::isfinite(v);})) {
+                Eigen::Matrix4d matrix;
+                for (int r = 0; r < 4; ++r) {for (int c = 0; c < 4; ++c) {matrix(r,c)=values[r*4+c];}}
+                const Eigen::Matrix3d rotation = matrix.block<3,3>(0,0);
+                if ((rotation.transpose()*rotation-Eigen::Matrix3d::Identity()).norm() < 1e-5 &&
+                  std::abs(rotation.determinant()-1.) < 1e-5 &&
+                  (matrix.row(3)-Eigen::RowVector4d(0,0,0,1)).norm() < 1e-5) {
+                  const Eigen::Matrix4d inverse = matrix.inverse();
+                  const Eigen::Quaterniond q(inverse.block<3,3>(0,0));
+                  measured_relation_.translation.x=inverse(0,3);
+                  measured_relation_.translation.y=inverse(1,3);
+                  measured_relation_.translation.z=inverse(2,3);
+                  measured_relation_.rotation.x=q.x(); measured_relation_.rotation.y=q.y();
+                  measured_relation_.rotation.z=q.z(); measured_relation_.rotation.w=q.w();
+                  measured_relation_execution_id_ = identity->second;
+                  measured_relation_valid_ = true;
+                }
+              }
+            } catch (const std::exception &) {}
+          }
         }
         recovered_rejection_reason = last_gripper_status_rejection_reason_;
         last_gripper_status_rejection_reason_.clear();

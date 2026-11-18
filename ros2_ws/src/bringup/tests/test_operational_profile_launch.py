@@ -125,11 +125,18 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     motion = profile["motion"]
     nodes = _project_nodes(_composed_nodes())
     parameters = _node_parameters(nodes["motion_node"])
-    configured = {key: parameters[key] for key in motion}
+    # ROS parameter dictionaries flatten nested profile sections into dotted names.
+    def flattened(values, prefix=''):
+        result={}
+        for key,value in values.items():
+            if isinstance(value,dict):result.update(flattened(value,prefix+key+'.'))
+            else:result[prefix+key]=value
+        return result
+    expected_motion=flattened(motion)
+    configured = {key: parameters[key] for key in expected_motion}
     assert parameters["place_waypoint_trajectory_file"].endswith(
         ".motion_data/place_waypoint_home_to_place.json"
     )
-    expected_motion = dict(motion)
     assert {
         key: list(value) if isinstance(value, tuple) else value
         for key, value in configured.items()

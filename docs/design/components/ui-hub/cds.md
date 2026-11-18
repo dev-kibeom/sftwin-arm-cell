@@ -53,7 +53,7 @@ classDiagram
 
 | 역할 | Hub의 책임 | 공식 결과 Owner |
 |---|---|---|
-| External Handoff Trigger | 타입·수량을 입력받아 공용 Trigger 발행, 로컬 발행 결과 표시 | Gateway 수락·공급 완료, Orchestration Mission Admission |
+| Supply | 선택된 Cell의 자재·수량 단위를 표시하고 Owner에 요청 전달, CNC는 기존 공용 Trigger 발행 | Cell 공급 상태·완료, Gateway 수락, Orchestration Mission Admission |
 | Live Camera / Vision Viewer | 원본 영상 및 Snapshot·선택 Target Annotation 읽기 전용 표시 | Camera Publisher·Vision·공유 ICD |
 | Simulation Control | Timeline 및 Demonstration Stimulus 요청·표시 | Isaac Simulation Runtime·Supply Adapter |
 | Retry Detection / Calibration | 개발 전용/명시적 보정 요청, 응답 표시 | Vision·Orchestration 관련 기능 FDS |

@@ -15,6 +15,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(unique_identifier_msgs REQUIRED)
 
 set(msg_files
+  "msg/ConfiguredSupplyState.msg"
   "msg/AMRDockingState.msg"
   "msg/DetectTargetResultCode.msg"
   "msg/DisturbanceCandidate.msg"
@@ -47,6 +48,7 @@ set(msg_files
 )
 
 set(srv_files
+  "srv/ConfiguredSupply.srv"
   "srv/DetectTarget.srv"
   "srv/RequestMaterial.srv"
   "srv/RequestGripperOpen.srv"
@@ -55,6 +57,7 @@ set(srv_files
 )
 
 set(action_files
+  "action/ExecuteConfiguredGrasp.action"
   "action/ExecuteCycle.action"
   "action/ExecuteDisturb.action"
   "action/ExecutePnp.action"

@@ -1,9 +1,53 @@
-"""Cell scene: dynamic hollow rolls, axial cartridge and passive conveyor receiver."""
+"""Cell scene: epoxy floor, robot pedestal, indexed infeed and vertical outfeed."""
 from tape_roll_cell.material import TapeRoll
 
 
-def build_scene(*, configuration, stage, **unused):
-    from pxr import Gf, UsdGeom, UsdPhysics, PhysxSchema, UsdShade
+def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_stage=None, **unused):
+    from pxr import Gf, UsdGeom, UsdPhysics, PhysxSchema, UsdShade, UsdLux
+    world = None
+    robot = None
+    if stage is None:
+        import os
+        from pathlib import Path
+        from isaac_runtime.model_build_configuration import ModelBuildConfiguration
+        from isaacsim.core.prims import SingleArticulation
+        if world_cls is None:
+            from isaacsim.core.api import World
+            world_cls = World
+        world = world_cls.instance() or world_cls(stage_units_in_meters=1., physics_dt=1/120, rendering_dt=1/60)
+        stage = world.stage
+        if world.get_physics_context() is not None:
+            world.set_simulation_dt(physics_dt=1/120, rendering_dt=1/60)
+            world.get_physics_context().set_gravity(-9.81)
+        else:
+            # Kit initializes World asynchronously during common startup.
+            # Author gravity without dereferencing the pending context.
+            physics = UsdPhysics.Scene.Define(stage, '/physicsScene')
+            physics.CreateGravityDirectionAttr(Gf.Vec3f(0,0,-1))
+            physics.CreateGravityMagnitudeAttr(9.81)
+            PhysxSchema.PhysxSceneAPI.Apply(physics.GetPrim()).CreateTimeStepsPerSecondAttr(120)
+        model = ModelBuildConfiguration.from_runtime(configuration, Path(os.environ['SFTWIN_PROJECT_ROOT']))
+        if add_reference_to_stage is None:
+            from isaacsim.core.utils.stage import add_reference_to_stage
+        robot_path = configuration['cell']['isaac']['robot_prim_path']
+        if stage.GetPrimAtPath(robot_path):
+            stage.RemovePrim(robot_path)
+        add_reference_to_stage(str(model.usd), robot_path)
+        import xml.etree.ElementTree as ET
+        from isaac_runtime.robot_binding import RobotBinding, author_initial_pose
+        tool=configuration['tool']['runtime']
+        contracted={name:model['upper'] for name,model in tool['joint_model'].items()}
+        author_initial_pose(stage,RobotBinding.from_runtime(configuration),ET.parse(model.generated_urdf).getroot(),contracted)
+        old = world.scene.get_object('selected_robot')
+        if old is not None:
+            world.scene.remove_object('selected_robot', registry_only=True)
+        robot = world.scene.add(SingleArticulation(prim_path=robot_path, name='selected_robot'))
+        ground = world.scene.get_object('default_ground_plane')
+        if ground is not None:
+            world.scene.remove_object('default_ground_plane')
+        UsdLux.DomeLight.Define(stage, '/World/Light').CreateIntensityAttr(1000.)
+    if stage.GetPrimAtPath('/World/defaultGroundPlane'):
+        stage.RemovePrim('/World/defaultGroundPlane')
     config = configuration['cell']['tape_roll']
     roll = TapeRoll(**config['material'])
     root = '/World/TapeRollCell'
@@ -23,57 +67,26 @@ def build_scene(*, configuration, stage, **unused):
         contact.CreateRestOffsetAttr(0.)
         UsdShade.MaterialBindingAPI.Apply(prim).Bind(material, materialPurpose='physics')
 
-    roll_paths = []
-    for slot in config['slots']:
-        path = f'{root}/Roll{slot["index"]:03d}'
-        body = UsdGeom.Xform.Define(stage, path)
-        body.AddTranslateOp().Set(Gf.Vec3d(*slot['supply_center_m']))
-        # Local annulus Z becomes horizontal world X; local Y remains world Y.
-        body.AddRotateYOp().Set(90.)
-        UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
-        mass = UsdPhysics.MassAPI.Apply(body.GetPrim())
-        mass.CreateMassAttr(roll.mass_kg)
-        mass.CreateCenterOfMassAttr(Gf.Vec3f(0,0,0))
-        mass.CreateDiagonalInertiaAttr(Gf.Vec3f(*roll.inertia()))
-        mass.CreatePrincipalAxesAttr(Gf.Quatf(1.))
-        rb = PhysxSchema.PhysxRigidBodyAPI.Apply(body.GetPrim())
-        rb.CreateSolverPositionIterationCountAttr(32)
-        rb.CreateSolverVelocityIterationCountAttr(8)
-        PhysxSchema.PhysxContactReportAPI.Apply(body.GetPrim()).CreateThresholdAttr(0.)
-        faces = [(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
-        for index, vertices in enumerate(roll.convex_segments()):
-            mesh = UsdGeom.Mesh.Define(stage, f'{path}/Sector{index:03d}')
-            mesh.CreatePointsAttr([Gf.Vec3f(*p) for p in vertices])
-            mesh.CreateFaceVertexCountsAttr([4]*6)
-            mesh.CreateFaceVertexIndicesAttr([v for face in faces for v in face])
-            mesh.CreateSubdivisionSchemeAttr('none')
-            mesh.CreateDisplayColorAttr([Gf.Vec3f(.74,.55,.24)])
-            collision(mesh.GetPrim())
-            UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr('convexHull')
-        roll_paths.append(path)
+    from tape_roll_cell.presentation import author_presentation
+    view = configuration['cell'].get('presentation', {}).get('overview',
+        dict(eye=[1.4, -1.25, 1.1], target=[.28, .18, .36]))
+    looks = author_presentation(stage, config, roll, root, view, configuration['cell']['environment'])
 
-    def box(name, center, dimensions):
-        cube = UsdGeom.Cube.Define(stage, root+'/'+name)
+    roll_paths = []  # Supply creates full cartridges on the physical infeed belt.
+    for item in config['static_boxes']:
+        cube = UsdGeom.Cube.Define(stage, item['id'])
         cube.CreateSizeAttr(1.)
-        cube.AddTranslateOp().Set(Gf.Vec3d(*center))
-        cube.AddScaleOp().Set(Gf.Vec3f(*dimensions))
-        cube.CreateDisplayColorAttr([Gf.Vec3f(.2,.3,.4)])
+        cube.AddTranslateOp().Set(Gf.Vec3d(*item['pose']['position_m']))
+        q = item['pose']['quaternion_xyzw']
+        cube.AddOrientOp().Set(Gf.Quatf(q[3],Gf.Vec3f(*q[:3])))
+        cube.AddScaleOp().Set(Gf.Vec3f(*item['geometry']['dimensions_m']))
+        look = 'floor' if item['id'].endswith('/EpoxyFloor') else 'steel'
+        UsdShade.MaterialBindingAPI.Apply(cube.GetPrim()).Bind(looks[look])
         collision(cube.GetPrim())
-
-    # No axial cap: extraction and retreat can leave along -X. Side guides
-    # constrain the outside diameter; the bore remains clear for all fingers.
-    for slot in config['slots']:
-        for label, center in ((f'Cartridge{slot["index"]:03d}',slot['supply_center_m']),
-                              (f'Receiver{slot["index"]:03d}',slot['receiver_center_m'])):
-            x,y,z = center
-            r, width = roll.outer_radius_m, roll.width_m
-            box(label+'Floor', (x,y,z-r-.005), (width+.008,2*r+.024,.01))
-            for side, sign in (('Left',-1),('Right',1)):
-                box(label+side+'Guide', (x,y+sign*(r+.009),z-r+.015),
-                    (width+.008,.01,.04))
-    from tape_roll_cell.supply import TapeSupply
-    from tape_roll_cell.lifecycle import bind_stop_reset
-    supply = TapeSupply(len(roll_paths))
-    stop_subscription = bind_stop_reset(stage, roll_paths, supply)
-    return dict(stop_subscription=stop_subscription, roll_path=roll_paths[0], roll_paths=roll_paths, root_path=root,
-                roll=roll, supply=supply)
+    from tape_roll_cell.supply import ConfiguredTapeSupply
+    supply = ConfiguredTapeSupply(len(config['slots']),
+        supply_id=configuration['cell']['configured_supply']['supply_id'],
+        material_id=configuration['cell']['configured_supply']['material_id'])
+    supply.unload()
+    return dict(stage=stage, world=world, robot=robot, configuration=configuration,
+                roll_path=None, roll_paths=roll_paths, root_path=root, roll=roll, supply=supply)

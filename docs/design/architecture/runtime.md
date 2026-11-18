@@ -125,7 +125,7 @@ sequenceDiagram
 
 ## 5. 실행 구조적 불변조건
 
-- 정상 Mission 진행은 **Vision의 독립 관측 결과**와 **Task Execution의 단일 PnP 결과**를 소비한다. Orchestration은 하위 Movement나 Holding의 상세 결과를 이용해 PnP terminal 결과를 재판정하지 않는다.
+- Vision source의 정상 Mission 진행은 **Vision의 독립 관측 결과**와 **Task Execution의 단일 PnP 결과**를 소비한다. Orchestration은 하위 Movement나 Holding의 상세 결과를 이용해 PnP terminal 결과를 재판정하지 않는다.
 - Task Execution과 Motion의 실행 협력은 [Components Architecture](components.md)의 단방향 Port 경계를 유지한다. 이 View는 새로운 ROS 경계나 Backend 공유 구조를 요구하지 않는다.
 - Safety의 직접 Motion 정지는 Orchestration의 취소·중단 처리에 종속되지 않는다. 실제 정지 관측·복구 허가·작업 재개는 서로 다른 책임의 결과다.
 - 실패 결과를 전달할 때 원래 실패 근거와 확정 Owner를 유지한다. 구체 오류 코드·우선순위·Retry·회복 절차와 Verification Requirement는 해당 FDS/ICD에서만 정한다.
@@ -144,3 +144,7 @@ Tool Runtime은 실행 시작 시 기존 Actuator/Grasp 조합을 고정한다. 
 추정하며 Attach 없이 유지한다. Session은 Detection을 재구현하지 않고 선택된 구현의 Holding과
 Attachment를 독립 전달한다. 구체적인 상태 의미는 [Motion Backend ICD](../interfaces/icd-motion-backend.md),
 역할 책임은 [Components](components.md)를 따른다. 실행 중 모드 교체나 다른 모드로의 Fallback은 없다.
+
+## Configured 공급 Runtime
+
+정렬 슬롯은 [Configured Supply ICD](../interfaces/icd-configured-supply.md)의 명시적 source로 실행한다. Orchestration이 Cell 예약 → Task → 실제 수령 확인을 연결하며 Vision 결과를 합성하지 않는다. 기존 Vision Mission의 source 계약과 Safety 권한은 유지한다.

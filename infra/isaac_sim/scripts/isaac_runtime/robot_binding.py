@@ -14,19 +14,35 @@ class RobotBinding:
     max_forces: dict = field(default_factory=dict)
     damping: dict = field(default_factory=dict)
 
+    damping_scales: dict = field(default_factory=dict)
+
     @classmethod
     def from_runtime(cls, configuration):
         robot_path = configuration['cell']['isaac']['robot_prim_path']
         assembly = configuration['model_configuration']['isaac']
+        robot = configuration['robot'].get('isaac', {})
+        stiffness = dict(robot.get('joint_drive_stiffness_scales', {}))
+        damping_scales = {}
+        profile_name = assembly.get('robot_drive_profile')
+        if profile_name:
+            profile = robot['drive_profiles'][profile_name]
+            for key in ('stiffness_scale', 'damping_scale'):
+                value = profile[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+                    raise ValueError(f'Robot drive profile {key} must be finite and positive')
+            stiffness = {name:stiffness.get(name, 1.)*profile['stiffness_scale']
+                         for name in configuration['motion']['arm_joint_names']}
+            damping_scales = {name:profile['damping_scale'] for name in configuration['motion']['arm_joint_names']}
         return cls(
             robot_path,
             f"{robot_path}/{assembly['articulation_root']}",
             f"{robot_path}/{assembly['articulation_base']}",
             tuple(configuration['motion']['arm_joint_names']),
             tuple(configuration['home_joint_positions']),
-            configuration['robot'].get('isaac', {}).get('joint_drive_stiffness_scales', {}),
+            stiffness,
             configuration['robot'].get('isaac', {}).get('joint_drive_max_forces', {}),
-            configuration['robot'].get('isaac', {}).get('joint_drive_damping', {}),
+            robot.get('joint_drive_damping', {}),
+            damping_scales,
         )
 
 
@@ -81,6 +97,14 @@ def apply_joint_drive_profile(stage, binding, usd_physics):
             raise RuntimeError(f'{name} imported angular stiffness must be positive')
         stiffness.Set(base_stiffness * scale)
 
+    for name, scale in binding.damping_scales.items():
+        joint = _robot_joints(stage, binding, [name])[name]
+        drive = usd_physics.DriveAPI.Get(joint, 'angular')
+        if not drive or not drive.GetDampingAttr().IsValid():
+            raise RuntimeError(f'angular drive damping unavailable for {name}')
+        damping = drive.GetDampingAttr()
+        damping.Set(float(damping.Get()) * scale)
+
     for name, value in binding.max_forces.items():
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
             raise RuntimeError(f'{name} max force must be finite and positive')
@@ -101,3 +125,35 @@ def apply_joint_drive_profile(stage, binding, usd_physics):
         if not drive or not drive.GetDampingAttr().IsValid():
             raise RuntimeError(f'angular drive damping unavailable for {name}')
         drive.GetDampingAttr().Set(value)
+
+
+def author_initial_pose(stage, binding, urdf, extra_joint_positions=None):
+    """Initialize a stopped Scene at Robot HOME, with consistent body and joint states.
+
+    This is setup, not a motion command. Play-time movements use the ROS backend.
+    """
+    import numpy as np
+    import omni.timeline
+    from pxr import Gf, UsdGeom, UsdPhysics, PhysxSchema
+    from isaac_runtime.urdf_kinematics import link_transforms
+    if not omni.timeline.get_timeline_interface().is_stopped():
+        raise RuntimeError('Initial robot pose may only be authored while stopped')
+    positions=dict(zip(binding.joint_names,binding.home_positions))
+    positions.update(extra_joint_positions or {})
+    transforms=link_transforms(urdf,positions)
+    root_world=np.array(UsdGeom.XformCache().GetLocalToWorldTransform(stage.GetPrimAtPath(binding.robot_path))).T
+    for prim in stage.Traverse():
+        if not str(prim.GetPath()).startswith(binding.robot_path+'/'):
+            continue
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI) and prim.GetName() in transforms:
+            parent_world=np.array(UsdGeom.XformCache().GetLocalToWorldTransform(prim.GetParent())).T
+            local=np.linalg.inv(parent_world)@root_world@transforms[prim.GetName()]
+            UsdGeom.Xformable(prim).MakeMatrixXform().Set(Gf.Matrix4d(*local.T.reshape(-1).tolist()))
+            body=UsdPhysics.RigidBodyAPI(prim)
+            body.CreateVelocityAttr(Gf.Vec3f(0.));body.CreateAngularVelocityAttr(Gf.Vec3f(0.))
+        if prim.GetName() in positions:
+            kind='angular' if prim.IsA(UsdPhysics.RevoluteJoint) else 'linear'
+            state=PhysxSchema.JointStateAPI.Apply(prim,kind)
+            value=positions[prim.GetName()]
+            state.CreatePositionAttr(math.degrees(value) if kind=='angular' else value)
+            state.CreateVelocityAttr(0.)

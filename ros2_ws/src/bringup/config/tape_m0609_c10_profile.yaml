@@ -1,0 +1,22 @@
+kind: arm-cell-configured-supply-profile
+schema_version: 2
+use_sim_time: true
+readiness:
+  fail_closed_until_inputs_fresh: true
+  required_motion_backend: true
+components:
+  motion: package://arm_cell_motion/config/operational.yaml
+  simulation: project://infra/isaac_sim/config/simulation.yaml
+  safety: package://arm_cell_safety/config/operational.yaml
+profiles:
+  robot: package://arm_cell_motion/config/robots/m0609.yaml
+  tool: package://arm_cell_motion/config/tools/hand_e_c10.yaml
+  cell: package://arm_cell_bringup/config/cells/tape_roll_cell.yaml
+model_configuration: package://arm_cell_motion/config/models/m0609_hand_e_c10.yaml
+motion_configuration: package://arm_cell_motion/config/planning.yaml
+mission: package://arm_cell_bringup/config/missions/tape/TapeRoll17.yaml
+motion:
+  trajectory_goal_tolerance_rad: 0.003
+  holding_confirmation_timeout_ms: 8000
+launcher:
+  validation_status: live-pending

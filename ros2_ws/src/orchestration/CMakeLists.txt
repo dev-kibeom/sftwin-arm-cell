@@ -35,6 +35,8 @@ target_include_directories(orchestration_node PRIVATE include)
 ament_target_dependencies(orchestration_node rclcpp rclcpp_action builtin_interfaces std_msgs std_srvs arm_cell_interfaces)
 target_link_libraries(orchestration_node arm_cell_orchestration_core)
 
+install(PROGRAMS scripts/configured_supply_mission.py DESTINATION lib/${PROJECT_NAME})
+
 install(
   DIRECTORY include/
   DESTINATION include
@@ -60,6 +62,8 @@ ament_export_dependencies(
   ament_index_cpp arm_cell_interfaces behaviortree_cpp_v3 nlohmann_json rclcpp std_msgs)
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_configured_supply_policy tests/test_configured_supply_policy.py)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files

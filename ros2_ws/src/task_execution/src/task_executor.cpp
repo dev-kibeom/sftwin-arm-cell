@@ -99,13 +99,38 @@ std::uint8_t TaskExecutor::execute_grasp_cycle(
   const bool valid_identity = motion_execution_id.size() == 32 &&
     motion_execution_id.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos &&
     motion_execution_id.find_first_not_of('0') != std::string::npos;
-  if (!valid_identity || !request.valid() || !tool ||
+  const auto & identity = request.identity;
+  const bool configured_request = !identity.execution_id.empty() || !identity.material_id.empty() ||
+    !identity.supply_id.empty() || !identity.slot_id.empty() || !identity.supply_epoch.empty() ||
+    !identity.reservation_id.empty();
+  if (!valid_identity || !request.valid() ||
+    (configured_request && (!identity.valid() || identity.execution_id != motion_execution_id)) || !tool ||
     !tool->supportsGraspStrategy(request.grasp.strategy) ||
     object_state() != MotionObjectState::NO_OBJECT)
   {
     last_report_.failure_stage = "grasp_strategy:unsupported_or_invalid_request";
     return last_report_.result_code = MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
+  if (request.identity.valid()) {
+    std::lock_guard<std::mutex> lock(configured_execution_mutex_);
+    configured_execution_id_ = motion_execution_id;
+  }
+  struct ConfiguredCleanup
+  {
+    TaskExecutor & owner;
+    bool configured;
+    ~ConfiguredCleanup() {
+      if (!configured) {return;}
+      try {
+        const auto & check = owner.support_->interruption_checker();
+        if (check && check() != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+          owner.support_->gripper()->stop();
+        }
+      } catch (...) {}
+      std::lock_guard<std::mutex> lock(owner.configured_execution_mutex_);
+      owner.configured_execution_id_.clear();
+    }
+  } configured_cleanup{*this, request.identity.valid()};
   // This prepared entry has no Material catalog admission. Do not silently
   // bypass a configured operational force policy for an experimental input.
   if (grip_force_policy_) {
@@ -118,7 +143,8 @@ std::uint8_t TaskExecutor::execute_grasp_cycle(
       return last_report_.result_code = result;
     }
   }
-  const auto configured = tool->prepareGrasp(request.grasp);
+  const auto configured = request.identity.valid() ?
+    tool->prepareConfiguredGrasp(request.grasp, request.identity) : tool->prepareGrasp(request.grasp);
   if (configured != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
     last_report_.failure_stage = "grasp_strategy:tool_preparation";
     return last_report_.result_code = configured;
@@ -344,6 +370,16 @@ bool TaskExecutor::pick_grasp_insertion_started() const
   const auto motion = support_->motion_port();
   return support_->prepared_insertion_started() ||
          (motion && motion->pickGraspInsertionStarted());
+}
+
+void TaskExecutor::fence_configured_grasp(const unique_identifier_msgs::msg::UUID & uuid)
+{
+  cancel_active_motion(uuid);
+  static constexpr char hex[] = "0123456789abcdef";
+  std::string id;
+  for (const auto byte : uuid.uuid) {id += hex[byte >> 4]; id += hex[byte & 15];}
+  std::lock_guard<std::mutex> lock(configured_execution_mutex_);
+  if (configured_execution_id_ == id && support_->gripper()) {support_->gripper()->stop();}
 }
 
 MotionCancelResult TaskExecutor::cancel_active_motion(

@@ -3,6 +3,9 @@ import math
 import time
 from gripper_runtime.grasp_attachment import HoldingObservation, HoldingState
 from gripper_runtime.tool_plugin import ToolIntent, ToolRuntime
+from gripper_runtime.robotiq_actuator import GripperState
+
+_INJECTED = object()
 
 
 class RadialPhysicalTool:
@@ -21,6 +24,9 @@ class RadialPhysicalTool:
         self.sequence = 0
         self._holding = HoldingObservation(HoldingState.UNKNOWN, time.monotonic(), 0)
         self.contacts = None
+        self.state = GripperState.IDLE
+        self.read_contacts = None
+        self.suspended = False
 
     def _positions(self):
         positions = tuple(float(q) for q in self.measure())
@@ -29,7 +35,11 @@ class RadialPhysicalTool:
         return positions
 
     def command(self, intent):
+        if self.suspended:
+            raise ValueError('Stopped radial Tool requires a new Play-time binding')
         self.intent = ToolIntent(intent)
+        self.state = (GripperState.CLOSING if self.intent is ToolIntent.GRASP else
+                      GripperState.OPENING if self.intent is ToolIntent.RELEASE else GripperState.IDLE)
         self.held_dwell = self.release_dwell = 0.
         self.target = max(self.lower, min(self.upper, self._positions()[0]))
         if self.intent is ToolIntent.STOP:
@@ -40,9 +50,27 @@ class RadialPhysicalTool:
         self.sequence += 1
         self._holding = HoldingObservation(state, time.monotonic(), self.sequence)
 
-    def update(self, dt, finger_forces_n):
+    def reset_stopped_state(self):
+        # No measured-state reads or solver writes after Timeline Stop.
+        self.suspended = True
+        self.intent = None
+        self.state = GripperState.IDLE
+        self.target = self.upper
+        self.held_dwell = self.release_dwell = 0.
+        self.contacts = None
+        self._record(HoldingState.UNKNOWN)
+
+    def cancel_motion(self):
+        self.command(ToolIntent.STOP)
+
+    def update(self, dt, finger_forces_n=_INJECTED):
+        if self.suspended:
+            self._record(HoldingState.UNKNOWN)
+            return
         if not math.isfinite(dt) or dt <= 0:
             raise ValueError('Fresh positive physics dt required')
+        if finger_forces_n is _INJECTED:
+            finger_forces_n = self.read_contacts(dt) if self.read_contacts is not None else None
         positions = self._positions()
         if self.intent in (ToolIntent.GRASP, ToolIntent.RELEASE):
             endpoint = self.strategy.primary_position(self.intent.value)
@@ -67,25 +95,42 @@ class RadialPhysicalTool:
         self.release_dwell = self.release_dwell+dt if released else 0.
         state = (HoldingState.HELD if self.held_dwell >= self.dwell else
                  HoldingState.RELEASED if self.release_dwell >= self.dwell else HoldingState.UNKNOWN)
+        if state is HoldingState.HELD:
+            self.state = GripperState.HOLDING
+        elif state is HoldingState.RELEASED:
+            self.state = GripperState.IDLE
         self._record(state)
 
     def holding_observation(self):
         return self._holding
 
     def observation(self):
-        return dict(positions_m=self._positions(), target_m=self.target,
+        return dict(positions_m=None if self.suspended else self._positions(), target_m=self.target,
                     finger_forces_n=self.contacts, holding=self._holding.state.value,
                     intent=self.intent.value if self.intent else None)
 
 
-def radial_physical_runtime(profile, binding):
-    """Selected Tool factory; Isaac drive and measurement services are injected."""
-    from gripper_runtime.grasp_strategy import select_grasp_strategy
+def radial_physical_runtime(profile, binding, *, configuration=None):
+    """Build the selected production Tool; injected services remain usable in tests."""
+    if configuration is not None:
+        from gripper_runtime.radial_binding import IsaacRadialBinding
+        binding = IsaacRadialBinding(configuration, binding)
+    from gripper_runtime.radial_manager import RadialCapture, RadialGraspManager
     settings = profile['runtime']
-    strategy = select_grasp_strategy(settings, binding.requirement, geometry=binding.geometry)
+    capture = RadialCapture(settings, binding.geometry)
     joint = settings['joint_model'][settings['primary_joint']]
-    actuator = RadialPhysicalTool(strategy, binding.write_primary, binding.measure_fingers,
-        lower=joint['lower'], upper=joint['upper'], speed_m_s=joint['velocity']*.25,
+    # Initial contraction is legal without a selected material; expansion needs
+    # the accepted bore reference and never invents an aperture/width API.
+    from types import SimpleNamespace
+    initial = SimpleNamespace(solution={'release_position_m': joint['upper']},
+        primary_position=lambda intent: joint['upper'] if intent == 'RELEASE' else
+            (_ for _ in ()).throw(ValueError('GRASP requires a selected bore')))
+    actuator = RadialPhysicalTool(initial, binding.write_primary, binding.measure_fingers,
+        lower=joint['lower'], upper=joint['upper'],
+        speed_m_s=joint['velocity']*settings.get('speed_fraction', .25),
         **binding.physical_settings)
-    return ToolRuntime(actuator, frozenset({'joint_position', 'actuator_observation'}),
-        lambda intent, duration: actuator.command(intent), strategy)
+    actuator.read_contacts = getattr(binding, 'read_contacts', None)
+    tool = ToolRuntime(actuator, frozenset({'joint_position', 'actuator_observation'}),
+        lambda intent, duration: actuator.command(intent), capture)
+    tool.grasp_factory = lambda **services: RadialGraspManager(binding=binding, **services)
+    return tool

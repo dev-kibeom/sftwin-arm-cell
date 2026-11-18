@@ -1,0 +1,17 @@
+uint8 RESERVE=0
+uint8 COMPLETE=1
+uint8 ABANDON=2
+uint8 command
+string supply_id
+string supply_epoch
+string reservation_id
+string slot_id
+bool material_placed
+---
+bool success
+string diagnostic_detail
+string supply_epoch
+string slot_id
+string reservation_id
+bool exhausted
+uint32 completed_count

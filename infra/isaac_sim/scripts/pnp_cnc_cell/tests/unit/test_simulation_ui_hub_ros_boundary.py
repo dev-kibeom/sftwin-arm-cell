@@ -2948,7 +2948,7 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
     collapsible_sections.clear()
     extension._retry_detection_enabled = True
     extension._build()
-    assert collapsible_sections[0] == "External Handoff Trigger"
+    assert collapsible_sections[0] == "Supply"
     assert "System Observations" not in collapsible_sections
     assert "Vision Detector Snapshot" in collapsible_sections
     assert "Cuboid Demonstration" in collapsible_sections
@@ -3903,6 +3903,11 @@ def test_demonstration_control_calls_local_adapter_without_handoff(monkeypatch):
 
     extension = SimulationUIHubExtension.__new__(SimulationUIHubExtension)
     extension.runtime = _Runtime()
+    extension._cell_capabilities = {
+        'load_demonstration': cuboid_demonstration.load_demonstration,
+        'demonstration_loaded': lambda: False,
+        'load_unavailable_reason': lambda: None,
+    }
     extension._demonstration_scenarios = (
         ("side_by_side", "Side by Side", "two contact parts"),
     )

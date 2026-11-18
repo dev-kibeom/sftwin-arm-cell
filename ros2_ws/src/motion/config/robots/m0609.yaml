@@ -31,3 +31,8 @@ joint_policy:
 isaac:
   joint_drive_stiffness_scales:
     joint_2: 2.75
+  # Selected only by C10 assemblies: narrow bore insertion requires reduced gravity sag.
+  drive_profiles:
+    radial_precision:
+      stiffness_scale: 100.0
+      damping_scale: 10.0

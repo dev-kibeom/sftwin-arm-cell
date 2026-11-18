@@ -78,3 +78,42 @@ def test_stop_near_joint_limit_uses_a_legal_hold_target():
     values[:] = [.01920001]*3  # finite PhysX solver residual, not a new limit
     radial.command(ToolIntent.STOP)
     assert writes[-1] == .0192
+
+
+def test_operational_update_consumes_injected_fresh_contacts_without_width_api():
+    radial, values, _ = tool()
+    samples = iter(([1.,1.,1.], None))
+    radial.read_contacts = lambda dt: next(samples)
+    radial.command(ToolIntent.GRASP)
+    values[:] = [.009]*3
+    radial.target = .008
+    radial.update(.2)
+    assert radial.holding_observation().state.value == 'held'
+    radial.update(.01)
+    assert radial.holding_observation().state.value == 'unknown'
+    assert not hasattr(radial, 'get_width')
+
+
+def test_stopped_actuator_stays_suspended_until_new_binding_on_play():
+    radial, _, _ = tool()
+    radial.reset_stopped_state()
+    radial.measure = lambda: (_ for _ in ()).throw(RuntimeError('old DC handle'))
+    radial.update(.01)
+    assert radial.observation()['positions_m'] is None
+    assert radial.holding_observation().state.value == 'unknown'
+    with pytest.raises(ValueError):
+        radial.command(ToolIntent.GRASP)
+
+
+def test_long_contact_links_follow_fixed_extensions_in_measured_joint_order():
+    import xml.etree.ElementTree as ET
+    from gripper_runtime.radial_binding import contact_links_by_joint
+    urdf=ET.fromstring('<robot>'+''.join(
+        f'<joint name="j{i}" type="prismatic"><parent link="base"/><child link="slider{i}"/></joint>'
+        f'<joint name="ext{i}" type="fixed"><parent link="slider{i}"/><child link="tip{i}"/></joint>'
+        for i in range(1,4))+'</robot>')
+    assert contact_links_by_joint(urdf,['j3','j1','j2'],['tip1','tip2','tip3'])==['tip3','tip1','tip2']
+    assert contact_links_by_joint(urdf,['j1','j2','j3'],['slider3','slider2','slider1'])==['slider1','slider2','slider3']
+    with pytest.raises(ValueError):contact_links_by_joint(urdf,['j1','j2','j3'],['tip1','tip2','base'])
+    urdf.find("joint[@name='ext3']").set('type','revolute')
+    with pytest.raises(ValueError):contact_links_by_joint(urdf,['j1','j2','j3'],['tip1','tip2','tip3'])

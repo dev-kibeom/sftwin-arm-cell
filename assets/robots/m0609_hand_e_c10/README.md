@@ -1,4 +1,4 @@
-# M0609 + Hand-E C10 — 1단계
+# M0609 + Hand-E C10
 
 기존 M0609와 표준 Tool Adapter를 재사용하는 조립 모델입니다.
 기존 M0609·RB5·HCR-14 및 Robotiq 2F-85 조립 모델은 변경하지 않습니다.
@@ -11,7 +11,7 @@ C10 하우징 뒷면을 `tool_mount`에 직접 장착하며, 제조사 Coupling�
 관절 축은 각 손가락의 로컬 `-X`이며, 하우징 축 주위로 각각 0°·120°·240° 회전해 있습니다.
 관절 위치가 증가하면 손가락이 수축하여 **외경(OD) 파지** 방향으로 움직이고,
 감소하면 확장하여 **내경(ID) 파지** 방향으로 움직입니다.
-1단계에서는 이동만 검증하며, 어느 방향의 파지 동작도 검증하지 않습니다.
+운영 Tape Cell에서는 내경 팽창 파지와 실제 수축 해제를 사용합니다.
 
 `sf_grasp_tcp`는 공식 `gripper_tcp_link`와 위치·방향이 같은 별칭 프레임입니다.
 제조사 CAD에서 큰 지름의 손가락 단차 상단에 해당하며, 하우징 중심축 위에서
@@ -24,119 +24,18 @@ C10 하우징 뒷면을 `tool_mount`에 직접 장착하며, 제조사 Coupling�
 Base의 충돌 형상은 하우징·전면부로, 각 손가락의 충돌 형상은 Slider·Tip으로 나뉩니다.
 Isaac Import 후에도 각각 분리된 볼록 충돌 형상으로 유지합니다.
 기존 Importer는 의미를 갖는 고정 프레임을 보존하고 PhysX Mimic을 비활성화합니다.
-실험에서는 URDF의 Mimic 배율·Offset을 사용해 세 Linear Drive에 명령을 전달합니다.
+Tool Runtime은 URDF의 Mimic 배율·Offset을 사용해 세 Linear Drive에 명령을 전달합니다.
 2F-85의 파지 폭 변환이나 양측 접촉 로직은 사용하지 않습니다.
 
-ROS 2 Humble 환경을 적용한 뒤 저장소 루트에서 실행합니다.
+## 실행과 지원 경계
 
-```bash
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10.yaml
-# 한 번의 왕복 동작으로 종료하는 라이브 검증:
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10.yaml \
-  --headless --cycles 1
-```
+Launcher에서 M0609 + C10/Long + Tape Handling Cell + Physical Real을 선택하고
+일반 Isaac/ROS 시작 흐름으로 실행합니다. 공통 Tool Plugin, 운영 ROS Backend,
+공통 Task GraspCycle BT와 configured-source Mission을 사용합니다.
+[상세 실행 안내](../../../infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요.
 
-Launcher에는 C10 모델 실험임을 명시한 별도 버튼이 있습니다.
-독립 모델에서 수축·확장을 반복하며, ROS 시작은 비활성화됩니다.
-운영 Runtime Profile Loader는 모델 실험 설정을 거부합니다.
-기본 관절 왕복 모드에서는 Mission, GRASP/RELEASE, Vision, Payload, Physical Grasp, 신규 Cell 및 자재 통합은
-지원하지 않습니다. Runtime 구동 설정은 실험용이며, 보정된 파지력이나 자재 유지 성능을
-보장하지 않습니다. 내부 Self-collision은 기존 Importer 정책에 따라 비활성화합니다.
-라이브 검사에서는 가져온 충돌 형상의 존재를 확인하며, 실제 접촉 정확성이나 자재 취급을
-검증하지는 않습니다.
-
-각 실행은 조립된 설정과 `result.json`을 `.run_records/model-experiment-*/`에 기록하고,
-기존 모델 출처 추적 정보와 함께 파생 USD를 생성합니다.
-측정 항목은 관절 한계, 목표 끝점 도달, 동기화, 방사형 변위, TCP 및 분리 충돌 형상의
-존재입니다. PASS에는 완전한 수축·확장 왕복이 필요합니다.
-창을 닫아 중단했거나 검사에 실패한 실행은 검증 완료로 보고하지 않습니다.
-
-사진을 참고한 100 mm 연장 핑거는 기본 모델과 별도인 `m0609_hand_e_c10_long` 실험입니다.
-[연장부 치수·물성 가정과 실행법](../../tools/hand_e_c10/README.md)을 참조하세요.
-
-## 2단계 — 기본 내경 파지 실험
-
-M0609의 두 C10 Tool은 기존 모델·관절 실험 실행기에 `--internal-grasp`를 추가해
-같은 내경 파지 시퀀스를 실행합니다. 아래는 한 번 실행하고 종료하는 Isaac 라이브 검사입니다.
-ROS 2 Humble 환경을 적용한 저장소 루트에서 실행하세요.
-
-```bash
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10.yaml \
-  --internal-grasp --headless --cycles 1
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10_long.yaml \
-  --internal-grasp --headless --cycles 1
-```
-
-창에서 반복하려면 `--headless --cycles 1`을 생략합니다. 기존 Launcher 버튼과
-플래그 없는 명령은 종전 모델·관절 왕복 실험입니다. HCR-14의 모델 구성은 유지하며,
-내경 파지 티칭은 M0609에만 제공합니다.
-
-`CONTRACT → INSERT → EXPAND/GRASP → TRANSFER → CONTRACT/RELEASE → RETREAT`를
-실행합니다. 수축은 선택 Tool의 URDF 상한 방향, 확장은 하한 방향입니다.
-Arm은 [고정 티칭 자세](../../../ros2_ws/src/bringup/config/internal_grasp/m0609.yaml) 사이를
-관절 보간하며 실행 중 IK·경로 계획을 사용하지 않습니다. 이 실험의 정렬 정확도를 위한
-Arm Drive 배율만 별도로 적용하며 운영 Drive 설정을 변경하지 않습니다.
-
-시험 고리는 선택 모델의 충돌 STL/Box와 `sf_grasp_tcp`를 기준으로 생성합니다.
-기본형 삽입 깊이는 4 mm, 연장형은 20 mm이며 두 경우 고리 두께는 2 mm입니다.
-수축 상태의 삽입 구간 외측 반경과 확장 상태의 파지 단면 반경 사이에서 고리 내경을
-선택하고, 해당 내면에 도달하는 관절 목표를 계산합니다. 특정 관절명·Finger 길이를
-실행 코드에 넣지 않습니다. Finger·관절·TCP·Assembly 자산은 수정하지 않습니다.
-
-측정된 Finger 동기화·관절 범위·속도, 라이브 TCP와 측정 관절 FK 일치, 삽입 중
-충돌 형상의 반경 여유, 삽입 깊이·정렬·확장 도달을 확인한 뒤 기존 `UsdFixedJointOwner`로
-Logical Attach합니다. 이송 중 TCP 상대 고리 자세와 부착 관절을 검사합니다.
-수축 도달 후 부착 관절을 제거하고 후퇴 뒤 고리의 위치 유지와 TCP 이격을 확인합니다.
-
-고리는 중력을 끈 실험용 Rigid Body이며 접촉용 Collider는 없습니다. 삽입 가능성은
-선택된 Finger의 충돌 형상을 고리 단면에 투영하여 검사합니다. 해제 후 잔여 속도를
-0으로 설정해 시험 고리를 유지합니다. 이 방식은 물리 접촉·마찰·파지력·자유낙하나
-실제 배치 안정성을 검증하지 않습니다. 정식 Material/Cell 등록, Vision, Physical Grasp, ROS Mission 연동은 포함하지 않습니다.
-
-실행별 `configuration.json`과 `result.json`에는 Fixture 치수, 티칭 자세,
-단계별 측정 Finger·TCP·고리 자세·부착 상태, 삽입 여유, 이송 부착 오차와 해제 후 변위를
-기록합니다. 설정·실행기·실험 모듈·생성 URDF/USD의 해시로 실행 입력을 식별합니다.
-전체 시퀀스가 완료되어야 `PASS`이며 중단·실패는 wrapper에서도 실패로 반환합니다.
-
-
-## 3단계 — 공통 Grasp Strategy·Task 통합 검증
-
-Tool 설정의 `runtime.grasp_strategies`와 작업의 `strategy` 요구가 일치할 때만
-`box_exterior` 또는 `internal_radial`을 선택합니다. Robot 종류로 선택하지 않습니다.
-기본 C10과 Long은 같은 `InternalRadialGraspStrategy`를 사용하며 선택된 URDF·TCP·Finger
-충돌 형상으로 명시적인 내경·두께·삽입 깊이에 대한 목표를 계산합니다. 시험 고리 치수를
-선정하는 `fixture()`와 시각 형상·보고는 실험에 남습니다.
-`GRASP`는 확장, `RELEASE`는 수축입니다. 기존 2F-85의 닫기·열기는 유지합니다.
-
-공통 Task BT까지 실행하려면 `BUILD_TESTING=ON`으로 빌드한
-`arm_cell_task_execution`의 `grasp_cycle_fixture_bridge` 라이브러리를 지정합니다.
-ROS 2 및 빌드 overlay를 source한 뒤 아래 명령을 실행합니다.
-
-```bash
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10.yaml \
-  --internal-grasp --headless --cycles 1 \
-  --task-execution-library "$PWD/ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so"
-# Long: profile을 m0609_hand_e_c10_long.yaml로 변경합니다.
-```
-
-이 라이브러리는 시험 전용 in-process 어댑터입니다. 같은 `TaskExecutor`의 공통 Pick BT,
-`MoveTaught`, 의미적 GripperPort, fresh Holding 확인과 기존 파지 실패 복구를 실행합니다.
-라이브 Fixture 이동·측정·Logical Attach는 기존 Isaac 실험 함수가 제공합니다.
-순서는 수축→접근→삽입→확장·부착→이송→수축·해제→후퇴이며, 이송은 Pick의
-보유 확인을 포함한 retract 단계를 재사용합니다. 부착 실패·불확정 관측 후 이송하지 않습니다.
-
-이 경로는 운영 ROS Motion runtime의 계획·Safety admission·Stop 전체를 검증하는 것이
-아닙니다. 운영 호출은 같은 in-process `execute_grasp_cycle`에 등록된 티칭 이름과
-선택 Tool의 검증된 기하 해를 전달하고 기존 MotionPort 티칭 실행기를 사용합니다.
-준비된 입력에는 Material별 파지력 인수가 없으므로 운영 force policy가 설정된 executor는
-이 입력을 거부합니다. 운영 C10 Gripper transport와 Mission 조합은 아직 등록하지 않았으며 Launcher도 모델 실험
-상태를 유지합니다. 라이브러리 옵션을 생략하면 기존 독립 실험 경로가 유지됩니다.
-
-PR #103의 티칭 자세는 현재 실험 설정에 유지합니다. 5단계 신규 Cell 도입 때 Cell Profile로
-옮길 예정이며 이번 통합에서는 이동하지 않습니다. 실행 보고에는 공통 Task 사용 시 native
-라이브러리 해시·execution identity·결과를 함께 기록합니다.
+이전 모델·관절 왕복 및 Logical 고리 실험 실행기·버튼은 제거했습니다.
+HCR-14는 정적 조립·기하 검증 범위로 유지하며 운영 배포로 등록하지 않습니다.
+기본형과 [100 mm 연장형](../../tools/hand_e_c10/README.md)은 같은 내경 전략을 사용하되
+선택된 실제 URDF Collision과 TCP로 각각 기하를 검증합니다. 핑거의 실제 강성·허용 하중이나
+보정된 파지력은 이 시뮬레이션 실행만으로 보장하지 않습니다.

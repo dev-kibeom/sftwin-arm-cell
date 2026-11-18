@@ -3071,3 +3071,132 @@ TEST_F(IsaacRosMotionTransportTest, NamedJointMotionKeepsSafetyCauseAcrossRacedW
   EXPECT_FALSE(transport_->trajectory_worker_->active());
 }
 }  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, ConfiguredRadialRequiresCorrelatedMeasuredRelation)
+{
+  transport_->tool_width_control_ = false;
+  transport_->tool_grasp_strategies_ = {"internal_radial"};
+  GraspSpecification spec;
+  spec.strategy = GraspStrategy::INTERNAL_RADIAL;
+  spec.insertion_depth_m = .012; spec.thickness_m = .017; spec.bore_radius_m = .025;
+  spec.release_position_m = .02; spec.grasp_position_m = .01;
+  GraspExecutionIdentity identity{
+    "1234567890abcdef1234567890abcdef", "Tape", "supply", "slot_0", "epoch", "reservation"};
+  ASSERT_TRUE(transport_->prepare_configured_grasp(spec, identity));
+  pump_until([&]() {return !capture_reference_payloads().empty();});
+  const auto payload = nlohmann::json::parse(capture_reference_payloads().back());
+  EXPECT_EQ(payload.at("slot_id"), "slot_0");
+  EXPECT_EQ(payload.at("motion_goal_uuid"), identity.execution_id);
+  EXPECT_FALSE(transport_->commit_pending_grasp_relation());
+  auto status = std::make_shared<String>();
+  status->data = "ready=1;grasp=1;attached=0;released=0;seq=1;capture_reference_id=" + identity.execution_id +
+    ";relation_execution_id=wrong;grasp_relation=[1,0,0,0.1,0,1,0,0.2,0,0,1,0.3,0,0,0,1]";
+  transport_->on_gripper_status(status);
+  EXPECT_FALSE(transport_->commit_pending_grasp_relation());
+  status->data = "ready=1;grasp=1;attached=0;released=0;seq=2;capture_reference_id=" + identity.execution_id +
+    ";relation_execution_id=" + identity.execution_id +
+    ";grasp_relation=[1,0,0,0.1,0,1,0,0.2,0,0,1,0.3,0,0,0,1]";
+  transport_->on_gripper_status(status);
+  // Fresh HELD alone cannot authorize transfer before the measured payload
+  // appears in the authoritative scene.
+  EXPECT_FALSE(transport_->commit_pending_grasp_relation());
+  std::atomic_bool attached{true};
+  auto scene_service = observer_->create_service<moveit_msgs::srv::GetPlanningScene>(
+    "/get_planning_scene", [&attached](
+      const std::shared_ptr<moveit_msgs::srv::GetPlanningScene::Request>,
+      std::shared_ptr<moveit_msgs::srv::GetPlanningScene::Response> response) {
+      moveit_msgs::msg::CollisionObject object;
+      object.id = "supply_slot_0";
+      shape_msgs::msg::SolidPrimitive primitive;
+      primitive.type = shape_msgs::msg::SolidPrimitive::CYLINDER;
+      primitive.dimensions = {.017, .05};
+      object.primitives = {primitive};
+      if (attached.load()) {
+        moveit_msgs::msg::AttachedCollisionObject payload;
+        payload.object = object;
+        response->scene.robot_state.attached_collision_objects = {payload};
+      } else {response->scene.world.collision_objects = {object};}
+    });
+  // Refresh the physical observation after the intentionally failed wait.
+  status->data = "ready=1;grasp=1;attached=0;released=0;seq=3;capture_reference_id=" + identity.execution_id +
+    ";relation_execution_id=" + identity.execution_id +
+    ";grasp_relation=[1,0,0,0.1,0,1,0,0.2,0,0,1,0.3,0,0,0,1]";
+  transport_->on_gripper_status(status);
+  auto committing = std::async(std::launch::async, [this]() {return transport_->commit_pending_grasp_relation();});
+  pump_until([&]() {return committing.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;});
+  ASSERT_TRUE(committing.get());
+  EXPECT_NEAR(transport_->accepted_object_to_tcp_.translation.x, -.1, 1e-9);
+  EXPECT_NEAR(transport_->accepted_object_to_tcp_.translation.z, -.3, 1e-9);
+  EXPECT_FALSE(transport_->holding_observation().width_mm.has_value());
+  attached.store(false);
+  status->data = "ready=1;grasp=0;attached=0;released=1;seq=4";
+  transport_->on_gripper_status(status);
+  auto clearing = std::async(std::launch::async, [this]() {transport_->clear_grasp_relation_after_release();});
+  pump_until([&]() {return clearing.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;});
+  EXPECT_NO_THROW(clearing.get());
+  EXPECT_FALSE(transport_->accepted_object_to_tcp_valid_);
+}
+
+}  // namespace arm_cell_motion
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, PlannedEntryCannotFallBackToUnplannedJointInterpolation)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  publish_feedback(std::vector<double>(6, 0.0));
+  TaughtMotion path;
+  path.joint_path = {std::vector<double>(6, .2), std::vector<double>(6, .3)};
+  path.joint_positions = path.joint_path.back();
+  path.duration_s = 4.; path.velocity_scale = .3; path.acceleration_scale = .2;
+  path.plan_to_start = true;
+  transport_->configure_taught_motions({{"approach", path}},
+    std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  // No MoveGroup exists in this fixture: entry planning must fail without
+  // emitting the old unchecked joint-linear HOME-to-entry commands.
+  EXPECT_EQ(transport_->execute_taught_motion("approach", "entry", {}), Code::TASK_RESULT_BACKEND_ERROR);
+  EXPECT_EQ(command_count(), 0U);
+  path.plan_to_start = false;
+  transport_->configure_taught_motions({{"approach", path}},
+    std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  EXPECT_EQ(transport_->execute_taught_motion("approach", "fixed", {}), Code::TASK_RESULT_INVALID_GOAL);
+  EXPECT_EQ(command_count(), 0U);
+}
+}
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, TaughtEntryExecutesIntermediatePlannedWaypoints)
+{
+  publish_feedback(std::vector<double>(6,0.0));
+  transport_->on_simulation_clock(clock_message(10.));
+  NormalizedTrajectoryPlan entry;
+  entry.request.task_type.value=MotionTaskType::TASK_TYPE_GO_HOME;
+  entry.request.phase=arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
+  entry.request.motion_goal_uuid="planned-entry";
+  entry.planning_scales={.3,.2};
+  entry.trajectory.joint_names=arm_joint_names();
+  for (int index=0;index<3;++index) {
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.positions=std::vector<double>(6,index==1?.1:0.);
+    point.velocities=std::vector<double>(6,0.);
+    point.accelerations=std::vector<double>(6,0.);
+    point.time_from_start=rclcpp::Duration::from_seconds(index*2.);
+    entry.trajectory.points.push_back(point);
+  }
+  const std::vector<JointMotionLimit> limits(6,{-2,2,.3,.4});
+  ASSERT_TRUE(transport_->execute_taught_entry(entry,[](){return false;},limits));
+  ASSERT_TRUE(transport_->timed_trajectory_active_);
+  ASSERT_TRUE(transport_->trajectory_worker_->active());
+  EXPECT_EQ(transport_->trajectory_worker_->trajectory_.points.size(),3U);
+  const auto before=command_count();
+  transport_->on_simulation_clock(clock_message(12.));
+  pump_until([&](){return command_count()>before;});
+  EXPECT_NEAR(last_command().front(),.1,1e-8);
+  // Start and final target coincide; sending only the final target would never
+  // emit this intermediate collision-planned waypoint.
+  transport_->cancel();
+}
+}

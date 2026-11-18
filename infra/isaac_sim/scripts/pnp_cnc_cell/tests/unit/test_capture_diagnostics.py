@@ -524,3 +524,41 @@ def test_capture_rejection_warns_once_after_close_finishes_and_matches_policy_re
     assert outcome["reason"] == "outside_capture_volume"
     assert outcome["capture_decision"] == "no_capture"
     assert outcome["capture_result"] == "rejected"
+
+
+def test_writer_aggregates_queue_drops_without_identifiers(caplog, monkeypatch):
+    import gripper_runtime.capture_diagnostics as diagnostics
+    monkeypatch.setattr(diagnostics.LOGGER, "propagate", True)
+    monkeypatch.setattr(diagnostics.LOGGER, "disabled", False)
+    entered=threading.Event();release=threading.Event()
+    def write(record):
+        entered.set()
+        assert release.wait(2.)
+    writer=BoundedCaptureDiagnosticWriter('/unused',max_pending=1,write_record=write)
+    try:
+        assert writer.submit({'id':'first'})
+        assert entered.wait(2.)
+        assert writer.submit({'id':'pending'})
+        for _ in range(100):assert not writer.submit({'record_id':'private-id'})
+    finally:
+        release.set();assert writer.close()
+    warnings=[r for r in caplog.records if r.levelname=='WARNING']
+    assert 1<=len(warnings)<=2
+    assert writer.dropped_count==100
+    assert all('private-id' not in r.getMessage() for r in caplog.records)
+
+
+def test_writer_logging_failure_does_not_stop_storage(monkeypatch):
+    import gripper_runtime.capture_diagnostics as diagnostics
+    def broken(*args,**kwargs):raise BrokenPipeError('log sink closed')
+    monkeypatch.setattr(diagnostics.LOGGER,'log',broken)
+    written=[]
+    writer=BoundedCaptureDiagnosticWriter('/unused',write_record=written.append)
+    assert writer.submit({'bad':object()})
+    assert writer.close()
+    assert writer.write_failure_count==1
+    # A second writer exercises normal storage with the same failed log sink.
+    writer=BoundedCaptureDiagnosticWriter('/unused',write_record=written.append)
+    assert writer.submit({'id':'kept'})
+    assert writer.close()
+    assert written==[{'id':'kept'}]

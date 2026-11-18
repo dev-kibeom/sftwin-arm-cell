@@ -9,13 +9,13 @@ import xacro
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / 'infra/isaac_sim/scripts'))
-from internal_grasp_geometry import ToolGeometry, qualify_capture
-from arm_cell_bringup.model_experiment import load_model_experiment
+from gripper_runtime.radial_geometry import ToolGeometry, qualify_capture
+from arm_cell_bringup.assembly_model import load_assembly_model
 
 
 @pytest.mark.parametrize('suffix,depth', [('', .004), ('_long', .020)])
 def test_selected_geometry_has_insertion_clearance_and_expansion_contact(suffix, depth):
-    config = load_model_experiment(ROOT / 'ros2_ws/src/bringup/config/model_experiments' / f'm0609_hand_e_c10{suffix}.yaml')
+    config = load_assembly_model('m0609', f'hand_e_c10{suffix}')
     model = config['model_configuration']
     urdf = ET.fromstring(xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml())
     geometry = ToolGeometry(urdf, config['tool']['runtime'])
@@ -35,7 +35,7 @@ def test_selected_geometry_has_insertion_clearance_and_expansion_contact(suffix,
 
 
 def test_slab_includes_triangle_edge_intersections():
-    from internal_grasp_geometry import slab_radius
+    from gripper_runtime.radial_geometry import slab_radius
     triangle = np.array([[[0., 0, -1], [2, 0, 1], [0, 0, 1]]])
     # No vertex lies on z=0; the true section reaches x=1.
     assert slab_radius(triangle, 0., 0.) == pytest.approx(1.)
@@ -52,7 +52,7 @@ def test_capture_rejects_orientation_and_nonfinite_observations(rotation, positi
 
 
 def test_joint_and_finger_link_names_are_not_algorithm_inputs():
-    config = load_model_experiment(ROOT / 'ros2_ws/src/bringup/config/model_experiments/m0609_hand_e_c10_long.yaml')
+    config = load_assembly_model('m0609', 'hand_e_c10_long')
     model = config['model_configuration']
     urdf = ET.fromstring(xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml())
     settings = config['tool']['runtime']
@@ -72,7 +72,7 @@ def test_joint_and_finger_link_names_are_not_algorithm_inputs():
 
 @pytest.mark.parametrize('suffix,depth', [('', .004), ('_long', .020)])
 def test_explicit_bore_is_solved_without_changing_material_dimensions(suffix, depth):
-    config = load_model_experiment(ROOT / 'ros2_ws/src/bringup/config/model_experiments' / f'm0609_hand_e_c10{suffix}.yaml')
+    config = load_assembly_model('m0609', f'hand_e_c10{suffix}')
     model = config['model_configuration']
     urdf = ET.fromstring(xacro.process_file(model['urdf'], mappings={'mesh_root': model['mesh_root']}).toxml())
     geometry = ToolGeometry(urdf, config['tool']['runtime'])
@@ -88,8 +88,20 @@ def test_explicit_bore_is_solved_without_changing_material_dimensions(suffix, de
     assert solution['insertion_depth_m'] == depth
     assert solution['thickness_m'] == .002
     assert solution['grasp_position_m'] < solution['release_position_m']
-    from internal_grasp_geometry import slab_radius
+    from gripper_runtime.radial_geometry import slab_radius
     assert slab_radius(geometry.triangles(solution['grasp_position_m']), -depth-.001, -depth+.001) == pytest.approx(radius, abs=1e-8)
     for unreachable in (fixture['contracted_swept_radius_m'], fixture['expanded_radius_m']+.001, float('nan')):
         with pytest.raises(ValueError):
             geometry.solve_bore(depth, .002, unreachable)
+
+
+def test_repeated_prepared_bore_does_not_repeat_mesh_solve(monkeypatch):
+    config=load_assembly_model('m0609','hand_e_c10_long')
+    model=config['model_configuration']
+    urdf=ET.fromstring(xacro.process_file(model['urdf'],mappings={'mesh_root':model['mesh_root']}).toxml())
+    geometry=ToolGeometry(urdf,config['tool']['runtime'])
+    first=geometry.solve_bore(.02,.017,.06)
+    monkeypatch.setattr(geometry,'_solve_bore_uncached',lambda *args: (_ for _ in ()).throw(AssertionError('physics callback repeated mesh solve')))
+    assert geometry.solve_bore(.02,.017,.06)==first
+    first['grasp_position_m']=0
+    assert geometry.solve_bore(.02,.017,.06)['grasp_position_m']>0

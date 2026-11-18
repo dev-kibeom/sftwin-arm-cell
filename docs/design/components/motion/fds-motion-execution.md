@@ -92,7 +92,7 @@ Trajectory를 Motion이 실행한다. 결과는 적용된 운영 profile, HOME �
 다른 전략에서는 해당 파일을 읽어서는 안 된다. 실행·완료·Cancel·Safety는 기존 Motion Trajectory
 lifecycle 계약을 그대로 따른다. 실제 자재를 보유한 상태에서 캐시된 PLACE 경로를 실행할 때에는
 최신 Scene과 부착 자재로 경로를 재검증한다. 자재가 없는 사전 경로 생성과 실행 시 부착 검증을
-구별하며, 아래 Named Joint Motion에는 이 계획 기반 경로 검증을 적용하지 않는다.
+구별하며, 아래 단일 목표 Named Joint Motion에는 이 계획 기반 경로 검증을 적용하지 않는다.
 
 분리된 계획 기능은 실행 명령 없이 Trajectory와 계획 시작·종료 상태를 반환한다. 다음 구간을
 앞서 계획하는 경우 앞 계획의 종료 상태를 시작 상태로 전달한다. 실행 기능은 계획을 만든 순서로
@@ -111,12 +111,14 @@ GO_HOME·트레이 반환·payload HOME 및 추가 티칭 자세는 단일 Regis
 참조 또는 `arm_joint_names` 순서의 유한 관절 위치(rad)로 등록하며, 실행기는 이름별로
 분기하지 않는다. GO_HOME 등 기존 작업 요청을 이름으로 연결하는 부분은 호출 경계에 둔다.
 
-Named Joint Motion은 현재 측정 관절값에서 목표까지 직접 Joint Trajectory를 생성한다.
+단일 목표 Named Joint Motion은 현재 측정 관절값에서 목표까지 직접 Joint Trajectory를 생성한다.
 MoveIt 경로 계획·IK·Planning Scene 조회·충돌 경로 탐색을 수행하지 않는다. Robot의
 위치·속도 한계와 설정된 관절 가속도 한계를 소비하고, 표준 동기화 속도 프로파일을 사용한다.
 별도의 보간기나 작업별 궤적 생성기를 두지 않으며 기존 simulation-clock sampler·명령
 전송·감시·Stop 실행기를 재사용한다. 티칭 자세 사이의 직접 관절 이동 경로 적합성은 운영
 티칭에서 확보하며, 이 실행 성공을 충돌 검사 완료로 표현하지 않는다.
+
+Cell이 실제 기구학으로 산출한 Cartesian 관절 경로를 명시적으로 등록한 경우에는 경로 시작 관절값과 현재 측정을 대조하고, 시간 매개화 및 최신 Scene의 전체 경로 충돌 검사를 수행한다. 최초 진입에 전역 계획이 명시된 항목만 현재 상태에서 경로 시작점까지 MoveIt을 사용하며, 진입 도달을 실제 관절 피드백으로 확인한 뒤 등록 경로를 실행한다. 후속 구간은 앞 구간의 실제 끝 관절 해를 이어 사용한다. 실패한 경로를 단일 목표 이동이나 충돌 허용으로 대체하지 않는다. 기존 HOME·자재 반환·단일 티칭 자세의 직접 이동 의미는 유지한다.
 
 `velocity_scale`과 `acceleration_scale`은 각각 관절 속도·가속도 한계 대비 `(0, 1]`
 비율이다. PICK/PLACE planning scale과 독립적이며 현재 Safety envelope 비율을 곱해

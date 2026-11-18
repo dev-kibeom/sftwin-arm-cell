@@ -398,36 +398,66 @@ def test_grasp_parameter_producer_rejects_invalid_overrides(window, tmp_path):
             launcher.export_selection(dict(entry, tool_parameters=parameters), tmp_path / 'bad.json')
 
 
-def test_model_experiment_cannot_start_ros(app, window, monkeypatch):
-    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
-    entry = launcher.model_experiments()[0]
-    window.start_model_experiment(entry)
-    assert len(calls) == 1
-    assert calls[0][1][1].endswith('run_model_experiment.sh')
-    assert not window.ros.isEnabled()
-    assert '파지 미지원' in window.status.text()
-    assert all(not button.isEnabled() for button in window.experiment_buttons)
+
+def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch):
+    entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
+    for key,combo in window.selectors.items():
+        combo.setCurrentIndex(combo.findData(entry[key]))
+    assert window.tool_mode.currentData()==['physics','physical']
+    assert window.isaac.isEnabled()
+    assert not hasattr(window,'experiment_buttons')
+    assert not hasattr(window,'start_model_experiment')
+    calls=fake_spawn(window,monkeypatch,{'isaac':WAIT,'ros':WAIT})
+    monkeypatch.setattr(launcher,'preparation_command',lambda entry,destination:
+        [sys.executable,'-c','from pathlib import Path; import sys; Path(sys.argv[1]).write_text("{}")',str(destination)])
+    window.start_isaac()
+    assert window.preparing and not calls
+    assert '준비 중' in window.status.text()
+    until(app,window,lambda:bool(calls))
+    assert calls[0][1][1].endswith('isaac_arm_cell.sh')
+    assert window.ros.isEnabled()
     window.start_ros()
-    assert len(calls) == 1
+    assert len(calls)==2
     window.begin_stop()
-    until(app, window, lambda: not window.stopping)
-    assert all(button.isEnabled() for button in window.experiment_buttons)
+    until(app,window,lambda:not window.stopping)
 
 
-def test_cell_fixture_runs_one_cartridge_and_cannot_start_ros(app, window, monkeypatch, tmp_path):
-    entry = launcher.cell_fixtures()[0]
-    library = tmp_path / 'ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so'
-    library.parent.mkdir(parents=True)
-    library.touch()
-    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
-    monkeypatch.setattr(launcher, 'ROOT', tmp_path)
-    window.start_cell_fixture(entry)
-    assert len(calls) == 1
-    assert calls[0][1][1].endswith('tape_roll_cell/run.sh')
-    assert calls[0][1][-2:] == ['--cycles', '1']
-    assert not window.ros.isEnabled()
-    assert '물리 이송' in window.status.text()
-    window.start_ros()
-    assert len(calls) == 1
+def test_switching_between_radial_and_parallel_tools_has_no_signal_exceptions(window, monkeypatch):
+    errors = []
+    monkeypatch.setattr(sys, 'excepthook', lambda kind, error, tb: errors.append(error))
+    selector = window.selectors['tool']
+    parallel = selector.currentData()
+    for name in ('hand_e_c10_long.yaml', 'hand_e_c10.yaml'):
+        target = next(selector.itemData(i) for i in range(selector.count())
+                      if Path(selector.itemData(i)).name == name)
+        selector.setCurrentIndex(selector.findData(target))
+        assert 'move_duration_s' not in window.parameter_edits
+        assert 'max_velocity_fraction' in window.parameter_edits
+        selector.setCurrentIndex(selector.findData(parallel))
+        assert 'move_duration_s' in window.parameter_edits
+    assert errors == []
+
+
+def test_configured_preparation_can_be_canceled_before_isaac_starts(app, window, monkeypatch):
+    entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
+    for key,combo in window.selectors.items():combo.setCurrentIndex(combo.findData(entry[key]))
+    monkeypatch.setattr(launcher,'preparation_command',lambda *_:WAIT)
+    calls=fake_spawn(window,monkeypatch,{'isaac':WAIT})
+    window.start_isaac()
+    assert window.preparing and window.stop.isEnabled() and not window.ros.isEnabled()
+    app.processEvents()
     window.begin_stop()
-    until(app, window, lambda: not window.stopping)
+    until(app,window,lambda:not window.stopping)
+    assert not calls and window.run is None and not window.preparing
+
+
+def test_configured_preparation_failure_is_visible_and_does_not_start_isaac(app, window, monkeypatch):
+    entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
+    for key,combo in window.selectors.items():combo.setCurrentIndex(combo.findData(entry[key]))
+    monkeypatch.setattr(launcher,'preparation_command',lambda *_:
+        [sys.executable,'-c','print("unreachable teaching",flush=True); raise SystemExit(2)'])
+    calls=fake_spawn(window,monkeypatch,{'isaac':WAIT})
+    window.start_isaac()
+    until(app,window,lambda:window.run is None)
+    assert 'unreachable teaching' in window.status.text()
+    assert not calls

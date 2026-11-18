@@ -53,3 +53,23 @@ TEST(TaughtMotion, RegistryNamesUseTheSameDataSchema)
     motions.at("return_material").joint_positions,
     motions.at("custom_pose").joint_positions);
 }
+
+TEST(TaughtMotion, PreservesConfiguredPathAndDuration)
+{
+  const auto motions = parse_taught_motions(
+    R"({"insert":{"joint_path":[[0.0,0.1],[0.2,0.3],[0.4,0.5]],"duration_s":4.0,"velocity_scale":0.3,"acceleration_scale":0.2}})",
+    {0.0,0.0}, {0.0,0.0}, 2);
+  EXPECT_EQ(motions.at("insert").joint_path.size(), 3U);
+  EXPECT_DOUBLE_EQ(motions.at("insert").duration_s, 4.0);
+}
+
+TEST(TaughtMotion, PlannedEntryIsExplicitAndOnlyAvailableForConfiguredPaths)
+{
+  const auto motions = parse_taught_motions(
+    R"({"approach":{"joint_path":[[0.0],[0.1]],"duration_s":4.0,"velocity_scale":0.3,"acceleration_scale":0.2,"plan_to_start":true}})",
+    {0.0}, {0.0}, 1);
+  EXPECT_TRUE(motions.at("approach").plan_to_start);
+  EXPECT_THROW(parse_taught_motions(
+    R"({"home":{"target":"home","velocity_scale":0.3,"acceleration_scale":0.2,"plan_to_start":true}})",
+    {0.0}, {0.0}, 1), std::invalid_argument);
+}

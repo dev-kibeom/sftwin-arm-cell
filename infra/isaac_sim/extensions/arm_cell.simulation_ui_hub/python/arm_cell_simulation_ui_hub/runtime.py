@@ -114,7 +114,6 @@ class HubRuntime:
             cls is HubRuntime
             and node is None
             and sys.version_info >= (3, 11)
-            and os.environ.get("ROS_DISTRO") == "humble"
         ):
             from .sidecar import IsaacRosSidecar
 

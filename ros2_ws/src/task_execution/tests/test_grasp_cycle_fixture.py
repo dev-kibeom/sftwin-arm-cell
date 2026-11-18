@@ -5,8 +5,7 @@ import sys
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(ROOT / 'infra/isaac_sim/scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'support'))
 from grasp_cycle_fixture import run_task_grasp_cycle
 
 

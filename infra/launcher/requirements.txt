@@ -3,3 +3,7 @@ PySide6>=6.5,<7,!=6.12.0
 PyYAML>=6,<7
 # Standalone model expansion for Bringup composition validation.
 xacro>=2.0,<3
+
+# Cartesian Cell teaching and hollow-material geometry.
+numpy>=1.23,<3
+scipy>=1.10,<2

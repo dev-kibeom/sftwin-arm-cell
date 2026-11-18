@@ -13,6 +13,9 @@ class IsaacGripperPort final : public GripperPort
 public:
   explicit IsaacGripperPort(std::shared_ptr<IsaacMotionTransport> transport);
 
+  bool supportsGraspStrategy(GraspStrategy strategy) const override;
+  uint8_t prepareConfiguredGrasp(
+    const GraspSpecification &, const GraspExecutionIdentity &) override;
   uint8_t close() override;
   uint8_t close(double grip_force_n) override;
   uint8_t open() override;

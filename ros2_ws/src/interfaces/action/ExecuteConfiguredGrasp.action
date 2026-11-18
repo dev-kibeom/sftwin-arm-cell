@@ -1,0 +1,12 @@
+# A Cell reservation selects a configured operation, never a fabricated Vision observation.
+string supply_id
+string slot_id
+string supply_epoch
+string reservation_id
+---
+uint8 result_code
+bool material_placed
+string failure_stage
+string diagnostic_detail
+---
+string phase

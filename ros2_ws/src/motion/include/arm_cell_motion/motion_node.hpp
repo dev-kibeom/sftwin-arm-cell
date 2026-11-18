@@ -35,9 +35,11 @@ public:
   {return holding_confirmation_timeout_;}
   void configure_waypoint_mode(bool pick_waypoint, bool place_waypoint);
   void initialize_backend();
+  bool backend_ready() const;
 
 private:
   std::shared_ptr<MotionCore> core_;
+  std::weak_ptr<MotionBackend> backend_readiness_;
   std::shared_ptr<IsaacRosMotionTransport> isaac_transport_;
   rclcpp::Node::SharedPtr backend_node_;
   rclcpp::Subscription<SafetyState>::SharedPtr safety_state_subscription_;

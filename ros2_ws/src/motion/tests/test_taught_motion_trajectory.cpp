@@ -103,3 +103,18 @@ TEST(TaughtTrajectory, EncodedTimingObeysTheExistingWorkerVelocityLimits)
   const auto started = worker.start(result.trajectory, 1, 0);
   EXPECT_TRUE(started.valid) << started.reason;
 }
+
+TEST(TaughtMotionPath, PreservesIntermediateKnotsAndRejectsWrongStart)
+{
+  using namespace arm_cell_motion;
+  const std::vector<std::string> names{"a", "b"};
+  const std::vector<JointMotionLimit> limits(2, {-2.,2.,2.,4.,true});
+  const std::vector<std::vector<double>> path{{0.,0.},{.2,-.2},{.4,0.}};
+  auto result = make_taught_path_trajectory(names, {0.,0.}, path, limits, 4., .5, .5);
+  ASSERT_TRUE(result.valid) << result.reason;
+  const auto & middle = result.trajectory.points[result.trajectory.points.size()/2];
+  EXPECT_NEAR(middle.positions[0], .2, 1e-8);
+  EXPECT_NEAR(middle.positions[1], -.2, 1e-8);
+  EXPECT_FALSE(make_taught_path_trajectory(names, {.1,0.}, path, limits, 4., .5,.5).valid);
+  EXPECT_FALSE(make_taught_path_trajectory(names, {0.,0.}, path, limits, .01,.5,.5).valid);
+}

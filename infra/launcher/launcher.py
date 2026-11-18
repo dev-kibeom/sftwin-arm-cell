@@ -1,5 +1,6 @@
 """Profile selection and host process control; Bringup owns configuration semantics."""
 import os
+import json
 from pathlib import Path
 import select
 import shutil
@@ -58,29 +59,6 @@ def deployments(root=ROOT):
     return sorted(entries, key=lambda entry: entry['validation_status'] == 'experimental')
 
 
-def model_experiments(root=ROOT):
-    """Registered model-only runs are separate from production grasp deployments."""
-    entries = []
-    for path in sorted((root / 'ros2_ws/src/bringup/config/model_experiments').glob('*.yaml')):
-        data = read(path)
-        if data.get('kind') == 'arm-cell-model-experiment' and data.get('schema_version') == 1:
-            entries.append(dict(profile=path, label=data['display_name']))
-    return entries
-
-
-def cell_fixtures(root=ROOT):
-    """Cell physical fixtures never become ROS Mission deployments."""
-    entries = []
-    for path in sorted((root / 'ros2_ws/src/bringup/config/cell_executions').glob('*.yaml')):
-        data = read(path)
-        if (data.get('kind') == 'arm-cell-physical-fixture' and data.get('schema_version') == 1
-                and data.get('execution') == 'native_task_bt_physical_fixture'):
-            cell = read(resolve(data['cell'], path.parent))
-            if cell.get('execution_support', {}).get(data['execution']):
-                entries.append(dict(profile=path, label=data['display_name'], execution=data['execution']))
-    return entries
-
-
 def profile_choices(root=ROOT):
     result = {key: [str(path.resolve()) for path in sorted((root / directory).glob('*.yaml'))]
               for key, directory in OWNERS.items()}
@@ -110,10 +88,33 @@ def tool_mode_choices(profile):
             for pair in runtime.get('supported_combinations', [['logical', 'fixed_attach']])]
 
 
+def validation_note(entry):
+    status = entry['validation_status']
+    message = ''
+    if status == 'experimental':
+        message += ' — 실험적 모델 · 단순화 형상 · 실물 일치 미검증'
+    if status == 'live-verified':
+        message += ' — 기본 설정 Isaac 라이브 확인'
+        if entry.get('tool_parameters'):
+            message += ' · 변경 설정 미검증'
+    elif entry['tool_actuator'] == 'physics' or status == 'live-pending':
+        message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
+    return message
+
+
 def export_selection(entry, destination):
     # No parallel configuration engine or edited copies of source profiles.
     return export_runtime_configuration(entry['profile'], destination,
         tool_actuator=entry.get('tool_actuator'), tool_grasp=entry.get('tool_grasp'), tool_parameters=entry.get('tool_parameters'))
+
+
+def preparation_command(entry, destination):
+    command = [sys.executable, str(ROOT/'ros2_ws/src/bringup/scripts/export_runtime_configuration'),
+               '--profile', str(entry['profile']), '--output', str(destination),
+               '--tool-parameters-json', json.dumps(entry.get('tool_parameters', {}))]
+    for option, key in [('--tool-actuator','tool_actuator'),('--tool-grasp','tool_grasp')]:
+        if entry.get(key) is not None:command.extend([option,entry[key]])
+    return command
 
 
 def terminal_command(name, slave, master):
@@ -155,9 +156,10 @@ class Launcher(QMainWindow):
         self.closing = False
         self.phase = 0
         self.run = None
-        self.model_experiment_active = False
-        self.isolated_execution_description = ''
         self.error = ''
+        self.preparing = False
+        self.preparation_output = b''
+        self.preparation_started_at = 0.
         # One host simulation uses fixed ports even across repository checkouts.
         self.lock = QLockFile(str(Path(tempfile.gettempdir()) / f'arm-cell-launcher-{os.getuid()}.lock'))
         self.lock.setStaleLockTime(0)
@@ -174,7 +176,8 @@ class Launcher(QMainWindow):
                 label = read(path).get('display_name', Path(path).stem)
                 combo.addItem(('Isaac / ' if key == 'backend' else '') + label, path)
             self.selectors[key] = combo
-            combo.currentIndexChanged.connect(self.validate)
+            if key != 'tool':
+                combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
         self.tool_mode = QComboBox()
         form.insertRow(2, 'Grasp Mode', self.tool_mode)
@@ -209,19 +212,6 @@ class Launcher(QMainWindow):
         layout.addWidget(self.status)
         hint = QLabel('Isaac 초기화 완료 후 ROS 2를 시작하세요. 출력은 각 터미널에서 확인합니다.')
         layout.addWidget(hint)
-        self.experiment_buttons = []
-        for entry in model_experiments():
-            button = QPushButton(entry['label'])
-            button.setToolTip('별도 모델에서 세 손가락을 왕복 구동합니다. ROS Mission·파지 미지원.')
-            button.clicked.connect(lambda checked=False, entry=entry: self.start_model_experiment(entry))
-            layout.addWidget(button)
-            self.experiment_buttons.append(button)
-        for entry in cell_fixtures():
-            button = QPushButton(entry['label'])
-            button.setToolTip('카트리지 소진까지 물리 이송합니다. native Task BT 시험; ROS Mission 미지원.')
-            button.clicked.connect(lambda checked=False, entry=entry: self.start_cell_fixture(entry))
-            layout.addWidget(button)
-            self.experiment_buttons.append(button)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
         self.timer.start(100)
@@ -306,10 +296,7 @@ class Launcher(QMainWindow):
         try:
             entry = self.selection()
             message = f"Profile: {entry['profile'].name} | {self.tool_mode.currentText()}"
-            if entry['validation_status'] == 'experimental':
-                message += ' — 실험적 모델 · 단순화 형상 · 실물 일치 미검증'
-            if entry['tool_actuator'] == 'physics' or entry['validation_status'] == 'live-pending':
-                message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
+            message += validation_note(entry)
         except ValueError as exc:
             valid, message = False, str(exc)
         active = bool(self.processes or self.terminals) or self.stopping
@@ -317,17 +304,16 @@ class Launcher(QMainWindow):
             combo.setEnabled(not active)
         self.parameter_panel.setEnabled(not active)
         self.reset_parameters.setEnabled(not active)
+        self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
         self.isaac.setEnabled(valid and not active)
-        self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping
-                            and not self.model_experiment_active)
-        for button in self.experiment_buttons:
-            button.setEnabled(not active)
-        if self.model_experiment_active and active:
-            message = self.isolated_execution_description
+        self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
-        if states:
+        if self.preparing:
+            elapsed = int(time.monotonic()-self.preparation_started_at)
+            message = f'설정·슬롯 티칭 경로 준비 중… ({elapsed}초) 중지 버튼으로 취소할 수 있습니다.'
+        elif states:
             message = states + ' | ' + message
         self.status.setText(self.error or ('종료 중…' if self.stopping else message))
 
@@ -357,69 +343,63 @@ class Launcher(QMainWindow):
         if self.processes or self.terminals or self.stopping:
             return
         self.error = ''
-        self.model_experiment_active = False
-        self.isolated_execution_description = ''
         if not self.lock.tryLock(0):
             self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
             self.validate()
             return
         try:
             self.run = tempfile.TemporaryDirectory(prefix='arm-cell-launcher-')
-            runtime = export_selection(self.selection(), Path(self.run.name) / 'runtime_configuration.json')
+            entry = self.selection()
+            self.runtime = Path(self.run.name)/'runtime_configuration.json'
             # Both consumers retain this one snapshot until all owned groups exit.
             self.environment = dict(os.environ, SFTWIN_PROJECT_ROOT=str(ROOT),
-                                    ARM_CELL_PROFILE=str(runtime),
-                                    ARM_CELL_RUNTIME_CONFIG=str(runtime), PYTHONUNBUFFERED='1')
-            self.runtime = runtime
-            self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
-                                 '--runtime-config', str(runtime)], self.environment)
+                ARM_CELL_PROFILE=str(self.runtime), ARM_CELL_RUNTIME_CONFIG=str(self.runtime), PYTHONUNBUFFERED='1')
+            if read(entry['profile']).get('kind') == 'arm-cell-configured-supply-profile':
+                producer_environment = dict(self.environment,
+                    PYTHONPATH=str(ROOT/'ros2_ws/src/bringup')+os.pathsep+os.environ.get('PYTHONPATH',''))
+                process = subprocess.Popen(preparation_command(entry,self.runtime),cwd=ROOT,
+                    env=producer_environment,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
+                os.set_blocking(process.stdout.fileno(),False)
+                self.processes['prepare'] = process
+                self.preparation_output = b''
+                self.preparing = True
+                self.preparation_started_at = time.monotonic()
+            else:
+                export_selection(entry,self.runtime)
+                self._start_prepared_isaac()
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
         self.validate()
 
-    def start_model_experiment(self, entry):
-        if self.processes or self.terminals or self.stopping:
-            return
-        self.error = ''
-        if not self.lock.tryLock(0):
-            self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
-            self.validate()
-            return
-        try:
-            self.model_experiment_active = True
-            self.isolated_execution_description = 'C10 모델·관절 실험 실행 중 — ROS Mission·파지 미지원'
-            self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/run_model_experiment.sh'),
-                                 str(entry['profile'])], dict(os.environ, PYTHONUNBUFFERED='1'))
-        except Exception as exc:
-            self.error = str(exc)
-            self.begin_stop()
-        self.validate()
+    def _start_prepared_isaac(self):
+        self.spawn('isaac', ['bash', str(ROOT/'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
+                            '--runtime-config', str(self.runtime)], self.environment)
 
-    def start_cell_fixture(self, entry):
-        if self.processes or self.terminals or self.stopping:
+    def _poll_preparation(self):
+        process = self.processes['prepare']
+        while True:
+            try:chunk = os.read(process.stdout.fileno(),65536)
+            except BlockingIOError:break
+            if not chunk:break
+            self.preparation_output = (self.preparation_output+chunk)[-65536:]
+        code = process.poll()
+        if code is None or groups_alive([process]):return
+        self.preparing = False
+        process.stdout.close()
+        if code != 0 or not self.runtime.is_file():
+            lines = self.preparation_output.decode(errors='replace').strip().splitlines()
+            self.error = '설정 준비 실패: '+(lines[-1] if lines else f'프로세스 종료 코드 {code}')
+            self.begin_stop()
             return
-        self.error = ''
-        if not self.lock.tryLock(0):
-            self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
-            self.validate()
-            return
-        try:
-            self.model_experiment_active = True
-            self.isolated_execution_description = 'Tape Cell 물리 이송 실행 중 — native Task BT 시험 · ROS Mission 미지원'
-            library = ROOT / 'ros2_ws/build/arm_cell_task_execution/libgrasp_cycle_fixture_bridge.so'
-            if not library.is_file():
-                raise FileNotFoundError('Task Execution을 BUILD_TESTING=ON으로 빌드하세요: ' + str(library))
-            self.spawn('isaac', ['bash', str(ROOT / 'infra/isaac_sim/scripts/tape_roll_cell/run.sh'),
-                                 str(entry['profile']), str(library), '--cycles', '1'],
-                       dict(os.environ, PYTHONUNBUFFERED='1'))
+        del self.processes['prepare']
+        try:self._start_prepared_isaac()
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
-        self.validate()
 
     def start_ros(self):
-        if (self.model_experiment_active or 'isaac' not in self.processes
+        if ('isaac' not in self.processes
                 or 'ros' in self.processes or self.stopping):
             return
         try:
@@ -434,6 +414,7 @@ class Launcher(QMainWindow):
         signal_processes(self.processes.values(), sig)
 
     def begin_stop(self):
+        self.preparing = False
         if not self.stopping:
             self.stopping = True
             self.phase = 0
@@ -443,6 +424,8 @@ class Launcher(QMainWindow):
         self.validate()
 
     def poll(self):
+        if self.preparing and not self.stopping:
+            self._poll_preparation()
         if not self.stopping:
             for name, process in self.processes.items():
                 code = process.poll()
@@ -474,6 +457,8 @@ class Launcher(QMainWindow):
                     if time.monotonic() >= self.deadline:
                         signal_processes(self.terminals.values(), signal.SIGKILL)
                 else:
+                    for process in self.processes.values():
+                        if process.stdout is not None:process.stdout.close()
                     self.processes.clear()
                     self.terminals.clear()
                     if self.run is not None:

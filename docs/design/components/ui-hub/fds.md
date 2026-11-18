@@ -54,7 +54,7 @@ sequenceDiagram
 
 Play·Pause·Stop은 Isaac Sim의 표준 Timeline UI가 소유한다. Hub는 별도 Simulation 조작 버튼이나 Timeline 상태 표시를 두지 않으며, 요청 가능 여부와 Cleanup에만 Timeline Lifecycle Event를 내부적으로 사용한다. Development Mode에서는 Publish Trigger·Retry Detection을 표시할 수 있고, 승인된 Fault Scenario를 실행하거나 [Safety Operator ICD](../../interfaces/icd-safety-operator.md)를 통해 Operator Acknowledgement/Reset을 요청할 수 있다.
 
-Trigger에는 입력원에서 지정한 `delivery_id`, 양수 `quantity`, 설정된 `material_type`(현재 `TestCube`), 선택적 Random Seed를 담는다. Demo 자극에서 Hub가 생성하는 Fresh ID는 해당 Event의 상관관계 식별자일 뿐, 작업 배정·자재 예약/요청·VDA 호출·Delivery 관리를 뜻하지 않는다. Raw Trigger는 Gateway만 수락해 VDA 및 Isaac Material Supply Adapter로 전달한다. Hub는 Trigger 발행 여부만 보고한다. Adapter의 공급 결과, Vision Scene Stability, VDA Phase, `MATERIAL_READY`, Orchestration Admission은 Hub에서 표시하지 않는다.
+CNC의 External Handoff Trigger에는 입력원에서 지정한 `delivery_id`, 양수 `quantity`, 설정된 `material_type`(현재 `TestCube`), 선택적 Random Seed를 담는다. Demo 자극에서 Hub가 생성하는 Fresh ID는 해당 Event의 상관관계 식별자일 뿐, 작업 배정·자재 예약/요청·VDA 호출·Delivery 관리를 뜻하지 않는다. Raw Trigger는 Gateway만 수락해 VDA 및 Isaac Material Supply Adapter로 전달한다. Hub는 Trigger 발행 여부만 보고한다. Adapter의 공급 결과, Vision Scene Stability, VDA Phase, `MATERIAL_READY`, Orchestration Admission은 Hub에서 표시하지 않는다.
 
 ### 3.1 Isaac Timeline Stop과 Simulation Reset
 
@@ -75,11 +75,17 @@ Reset은 각 Owner의 로컬 동작이며 멱등적이다. Hub가 Cleanup 진단
 
 ROS Owner를 사용할 수 있는 동안 Hub Extension이 종료되면 활성 E-Stop Stimulus Clear, Safety Signal Loss 기간 취소, 아직 대기 중인 Vision Mislocalization Disarm을 요청한다. 이는 Stimulus Cleanup 요청일 뿐 응답이 Safety·Motion·Vision 결과를 확정하지 않는다. Owner가 이미 없으면 Hub는 Cleanup 요청 실패를 보고하고 기존 Owner/Process Lifecycle이 로컬 Stimulus 폐기를 책임진다. Hub는 Cleanup 명목으로 Safety Acknowledgement/Reset을 요청하지 않는다.
 
-### 3.2 Publish Trigger와 신규 자재 공급
+### 3.2 Supply
 
-Hub는 데모·개발 편의 화면이다. Publish Trigger 조작과 공개 Trigger 계약은 Bringup이 선택한 두 Provider 환경에서 동일하며 Gateway도 모든 Provider에 같은 입력 계약을 적용한다. 각 명시적 클릭은 Source가 새로 부여한 `delivery_id`를 포함한 기존 External Handoff Trigger를 발행한다. Material Type과 양수 Quantity는 운영자 입력이다. Hub는 선택적 Seed를 생략하고 Random Drop Sampling을 기존 공급 경로에 맡긴다. Gateway만 Trigger 수락·거부를 결정한다. Hub는 로컬 발행 결과만 보고하고 Gateway Receipt, 공급 결과, `MATERIAL_READY`, Mission 결과를 표시하지 않는다. 로컬 발행 성공을 이들 Owner의 결과로 암시해서는 안 된다.
+Hub는 Cell·Robot·Tool 종류와 무관하게 로드한다. 선택된 Cell은 선택적 Supply capability로 자재 목록, 수량 단위, 요청·상태 callback을 제공한다. Hub는 입력을 해당 Owner에 전달하고 수락·거부와 Owner가 제공한 진행 상태를 표시한다. 요청 수락을 공급 준비·PnP 성공으로 해석하지 않는다. Cell readiness, Mission Admission, Safety, 완료 수량은 기존 Owner가 결정한다.
 
-Timeline이 Running이고 Stop 소유 Simulation Reset이 끝났을 때 Publish Trigger를 사용할 수 있다. 각 클릭은 새 Delivery ID로 해당 Quantity의 추가 공급을 요청한다. 이전 Receipt를 기다리는 중이어도 서로 다른 주문을 막지 않으며 중복 Delivery ID는 Gateway가 거부한다. 새로 수락된 Delivery는 활성 공급이나 PnP를 취소·대체하지 않는다. 활성 Mission이 있으면 Orchestration은 새 주문을 보존해 다음 순차 ExecuteCycle에서 처리한다. Terminal Mission 실패가 기존 자재나 성공 PLACE Accounting을 지우지 않으며, 이후 고유 Trigger는 미처리량 전체를 대상으로 새 Cycle을 허용하는 정상 공급 Event다.
+Tape Cell에서 수량은 15개 롤이 가득 찬 카트리지 개수다. Cell이 실제 컨베이어 정렬 관측 후 기존 configured-source Mission을 요청한다. Hub는 Vision 검출 결과를 합성하거나 자재 pose를 바꾸지 않는다. CNC Cell은 기존 External Handoff Trigger·Gateway 수락·공급 경로를 유지하며 Supply 클릭마다 새 Delivery ID를 발행한다. Cell capability가 없다는 이유로 다른 Cell의 동작을 가져오지 않는다.
+
+CNC의 Supply 조작과 공개 Trigger 계약은 Bringup이 선택한 두 Provider 환경에서 동일하며 Gateway도 모든 Provider에 같은 입력 계약을 적용한다. 각 명시적 클릭은 Source가 새로 부여한 `delivery_id`를 포함한 기존 External Handoff Trigger를 발행한다. Material Type과 양수 Quantity는 운영자 입력이다. Hub는 선택적 Seed를 생략하고 Random Drop Sampling을 기존 공급 경로에 맡긴다. Gateway만 Trigger 수락·거부를 결정한다. Hub는 로컬 발행 결과만 보고하고 Gateway Receipt, 공급 결과, `MATERIAL_READY`, Mission 결과를 표시하지 않는다. 로컬 발행 성공을 이들 Owner의 결과로 암시해서는 안 된다.
+
+Timeline이 Running이고 Stop 소유 Simulation Reset이 끝났을 때 Supply를 사용할 수 있다. 각 클릭은 새 Delivery ID로 해당 Quantity의 추가 공급을 요청한다. 이전 Receipt를 기다리는 중이어도 서로 다른 주문을 막지 않으며 중복 Delivery ID는 Gateway가 거부한다. 새로 수락된 Delivery는 활성 공급이나 PnP를 취소·대체하지 않는다. 활성 Mission이 있으면 Orchestration은 새 주문을 보존해 다음 순차 ExecuteCycle에서 처리한다. Terminal Mission 실패가 기존 자재나 성공 PLACE Accounting을 지우지 않으며, 이후 고유 Trigger는 미처리량 전체를 대상으로 새 Cycle을 허용하는 정상 공급 Event다.
+
+Cuboid Demonstration과 Owner별 fault adapter는 선택된 Cell이 제공하는 선택적 capability다. 지원하지 않는 기능이나 ROS·Vision 관측이 없으면 unavailable로 표시하며 Hub 로드를 실패시키거나 가짜 성공을 만들지 않는다.
 
 ### 3.3 Cuboid Demonstration
 

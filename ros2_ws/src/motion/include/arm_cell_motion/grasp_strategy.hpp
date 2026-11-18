@@ -1,12 +1,22 @@
 #pragma once
 
 #include <cmath>
+#include <string>
 
 namespace arm_cell_motion
 {
 // Work requirement, independent of the robot and finger length. Tool adapters
 // advertise supported strategies and own actuator/capture realization.
 enum class GraspStrategy { BOX_EXTERIOR, INTERNAL_RADIAL };
+
+struct GraspExecutionIdentity
+{
+  std::string execution_id, material_id, supply_id, slot_id, supply_epoch, reservation_id;
+  bool valid() const {return execution_id.size() == 32 &&
+    execution_id.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos &&
+    execution_id.find_first_not_of('0') != std::string::npos && !material_id.empty() &&
+    !supply_id.empty() && !slot_id.empty() && !supply_epoch.empty() && !reservation_id.empty();}
+};
 
 struct GraspSpecification
 {

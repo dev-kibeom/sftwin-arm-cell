@@ -3,7 +3,7 @@ import math
 import json
 import time
 
-from graph_builder.graph_contract import GRAPH_PATH
+from isaac_runtime.graph_contract import GRAPH_PATH
 from gripper_runtime.tool_plugin import ToolIntent
 
 LOGGER = logging.getLogger(__name__)
@@ -50,6 +50,7 @@ class SimGripperAdapter:
         self.gripper = gripper
         self.tool = tool
         self.MAX_WIDTH_MM = tool.max_width_mm if tool is not None else getattr(gripper, 'MAX_WIDTH_MM', None)
+        self._width_control = tool is None or 'width' in tool.capabilities
         self.last_intent = None
         self._last_intent_generation = None
         self._intent_execution_id = None
@@ -78,9 +79,10 @@ class SimGripperAdapter:
         self._last_close_generation = None
         self._last_command_is_closing = None
 
-        self._resolve_attribute()
-        self._resolve_generation_attribute()
-        self._resolve_close_generation_attribute()
+        if self._width_control:
+            self._resolve_attribute()
+            self._resolve_generation_attribute()
+            self._resolve_close_generation_attribute()
         self._resolve_status_attribute()
         self._resolve_capture_reference_attribute()
 
@@ -103,7 +105,10 @@ class SimGripperAdapter:
         """
         path = self._attribute_path()
 
-        attr = self._controller.attribute(path)
+        try:
+            attr = self._controller.attribute(path)
+        except Exception:
+            attr = None
 
         if attr is None or not attr.is_valid():
             self._data_attribute = None
@@ -125,7 +130,10 @@ class SimGripperAdapter:
 
     def _resolve_capture_reference_attribute(self):
         path = f"{self.graph_path}/SubscribeGripperCaptureReference.outputs:data"
-        attr = self._controller.attribute(path)
+        try:
+            attr = self._controller.attribute(path)
+        except Exception:
+            attr = None
         if attr is None or not attr.is_valid():
             self._capture_reference_attribute = None
             return False
@@ -174,7 +182,9 @@ class SimGripperAdapter:
         decode = getattr(self.tool.capture, 'decode_reference', None) if self.tool is not None else None
         if callable(decode):
             decoded = decode(packet)
-            if decoded is None or decoded == self._last_capture_reference_packet:
+            if decoded is None:
+                return self._invalid_capture_reference()
+            if decoded == self._last_capture_reference_packet:
                 return None
             self._last_capture_reference_packet = decoded
             return decoded
@@ -247,7 +257,10 @@ class SimGripperAdapter:
 
     def _resolve_generation_attribute(self):
         path = f"{self.graph_path}/GripperCommandGeneration.outputs:count"
-        attr = self._controller.attribute(path)
+        try:
+            attr = self._controller.attribute(path)
+        except Exception:
+            attr = None
         if attr is None or not attr.is_valid():
             self._generation_attribute = None
             return False
@@ -280,6 +293,8 @@ class SimGripperAdapter:
         return value
 
     def _read_command_generation(self):
+        if not self._width_control:
+            return None
         if self._generation_attribute is None:
             if not self._resolve_generation_attribute():
                 return None
@@ -296,7 +311,10 @@ class SimGripperAdapter:
 
     def _resolve_close_generation_attribute(self):
         path = f"{self.graph_path}/GripperCloseGeneration.outputs:count"
-        attr = self._controller.attribute(path)
+        try:
+            attr = self._controller.attribute(path)
+        except Exception:
+            attr = None
         if attr is None or not attr.is_valid():
             self._close_generation_attribute = None
             return False
@@ -304,6 +322,8 @@ class SimGripperAdapter:
         return True
 
     def _read_close_generation(self):
+        if not self._width_control:
+            return None
         if self._close_generation_attribute is None:
             if not self._resolve_close_generation_attribute():
                 return None
@@ -329,6 +349,8 @@ class SimGripperAdapter:
     def prime_command_generation(self):
         """Treat the retained graph value as a baseline, not a new command."""
         self._last_intent_generation = self._read_intent_generation()
+        if not self._width_control:
+            return self._last_intent_generation is not None
         generation = self._read_command_generation()
         if generation is None:
             return False
@@ -387,6 +409,8 @@ class SimGripperAdapter:
             self._last_command_generation = time.monotonic_ns()
             self._last_command_is_closing = intent is ToolIntent.GRASP
             return True
+        if not self._width_control:
+            return False
         close_generation = self._read_close_generation()
         if (
             close_generation is not None
@@ -470,6 +494,8 @@ class SimGripperAdapter:
         width_mm,
         sequence,
         capture_reference_id="",
+        relation_execution_id="",
+        grasp_relation=None,
     ):
         """Publish simulator-owned grasp/attachment state through the ActionGraph."""
         if self._status_attribute is None and not self._resolve_status_attribute():
@@ -484,6 +510,9 @@ class SimGripperAdapter:
             f"seq={int(sequence)}"
             f";capture_reference_id={capture_reference_id or ''}"
         )
+        if grasp_relation is not None:
+            payload += ";relation_execution_id=" + str(relation_execution_id or "")
+            payload += ";grasp_relation=" + json.dumps(list(grasp_relation),separators=(",",":"),allow_nan=False)
         self._controller.set(self._status_attribute, payload)
         return True
 

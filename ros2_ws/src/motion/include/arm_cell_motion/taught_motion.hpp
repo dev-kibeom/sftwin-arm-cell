@@ -11,6 +11,9 @@ struct TaughtMotion
   std::vector<double> joint_positions;
   double velocity_scale;
   double acceleration_scale;
+  std::vector<std::vector<double>> joint_path{};
+  double duration_s{0.0};
+  bool plan_to_start{false};
 };
 
 using TaughtMotions = std::map<std::string, TaughtMotion>;

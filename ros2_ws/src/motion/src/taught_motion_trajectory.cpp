@@ -35,6 +35,70 @@ std::vector<JointMotionLimit> joint_motion_limits_from_urdf(
   return result;
 }
 
+TaughtJointTrajectoryResult make_taught_path_trajectory(
+  const std::vector<std::string> & names, const std::vector<double> & start,
+  const std::vector<std::vector<double>> & path, const std::vector<JointMotionLimit> & limits,
+  double duration, double velocity_scale, double acceleration_scale)
+{
+  TaughtJointTrajectoryResult result;
+  result.reason = "invalid_taught_path";
+  if (names.empty() || start.size() != names.size() || limits.size() != names.size() ||
+    path.size() < 2 || path.size() > 100000 || !std::isfinite(duration) || duration <= 0 || duration > 1800 ||
+    !std::isfinite(velocity_scale) || velocity_scale <= 0 || velocity_scale > 1 ||
+    !std::isfinite(acceleration_scale) || acceleration_scale <= 0 || acceleration_scale > 1 ||
+    std::set<std::string>(names.begin(), names.end()).size() != names.size()) {return result;}
+  const auto step_ns = static_cast<std::int64_t>(std::ceil(duration * 1e9 / (path.size() - 1)));
+  const double dt = step_ns * 1e-9;
+  // Cell compilation supplies uniformly timed Cartesian/IK samples. Keep the
+  // timing and every knot; independently profiling joints would change the path.
+  std::vector<std::vector<double>> segment_velocity(path.size()-1);
+  for (std::size_t k = 0; k < path.size(); ++k) {
+    if (path[k].size() != names.size()) {return result;}
+    for (std::size_t j = 0; j < names.size(); ++j) {
+      const auto & limit = limits[j];
+      const auto q = path[k][j];
+      if (names[j].empty() || !std::isfinite(q) || !std::isfinite(start[j]) ||
+        !std::isfinite(limit.max_velocity) || limit.max_velocity <= 0 ||
+        !std::isfinite(limit.max_acceleration) || limit.max_acceleration <= 0 ||
+        (limit.position_bounded && (!std::isfinite(limit.lower) || !std::isfinite(limit.upper) ||
+        limit.lower > limit.upper || q < limit.lower || q > limit.upper ||
+        start[j] < limit.lower || start[j] > limit.upper))) {return result;}
+      if (k == 0 && std::abs(start[j] - q) > 0.01) {
+        result.reason = "taught_path_start_mismatch"; return result;
+      }
+      if (k > 0) {
+        const double v = (q-path[k-1][j])/dt;
+        segment_velocity[k-1].push_back(v);
+        if (std::abs(v) > limit.max_velocity * velocity_scale) {
+          result.reason = "taught_path_velocity_exceeded"; return result;
+        }
+        const double prior = k > 1 ? segment_velocity[k-2][j] : 0.;
+        if (std::abs(v-prior)/dt > limit.max_acceleration * acceleration_scale ||
+          (k + 1 == path.size() && std::abs(v)/dt > limit.max_acceleration * acceleration_scale))
+        {result.reason = "taught_path_acceleration_exceeded"; return result;}
+      }
+    }
+  }
+  result.trajectory.joint_names = names;
+  for (std::size_t k = 0; k < path.size(); ++k) {
+    const auto ns = static_cast<std::int64_t>(k) * step_ns;
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.time_from_start.sec = static_cast<std::int32_t>(ns / 1000000000LL);
+    point.time_from_start.nanosec = static_cast<std::uint32_t>(ns % 1000000000LL);
+    point.positions = path[k];
+    for (std::size_t j = 0; j < names.size(); ++j) {
+      const double before = k == 0 ? 0. : segment_velocity[k-1][j];
+      const double after = k + 1 == path.size() ? 0. : segment_velocity[k][j];
+      point.velocities.push_back(k == 0 || k+1 == path.size() ? 0. : (before+after)*.5);
+      point.accelerations.push_back((after-before)/dt);
+    }
+    result.trajectory.points.push_back(std::move(point));
+  }
+  result.valid = true;
+  result.reason.clear();
+  return result;
+}
+
 TaughtJointTrajectoryResult make_taught_joint_trajectory(
   const std::vector<std::string> & joint_names, const std::vector<double> & start,
   const std::vector<double> & target, const std::vector<JointMotionLimit> & limits,

@@ -583,3 +583,11 @@ Task Execution Action이 취소 terminal status를 반환하면 Orchestration이
 - [Observability Records ICD](../../interfaces/icd-observability-records.md)
 - [Simulation Environment Semantics](../simulation-environment-semantics.md)
 - [Controlled Recovery FDS](fds-controlled-recovery.md)
+
+## Configured source
+
+정렬 슬롯 Mission은 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)의 별도 작업 원천으로 Cell 예약·실제 수령 확인을 사용한다. 이 source는 Vision Acquisition을 발행하지 않으며, 기존 Vision source의 관측·후보 정책은 유지한다.
+
+Configured-source의 롤 단위 Mission 수락 조건은 해당 ICD를 따른다. Tape Cell은 정렬된 롤 하나의
+Mission이 정상 완료된 뒤 컨베이어 배출과 다음 슬롯 정렬을 진행하고, 다음 롤에는 별도 Mission을 요청한다.
+가득 찬 카트리지 개수는 기존 Simulation UI Hub의 Supply에서 관리하며 Mission의 quantity로 전달하지 않는다.

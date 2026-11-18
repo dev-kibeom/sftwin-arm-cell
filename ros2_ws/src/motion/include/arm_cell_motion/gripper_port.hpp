@@ -64,6 +64,10 @@ public:
            ResultCode::TASK_RESULT_SUCCESS : ResultCode::TASK_RESULT_INVALID_GOAL;
   }
 
+  virtual uint8_t prepareConfiguredGrasp(
+    const GraspSpecification &, const GraspExecutionIdentity &)
+  {return ResultCode::TASK_RESULT_INVALID_GOAL;}
+
   virtual uint8_t close() = 0;
   // Sum of opposing finger contact normal forces in N. Native adapters must
   // explicitly implement their manufacturer-specific conversion; never ignore it.

@@ -45,6 +45,12 @@ async def _start_arm_cell():
     carb.log_info("ARM Cell startup: running before-play setup")
     _run_entrypoint(BEFORE_PLAY)
 
+    # World creation from a Kit extension is asynchronous. Complete the SDK
+    # context before Play so later initialization cannot invalidate live views.
+    world = _RUNTIME_NAMESPACE.get("context", {}).get("world")
+    if world is not None and world.get_physics_context() is None:
+        await world.initialize_simulation_context_async()
+
     carb.log_info("ARM Cell startup: starting Timeline Play")
     timeline.play()
     await app.next_update_async()

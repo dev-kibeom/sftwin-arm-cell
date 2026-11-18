@@ -141,28 +141,16 @@ def _robotiq_runtime(profile, binding):
     return tool
 
 
-def select_tool_runtime(profile, binding, *, implementations=None):
+def select_tool_runtime(profile, binding, *, implementations=None, configuration=None):
     """One explicit assembly boundary; test implementations never enter production."""
-    implementations = {'robotiq_2f85': _robotiq_runtime} if implementations is None else implementations
+    if implementations is None:
+        from gripper_runtime.radial_physical import radial_physical_runtime
+        implementations = {'robotiq_2f85': _robotiq_runtime, 'hand_e_c10_physical': radial_physical_runtime}
     name = profile['runtime']['implementation']
     try:
         build = implementations[name]
     except KeyError:
         raise ValueError(f'Unsupported Tool runtime implementation: {name}') from None
+    if name == 'hand_e_c10_physical' and configuration is not None:
+        return build(profile, binding, configuration=configuration)
     return build(profile, binding)
-
-
-def radial_tool_runtime(move_primary, profile, geometry, requirement):
-    """Bind model-experiment joint motion to common Tool GRASP/RELEASE intent.
-
-    The caller owns interpolation and measured settling. No production launcher
-    combination or attachment ownership is introduced by this binding.
-    """
-    settings = profile['runtime']
-    strategy = select_grasp_strategy(settings, requirement, geometry=geometry)
-    def execute(intent, duration):
-        if intent is ToolIntent.STOP:
-            raise ValueError('Synchronous radial binding does not support STOP')
-        move_primary(strategy.primary_position(intent))
-    return ToolRuntime(move_primary, frozenset(settings['capabilities']), execute,
-                       strategy, move_duration=float(settings['sweep_duration_s']))

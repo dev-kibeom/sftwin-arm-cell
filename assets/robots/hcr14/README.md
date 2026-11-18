@@ -143,7 +143,7 @@ Git에 넣지 않는다. 로컬 자산은 `.local_artifacts/` 등에 보관하�
 - 상세 CAD collision, 실제 제조사 영점/부호/프레임, 실물 정확성 및 동역학은 미검증이다.
   기존 셀 전체의 픽/플레이스 경로와 Payload 부착 중 충돌도 미검증이다.
 
-## Hand-E C10 모델·관절 실험
+## Hand-E C10 정적 조립 모델
 
 기존 HCR-14 팔과 `flange`→`tool_mount` 장착 프레임을 재사용하는
 `hcr14_hand_e_c10` 조립 모델을 제공합니다. 기존 HCR-14 + 2F-85 조합은 유지합니다.
@@ -156,21 +156,12 @@ C10 하우징 뒷면을 `tool_mount`에 직접 장착하며, 실제 Coupling이�
 공식 자산의 출처·라이선스와 공통 구동 원리는 [C10 모델 안내](../m0609_hand_e_c10/README.md)를
 참조하세요. TCP·관절 데이터는 두 로봇이 같은 C10 Tool Assembly를 사용합니다.
 
-Launcher의 **HCR-14 + Hand-E C10 · 모델·관절 실험** 버튼으로 실행하거나,
-ROS 2 Humble 환경을 적용한 뒤 저장소 루트에서 다음 명령을 사용합니다.
+HCR-14 + C10 및 C10 Long은 정적 조립 모델로 유지합니다. Xacro의 장착 변환,
+TCP와 관절·Mimic 구조를 검사할 수 있습니다. 별도 모델 실험 Launcher 버튼이나 실행 경로는 제공하지 않습니다.
 
-```bash
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/hcr14_hand_e_c10.yaml
-# 한 번의 왕복 동작으로 종료하는 headless 라이브 검증:
-bash infra/isaac_sim/scripts/run_model_experiment.sh \
-  ros2_ws/src/bringup/config/model_experiments/hcr14_hand_e_c10.yaml \
-  --headless --cycles 1
-```
+HCR-14 + C10 조합에는 operational Cell·ROS Mission·Physical Real 실행 구성을
+제공하지 않습니다. M0609 Tape Cell의 실행 지원을 이 조합에 적용하지 않습니다.
+기존 셀에서의 충돌 없는 경로나 물리 파지 성공도 확인하지 않았습니다.
 
-실행 범위는 독립 모델의 Import·Articulation 생성과 손가락 왕복 구동입니다.
-ROS 시작은 비활성화하며, Mission·파지·자재·Vision·Physical Grasp·신규 Cell은 지원하지 않습니다.
-기존 셀에서의 충돌 없는 경로나 파지 성공을 뜻하지 않습니다.
-
-사진을 참고한 100 mm 연장 핑거도 별도 `hcr14_hand_e_c10_long` 실험으로 제공합니다.
-[연장부 치수·물성 가정과 실행법](../../tools/hand_e_c10/README.md)을 참조하세요.
+사진을 참고한 100 mm 연장 핑거의 정적 조립 모델은 `hcr14_hand_e_c10_long`입니다.
+[연장부 치수·물성 가정](../../tools/hand_e_c10/README.md)을 참조하세요.
