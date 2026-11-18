@@ -19,7 +19,9 @@ Tape Cell의 초기 상태는 빈 컨베이어와 공급 대기다.
 ## Mission과 단일 Task
 
 Configured-source Mission은 기존 `/orchestration/execute_cycle`을 사용한다. target_id는 등록 자재,
-quantity는 양의 처리 수량이다. 이 source의 delivery_id는 zero UUID이며 외부 Delivery/AMR 인계를 가장하지 않는다.
+quantity는 정렬된 롤 하나를 뜻하며 `quantity == 1`만 수락한다. 1이 아닌 요청은 Action 수락 단계에서
+거부하고 슬롯 예약·Task 요청·수량 반영을 수행하지 않는다. 이 source의 delivery_id는 zero UUID이며
+외부 Delivery/AMR 인계를 가장하지 않는다. 기존 CNC Mission의 수량 계약은 변경하지 않는다.
 Orchestration은 fresh 정상 Safety와 fresh 유효 공급을 요구하고 슬롯을 예약한 뒤 단일 Task를 요청한다.
 Configured Task Action은 운영 Backend 초기화가 완료된 뒤 제공하며, configured Mission Action은
 그 Task와 Cell 공급 service가 발견된 뒤 제공한다. 프로세스 시작이나 Safety 정상 상태만으로

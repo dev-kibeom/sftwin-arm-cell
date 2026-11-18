@@ -193,7 +193,7 @@ def main(args=None):
         def accept(self,goal):
             with self.lock:
                 if (self.busy or not self.ready() or self.supply.reservation_id or goal.target_id != self.target or
-                        not 0 < goal.quantity or any(goal.delivery_id.uuid) or not self.task.server_is_ready() or not self.cell.service_is_ready()):
+                        goal.quantity != 1 or any(goal.delivery_id.uuid) or not self.task.server_is_ready() or not self.cell.service_is_ready()):
                     return GoalResponse.REJECT
                 self.busy=True
             return GoalResponse.ACCEPT
