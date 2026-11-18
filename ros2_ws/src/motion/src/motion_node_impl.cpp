@@ -788,6 +788,8 @@ MotionNode::MotionNode(
         response->message = "fake backend inactivity confirmation updated";
       });
   }
+  initialize_teaching();
+
   status_timer_ = create_wall_timer(
     std::chrono::milliseconds(20),
     [this]() {

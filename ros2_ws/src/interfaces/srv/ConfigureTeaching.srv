@@ -1,0 +1,5 @@
+# Complete nonempty named motion registry. Applied atomically while Motion is idle.
+string taught_motions_json
+---
+bool success
+string diagnostic_detail

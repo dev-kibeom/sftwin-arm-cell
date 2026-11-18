@@ -54,6 +54,8 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
     if stage.GetPrimAtPath(root):
         stage.RemovePrim(root)
     UsdGeom.Xform.Define(stage, root)
+    from tape_roll_cell.teaching_program import author_equipment_frames
+    author_equipment_frames(stage, configuration['cell']['teaching_program'], configuration)
     material = UsdShade.Material.Define(stage, root+'/ContactMaterial')
     physics_material = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
     physics_material.CreateStaticFrictionAttr(roll.static_friction)
@@ -76,8 +78,9 @@ def build_scene(*, configuration, stage=None, world_cls=None, add_reference_to_s
     for item in config['static_boxes']:
         cube = UsdGeom.Cube.Define(stage, item['id'])
         cube.CreateSizeAttr(1.)
-        cube.AddTranslateOp().Set(Gf.Vec3d(*item['pose']['position_m']))
-        q = item['pose']['quaternion_xyzw']
+        pose=item.get('local_pose',item['pose'])
+        cube.AddTranslateOp().Set(Gf.Vec3d(*pose['position_m']))
+        q = pose['quaternion_xyzw']
         cube.AddOrientOp().Set(Gf.Quatf(q[3],Gf.Vec3f(*q[:3])))
         cube.AddScaleOp().Set(Gf.Vec3f(*item['geometry']['dimensions_m']))
         look = 'floor' if item['id'].endswith('/EpoxyFloor') else 'steel'

@@ -208,3 +208,35 @@ def test_selected_profiles_reach_home_tf_and_nested_moveit(tmp_path):
                                          for key, value in forwarded.items()})
     (parameters, _) = evaluate_parameters(nested, module.compose(nested)[0]._Node__parameters)
     assert parameters['robot_description_planning.joint_limits.joint_1.max_velocity'] == 0.25
+
+
+def test_debug_filters_independent_moveit_startup_namespaces(monkeypatch):
+    package_root = Path(__file__).parents[1]
+    package_roots = {
+        "arm_cell_bringup": package_root,
+        "arm_cell_motion": package_root.parent / "motion",
+    }
+    monkeypatch.setattr(
+        "ament_index_python.packages.get_package_share_directory",
+        lambda package: str(package_roots[package]),
+    )
+    sources = (
+        package_root / "launch/arm_cell_operational.launch.py",
+        package_root / "launch/isaac_planning.launch.py",
+        package_roots["arm_cell_motion"] / "launch/planning_only.launch.py",
+    )
+    for index, source in enumerate(sources):
+        spec = importlib.util.spec_from_file_location(f"startup_logging_{index}", source)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        arguments = (module.node_ros_arguments("arm_cell_motion", "debug")
+                     if index == 0 else module.node_ros_arguments("debug"))
+        # Underscore-separated names do not inherit the moveit logger level.
+        for logger in ("moveit_rdf_loader", "moveit_move_group_capabilities_base"):
+            assert f"{logger}:=warn" in arguments, source
+        assert "moveit_planning_scene:=warn" not in arguments
+        if index == 0:
+            assert "isaac_motion_backend:=debug" in arguments
+            assert "moveit_planning_scene.planning_scene:=info" in arguments
+        else:
+            assert "moveit_planning_scene.planning_scene:=warn" in arguments

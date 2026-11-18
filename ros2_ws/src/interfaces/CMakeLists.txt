@@ -48,6 +48,7 @@ set(msg_files
 )
 
 set(srv_files
+  "srv/ConfigureTeaching.srv"
   "srv/ConfiguredSupply.srv"
   "srv/DetectTarget.srv"
   "srv/RequestMaterial.srv"
@@ -57,6 +58,7 @@ set(srv_files
 )
 
 set(action_files
+  "action/ExecuteTeaching.action"
   "action/ExecuteConfiguredGrasp.action"
   "action/ExecuteCycle.action"
   "action/ExecuteDisturb.action"

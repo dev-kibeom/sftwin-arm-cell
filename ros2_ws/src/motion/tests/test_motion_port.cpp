@@ -50,6 +50,84 @@ void grant_recovery_only(MotionCore & core)
   core.update_safety_state(safety, now);
 }
 
+TEST(MotionTeaching, RegistryMutationCannotRaceAnAcceptedTeachingGoal)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  MotionCore core(backend);
+  grant_normal(core);
+  bool applied = false;
+  ASSERT_TRUE(core.reserveTeaching(make_uuid(51)));
+  EXPECT_FALSE(core.configureTeaching([&]() {applied = true; return true;}));
+  EXPECT_FALSE(applied);
+  EXPECT_FALSE(core.reserveTeaching(make_uuid(52)));
+  core.releaseTeachingReservation(make_uuid(52));
+  EXPECT_FALSE(core.configureTeaching([]() {return true;}));
+  core.releaseTeachingReservation(make_uuid(51));
+  EXPECT_TRUE(core.configureTeaching([&]() {applied = true; return true;}));
+  EXPECT_TRUE(applied);
+}
+
+TEST(MotionTeaching, ManualAdmissionRequiresNormalFreshSafety)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  MotionCore core(backend);
+  EXPECT_FALSE(core.reserveTeaching(make_uuid(51)));
+  grant_recovery_only(core);
+  EXPECT_FALSE(core.reserveTeaching(make_uuid(51)));
+  grant_normal(core);
+  EXPECT_TRUE(core.reserveTeaching(make_uuid(51)));
+  core.releaseTeachingReservation(make_uuid(51));
+}
+
+TEST(MotionTeaching, RevalidatesPermissionBeforeEachNewTrajectory)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  backend->set_block_task_execution(true);
+  MotionCore core(backend);
+  grant_normal(core);
+  auto running = std::async(std::launch::async, [&]() {
+      return core.executeTaughtMotion("home", std::string(32, 'a'), "teaching");
+    });
+  const bool started = backend->wait_until_execution_started();
+  EXPECT_TRUE(started);
+  if (started) {
+    EXPECT_EQ(core.teachingSubmissionPermission(), MotionTaskResultCode::TASK_RESULT_SUCCESS);
+    const auto now = MotionCore::Clock::now();
+    SafetyState state;
+    state.safety_state = SafetyState::SAFETY_STATE_SAFE;
+    state.motion_capability.value = arm_cell_interfaces::msg::MotionCapability::MOTION_NORMAL;
+    state.valid = true;
+    state.required_inputs_fresh = true;
+    state.motion_envelope_valid = true;
+    state.max_acceleration_scale = 1.0F;
+    state.max_velocity_scale = 0.5F;
+    core.update_safety_state(state, now);
+    EXPECT_EQ(core.teachingSubmissionPermission(), MotionTaskResultCode::TASK_RESULT_PERMISSION_DENIED);
+    // Permission rejection for a new segment must not synthesize a Safety stop.
+    EXPECT_EQ(backend->cancel_calls(), 0);
+  }
+  backend->release_execution();
+  running.get();
+}
+
+TEST(MotionTeaching, BackendExceptionReleasesCoreExecutionAndRegistryAdmission)
+{
+  auto backend = std::make_shared<FakeMotionBackend>();
+  backend->set_throw_on_task_execution(true);
+  MotionCore core(backend);
+  grant_normal(core);
+  const auto id = make_uuid(0xaa);
+  ASSERT_TRUE(core.reserveTeaching(id));
+  const std::string motion =
+    R"({"cartesian_waypoints":[{"pose":[0,0,0,0,0,0,1],"mode":"joint"}],"velocity_scale":0.1,"acceleration_scale":0.1})";
+  EXPECT_EQ(core.executeTaughtMotion(motion, std::string(32, 'a'), "teaching"),
+    MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR);
+  core.releaseTeachingReservation(id);
+  EXPECT_FALSE(core.status().has_active_execution);
+  EXPECT_TRUE(core.configureTeaching([]() {return true;}));
+  EXPECT_EQ(backend->submitted_task_type().value, MotionTaskType::TASK_TYPE_GO_HOME);
+}
+
 MotionPortRequest pick_approach_request(std::string movement_id)
 {
   MotionPortRequest request;

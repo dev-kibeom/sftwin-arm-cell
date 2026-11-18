@@ -366,7 +366,10 @@ uint8_t MotionCore::accept_goal_impl(
         named_task ? motion_execution_support_->execute_task(*named_task, goal_id) :
         MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
     } catch (...) {
-      throw;
+      if (taught_motion.empty()) {throw;}
+      // A teaching transport/diagnostic exception still completes the Core lifecycle.
+      // The terminal path below preserves active backend evidence when necessary.
+      execution_result = MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
     }
   }
   if (execution_result == MotionTaskResultCode::TASK_RESULT_SUCCESS &&
@@ -1414,6 +1417,64 @@ std::uint8_t MotionCore::executeLegacyMovement(
     nullptr, nullptr, &legacy_movement, movement_id);
 }
 
+uint8_t MotionCore::teachingSubmissionPermission() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  const auto interrupted = interruption_result_locked(MotionTaskResultCode::TASK_RESULT_SUCCESS);
+  if (interrupted != MotionTaskResultCode::TASK_RESULT_SUCCESS) {return interrupted;}
+  const auto result = validate_goal_locked(status_.active_task_type.value, now_());
+  if (result != MotionTaskResultCode::TASK_RESULT_SUCCESS) {return result;}
+  const auto applied = backend_->applied_motion_envelope();
+  // Called only at a new trajectory boundary, never to synthesize an active Stop.
+  if (!applied.valid || applied.max_velocity_scale > safety_state_.max_velocity_scale ||
+    applied.max_acceleration_scale > safety_state_.max_acceleration_scale)
+  {return MotionTaskResultCode::TASK_RESULT_PERMISSION_DENIED;}
+  return MotionTaskResultCode::TASK_RESULT_SUCCESS;
+}
+
+bool MotionCore::configureTeaching(const std::function<bool()> & apply)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (goal_submission_pending_ || motion_execution_in_progress_ ||
+    operator_gripper_open_in_progress_ || place_waypoint_generation_in_progress_ ||
+    status_.has_active_execution || status_.execution_active ||
+    !retained_planned_operations_.empty() || backend_->execution_active() ||
+    !backend_->backend_inactivity_confirmed() ||
+    (status_.execution_state != MotionStatus::MOTION_STATE_IDLE &&
+    status_.execution_state != MotionStatus::MOTION_STATE_STOPPED)) {return false;}
+  return apply();
+}
+
+bool MotionCore::reserveTeaching(const UUID & goal_uuid)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (goal_submission_pending_ || motion_execution_in_progress_ ||
+    operator_gripper_open_in_progress_ || place_waypoint_generation_in_progress_ ||
+    status_.has_active_execution || !retained_planned_operations_.empty() ||
+    backend_->execution_active() || !backend_->backend_inactivity_confirmed() ||
+    validate_goal_locked(MotionTaskType::TASK_TYPE_PICK, now_()) !=
+    MotionTaskResultCode::TASK_RESULT_SUCCESS) {return false;}
+  goal_submission_pending_ = true;
+  pending_goal_uuid_ = goal_uuid;
+  active_movement_id_ = "teaching";
+  active_tuning_snapshot_ = runtime_tuning_;
+  active_geometry_snapshot_ = runtime_geometry_;
+  active_holding_confirmation_timeout_ = holding_confirmation_timeout_;
+  stop_requested_ = false;
+  interruption_reason_ = InterruptionReason::NONE;
+  return true;
+}
+
+void MotionCore::releaseTeachingReservation(const UUID & goal_uuid)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (goal_submission_pending_ && pending_goal_uuid_.uuid == goal_uuid.uuid) {
+    goal_submission_pending_ = false;
+    pending_goal_uuid_ = UUID{};
+    active_movement_id_.clear();
+  }
+}
+
 std::uint8_t MotionCore::executeTaughtMotion(
   const std::string & motion, const std::string & execution_id, const std::string & movement_id)
 {
@@ -1428,7 +1489,8 @@ std::uint8_t MotionCore::executeTaughtMotion(
     return MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
   return accept_goal_impl(
-    uuid, MotionTaskType::TASK_TYPE_GO_HOME, Clock::now(), true, true,
+    uuid, motion.front() == '{' ? MotionTaskType::TASK_TYPE_PICK :
+    MotionTaskType::TASK_TYPE_GO_HOME, Clock::now(), true, true,
     nullptr, nullptr, nullptr, movement_id, nullptr, false, nullptr, motion);
 }
 

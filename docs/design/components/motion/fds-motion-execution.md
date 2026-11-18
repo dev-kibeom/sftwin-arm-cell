@@ -131,6 +131,33 @@ GO_HOME과 독립 티칭 이동은 궤적 전송 완료 이후에도 기존 연�
 자재 반환의 fresh HELD·OPEN·fresh RELEASED 및 객체 처리 확정은 Task Execution BT가
 소유한다. 설정된 시간 궤적 실행이 불가능하면 단일 목표 명령으로 대체하지 않는다.
 
+### 희소 Cartesian 티칭과 운영자 시험 실행
+
+티칭 Registry는 `cartesian_waypoints`를 가진 이름별 동작을 지원한다. 각 waypoint는
+`base_link` 기준 `sf_grasp_tcp`의 `[x,y,z,qx,qy,qz,qw]` Pose와 `joint` 또는
+`linear` 이동 mode를 가진다. Quaternion은 유한 단위 회전이며, 알 수 없는 frame·mode,
+불완전 Pose, 혼합 목표 형식 및 유효하지 않은 배율은 이동 없이 거부한다.
+
+각 구간은 현재의 신선한 측정 관절값과 유효한 전체 Planning Scene에서 시작한다.
+`joint`는 Pose 목표의 전역 관절 경로를 계획하고, `linear`는 TCP 직선 Cartesian
+경로를 계산한다. Cartesian 부분 경로는 실행하지 않는다. 완전한 경로의 충돌 검사와
+속도·가속도 제한에 따른 시간 매개화를 통과한 뒤 기존 Trajectory 실행기로 제출하고,
+실제 관절 피드백의 목표 도달을 확인한 다음 다음 waypoint를 계획한다. 실패 시 다음
+구간을 시작하지 않으며, Gripper 조작·직접 관절 순간이동·충돌 허용으로 대체하지 않는다.
+기존 CNC의 `target`·`joint_positions`·등록 `joint_path` 의미는 유지한다.
+
+운영자 `/motion/execute_teaching` Action은 한 희소 Cartesian 동작을 시험한다.
+수락 전에 Motion 실행을 예약하고 현재 fresh `MOTION_NORMAL` 권한을 요구하며,
+기존 execution identity·Safety envelope·Cancel·Stop 경계를 사용한다. 운영자 시험의
+속도·가속도 배율은 각각 최대 `0.1`로 제한한다. 자동 공정의 이름별 동작은 등록 배율을
+사용한다. 결과는 기존 Motion 결과 코드와 진단을 반환하며 계획 성공만으로 실행 성공을
+주장하지 않는다.
+
+`/motion/configure_teaching`은 비어 있지 않은 전체 이름별 Registry를 원자적으로
+교체한다. 유효하지 않은 입력은 이전 Registry를 보존한다. 예약·계획 보유·실행·정지 중인
+Motion 또는 backend 비활성이 확인되지 않은 상태에서는 교체하지 않는다. 수락된 시험과
+Registry 교체는 동일한 admission 경계로 직렬화하여 수락 후 실행 전 교체 경합을 막는다.
+
 ## Planning 탐색과 요청 수명
 
 ```mermaid

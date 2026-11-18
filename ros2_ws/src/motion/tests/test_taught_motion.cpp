@@ -73,3 +73,31 @@ TEST(TaughtMotion, PlannedEntryIsExplicitAndOnlyAvailableForConfiguredPaths)
     R"({"home":{"target":"home","velocity_scale":0.3,"acceleration_scale":0.2,"plan_to_start":true}})",
     {0.0}, {0.0}, 1), std::invalid_argument);
 }
+
+TEST(TaughtMotion, SparseCartesianWaypointsPreserveModeAndTcpPose)
+{
+  const auto motions = parse_taught_motions(
+    R"({"tape_insert":{"cartesian_waypoints":[{"pose":[0.4,-0.2,0.5,0,0,0,1],"mode":"joint"},{"pose":[0.4,-0.2,0.4,0,0,0,1],"mode":"linear"}],"velocity_scale":0.2,"acceleration_scale":0.15}})",
+    {}, {}, 6);
+  const auto & points = motions.at("tape_insert").cartesian_waypoints;
+  ASSERT_EQ(points.size(), 2U);
+  EXPECT_FALSE(points[0].linear);
+  EXPECT_TRUE(points[1].linear);
+  EXPECT_DOUBLE_EQ(points[1].pose[2], 0.4);
+}
+
+TEST(TaughtMotion, RejectsAmbiguousMalformedOrUnframedCartesianDefinitions)
+{
+  const auto good = nlohmann::json::parse(
+    R"({"insert":{"cartesian_waypoints":[{"pose":[0,0,0,0,0,0,1],"mode":"linear"}],"velocity_scale":0.2,"acceleration_scale":0.1}})");
+  std::vector<nlohmann::json> bad;
+  bad.push_back(good); bad.back()["insert"]["cartesian_waypoints"] = nlohmann::json::array();
+  bad.push_back(good); bad.back()["insert"]["cartesian_waypoints"][0]["mode"] = "spline";
+  bad.push_back(good); bad.back()["insert"]["cartesian_waypoints"][0]["pose"] = {0,0,0,0,0,0,0};
+  bad.push_back(good); bad.back()["insert"]["cartesian_waypoints"][0]["pose"] = {0,0,0,1};
+  bad.push_back(good); bad.back()["insert"]["cartesian_waypoints"][0]["frame_id"] = "world";
+  bad.push_back(good); bad.back()["insert"]["target"] = "home";
+  for (const auto & value : bad) {
+    EXPECT_THROW(parse_taught_motions(value.dump(), {}, {}, 6), std::exception);
+  }
+}

@@ -333,6 +333,7 @@ bool IsaacRosMotionTransport::execute_planned(const NormalizedTrajectoryPlan & p
 
 bool IsaacRosMotionTransport::named_joint_motion_available() const
 {
+  std::lock_guard<std::mutex> lock(teaching_mutex_);
   return taught_joint_limits_.size() == arm_joint_names_.size() && !taught_motions_.empty() &&
          current_state_fresh();
 }
@@ -358,8 +359,26 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
     pending_motion_planning_goal_uuid_.clear();
     pending_motion_planning_evidence_.clear();
   }
-  const auto found = taught_motions_.find(motion);
-  if (found == taught_motions_.end()) {return Code::TASK_RESULT_INVALID_GOAL;}
+  TaughtMotion taught;
+  {
+    std::lock_guard<std::mutex> registry_lock(teaching_mutex_);
+    if (!motion.empty() && motion.front() == '{') {
+      try {
+        taught = parse_taught_motions("{\"manual\":" + motion + "}", {}, {},
+          arm_joint_names_.size()).at("manual");
+        if (taught.cartesian_waypoints.empty()) {return Code::TASK_RESULT_INVALID_GOAL;}
+        taught.velocity_scale = std::min(taught.velocity_scale, 0.1);
+        taught.acceleration_scale = std::min(taught.acceleration_scale, 0.1);
+      } catch (const std::exception &) {return Code::TASK_RESULT_INVALID_GOAL;}
+    } else {
+      const auto found = taught_motions_.find(motion);
+      if (found == taught_motions_.end()) {return Code::TASK_RESULT_INVALID_GOAL;}
+      taught = found->second;
+    }
+  }
+  if (!taught.cartesian_waypoints.empty()) {
+    return execute_cartesian_teaching(taught, execution_id, interruption);
+  }
   const auto interrupted = [&]() {
       return interruption ? interruption() : Code::TASK_RESULT_SUCCESS;
     };
@@ -380,8 +399,7 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
   const auto envelope = applied_motion_envelope();
   if (!envelope.valid) {return Code::TASK_RESULT_PERMISSION_DENIED;}
   const auto scales = apply_motion_envelope_to_planning_scales(
-    found->second.velocity_scale, found->second.acceleration_scale, envelope);
-  const auto & taught = found->second;
+    taught.velocity_scale, taught.acceleration_scale, envelope);
   auto effective_limits = taught_joint_limits_;
   for (auto & limit : effective_limits) {
     limit.max_velocity *= scales.max_velocity;
@@ -476,7 +494,7 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
       nlohmann::json{
         {"decision", "named_joint_motion"}, {"motion_name", motion},
         {"planner", taught.plan_to_start ? "moveit_entry" : "not_used"}, {"start_joint_positions", start},
-        {"target_joint_positions", found->second.joint_positions},
+        {"target_joint_positions", taught.joint_positions},
         {"velocity_scale", scales.max_velocity}, {"acceleration_scale", scales.max_acceleration},
         {"duration_s", final_time.sec + final_time.nanosec * 1e-9}}.dump());
   }
@@ -488,6 +506,135 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
     return result != Code::TASK_RESULT_SUCCESS ? result : Code::TASK_RESULT_BACKEND_ERROR;
   }
   return wait_for_joint_target_result();
+}
+
+bool IsaacRosMotionTransport::replace_teaching(const std::string & json, std::string & detail)
+{
+  try {
+    auto replacement = parse_taught_motions(
+      json, home_joint_positions_, place_tray_return_joint_positions_, arm_joint_names_.size());
+    std::lock_guard<std::mutex> lock(teaching_mutex_);
+    taught_motions_.swap(replacement);
+    return true;
+  } catch (const std::exception & error) {
+    detail = error.what();
+    return false;
+  }
+}
+
+uint8_t IsaacRosMotionTransport::execute_cartesian_teaching(
+  const TaughtMotion & taught, const std::string & execution_id,
+  const std::function<uint8_t()> & interruption)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  if (!teaching_submission_check_) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+  for (const auto & waypoint : taught.cartesian_waypoints) {
+    const auto admission = teaching_submission_check_();
+    if (admission != Code::TASK_RESULT_SUCCESS) {return admission;}
+    if (interruption && interruption() != Code::TASK_RESULT_SUCCESS) {return interruption();}
+    sensor_msgs::msg::JointState measured;
+    if (!measured_joint_state(measured) || !current_state_fresh()) {
+      return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
+    }
+    if (!planning_scene_client_ ||
+      !planning_scene_client_->wait_for_service(std::chrono::milliseconds(500)))
+    {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+    auto query = std::make_shared<moveit_msgs::srv::GetPlanningScene::Request>();
+    query->components.components = pick_retract_planning_scene_components();
+    auto future = planning_scene_client_->async_send_request(query);
+    if (future.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+      return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
+    }
+    const auto response = future.get();
+    const auto envelope = applied_motion_envelope();
+    if (!envelope.valid) {return Code::TASK_RESULT_PERMISSION_DENIED;}
+    const auto scales = apply_motion_envelope_to_planning_scales(
+      taught.velocity_scale, taught.acceleration_scale, envelope);
+    NormalizedTrajectoryPlan plan;
+    plan.planning_scales = scales;
+    plan.request.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
+    plan.request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
+    plan.request.motion_goal_uuid = execution_id;
+    plan.request.interruption_result = interruption;
+    {
+      std::lock_guard<std::mutex> group_lock(move_group_state_->mutex);
+      auto & group = move_group_state_->move_group;
+      if (!response || !group || !measured_joint_state(measured) || !current_state_fresh()) {
+        return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
+      }
+      planning_scene::PlanningScene scene(group->getRobotModel());
+      if (!scene.setPlanningSceneMsg(response->scene)) {return Code::TASK_RESULT_BACKEND_ERROR;}
+      auto start = scene.getCurrentState();
+      std::vector<double> positions;
+      if (!extract_arm_positions(measured, positions) ||
+        !moveit::core::jointStateToRobotState(measured, start))
+      {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+      start.update();
+      if (!start.satisfiesBounds() || scene.isStateColliding(start, planning_group_)) {
+        return Code::TASK_RESULT_PATH_OBSTRUCTED;
+      }
+      group->setStartState(start);
+      group->setPoseReferenceFrame("base_link");
+      if (!group->setEndEffectorLink("sf_grasp_tcp")) {return Code::TASK_RESULT_BACKEND_ERROR;}
+      group->setMaxVelocityScalingFactor(scales.max_velocity);
+      group->setMaxAccelerationScalingFactor(scales.max_acceleration);
+      group->clearPoseTargets();
+      group->clearPathConstraints();
+      group->setPlanningTime(planning_time_s_);
+      geometry_msgs::msg::Pose pose;
+      pose.position.x = waypoint.pose[0]; pose.position.y = waypoint.pose[1];
+      pose.position.z = waypoint.pose[2]; pose.orientation.x = waypoint.pose[3];
+      pose.orientation.y = waypoint.pose[4]; pose.orientation.z = waypoint.pose[5];
+      pose.orientation.w = waypoint.pose[6];
+      moveit_msgs::msg::RobotTrajectory trajectory;
+      if (waypoint.linear) {
+        const double fraction = group->computeCartesianPath({pose}, 0.005, 1.5, trajectory, true);
+        if (!std::isfinite(fraction) || fraction < 1.0 - 1e-9) {
+          return Code::TASK_RESULT_PATH_OBSTRUCTED;
+        }
+      } else {
+        if (!group->setPoseTarget(pose, "sf_grasp_tcp")) {return Code::TASK_RESULT_INVALID_GOAL;}
+        moveit::planning_interface::MoveGroupInterface::Plan joint_plan;
+        const auto result = group->plan(joint_plan);
+        group->clearPoseTargets();
+        if (result != moveit::core::MoveItErrorCode::SUCCESS) {
+          return Code::TASK_RESULT_PATH_OBSTRUCTED;
+        }
+        trajectory = joint_plan.trajectory_;
+      }
+      if (trajectory.joint_trajectory.points.size() < 2U ||
+        !retime_taught_entry(group->getRobotModel(), planning_group_, start, trajectory, scales))
+      {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
+      moveit_msgs::msg::RobotState start_message;
+      moveit::core::robotStateToRobotStateMsg(start, start_message, true);
+      if (!scene.isPathValid(start_message, trajectory, planning_group_)) {
+        return Code::TASK_RESULT_PATH_OBSTRUCTED;
+      }
+      plan.trajectory = trajectory.joint_trajectory;
+    }
+    auto effective_limits = taught_joint_limits_;
+    for (auto & limit : effective_limits) {
+      limit.max_velocity *= scales.max_velocity;
+      limit.max_acceleration *= scales.max_acceleration;
+    }
+    const auto discard = [&]() {
+        if (!interruption) {return false;}
+        const auto result = interruption();
+        if (result == Code::TASK_RESULT_SUCCESS) {return false;}
+        std::lock_guard<std::mutex> lock(mutex_);
+        normalized_failure_result_ = result;
+        return true;
+      };
+    const auto permission = teaching_submission_check_();
+    if (permission != Code::TASK_RESULT_SUCCESS) {return permission;}
+    if (!execute_taught_entry(plan, discard, effective_limits)) {
+      if (interruption && interruption() != Code::TASK_RESULT_SUCCESS) {return interruption();}
+      return Code::TASK_RESULT_BACKEND_ERROR;
+    }
+    const auto result = wait_for_joint_target_result();
+    if (result != Code::TASK_RESULT_SUCCESS) {return result;}
+  }
+  return Code::TASK_RESULT_SUCCESS;
 }
 
 }  // namespace arm_cell_motion

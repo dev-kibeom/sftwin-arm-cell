@@ -33,6 +33,8 @@ def test_startup_keeps_before_play_play_after_play_order(monkeypatch, headless):
     monkeypatch.setenv('SFTWIN_PROJECT_ROOT', str(SCRIPTS.parents[2]))
     monkeypatch.setenv('SFTWIN_HEADLESS', '1' if headless else '0')
     from isaac_runtime import runtime_workflow
+    monkeypatch.setattr(runtime_workflow, 'startup_namespace',
+                        {'World': SimpleNamespace(instance=lambda: None)}, raising=False)
     monkeypatch.setattr(runtime_workflow, 'prepare_startup_model',
                         lambda *_: events.append('prepare'))
     loop = asyncio.new_event_loop()
@@ -49,8 +51,9 @@ def test_startup_keeps_before_play_play_after_play_order(monkeypatch, headless):
                       (SCRIPTS, '2_after_play_headless.py' if headless else '2_after_play.py')]
 
 
-@pytest.mark.parametrize('initialized',[False,True])
-def test_missing_sdk_context_is_initialized_before_play(monkeypatch,initialized):
+@pytest.mark.parametrize('initialized', [False, True])
+@pytest.mark.parametrize('context_shape', ['mapping', 'typed'])
+def test_missing_sdk_context_is_initialized_before_play(monkeypatch, initialized, context_shape):
     events=[]
     class World:
         ready=initialized
@@ -70,7 +73,10 @@ def test_missing_sdk_context_is_initialized_before_play(monkeypatch,initialized)
     monkeypatch.setitem(sys.modules,'carb',SimpleNamespace(log_info=lambda _:None,log_error=lambda e:pytest.fail(e)))
     monkeypatch.setenv('SFTWIN_PROJECT_ROOT',str(SCRIPTS.parents[2]))
     from isaac_runtime import runtime_workflow
-    monkeypatch.setattr(runtime_workflow,'startup_namespace',{'context':{'world':world}},raising=False)
+    scene_context = {'world': world} if context_shape == 'mapping' else SimpleNamespace(stage=object())
+    monkeypatch.setattr(runtime_workflow, 'startup_namespace',
+                        {'context': scene_context, 'World': SimpleNamespace(instance=lambda: world)},
+                        raising=False)
     monkeypatch.setattr(runtime_workflow,'prepare_startup_model',lambda *_:None)
     loop=asyncio.new_event_loop();monkeypatch.setattr(asyncio,'ensure_future',loop.create_task)
     try:

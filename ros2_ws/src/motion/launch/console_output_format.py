@@ -24,10 +24,9 @@ class ConsoleOutputFormat(str):
     def format(self, **kwargs):
         line = super().format(**kwargs)
         observed_at_ns = time.monotonic_ns()
-        console_elapsed_ns = max(0, observed_at_ns - self._started_at_ns)
         session_elapsed_ns = max(0, observed_at_ns - self._session_started_at_ns)
         self._write_nanosecond_file_log(line, session_elapsed_ns, kwargs.get("this"))
-        elapsed = console_elapsed_ns / 1_000_000_000
+        elapsed = session_elapsed_ns / 1_000_000_000
         return f"[{elapsed:.3f}s] {line}"
 
     def _write_nanosecond_file_log(self, line, elapsed_ns, process):
