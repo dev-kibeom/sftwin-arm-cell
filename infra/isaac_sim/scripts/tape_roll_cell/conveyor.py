@@ -5,6 +5,8 @@ Rolls are free dynamic bodies transported by contact with pallet pockets/belts.
 Only initial spawning and stopped reset author material poses.
 """
 import math
+import numpy as np
+from tape_roll_cell.teaching_program import equipment_transform, matrix_pose7, pose7_matrix
 
 
 class Conveyor:
@@ -13,8 +15,8 @@ class Conveyor:
         self.stage,self.configuration,self.roll=stage,configuration,roll
         self.layout=configuration['cell']['tape_roll']
         self.settings=configuration['cell']['conveyor']
-        self.root='/World/TapeRollCell/Transport'
-        self.state='idle';self.detail='Supply를 눌러 가득 찬 카트리지를 공급하세요.'
+        self.root='/World/TapeRollCell/Infeed/Transport'
+        self.state='idle';self.detail='Press Supply to load full cartridges.'
         self.queued=self.accepted=self.finished=0
         self.number=0;self.ordinal=0;self.active_roll_paths=[];self.history=[]
         self.carrier_path=None;self.drive=None;self.settle=0.;self.elapsed=0.
@@ -49,14 +51,15 @@ class Conveyor:
 
     def enqueue_cartridges(self,count):
         if isinstance(count,bool) or not isinstance(count,int) or not 0<count<=self.settings['max_cartridges']:
-            return dict(accepted=False,detail=f"카트리지 수는 1–{self.settings['max_cartridges']} 범위입니다.")
-        if self.state!='idle':return dict(accepted=False,detail='현재 공급이 끝나거나 Stop한 뒤 다시 요청하세요.')
+            return dict(accepted=False,detail=f"Cartridge count must be between 1 and {self.settings['max_cartridges']}.")
+        if self.state!='idle':return dict(accepted=False,detail='Wait for the current supply to finish or press Stop before requesting again.')
         self.queued=self.accepted=count;self.finished=0;self.state='waiting_spawn'
-        self.detail=f'{count}개 카트리지 공급 요청 수락 (각 {self.layout["cartridge"]["slot_count"]}롤)'
+        self.detail=f'Accepted {count} full cartridges ({self.layout["cartridge"]["slot_count"]} rolls each)'
         return dict(accepted=True,detail=self.detail)
 
     def _spawn(self):
         from pxr import UsdGeom,UsdPhysics,PhysxSchema,UsdShade
+        UsdGeom.Xform.Define(self.stage,self.root)
         from tape_roll_cell.fixtures import cartridge_bed_bottom_z,CARTRIDGE_BED_THICKNESS_M
         self.number+=1;self.ordinal=0;self.queued-=1
         cfg=self.settings;pitch=self.layout['cartridge']['slot_spacing_m'];n=self.layout['cartridge']['slot_count']
@@ -84,7 +87,11 @@ class Conveyor:
                         (i*pitch+side*(self.roll.width_m/2+.0025),sign*.05,z-.05),(.004,.008,.008))
         joint=UsdPhysics.PrismaticJoint.Define(self.stage,self.carrier_path+'/Rail')
         joint.CreateBody1Rel().SetTargets([self.carrier_path]);joint.CreateAxisAttr('X')
-        joint.CreateLocalPos0Attr(self.Gf.Vec3f(0.,y,0.));joint.CreateLocalPos1Attr(self.Gf.Vec3f(0.))
+        transform=equipment_transform(self.configuration,'infeed')
+        anchor=transform @ [0.,y,0.,1.]
+        rotation=matrix_pose7(transform)[3:]
+        joint.CreateLocalPos0Attr(self.Gf.Vec3f(*anchor[:3]));joint.CreateLocalPos1Attr(self.Gf.Vec3f(0.))
+        joint.CreateLocalRot0Attr(self.Gf.Quatf(rotation[3],self.Gf.Vec3f(*rotation[:3])))
         joint.CreateLowerLimitAttr(cfg['minimum_front_x_m']);joint.CreateUpperLimitAttr(cfg['inlet_front_x_m']+.1)
         self.drive=UsdPhysics.DriveAPI.Apply(joint.GetPrim(),'linear')
         self.drive.CreateTypeAttr('force');self.drive.CreateStiffnessAttr(cfg['drive_stiffness_n_m'])
@@ -117,7 +124,7 @@ class Conveyor:
             self.active_roll_paths.append(path)
         self.history.append((self.number,list(self.active_roll_paths)))
         self._target=self.layout['supply_center_m'][0];self.state='infeed';self.elapsed=self.settle=0.
-        self.detail='가득 찬 카트리지 이송 중'
+        self.detail='Full cartridge in transit'
 
     def update(self):
         # Author/remove USD objects from the application update, not a solver callback.
@@ -126,15 +133,23 @@ class Conveyor:
             self.stage.RemovePrim(self.carrier_path);self.carrier_path=None
             self.active_roll_paths=[];self.finished+=1
             self.state='waiting_spawn' if self.queued else 'idle'
-            self.detail='다음 카트리지 대기' if self.queued else '공급 완료'
+            self.detail='Waiting for next cartridge' if self.queued else 'Supply complete'
 
-    def _measure(self,path):
+    def _measure(self,path,frame='infeed'):
         from omni.isaac.dynamic_control import _dynamic_control as api
         dc=api.acquire_dynamic_control_interface();handle=dc.get_rigid_body(path)
         if handle==api.INVALID_HANDLE:return None
         pose=dc.get_rigid_body_pose(handle);vel=dc.get_rigid_body_linear_velocity(handle)
         angular=dc.get_rigid_body_angular_velocity(handle)
-        return pose,vel,angular
+        # Dynamic Control observations are world poses even under an equipment
+        # Xform. Compare and drive only in the matching mechanical coordinates.
+        inverse=np.linalg.inv(equipment_transform(self.configuration,frame))
+        transform=inverse @ pose7_matrix([pose.p.x,pose.p.y,pose.p.z,pose.r.x,pose.r.y,pose.r.z,pose.r.w])
+        values=matrix_pose7(transform)
+        from types import SimpleNamespace
+        vector=lambda v:SimpleNamespace(x=float(v[0]),y=float(v[1]),z=float(v[2]))
+        local_pose=SimpleNamespace(p=vector(values[:3]),r=SimpleNamespace(x=values[3],y=values[4],z=values[5],w=values[6]))
+        return local_pose,vector(inverse[:3,:3] @ [vel.x,vel.y,vel.z]),vector(inverse[:3,:3] @ [angular.x,angular.y,angular.z])
 
     @property
     def dock_ready(self):return self.state=='docked'
@@ -158,7 +173,10 @@ class Conveyor:
 
     def _surface(self,infeed=0.,outfeed=0.):
         for path,api in self.surfaces:
-            api.GetSurfaceVelocityAttr().Set(self.Gf.Vec3f(infeed,0.,0.) if path.endswith('/InfeedBelt') else self.Gf.Vec3f(0.,-outfeed,0.))
+            frame='infeed' if path.endswith('/InfeedBelt') else 'outfeed'
+            local=[infeed,0.,0.] if frame=='infeed' else [0.,-outfeed,0.]
+            world=equipment_transform(self.configuration,frame)[:3,:3] @ local
+            api.GetSurfaceVelocityAttr().Set(self.Gf.Vec3f(*world))
 
     def on_physics_step(self,dt):
         if not math.isfinite(dt) or dt<=0:return
@@ -166,11 +184,11 @@ class Conveyor:
             self._surface();return
         self.elapsed+=dt
         if self.elapsed>self.settings['movement_timeout_s']:
-            self.state='failed';self.detail='컨베이어 도착/배출 위치를 물리 관측으로 확인하지 못했습니다.'
+            self.state='failed';self.detail='Conveyor docking or outfeed position could not be physically confirmed.'
             self._surface();return
         if self.state=='outfeed':
             self._surface(outfeed=self.settings['outfeed_speed_m_s'])
-            row=self._measure(self.output_path)
+            row=self._measure(self.output_path,'outfeed')
             if row and row[0].p.y <= self.layout['place']['first_center_xy_m'][1]-self.settings['outfeed_pitch_m']:
                 self._surface();self.output_path=None
                 if self.ordinal+1 < len(self.active_roll_paths):
@@ -211,12 +229,12 @@ class Conveyor:
             self._surface();self.elapsed=self.settle=0.
             if self.state=='returning':
                 self.state='unloading'
-            else:self.state='docked';self.detail=f'고정 Pick 위치 도착 · 슬롯 {self.ordinal+1}'
+            else:self.state='docked';self.detail=f'Docked at fixed pick position · Slot {self.ordinal+1}'
 
     def resetstopped(self):
         self._surface()
         if self.stage.GetPrimAtPath(self.root):self.stage.RemovePrim(self.root)
-        self.state='idle';self.detail='Supply 대기';self.queued=self.accepted=self.finished=0
+        self.state='idle';self.detail='Waiting for Supply';self.queued=self.accepted=self.finished=0
         self.active_roll_paths=[];self.history=[];self.carrier_path=None;self.drive=None;self.output_path=None
 
     def close(self):self._surface()

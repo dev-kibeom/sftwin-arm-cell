@@ -54,6 +54,10 @@ DEBUG_FRAMEWORK_LOGGERS = (
     "moveit",
     "moveit_ros",
     "moveit_core",
+    # These namespaces do not inherit the dot-separated moveit logger.
+    "moveit_rdf_loader",
+    "moveit_move_group_capabilities_base",
+    "moveit_planning_scene.planning_scene",
     "pluginlib",
     "kdl_parser",
     "kinematics_plugin_loader",

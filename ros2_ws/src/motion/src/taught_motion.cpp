@@ -24,14 +24,36 @@ TaughtMotions parse_taught_motions(
       !value.is_object() || value.size() != (value.contains("joint_path") ? 4U + value.contains("plan_to_start") : 3U) ||
       !value.contains("velocity_scale") || !value.contains("acceleration_scale") ||
       (static_cast<int>(value.contains("target")) + static_cast<int>(value.contains("joint_positions")) +
-      static_cast<int>(value.contains("joint_path"))) != 1)
+      static_cast<int>(value.contains("joint_path")) +
+      static_cast<int>(value.contains("cartesian_waypoints"))) != 1)
     {
       throw std::invalid_argument("Invalid taught motion definition: " + entry.key());
     }
     TaughtMotion motion;
     motion.velocity_scale = value.at("velocity_scale").get<double>();
     motion.acceleration_scale = value.at("acceleration_scale").get<double>();
-    if (value.contains("joint_path")) {
+    if (value.contains("cartesian_waypoints")) {
+      const auto & waypoints = value.at("cartesian_waypoints");
+      if (!waypoints.is_array() || waypoints.empty() || waypoints.size() > 256U) {
+        throw std::invalid_argument("Invalid Cartesian waypoint count");
+      }
+      for (const auto & waypoint : waypoints) {
+        if (!waypoint.is_object() || waypoint.size() != 2U ||
+          !waypoint.contains("pose") || !waypoint.contains("mode"))
+        {throw std::invalid_argument("Invalid Cartesian waypoint fields");}
+        const auto pose = waypoint.at("pose").get<std::vector<double>>();
+        const auto mode = waypoint.at("mode").get<std::string>();
+        if (pose.size() != 7U || (mode != "joint" && mode != "linear") ||
+          !std::all_of(pose.begin(), pose.end(), [](double v) {return std::isfinite(v);}) ||
+          std::abs(std::sqrt(pose[3]*pose[3] + pose[4]*pose[4] +
+            pose[5]*pose[5] + pose[6]*pose[6]) - 1.0) > 1e-6)
+        {throw std::invalid_argument("Invalid base_link Cartesian pose or movement mode");}
+        CartesianTeachingWaypoint point;
+        std::copy(pose.begin(), pose.end(), point.pose.begin());
+        point.linear = mode == "linear";
+        motion.cartesian_waypoints.push_back(point);
+      }
+    } else if (value.contains("joint_path")) {
       motion.plan_to_start = value.value("plan_to_start", false);
       motion.joint_path = value.at("joint_path").get<std::vector<std::vector<double>>>();
       motion.duration_s = value.at("duration_s").get<double>();
@@ -54,7 +76,7 @@ TaughtMotions parse_taught_motions(
         return std::isfinite(scale) && scale > 0.0 && scale <= 1.0;
       };
     if (!valid_scale(motion.velocity_scale) || !valid_scale(motion.acceleration_scale) ||
-      motion.joint_positions.size() != joint_count ||
+      (motion.cartesian_waypoints.empty() && motion.joint_positions.size() != joint_count) ||
       !std::all_of(
         motion.joint_positions.begin(), motion.joint_positions.end(),
         [](double position) {return std::isfinite(position);}))

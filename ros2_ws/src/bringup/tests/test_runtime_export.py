@@ -7,11 +7,81 @@ import sys
 
 import pytest
 
-from arm_cell_bringup.runtime import export_runtime_configuration
+from arm_cell_bringup.runtime import export_runtime_configuration, load_profile, read
 
 ROOT = Path(__file__).resolve().parents[4]
 CELL = ROOT / 'infra/isaac_sim/scripts/pnp_cnc_cell'
 PROFILE = ROOT / 'ros2_ws/src/bringup/config/operational_profile.yaml'
+
+
+@pytest.mark.parametrize('filename', ['runtime.json', 'runtime.snapshot'])
+def test_json_configuration_does_not_use_yaml_parser(tmp_path, monkeypatch, filename):
+    path = tmp_path / filename
+    path.write_text('  \n{"enabled": true, "values": [0.1, 0.2]}')
+
+    def reject_yaml(_):
+        pytest.fail('JSON snapshots must bypass the YAML parser')
+
+    monkeypatch.setattr('arm_cell_bringup.runtime.yaml.safe_load', reject_yaml)
+    assert read(path) == {'enabled': True, 'values': [0.1, 0.2]}
+
+
+@pytest.mark.parametrize('text', ['enabled: true\nvalues: [0.1, 0.2]',
+                                  '{enabled: true, values: [0.1, 0.2]}'])
+def test_configuration_preserves_yaml_support(tmp_path, text):
+    path = tmp_path / 'owner.yaml'
+    path.write_text(text)
+    assert read(path) == {'enabled': True, 'values': [0.1, 0.2]}
+
+
+@pytest.mark.parametrize('text', ['[]', '[1, 2]', 'null', 'value'])
+def test_configuration_requires_mapping(tmp_path, text):
+    path = tmp_path / 'invalid.snapshot'
+    path.write_text(text)
+    with pytest.raises(ValueError, match='must be a mapping'):
+        read(path)
+
+
+def test_runtime_snapshot_reloads_are_isolated_and_verify_current_file(tmp_path):
+    configuration = {
+        'orchestration': {'mission_target_id': 'TestCube'},
+        '_mission_recipe': {'target_id': 'TestCube', 'schema_version': 1},
+        'motion': {'positions': [0.1, 0.2]},
+    }
+    document = {
+        'kind': 'arm-cell-runtime-configuration', 'schema_version': 1,
+        'configuration': configuration,
+        'configuration_sha256': hashlib.sha256(
+            json.dumps(configuration, sort_keys=True, allow_nan=False).encode()).hexdigest(),
+    }
+    path = tmp_path / 'runtime.snapshot'
+    path.write_text(json.dumps(document))
+    first = load_profile(path)
+    first['motion']['positions'][0] = 99
+    assert load_profile(path)['motion']['positions'] == [0.1, 0.2]
+
+    document['configuration']['motion']['positions'][0] = 0.3
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match='checksum mismatch'):
+        load_profile(path)
+
+    document['configuration_sha256'] = hashlib.sha256(
+        json.dumps(configuration, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    path.write_text(json.dumps(document))
+    assert load_profile(path)['motion']['positions'] == [0.3, 0.2]
+
+    document['schema_version'] = 2
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match='Unsupported runtime configuration schema'):
+        load_profile(path)
+
+
+@pytest.mark.parametrize('constant', ['NaN', 'Infinity', '-Infinity'])
+def test_json_configuration_rejects_nonfinite_constants(tmp_path, constant):
+    path = tmp_path / 'runtime.snapshot'
+    path.write_text('{"value": ' + constant + '}')
+    with pytest.raises(ValueError, match='finite'):
+        read(path)
 
 
 def test_export_is_self_contained_and_readable_without_ros_or_bringup(tmp_path):

@@ -123,7 +123,11 @@ public:
     const std::function<uint8_t()> & interruption) override;
   void configure_taught_motions(
     TaughtMotions motions, std::vector<JointMotionLimit> limits = {})
-  {taught_motions_ = std::move(motions); taught_joint_limits_ = std::move(limits);}
+  {std::lock_guard<std::mutex> lock(teaching_mutex_);
+    taught_motions_ = std::move(motions); taught_joint_limits_ = std::move(limits);}
+  void set_teaching_submission_check(std::function<uint8_t()> check)
+  {teaching_submission_check_ = std::move(check);}
+  bool replace_teaching(const std::string & json, std::string & detail);
   MotionDisturbanceParameters disturbance_parameters() const override;
   void reset_pick_grasp_insertion_started() override;
   bool pick_grasp_insertion_started() const override;
@@ -186,6 +190,8 @@ private:
     const moveit::core::RobotModelConstPtr & model, const std::string & group,
     const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,
     const MotionPlanningScales & scales);
+  uint8_t execute_cartesian_teaching(
+    const TaughtMotion &, const std::string &, const std::function<uint8_t()> &);
   bool execute_taught_entry(
     const NormalizedTrajectoryPlan & entry, const std::function<bool()> & discard_if_interrupted,
     const std::vector<JointMotionLimit> & effective_limits);
@@ -298,6 +304,8 @@ private:
   std::vector<std::string> place_ik_seed_joints_;
   bool wrap_equivalent_joint_policy(const std::string & joint_name) const;
   std::vector<std::string> arm_joint_names_;
+  std::function<uint8_t()> teaching_submission_check_;
+  mutable std::mutex teaching_mutex_;
   TaughtMotions taught_motions_;
   std::vector<JointMotionLimit> taught_joint_limits_;
   std::vector<double> home_joint_positions_;

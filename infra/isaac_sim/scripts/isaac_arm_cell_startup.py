@@ -47,7 +47,9 @@ async def _start_arm_cell():
 
     # World creation from a Kit extension is asynchronous. Complete the SDK
     # context before Play so later initialization cannot invalidate live views.
-    world = _RUNTIME_NAMESPACE.get("context", {}).get("world")
+    # Scene builders return Cell-owned contexts with different representations.
+    # Before-play setup imports the SDK World used by every selected builder.
+    world = _RUNTIME_NAMESPACE["World"].instance()
     if world is not None and world.get_physics_context() is None:
         await world.initialize_simulation_context_async()
 

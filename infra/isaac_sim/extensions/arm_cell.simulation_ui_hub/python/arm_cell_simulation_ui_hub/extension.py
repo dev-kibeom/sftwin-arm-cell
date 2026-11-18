@@ -145,6 +145,8 @@ class SimulationUIHubExtension(_ExtensionBase):
         self._handoff_default_quantity = handoff_default_quantity
         self._retry_detection_target_id = retry_detection_target_id
         self._ui = ui
+        from .teaching_panel import TeachingPanel
+        self._teaching_panel = TeachingPanel(ui)
         self._window = None
         self._window_menu = MenuHelperExtensionFull()
         self._window_menu.menu_startup(
@@ -260,6 +262,9 @@ class SimulationUIHubExtension(_ExtensionBase):
 
     def _on_update(self, _event: Any) -> None:
         self.runtime.spin_once()
+        panel = getattr(self, '_teaching_panel', None)
+        if panel is not None:
+            panel.refresh()
         self._refresh_demonstration_state()
         if self._supply_owner_status is not None and self._supply_descriptor is not None:
             from isaac_runtime.cell_supply import supply_status
@@ -420,9 +425,9 @@ class SimulationUIHubExtension(_ExtensionBase):
         with ui.CollapsableFrame("Supply", collapsed=False):
             with ui.VStack(spacing=4):
                 ui.Label(
-                    ("공급 요청과 Cell의 응답을 표시합니다. 요청 수락은 이송·작업 완료를 뜻하지 않습니다."
+                    ("Supply requests and Cell responses. Acceptance does not mean transfer or task completion."
                      if self._supply_descriptor else
-                     "공급 요청 발행 상태를 표시합니다. Cell 수락·이송 완료는 공급 Owner가 확인합니다."),
+                     "Supply request publication. The supply owner confirms Cell acceptance and transfer completion."),
                     word_wrap=True,
                 )
                 ui.Label("Material type")
@@ -443,6 +448,10 @@ class SimulationUIHubExtension(_ExtensionBase):
                     "No supply request published.", word_wrap=True
                 )
                 self._supply_owner_status=ui.Label("",word_wrap=True)
+
+        panel = getattr(self, '_teaching_panel', None)
+        if panel is not None:
+            panel.build()
 
         with ui.CollapsableFrame("Cuboid Demonstration", collapsed=True):
             with ui.VStack(spacing=4):
@@ -604,11 +613,11 @@ class SimulationUIHubExtension(_ExtensionBase):
                         word_wrap=True,
                     )
                     ui.Label(
-                        "Depth: teal 0.6 m → yellow 1.6 m · magenta invalid",
+                        "Depth: teal 0.6 m to yellow 1.6 m · magenta invalid",
                         word_wrap=True,
                     )
                     ui.Label(
-                        "Tray depth: top-down support-frame Z · -0.02 m → 0.18 m",
+                        "Tray depth: top-down support-frame Z · -0.02 m to 0.18 m",
                         word_wrap=True,
                     )
 
@@ -924,7 +933,7 @@ class SimulationUIHubExtension(_ExtensionBase):
             from isaac_runtime.cell_supply import supply_descriptor,request_supply
             if supply_descriptor() is not None:
                 result=request_supply(material_type,quantity)
-                label.text=('Supply 수락: ' if result['accepted'] else 'Supply 거부: ')+result['detail']
+                label.text=('Supply accepted: ' if result['accepted'] else 'Supply rejected: ')+result['detail']
                 return
             delivery_id = self.runtime.publish_handoff_trigger(material_type, quantity)
             label.text = (
@@ -1171,6 +1180,9 @@ class SimulationUIHubExtension(_ExtensionBase):
                 clear.enabled = active and not pending
 
     def on_shutdown(self) -> None:
+        panel = getattr(self, '_teaching_panel', None)
+        if panel is not None:
+            panel.close()
         timeline_subscription = getattr(self, "_timeline_subscription", None)
         unsubscribe = getattr(timeline_subscription, "unsubscribe", None)
         if callable(unsubscribe):

@@ -3,6 +3,10 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <thread>
+#include <rclcpp_action/rclcpp_action.hpp>
+#include <arm_cell_interfaces/action/execute_teaching.hpp>
+#include <arm_cell_interfaces/srv/configure_teaching.hpp>
 
 #include <rclcpp/rclcpp.hpp>
 #include <arm_cell_interfaces/srv/stop_motion.hpp>
@@ -27,6 +31,8 @@ public:
     std::shared_ptr<MotionBackend> backend,
     const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
+  ~MotionNode() override;
+
   rclcpp::Node::SharedPtr backend_node() const {return backend_node_;}
   std::shared_ptr<MotionCore> motion_core() const {return core_;}
   std::shared_ptr<GripperPort> gripper_port() const {return core_->gripper_port();}
@@ -38,6 +44,12 @@ public:
   bool backend_ready() const;
 
 private:
+  void initialize_teaching();
+  using ExecuteTeaching = arm_cell_interfaces::action::ExecuteTeaching;
+  rclcpp_action::Server<ExecuteTeaching>::SharedPtr teaching_action_;
+  rclcpp::Service<arm_cell_interfaces::srv::ConfigureTeaching>::SharedPtr teaching_service_;
+  std::thread teaching_worker_;
+  UUID teaching_goal_uuid_{};
   std::shared_ptr<MotionCore> core_;
   std::weak_ptr<MotionBackend> backend_readiness_;
   std::shared_ptr<IsaacRosMotionTransport> isaac_transport_;

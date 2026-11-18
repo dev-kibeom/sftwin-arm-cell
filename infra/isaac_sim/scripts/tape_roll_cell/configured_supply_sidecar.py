@@ -155,7 +155,8 @@ def serve(fd):
                             identity = packet.get('correlation_id')
                             if identity in pending:
                                 replies[identity] = packet['response']
-                        elif packet.get('op') in ('start_cycle','cancel_cycle'):
+                        elif packet.get('op') in ('start_cycle','cancel_cycle',
+                                                  'teaching_apply','teaching_move','teaching_cancel','teaching_settings'):
                             operator_requests.append(packet)
                         elif packet.get('op') == 'state':
                             cache.update(state=packet['state'], scene=packet.get('scene'), received_at=time.monotonic())
@@ -176,10 +177,12 @@ def serve(fd):
     from arm_cell_interfaces.action import ExecuteCycle
     cycle = ActionClient(node, ExecuteCycle, '/orchestration/execute_cycle')
     active_cycle = {'goal':None,'pending':False,'request_id':None,'cancel':False}
+    from tape_roll_cell.teaching_ros import TeachingRosBridge
+    teaching = TeachingRosBridge(node, send)
     def cycle_response(future):
         goal = future.result();active_cycle['pending']=False
         if goal is None or not goal.accepted:
-            send(dict(op='mission_result',request_id=active_cycle['request_id'],success=False,detail='Mission 요청 거부: ROS/Safety/공급 준비를 확인하세요.'));return
+            send(dict(op='mission_result',request_id=active_cycle['request_id'],success=False,detail='Mission rejected: check ROS, Safety, and supply readiness.'));return
         active_cycle['goal']=goal
         if active_cycle['cancel']:goal.cancel_goal_async()
         result = goal.get_result_async()
@@ -187,7 +190,7 @@ def serve(fd):
             outcome=future.result();active_cycle['goal']=None
             send(dict(op='mission_result',request_id=active_cycle['request_id'],
                 success=outcome.status==4 and outcome.result.exit_reason.value==7,detail=outcome.result.diagnostic_detail))
-            send(dict(op='mission_status',text='Mission 종료: '+outcome.result.diagnostic_detail))
+            send(dict(op='mission_status',text='Mission ended: '+outcome.result.diagnostic_detail))
         result.add_done_callback(finished)
     def service(request, response):
         identity = uuid.uuid4().hex
@@ -237,12 +240,15 @@ def serve(fd):
         with condition:
             commands=list(operator_requests);operator_requests.clear()
         for packet in commands:
+            if packet.get('op', '').startswith('teaching_'):
+                teaching.command(packet, mission_busy=active_cycle['goal'] is not None or active_cycle['pending'])
+                continue
             if packet.get('op')=='cancel_cycle':
                 active_cycle['cancel']=True
                 if active_cycle['goal'] is not None:active_cycle['goal'].cancel_goal_async()
                 continue
             if active_cycle['goal'] is not None or active_cycle['pending'] or not cycle.server_is_ready():
-                send(dict(op='mission_result',request_id=packet.get('request_id'),success=False,detail='Mission 실행 중이거나 ROS 준비 전입니다.'));continue
+                send(dict(op='mission_result',request_id=packet.get('request_id'),success=False,detail='A Mission is already running or ROS is not ready.'));continue
             goal=ExecuteCycle.Goal();goal.target_id=str(packet['target_id']);goal.quantity=int(packet['quantity'])
             active_cycle.update(pending=True,request_id=packet.get('request_id'),cancel=False)
             cycle.send_goal_async(goal).add_done_callback(cycle_response)
@@ -250,6 +256,7 @@ def serve(fd):
             state = dict(cache['state']) if cache['state'] else None
             scene = cache['scene']
             fresh = cache['connected'] and time.monotonic()-cache['received_at'] <= .5
+        teaching.publish()
         if state is None: return
         message = ConfiguredSupplyState()
         for key,value in state.items():
@@ -274,6 +281,7 @@ def serve(fd):
     try:
         executor.spin()
     finally:
+        teaching.close()
         sock.close()
         executor.shutdown()
         node.destroy_node()

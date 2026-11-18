@@ -93,12 +93,14 @@ class ConfiguredSupplyAdapter:
         self._cycle_start_count=0;self.last_mission_status=''
         self._completed_total=0
         register_supply_port(self,dict(materials=[dict(id=self.supply.material_id,label='Tape Roll 17 mm')],
-            count_label=f'가득 찬 카트리지 수 ({self.supply._count}롤/개)',default_count=1),
+            count_label=f'Full cartridges ({self.supply._count} rolls each)',default_count=1),
             self.request_supply,self.supply_status)
+        from tape_roll_cell.teaching_runtime import TeachingSession
+        self.teaching = TeachingSession(self)
 
     def request_supply(self,material_id,count):
-        if not self.timeline.is_playing():return dict(accepted=False,detail='Timeline Play 후 Supply를 요청하세요.')
-        if material_id!=self.supply.material_id:return dict(accepted=False,detail='지원하지 않는 자재')
+        if not self.timeline.is_playing():return dict(accepted=False,detail='Press Play before requesting Supply.')
+        if material_id!=self.supply.material_id:return dict(accepted=False,detail='Unsupported material')
         response=self.conveyor.enqueue_cartridges(count)
         if response['accepted']:
             self._completed_total=0;self.last_mission_status=''
@@ -107,8 +109,8 @@ class ConfiguredSupplyAdapter:
     def supply_status(self):
         total=self.conveyor.accepted*self.supply._count
         motion=self.configuration['cell'].get('motion_preparation',dict(ready=True,detail=''))
-        detail=(f'장면 준비됨 · 동작 경로 준비 불가: {motion["detail"]}' if not motion['ready'] else
-                f'{self.conveyor.detail} · 완료 {self._completed_total}/{total}롤')
+        detail=(f'Scene ready · Motion preparation unavailable: {motion["detail"]}' if not motion['ready'] else
+                f'{self.conveyor.detail} · Completed {self._completed_total}/{total} rolls')
         return dict(available=not self._closed,state=self.conveyor.state,queued=self.conveyor.queued,
             completed_cartridges=self.conveyor.finished,accepted_cartridges=self.conveyor.accepted,
             completed_rolls=self._completed_total,remaining_rolls=total-self._completed_total,
@@ -124,7 +126,8 @@ class ConfiguredSupplyAdapter:
             update_identity_attributes(self.stage,self.paths,self.supply)
         elif not paths:self.paths=[]
         ready=self.configuration['cell'].get('motion_preparation',{'ready':True})
-        if (self.valid() and ready['ready'] and self._pending_cycle is None and
+        if (not getattr(getattr(self, 'teaching', None), 'manual_mode', False) and
+                self.valid() and ready['ready'] and self._pending_cycle is None and
                 not self.supply.reservation_id and self._mission_available and
                 time.monotonic()-self._mission_available_at<.5):
             import uuid
@@ -183,8 +186,14 @@ class ConfiguredSupplyAdapter:
         x,y,z,w = pose.r.x,pose.r.y,pose.r.z,pose.r.w
         axis = (2*(x*z+w*y), 2*(y*z-w*x), 1-2*(x*x+y*y))
         expected = self.configuration['cell']['tape_roll']['slots'][slot]['receiver_center_m']
-        return receiver_settled((pose.p.x,pose.p.y,pose.p.z),
-            (velocity.x,velocity.y,velocity.z), (angular.x,angular.y,angular.z), axis, expected)
+        from tape_roll_cell.teaching_program import equipment_transform
+        import numpy as np
+        transform=equipment_transform(self.configuration,'outfeed')
+        inverse=np.linalg.inv(transform)
+        local_position=(inverse @ [pose.p.x,pose.p.y,pose.p.z,1.])[:3]
+        local_expected=(inverse @ [*expected,1.])[:3]
+        return receiver_settled(local_position, inverse[:3,:3] @ [velocity.x,velocity.y,velocity.z],
+            inverse[:3,:3] @ [angular.x,angular.y,angular.z], inverse[:3,:3] @ axis, local_expected)
 
     def _contact_failure(self, reason, message):
         previous = self.failure
@@ -234,7 +243,18 @@ class ConfiguredSupplyAdapter:
         if self._closed:
             return
         self._advance_supply()
+        self._poll_sidecar()
+
+    def spin_teaching_once(self):
+        """Process pendant responses while stopped without advancing Supply."""
+        if not self._closed:
+            self._poll_sidecar()
+
+    def _poll_sidecar(self):
         for packet in self.sidecar.poll_messages():
+            if packet.get('op', '').startswith('teaching_'):
+                self.teaching.consume(packet)
+                continue
             if packet.get('op')=='mission_available':
                 self._mission_available=packet.get('ready') is True;self._mission_available_at=time.monotonic()
             if packet.get('op')=='mission_result' and packet.get('request_id')==self._pending_cycle:
@@ -243,7 +263,7 @@ class ConfiguredSupplyAdapter:
                 if packet.get('success') is True and count==self._cycle_start_count+1:
                     self.conveyor.release_to_outfeed(self.paths[count-1])
                 elif not self.failure:
-                    self.failure='PnP 실패: '+str(packet.get('detail','완료 수량 불일치'))
+                    self.failure='PnP failed: '+str(packet.get('detail','Completion count mismatch'))
             if packet.get('op') == 'mission_status':
                 self.last_mission_status = packet.get('text', '')
             if packet.get('op') != 'request':
@@ -268,6 +288,8 @@ class ConfiguredSupplyAdapter:
             self._last_state_at = now
             self.sidecar.send(dict(op='state', state=self.supply.state(valid=self.valid(), detail=self.failure), scene=self.scene_packet()))
         self.sidecar.flush_outgoing()
+
+        self.teaching.tick()
 
     def scene_packet(self):
         from pxr import Gf, UsdGeom, UsdPhysics
@@ -320,6 +342,8 @@ class ConfiguredSupplyAdapter:
     def reset_generated_materials(self, attachment_reset):
         if not self.timeline.is_stopped() or not attachment_reset():
             return False
+        if getattr(self, 'teaching', None) is not None:
+            self.teaching.on_stop()
         self.conveyor.resetstopped()
         self.paths=[];self._pending_cycle=None;self._mission_available=False
         self._completed_total=0;self.last_mission_status=''
@@ -344,6 +368,7 @@ class ConfiguredSupplyAdapter:
             if callable(unsubscribe): unsubscribe()
             self.physics_sub = None
         self.observer.close()
+        self.teaching.close()
         from isaac_runtime.cell_supply import clear_supply_port
         clear_supply_port(self)
         self.conveyor.close()

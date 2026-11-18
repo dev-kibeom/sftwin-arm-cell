@@ -55,6 +55,7 @@ classDiagram
 |---|---|---|
 | Supply | 선택된 Cell의 자재·수량 단위를 표시하고 Owner에 요청 전달, CNC는 기존 공용 Trigger 발행 | Cell 공급 상태·완료, Gateway 수락, Orchestration Mission Admission |
 | Live Camera / Vision Viewer | 원본 영상 및 Snapshot·선택 Target Annotation 읽기 전용 표시 | Camera Publisher·Vision·공유 ICD |
+| Teaching | 선택된 Cell의 설비 기준 TCP 포인트·작업 순서 편집, 저장·적용 및 수동 시험 요청 | Cell 티칭 설정, Motion 계획·실행 |
 | Simulation Control | Timeline 및 Demonstration Stimulus 요청·표시 | Isaac Simulation Runtime·Supply Adapter |
 | Retry Detection / Calibration | 개발 전용/명시적 보정 요청, 응답 표시 | Vision·Orchestration 관련 기능 FDS |
 | Fault·Safety 조작 | 승인된 Fault Stimulus 및 Safety Operator 요청 전달 | Fault Injection·Safety Owner |
@@ -64,7 +65,7 @@ Hub의 로컬 **발행 성공**은 Gateway의 Trigger **수락**이나 Material 
 
 ## 4. 비책임과 설계 참조
 
-Hub는 임의의 RGB-D Pairing, Detector 실행, Snapshot 생성·그리기, Mission·VDA 상태 재분류, Safety Latch 직접 변경, Motion Goal 생성이나 자동 Retry 정책을 소유하지 않는다. 통합 운영 상태 Dashboard를 필수 기능으로 추가하지 않는다.
+Hub는 임의의 RGB-D Pairing, Detector 실행, Snapshot 생성·그리기, Mission·VDA 상태 재분류, Safety Latch 직접 변경, Motion 계획·실행 판정이나 자동 Retry 정책을 소유하지 않는다. 통합 운영 상태 Dashboard를 필수 기능으로 추가하지 않는다.
 
 관측의 수신·표시 시점 및 사용자의 상호작용은 [Camera·Vision Viewer FDS](fds-camera-vision-viewer.md) 및 [운영 명령 FDS](fds.md)가 소유한다. Snapshot Metadata·Source Identity 등 여러 소비자가 공유하는 의미는 [Vision–Orchestration ICD](../../interfaces/icd-vision-orchestration.md), Trigger 필드·수락 의미는 [External Handoff ICD](../../interfaces/icd-external-handoff-trigger.md), Safety 요청 의미는 [Safety Operator ICD](../../interfaces/icd-safety-operator.md)가 소유한다.
 

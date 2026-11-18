@@ -124,12 +124,12 @@ target_include_directories(${PROJECT_NAME}_core SYSTEM PRIVATE ${OpenCV_INCLUDE_
 target_include_directories(${PROJECT_NAME}_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(${PROJECT_NAME}_core nlohmann_json::nlohmann_json ${OpenCV_LIBS} ${orocos_kdl_LIBRARIES})
 
-add_library(${PROJECT_NAME}_runtime src/motion_node_impl.cpp)
+add_library(${PROJECT_NAME}_runtime src/motion_node_impl.cpp src/motion_node_teaching.cpp)
 target_include_directories(${PROJECT_NAME}_runtime PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-ament_target_dependencies(${PROJECT_NAME}_runtime rclcpp arm_cell_interfaces std_srvs)
+ament_target_dependencies(${PROJECT_NAME}_runtime rclcpp rclcpp_action arm_cell_interfaces std_srvs)
 target_link_libraries(${PROJECT_NAME}_runtime ${PROJECT_NAME}_core)
 
 add_executable(motion_node src/motion_node.cpp)
@@ -250,11 +250,11 @@ if(BUILD_TESTING)
     test_disturbance_motion arm_cell_interfaces geometry_msgs moveit_core moveit_msgs)
 
   ament_add_gtest(
-    test_motion_node_parameters tests/test_motion_node_parameters.cpp src/motion_node_impl.cpp)
+    test_motion_node_parameters tests/test_motion_node_parameters.cpp src/motion_node_impl.cpp src/motion_node_teaching.cpp)
   target_link_libraries(test_motion_node_parameters ${PROJECT_NAME}_runtime ${PROJECT_NAME}_core)
   target_include_directories(test_motion_node_parameters PRIVATE include)
   ament_target_dependencies(
-    test_motion_node_parameters rclcpp arm_cell_interfaces std_srvs)
+    test_motion_node_parameters rclcpp rclcpp_action arm_cell_interfaces std_srvs)
 
   ament_add_gtest(test_direct_stop_path tests/test_direct_stop_path.cpp)
   target_link_libraries(test_direct_stop_path ${PROJECT_NAME}_core)

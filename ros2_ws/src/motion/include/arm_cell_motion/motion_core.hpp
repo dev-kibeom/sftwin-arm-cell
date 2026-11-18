@@ -63,6 +63,10 @@ public:
     std::function<Clock::time_point()> now = []() {return Clock::now();});
 
   MotionStatus status() const;
+  uint8_t teachingSubmissionPermission() const;
+  bool reserveTeaching(const UUID & goal_uuid);
+  void releaseTeachingReservation(const UUID & goal_uuid);
+  bool configureTeaching(const std::function<bool()> & apply);
   void update_safety_state(const SafetyState & state, Clock::time_point receipt_time);
   bool request_cancel(const UUID & goal_uuid);
   bool request_stop(const UUID & request_uuid);

@@ -1,0 +1,8 @@
+# One sparse Cartesian motion definition, base_link TCP poses.
+string motion_json
+---
+# MotionTaskResultCode numeric value.
+uint8 result_code
+string diagnostic_detail
+---
+string phase

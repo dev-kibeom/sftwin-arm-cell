@@ -1,5 +1,7 @@
 """Cell-owned static geometry shared by PhysX and the planning scene."""
 import math
+import numpy as np
+from tape_roll_cell.teaching_program import matrix_pose7
 
 ROOT = '/World/TapeRollCell'
 CARTRIDGE_BED_THICKNESS_M = .02
@@ -14,8 +16,15 @@ def static_fixtures(layout, roll, environment, conveyor):
     boxes = []
 
     def box(name, center, dimensions, angle=0.):
-        boxes.append(dict(id=ROOT+'/'+name, geometry=dict(type='box', dimensions_m=dimensions),
-            pose=dict(position_m=center, quaternion_xyzw=[0.,0.,math.sin(angle/2),math.cos(angle/2)])))
+        equipment='infeed' if name=='InfeedBelt' else 'outfeed' if name.startswith('Outfeed') else None
+        identity=ROOT+('/'+equipment.capitalize() if equipment else '')+'/'+name
+        local=dict(position_m=center,quaternion_xyzw=[0.,0.,math.sin(angle/2),math.cos(angle/2)])
+        transform=np.array(layout.get('equipment_transforms',{}).get(equipment,np.eye(4)))
+        rotation=np.eye(4);rotation[:3,3]=center
+        rotation[:3,:3]=[[math.cos(angle),-math.sin(angle),0.],[math.sin(angle),math.cos(angle),0.],[0.,0.,1.]]
+        world=matrix_pose7(transform @ rotation)
+        boxes.append(dict(id=identity,geometry=dict(type='box',dimensions_m=dimensions),
+            pose=dict(position_m=world[:3],quaternion_xyzw=world[3:]),local_pose=local,equipment=equipment))
 
     floor = float(environment['floor_z_m'])
     thickness = float(environment['floor_thickness_m'])

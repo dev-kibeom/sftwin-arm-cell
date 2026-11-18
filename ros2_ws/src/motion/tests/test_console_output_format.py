@@ -20,7 +20,7 @@ def test_formatters_share_session_elapsed_time_and_preserve_console_format(
     source = Path(__file__).resolve().parents[1] / "launch/console_output_format.py"
     formatter_a = _load_formatter(source, "console_output_format_a")
     formatter_b = _load_formatter(source, "console_output_format_b")
-    observed_ns = iter((1_000, 1_010, 1_100, 2_000))
+    observed_ns = iter((1_000_000_000, 3_000_000_000, 4_000_000_000, 5_000_000_000))
     monkeypatch.setattr("time.monotonic_ns", lambda: next(observed_ns))
     monkeypatch.setattr(launch_config, "_log_dir", str(tmp_path))
     monkeypatch.setattr(launch_config, "file_handlers", {})
@@ -30,14 +30,14 @@ def test_formatters_share_session_elapsed_time_and_preserve_console_format(
     output_a = formatter_a("{line}")
     output_b = formatter_b("{line}")
 
-    assert output_a.format(line="first", this=process_a) == "[0.000s] first"
-    assert output_b.format(line="second", this=process_b) == "[0.000s] second"
+    assert output_a.format(line="first", this=process_a) == "[3.000s] first"
+    assert output_b.format(line="second", this=process_b) == "[4.000s] second"
 
     saved = (tmp_path / "ros_output_nanoseconds.log").read_text()
     assert "launch output observation time" in saved.splitlines()[0]
     assert "ROS event time" in saved.splitlines()[0]
-    assert "[0.000000100s] [a] first" in saved
-    assert "[0.000001000s] [b] second" in saved
+    assert "[3.000000000s] [a] first" in saved
+    assert "[4.000000000s] [b] second" in saved
 
 
 def test_formatter_preserves_flattened_ompl_and_motion_lines(tmp_path, monkeypatch):

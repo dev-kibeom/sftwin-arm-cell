@@ -87,6 +87,10 @@ def _spin_material_supply_while_playing():
 
     if omni.timeline.get_timeline_interface().is_playing():
         _material_supply_adapter.spin_once()
+    else:
+        teaching_spin = getattr(_material_supply_adapter, 'spin_teaching_once', None)
+        if callable(teaching_spin):
+            teaching_spin()
 
 
 def _on_material_supply_timeline_event(event):

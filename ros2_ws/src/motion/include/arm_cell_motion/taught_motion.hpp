@@ -1,11 +1,18 @@
 #pragma once
 
 #include <map>
+#include <array>
 #include <string>
 #include <vector>
 
 namespace arm_cell_motion
 {
+struct CartesianTeachingWaypoint
+{
+  std::array<double, 7> pose;
+  bool linear{false};
+};
+
 struct TaughtMotion
 {
   std::vector<double> joint_positions;
@@ -14,6 +21,7 @@ struct TaughtMotion
   std::vector<std::vector<double>> joint_path{};
   double duration_s{0.0};
   bool plan_to_start{false};
+  std::vector<CartesianTeachingWaypoint> cartesian_waypoints{};
 };
 
 using TaughtMotions = std::map<std::string, TaughtMotion>;

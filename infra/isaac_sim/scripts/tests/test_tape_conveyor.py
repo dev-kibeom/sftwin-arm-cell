@@ -28,7 +28,7 @@ def controller():
     c.awakened=[];c._wake_roll=c.awakened.append
     c.awakened=[];c._wake_roll=c.awakened.append
     c.observations=dict(carrier=pose(.53),r0=pose(.53),r1=pose(.56))
-    c._measure=c.observations.get
+    c._measure=lambda path,frame='infeed':c.observations.get(path)
     return c
 
 

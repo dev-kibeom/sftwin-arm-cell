@@ -58,8 +58,21 @@ def resolve(reference, base):
     return path if path.is_absolute() else (Path(base) / path).resolve()
 
 
+def _reject_json_constant(value):
+    raise ValueError(f'Configuration JSON requires finite numbers: {value}')
+
+
 def read(path):
-    value = yaml.safe_load(Path(path).read_text())
+    text = Path(path).read_text()
+    # Exported snapshots may have any extension. Avoid YAML's expensive object
+    # construction for JSON, while preserving YAML owners using flow mappings.
+    if text.lstrip().startswith(('{', '[')):
+        try:
+            value = json.loads(text, parse_constant=_reject_json_constant)
+        except json.JSONDecodeError:
+            value = yaml.safe_load(text)
+    else:
+        value = yaml.safe_load(text)
     if not isinstance(value, dict):
         raise ValueError(f'Configuration must be a mapping: {path}')
     return value

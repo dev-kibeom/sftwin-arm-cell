@@ -27,7 +27,9 @@ def author_presentation(stage, layout, roll, root, view, environment):
         materials[name] = material
 
     def box(name, center, size, look):
-        cube = UsdGeom.Cube.Define(stage, path+'/'+name)
+        equipment='Infeed' if name.startswith('Infeed/') or name=='PickDatum' else 'Outfeed' if name.startswith('Outfeed/') or name=='PlaceDatum' else None
+        target=root+'/'+equipment+'/Presentation/'+name if equipment else path+'/'+name
+        cube = UsdGeom.Cube.Define(stage, target)
         cube.CreateSizeAttr(1.)
         cube.AddTranslateOp().Set(Gf.Vec3d(*center))
         cube.AddScaleOp().Set(Gf.Vec3f(*size))
