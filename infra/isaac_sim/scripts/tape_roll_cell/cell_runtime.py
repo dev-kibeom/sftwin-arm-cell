@@ -1,4 +1,4 @@
-"""Configured Tape Cell runtime: inventory, measured completion and contact validity."""
+"""Device-driven Tape sequences with independent collision Ground Truth evidence."""
 import logging
 import math
 import time
@@ -25,17 +25,6 @@ def physical_contact_observed(report):
                 or len(impulse) != 3 or any(not math.isfinite(value) or value != 0. for value in impulse)):
             return True
     return False
-
-
-def receiver_settled(position, velocity, angular_velocity, axis, expected):
-    vectors = (position, velocity, angular_velocity, axis, expected)
-    if any(len(v) != 3 or not all(math.isfinite(float(x)) for x in v) for v in vectors):
-        return False
-    norm = lambda v: math.sqrt(sum(float(x)**2 for x in v))
-    length = norm(axis)
-    return (norm([a-b for a,b in zip(position, expected)]) <= .01
-            and norm(velocity) <= .02 and norm(angular_velocity) <= .2 and length > 0
-            and math.acos(min(1., abs(axis[2])/length)) <= .05)
 
 
 def update_identity_attributes(stage, paths, supply):
@@ -69,18 +58,30 @@ class ConfiguredSupplyAdapter:
         self._last_feedback_at = 0.
         prefix = configuration['cell']['isaac']['robot_prim_path'].rstrip('/')+'/'
         self.robot_bodies = set()
-        for prim in self.stage.Traverse():
-            if str(prim.GetPath()).startswith(prefix) and prim.HasAPI(UsdPhysics.RigidBodyAPI):
-                self.robot_bodies.add(str(prim.GetPath()))
-                PhysxSchema.PhysxContactReportAPI.Apply(prim).CreateThresholdAttr(0.)
-        self.observer = PhysicalContactObserver()
+        self.observer = None
+        try:
+            for prim in self.stage.Traverse():
+                if str(prim.GetPath()).startswith(prefix) and prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                    self.robot_bodies.add(str(prim.GetPath()))
+                    PhysxSchema.PhysxContactReportAPI.Apply(prim).CreateThresholdAttr(0.)
+            self.observer = PhysicalContactObserver()
+        except Exception:
+            # Missing GT observation is unavailable evidence, never a Cell fault.
+            self.observer = None
         self.physics_sub = omni.physx.get_physx_interface().subscribe_physics_on_step_events(self._on_physics_step, True, 0)
+        self.observation_sub = None
+        try:
+            self.observation_sub = omni.physx.get_physx_interface().subscribe_physics_on_step_events(
+                self._on_physics_observation, False, 0)
+        except Exception:
+            self._contact_observer_call('close')
+            self.observer = None
         if sidecar is None:
             from tape_roll_cell.configured_supply_sidecar import ConfiguredSupplyClient
             try:
                 sidecar = ConfiguredSupplyClient.launch()
             except Exception:
-                self.observer.close()
+                self._contact_observer_call('close')
                 unsubscribe = getattr(self.physics_sub, 'unsubscribe', None)
                 if callable(unsubscribe): unsubscribe()
                 self.physics_sub = None
@@ -90,8 +91,8 @@ class ConfiguredSupplyAdapter:
         from isaac_runtime.cell_supply import register_supply_port
         self.conveyor=Conveyor(self.stage,configuration,context['roll'])
         self._cart_number=0;self._pending_cycle=None;self._mission_available=False;self._mission_available_at=0.
-        self._cycle_start_count=0;self.last_mission_status=''
-        self._completed_total=0
+        self._cycle_slot=None;self.last_mission_status=''
+        self._cycle_evidence=None;self._cycle_writer=None
         register_supply_port(self,dict(materials=[dict(id=self.supply.material_id,label='Tape Roll 17 mm')],
             count_label=f'Full cartridges ({self.supply._count} rolls each)',default_count=1),
             self.request_supply,self.supply_status)
@@ -103,17 +104,15 @@ class ConfiguredSupplyAdapter:
         if material_id!=self.supply.material_id:return dict(accepted=False,detail='Unsupported material')
         response=self.conveyor.enqueue_cartridges(count)
         if response['accepted']:
-            self._completed_total=0;self.last_mission_status=''
+            self.last_mission_status=''
         return response
 
     def supply_status(self):
-        total=self.conveyor.accepted*self.supply._count
         motion=self.configuration['cell'].get('motion_preparation',dict(ready=True,detail=''))
         detail=(f'Scene ready · Motion preparation unavailable: {motion["detail"]}' if not motion['ready'] else
-                f'{self.conveyor.detail} · Completed {self._completed_total}/{total} rolls')
+                self.conveyor.detail)
         return dict(available=not self._closed,state=self.conveyor.state,queued=self.conveyor.queued,
-            completed_cartridges=self.conveyor.finished,accepted_cartridges=self.conveyor.accepted,
-            completed_rolls=self._completed_total,remaining_rolls=total-self._completed_total,
+            accepted_cartridges=self.conveyor.accepted,
             motion_ready=motion['ready'],detail=self.failure or detail,
             mission=self.last_mission_status)
 
@@ -132,7 +131,11 @@ class ConfiguredSupplyAdapter:
                 time.monotonic()-self._mission_available_at<.5):
             import uuid
             self._pending_cycle=uuid.uuid4().hex
-            self._cycle_start_count=self.supply.snapshot()['completed']
+            self._cycle_slot=self.conveyor.current_ordinal
+            if self._cycle_evidence is not None:
+                self._contact_observer_call('clear')
+                self._cycle_evidence.start(self._pending_cycle, supply_epoch=self.supply.epoch,
+                    slot_id=f'slot_{self._cycle_slot}')
             self.sidecar.send(dict(op='start_cycle',request_id=self._pending_cycle,
                 target_id=self.supply.material_id,quantity=1))
 
@@ -166,78 +169,60 @@ class ConfiguredSupplyAdapter:
                 and reference.get('supply_epoch') == self.supply.epoch
                 and reference.get('reservation_id') == self.supply.reservation_id)
 
-    def _completion_observed(self, slot):
-        from pxr import UsdGeom, UsdPhysics
-        if not self._release_observed(slot):
-            return False
-        prim = self.stage.GetPrimAtPath(self.paths[slot])
-        if not prim:
-            return False
-        # Read solver state, rather than USD velocity defaults which need not
-        # be written back by every Isaac physics configuration.
-        from omni.isaac.dynamic_control import _dynamic_control as api
-        dc = api.acquire_dynamic_control_interface()
-        handle = dc.get_rigid_body(self.paths[slot])
-        if handle == api.INVALID_HANDLE:
-            return False
-        pose = dc.get_rigid_body_pose(handle)
-        velocity = dc.get_rigid_body_linear_velocity(handle)
-        angular = dc.get_rigid_body_angular_velocity(handle)
-        x,y,z,w = pose.r.x,pose.r.y,pose.r.z,pose.r.w
-        axis = (2*(x*z+w*y), 2*(y*z-w*x), 1-2*(x*x+y*y))
-        expected = self.configuration['cell']['tape_roll']['slots'][slot]['receiver_center_m']
-        from tape_roll_cell.teaching_program import equipment_transform
-        import numpy as np
-        transform=equipment_transform(self.configuration,'outfeed')
-        inverse=np.linalg.inv(transform)
-        local_position=(inverse @ [pose.p.x,pose.p.y,pose.p.z,1.])[:3]
-        local_expected=(inverse @ [*expected,1.])[:3]
-        return receiver_settled(local_position, inverse[:3,:3] @ [velocity.x,velocity.y,velocity.z],
-            inverse[:3,:3] @ [angular.x,angular.y,angular.z], inverse[:3,:3] @ axis, local_expected)
-
-    def _contact_failure(self, reason, message):
-        previous = self.failure
-        self.failure = reason
-        if not previous:
-            try:
-                LOGGER.error(message)
-            except Exception:
-                # Logging cannot suppress the Cell's fail-closed observation.
-                pass
+    def _contact_observer_call(self, operation):
+        try:
+            if self.observer is not None:
+                getattr(self.observer, operation)()
+        except Exception:
+            self.observer = None
 
     def _on_physics_step(self, dt):
         if not hasattr(self,'conveyor'):return
         if not self.timeline.is_playing():
-            self.observer.clear()
+            self._contact_observer_call('clear')
             return
         self.conveyor.on_physics_step(dt)
-        self.observer.advance()
-        if self.observer.snapshot is None:
-            self._contact_failure('ambiguous_contact_step', 'Tape Cell contact observation crossed physics steps')
+
+    def _on_physics_observation(self, dt):
+        if not self.timeline.is_playing():
+            self._contact_observer_call('clear')
             return
-        manager = getattr(self.tool_session, 'grasp_manager', None)
-        binding = getattr(manager, 'binding', None)
-        fingers = set(getattr(binding, 'finger_bodies', ()))
-        selected = self.paths[self.supply._selected] if self.supply._selected is not None else None
-        root = self.context['root_path']+'/'
-        for contact in self.observer.snapshot:
-            if contact['lost'] or not physical_contact_observed(contact):
-                continue
-            a, b = contact['actor0'], contact['actor1']
-            robot = a if a in self.robot_bodies else b if b in self.robot_bodies else None
-            other = b if robot == a else a
-            if robot is None:
-                continue
-            if other in self.paths:
-                if other != selected or robot not in fingers:
-                    self._contact_failure('unexpected_robot_material_contact',
-                        'Tape Cell stopped: robot contacted an unselected roll or contacted a roll outside the fingers')
-            elif (other == self.context['root_path']+'/RobotPedestal'
-                    and robot == self.configuration['cell']['isaac']['robot_prim_path']+'/'+
+        self._observe_cycle_contacts()
+
+    def _observe_cycle_contacts(self, physics_step=True):
+        # PhysX identities and contact reports belong only to verification.
+        # Even an unavailable observer cannot invalidate the device-driven Cell.
+        self._contact_observer_call('advance')
+        if self._cycle_evidence is None or self._cycle_evidence.active is None:
+            return
+        try:
+            snapshot = self.observer.snapshot if self.observer is not None else None
+            if snapshot is None:
+                self._cycle_evidence.observe(None)
+                return
+            manager = getattr(self.tool_session, 'grasp_manager', None)
+            fingers = set(getattr(getattr(manager, 'binding', None), 'finger_bodies', ()))
+            slot = getattr(self, '_cycle_slot', self.supply._selected)
+            selected = self.paths[slot] if slot is not None and 0 <= slot < len(self.paths) else None
+            collisions = []
+            for contact in snapshot:
+                if contact['lost'] or not physical_contact_observed(contact):
+                    continue
+                a, b = contact['actor0'], contact['actor1']
+                robot = a if a in self.robot_bodies else b if b in self.robot_bodies else None
+                other = b if robot == a else a
+                if robot is None:
+                    continue
+                if other == selected and robot in fingers:
+                    continue
+                if (other == self.context['root_path']+'/RobotPedestal' and
+                    robot == self.configuration['cell']['isaac']['robot_prim_path']+'/'+
                         self.configuration['model_configuration']['isaac']['articulation_base']):
-                continue
-            elif other.startswith(root):
-                self._contact_failure('robot_fixture_collision', 'Tape Cell stopped: robot contacted a cell fixture')
+                    continue
+                collisions.append(contact)
+            self._cycle_evidence.observe(collisions, physics_step=physics_step)
+        except Exception:
+            self._cycle_evidence.observe(None)
 
     def spin_once(self):
         if self._closed:
@@ -259,11 +244,14 @@ class ConfiguredSupplyAdapter:
                 self._mission_available=packet.get('ready') is True;self._mission_available_at=time.monotonic()
             if packet.get('op')=='mission_result' and packet.get('request_id')==self._pending_cycle:
                 self._pending_cycle=None
-                count=self.supply.snapshot()['completed']
-                if packet.get('success') is True and count==self._cycle_start_count+1:
-                    self.conveyor.release_to_outfeed(self.paths[count-1])
+                succeeded=packet.get('success') is True
+                if self._cycle_evidence is not None:
+                    self._observe_cycle_contacts(physics_step=False)
+                    self._cycle_evidence.finish(succeeded)
+                if succeeded:
+                    self.conveyor.release_to_outfeed(self.paths[self._cycle_slot])
                 elif not self.failure:
-                    self.failure='PnP failed: '+str(packet.get('detail','Completion count mismatch'))
+                    self.failure='Teaching cycle failed: '+str(packet.get('detail','Unknown failure'))
             if packet.get('op') == 'mission_status':
                 self.last_mission_status = packet.get('text', '')
             if packet.get('op') != 'request':
@@ -273,71 +261,22 @@ class ConfiguredSupplyAdapter:
                     result = self.supply._response(False, 'expired_request')
                     self.sidecar.send(dict(op='response', correlation_id=packet.get('correlation_id'), response=result))
                     continue
-                before=self.supply.snapshot()['completed']
-                result = self.supply.handle(packet['request'], valid=self.valid(),
-                    completion_observed=self._completion_observed)
-                self._completed_total+=self.supply.snapshot()['completed']-before
+                request=packet['request']
+                release_valid=(request.get('command') != 1 or self._release_observed(self.supply._selected))
+                result = self.supply.handle(request, valid=self.valid() and release_valid)
                 update_identity_attributes(self.stage, self.paths, self.supply)
             except Exception as error:
                 self.failure = f'configured_supply_error: {error}'
                 result = self.supply._response(False, self.failure)
-            self.sidecar.send(dict(op='state', state=self.supply.state(valid=self.valid(), detail=self.failure), scene=self.scene_packet()))
+            self.sidecar.send(dict(op='state', state=self.supply.state(valid=self.valid(), detail=self.failure)))
             self.sidecar.send(dict(op='response', correlation_id=packet.get('correlation_id'), response=result))
         now = time.monotonic()
         if now-self._last_state_at >= .1:
             self._last_state_at = now
-            self.sidecar.send(dict(op='state', state=self.supply.state(valid=self.valid(), detail=self.failure), scene=self.scene_packet()))
+            self.sidecar.send(dict(op='state', state=self.supply.state(valid=self.valid(), detail=self.failure)))
         self.sidecar.flush_outgoing()
 
         self.teaching.tick()
-
-    def scene_packet(self):
-        from pxr import Gf, UsdGeom, UsdPhysics
-        from dataclasses import asdict
-        cache = UsdGeom.XformCache()
-        rolls = []
-        for number,paths in self.conveyor.history:
-            for i,path in enumerate(paths):
-                prim=self.stage.GetPrimAtPath(path)
-                if not prim:continue
-                matrix=cache.GetLocalToWorldTransform(prim);quaternion=matrix.ExtractRotationQuat()
-                active=number==self._cart_number and bool(self.conveyor.active_roll_paths)
-                slot_id=f'slot_{i}' if active else f'cartridge_{number}_slot_{i}'
-                identity=f'{self.supply.supply_id}_{slot_id}'
-                rolls.append(dict(id=identity,slot_id=slot_id,
-                    support_prefix=f'{self.conveyor.root}/Carrier{number:04d}',position=list(matrix.ExtractTranslation()),
-                    orientation_xyzw=[*quaternion.GetImaginary(),quaternion.GetReal()]))
-        manager = getattr(self.tool_session, 'grasp_manager', None)
-        observation = manager.holding_observation() if manager is not None else None
-        state = self.supply.state(valid=self.valid())
-        # Fixed fixtures retain their Cell-owned canonical geometry, also used
-        # by the startup scene loader. USD float scales must not overwrite it
-        # during the loader's readback. Only moving pallet boxes are measured.
-        fixtures = {item['id']: item for item in self.configuration['cell']['tape_roll']['static_boxes']}
-        static = []
-        for prim in self.stage.Traverse():
-            if (str(prim.GetPath()).startswith(self.context['root_path']+'/')
-                    and prim.IsA(UsdGeom.Cube) and prim.HasAPI(UsdPhysics.CollisionAPI)):
-                fixed = fixtures.get(str(prim.GetPath()))
-                if fixed is not None:
-                    static.append(dict(id=fixed['id'],position=list(fixed['pose']['position_m']),
-                        orientation_xyzw=list(fixed['pose']['quaternion_xyzw']),
-                        dimensions=list(fixed['geometry']['dimensions_m'])))
-                    continue
-                transform = cache.GetLocalToWorldTransform(prim)
-                scale = prim.GetAttribute('xformOp:scale').Get()
-                quaternion = Gf.Transform(transform).GetRotation().GetQuat()
-                static.append(dict(id=str(prim.GetPath()), position=list(transform.ExtractTranslation()),
-                    orientation_xyzw=[*quaternion.GetImaginary(),quaternion.GetReal()],dimensions=list(scale)))
-        return dict(frame_id=self.configuration['robot']['motion'].get('world_frame', 'world'), rolls=rolls,
-            material=asdict(self.context['roll']), selected_slot_id=state['selected_slot_id'],
-            reservation_id=state['reservation_id'], supply_epoch=self.supply.epoch,
-            holding_state=observation.state.value if observation is not None and observation.fresh() else 'unknown',
-            accepted_relation=getattr(manager, 'accepted_relation', None),
-            accepted_execution_id=getattr(manager, 'accepted_execution_id', None),
-            finger_links=list(self.configuration['tool']['runtime']['finger_tip_links']), static_boxes=static,
-            mount_links=self.configuration['model_configuration']['mount_collision_links'],
-            mount_object=self.context['root_path']+'/RobotPedestal')
 
     def reset_generated_materials(self, attachment_reset):
         if not self.timeline.is_stopped() or not attachment_reset():
@@ -346,18 +285,37 @@ class ConfiguredSupplyAdapter:
             self.teaching.on_stop()
         self.conveyor.resetstopped()
         self.paths=[];self._pending_cycle=None;self._mission_available=False
-        self._completed_total=0;self.last_mission_status=''
+        self.last_mission_status=''
+        if self._cycle_evidence is not None:
+            self._cycle_evidence.finish(False)
         self.sidecar.send(dict(op='cancel_cycle'))
         self.supply.reset();self.supply.unload()
         self.failure = ''
-        self.observer.clear()
+        self._contact_observer_call('clear')
         update_identity_attributes(self.stage, self.paths, self.supply)
-        self.sidecar.send(dict(op='state', state=self.supply.state(valid=False, detail='timeline_stopped'),scene=self.scene_packet()))
+        self.sidecar.send(dict(op='state', state=self.supply.state(valid=False, detail='timeline_stopped')))
         self.sidecar.flush_outgoing()
         return True
 
     def set_live_test_session_id(self, session_id, root=None):
+        if self._cycle_evidence is not None:
+            self._cycle_evidence.finish(False)
+        if self._cycle_writer is not None:
+            try:
+                self._cycle_writer.close()
+            except Exception:
+                pass
+        self._cycle_evidence=self._cycle_writer=None
         self.live_test_session_id = session_id
+        if session_id is not None and root is not None:
+            from pathlib import Path
+            from gripper_runtime.capture_diagnostics import BoundedCaptureDiagnosticWriter
+            from tape_roll_cell.cycle_evidence import CycleEvidence
+            try:
+                self._cycle_writer=BoundedCaptureDiagnosticWriter(Path(root)/'simulation'/'tape_cycles')
+                self._cycle_evidence=CycleEvidence(self._cycle_writer.submit, session_id)
+            except Exception:
+                self._cycle_writer=self._cycle_evidence=None
 
     def close(self):
         if self._closed:
@@ -367,7 +325,15 @@ class ConfiguredSupplyAdapter:
             unsubscribe = getattr(self.physics_sub, 'unsubscribe', None)
             if callable(unsubscribe): unsubscribe()
             self.physics_sub = None
-        self.observer.close()
+        if self.observation_sub is not None:
+            try:
+                unsubscribe = getattr(self.observation_sub, 'unsubscribe', None)
+                if callable(unsubscribe): unsubscribe()
+            except Exception:
+                pass
+            self.observation_sub = None
+        self.set_live_test_session_id(None)
+        self._contact_observer_call('close')
         self.teaching.close()
         from isaac_runtime.cell_supply import clear_supply_port
         clear_supply_port(self)

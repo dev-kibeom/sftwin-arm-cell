@@ -15,7 +15,7 @@ runtime:
     combination:
     - physics
     - physical
-    description: 세 핑거의 실제 접촉·팽창으로 보유를 확인하고 마찰로 유지합니다. 수축과 접촉 소실로 해제를 확인합니다.
+    description: 주축 위치의 목표 미도달·지속 정지로 보유를 추정하고 수축 위치로 해제를 확인합니다. 물리 마찰로 자재를 유지합니다.
   capabilities:
   - joint_position
   - actuator_observation
@@ -35,7 +35,6 @@ runtime:
   physical:
     preload_m: 0.001
     tolerance_m: 0.0002
-    contact_threshold_n: 0.2
     dwell_s: 0.15
 contact_links:
   payload_touch_links: *id001

@@ -16,15 +16,15 @@ def test_stale_token_failure_and_repeated_completion_preserve_exact_quantity():
     token = {k:reserved[k] for k in ('supply_epoch','reservation_id','slot_id')}
     complete = request(1)
     complete.update(token, material_placed=True)
-    assert not supply.handle(complete, valid=True, completion_observed=lambda slot:False)['success']
+    assert not supply.handle(dict(complete,material_placed=False), valid=True)['success']
     assert supply.snapshot()['completed'] == 0
     assert supply.handle(complete, valid=True, completion_observed=lambda slot:True)['success']
     assert supply.handle(complete, valid=True, completion_observed=lambda slot:True)['success']
-    assert supply.snapshot()['completed'] == 1
+    assert supply.snapshot()['completed'] == 0
     second = supply.handle(dict(request(0), supply_epoch=supply.epoch), valid=True, completion_observed=lambda slot:True)
     assert second['slot_id'] == 'slot_1'
     assert not supply.handle(complete, valid=True, completion_observed=lambda slot:True)['success']
-    assert supply.snapshot()['completed'] == 1
+    assert supply.snapshot()['completed'] == 0
     old_epoch = supply.epoch
     supply.reset()
     assert supply.epoch != old_epoch
@@ -42,15 +42,15 @@ def test_abandon_requires_exact_token_and_never_consumes():
     assert supply.handle(dict(request(0), supply_epoch=supply.epoch), valid=False, completion_observed=lambda slot:True)['success'] is False
 
 
-def test_completion_requires_settled_real_pose_and_finite_measurements():
-    from tape_roll_cell.cell_runtime import receiver_settled
-    target = (.5,.3,.6)
-    assert receiver_settled(target, (0,0,0), (0,0,0), (0,0,1), target)
-    assert not receiver_settled((.52,.3,.6), (0,0,0), (0,0,0), (0,0,1), target)
-    assert not receiver_settled(target, (.03,0,0), (0,0,0), (0,0,1), target)
-    assert not receiver_settled(target, (0,0,0), (.3,0,0), (0,0,1), target)
-    assert not receiver_settled(target, (0,0,0), (0,0,0), (1,0,0), target)
-    assert not receiver_settled(target, (float('nan'),0,0), (0,0,0), (0,0,1), target)
+def test_cycle_completion_does_not_query_material_truth_or_count_transferred_parts():
+    supply = ConfiguredTapeSupply(1)
+    def forbidden(*args): raise AssertionError('material GT used for completion')
+    reserved = supply.handle(dict(request(0), supply_epoch=supply.epoch), valid=True)
+    complete=dict(request(1), **{k:reserved[k] for k in ('supply_epoch','reservation_id','slot_id')})
+    complete['material_placed']=True
+    assert supply.handle(complete, valid=True, completion_observed=forbidden)['success']
+    assert supply.snapshot()['exhausted']
+    assert supply.state(valid=True)['completed_count']==0
 
 
 def test_socket_relay_preserves_request_correlation_and_state():
@@ -147,7 +147,7 @@ def test_predictive_contact_reports_are_distinct_from_physical_contact():
         report(.001)['points'][0], report(-.00001)['points'][0]]})
 
 
-def test_contact_failure_survives_log_sink_failure(monkeypatch):
+def test_collision_diagnostics_never_invalidate_supply_or_abort_control():
     from types import SimpleNamespace as S
     from tape_roll_cell.cell_runtime import ConfiguredSupplyAdapter
     adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
@@ -157,8 +157,62 @@ def test_contact_failure_survives_log_sink_failure(monkeypatch):
     adapter.failure='';adapter.tool_session=S(grasp_manager=None)
     adapter.paths=['/roll'];adapter.supply=S(_selected=None)
     adapter.context={'root_path':'/cell'};adapter.robot_bodies={'/robot'}
-    def broken(*args,**kwargs):raise BrokenPipeError('closed sink')
-    monkeypatch.setattr('builtins.print',broken)
-    monkeypatch.setattr('logging.Logger.error',broken)
-    adapter._on_physics_step(.01)
-    assert adapter.failure=='unexpected_robot_material_contact'
+    from tape_roll_cell.cycle_evidence import CycleEvidence
+    records=[];adapter._cycle_evidence=CycleEvidence(records.append)
+    adapter._cycle_evidence.start('cycle')
+    adapter._observe_cycle_contacts()
+    assert adapter.failure==''
+    adapter._cycle_evidence.finish(True)
+    assert records[-1]['verification']=='FAIL'
+    assert records[-1]['sequence_completed'] is True
+
+
+def test_contact_observer_is_drained_without_an_active_cycle():
+    from types import SimpleNamespace as S
+    from tape_roll_cell.cell_runtime import ConfiguredSupplyAdapter
+    adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
+    adapter.conveyor=S(on_physics_step=lambda dt:None)
+    adapter.timeline=S(is_playing=lambda:True)
+    drained=[];adapter.observer=S(advance=lambda:drained.append(True),snapshot=[])
+    adapter._cycle_evidence=None
+    adapter._observe_cycle_contacts()
+    assert drained
+
+
+def test_missing_contact_observer_marks_verification_unavailable_without_stopping():
+    from types import SimpleNamespace as S
+    from tape_roll_cell.cell_runtime import ConfiguredSupplyAdapter
+    from tape_roll_cell.cycle_evidence import CycleEvidence
+    adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
+    adapter.conveyor=S(on_physics_step=lambda dt:None)
+    adapter.timeline=S(is_playing=lambda:True)
+    adapter.observer=None;adapter.failure=''
+    records=[];adapter._cycle_evidence=CycleEvidence(records.append)
+    adapter._cycle_evidence.start('cycle')
+    adapter._observe_cycle_contacts()
+    adapter._cycle_evidence.finish(True)
+    assert records[-1]['verification']=='UNAVAILABLE'
+    assert adapter.failure==''
+
+
+def test_pending_terminal_contact_is_included_before_cycle_verdict():
+    from types import SimpleNamespace as S
+    from tape_roll_cell.cell_runtime import ConfiguredSupplyAdapter
+    from tape_roll_cell.cycle_evidence import CycleEvidence
+    adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
+    records=[];adapter._cycle_evidence=CycleEvidence(records.append)
+    adapter._cycle_evidence.start('cycle')
+    adapter._cycle_evidence.observe([])
+    adapter._pending_cycle='cycle';adapter._cycle_slot=0
+    adapter.paths=['/roll'];adapter.supply=S(_selected=None)
+    adapter.robot_bodies={'/robot'};adapter.tool_session=None
+    adapter.context={'root_path':'/cell'};adapter.failure=''
+    adapter._last_state_at=float('inf');adapter.teaching=S(tick=lambda:None)
+    adapter.conveyor=S(release_to_outfeed=lambda path:None)
+    adapter.observer=S(advance=lambda:None,snapshot=[dict(actor0='/robot',actor1='/fixture',lost=False,points=[])])
+    adapter.sidecar=S(poll_messages=lambda:[dict(op='mission_result',request_id='cycle',success=True)],
+                      flush_outgoing=lambda:None)
+    adapter._poll_sidecar()
+    assert adapter.failure==''
+    assert records[-1]['verification']=='FAIL'
+    assert records[-1]['observed_steps']==1

@@ -56,3 +56,11 @@ Demo Complete는 적용되는 live-current Profile을 기준으로 하나 이상
 - 운영자 관측 Use Case
 - 이상 대응 Use Case
 - 시뮬레이션 실험 Use Case
+
+## Tape Cell 티칭 사이클
+
+Tape Cell의 작업 완료는 충돌 없는 티칭 시퀀스 1사이클이다. 장치 피드백에 근거한 런타임 종료와
+독립된 진단·GT 검증 결과를 함께 확인한다. 물리 자재 이송 완료 수량은 인수 지표로 집계하지 않는다.
+GT 자재 위치·접촉 상대·정확한 파지 변환이 공정에 유입되지 않고, 충돌·낙하 등 물리 결과가 보존되며,
+관측이 불완전한 사이클은 PASS가 되지 않아야 한다. 구체 조건은
+[Tape Cell FDS](../design/components/simulation/fds-tape-cell-supply.md)의 VR을 따른다.

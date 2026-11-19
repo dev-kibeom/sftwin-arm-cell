@@ -14,4 +14,5 @@ string supply_epoch
 string slot_id
 string reservation_id
 bool exhausted
+# Reserved compatibility field; always zero. Not a physical material count.
 uint32 completed_count

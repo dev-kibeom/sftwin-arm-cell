@@ -1,4 +1,4 @@
-"""Cell-owned cartridge inventory; failed picks never consume a slot."""
+"""Cell-owned nominal slot progress; failed sequences never retire a slot."""
 
 
 class TapeSupply:
@@ -21,7 +21,7 @@ class TapeSupply:
         if slot != self._selected or slot is None or not self._occupied[slot]:
             raise ValueError('Completion must identify the active occupied slot')
         if not transferred or not released:
-            raise ValueError('Completion requires observed physical transfer and release')
+            raise ValueError('Slot retirement requires a successful sequence and device release')
         self._occupied[slot] = False
         self._selected = None
 
@@ -29,12 +29,13 @@ class TapeSupply:
         self._selected = None
 
     def snapshot(self):
-        return dict(occupied=list(self._occupied), completed=self._occupied.count(False),
+        # Legacy count fields remain zero; slot progress is not a material count.
+        return dict(occupied=list(self._occupied), completed=0,
                     selected=self._selected, exhausted=not any(self._occupied))
 
 
 class ConfiguredTapeSupply(TapeSupply):
-    """Session-fenced reservations; physical completion is supplied by the Cell."""
+    """Session-fenced reservations; successful sequences retire nominal slots."""
     def __init__(self, count, supply_id='tape_cartridge', material_id='TapeRoll17'):
         self.supply_id, self.material_id = supply_id, material_id
         super().__init__(count)
@@ -65,7 +66,8 @@ class ConfiguredTapeSupply(TapeSupply):
                     reservation_id=self.reservation_id, exhausted=snapshot['exhausted'],
                     completed_count=snapshot['completed'])
 
-    def handle(self, request, *, valid, completion_observed):
+    def handle(self, request, *, valid, completion_observed=None):
+        # The retired GT callback is never evaluated, including by older callers.
         import uuid
         if request.get('supply_id') != self.supply_id:
             return self._response(False, 'unknown_supply')
@@ -97,8 +99,8 @@ class ConfiguredTapeSupply(TapeSupply):
             return self._response(True, 'abandoned')
         if command != 1:
             return self._response(False, 'unknown_command')
-        if not valid or request.get('material_placed') is not True or not completion_observed(self._selected):
-            return self._response(False, 'physical_completion_not_confirmed')
+        if not valid or request.get('material_placed') is not True:
+            return self._response(False, 'cycle_release_not_confirmed')
         self.complete(self._selected, transferred=True, released=True)
         self._completed_token = token
         self.reservation_id = ''

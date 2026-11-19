@@ -17,59 +17,55 @@ class Strategy:
 def tool():
     values = [.0192]*3
     writes = []
-    radial = RadialPhysicalTool(Strategy(), lambda q: writes.append(q), lambda: values,
+    radial = RadialPhysicalTool(Strategy(), lambda q: writes.append(q), lambda: values[0],
         lower=0., upper=.0192, speed_m_s=.01, preload_m=.001,
-        tolerance_m=.0002, contact_threshold_n=.2, dwell_s=.1)
+        tolerance_m=.0002, dwell_s=.1)
     return radial, values, writes
 
 
-def test_reached_target_and_unrelated_contact_do_not_mean_held():
-    radial, values, writes = tool()
+def test_obstruction_is_inferred_from_primary_position_without_contact_truth():
+    radial, values, _ = tool()
     radial.command(ToolIntent.GRASP)
     values[:] = [.009]*3
-    for _ in range(150):
-        radial.update(.01, [0,0,0])
-    assert radial.holding_observation().state.value == 'unknown'
-    for _ in range(150):
-        radial.update(.01, [1,1,1])
+    radial.read_contacts=lambda dt: (_ for _ in ()).throw(AssertionError('contact truth queried'))
+    for _ in range(150): radial.update(.01)
     assert radial.holding_observation().state.value == 'held'
-    radial.update(.01, [0,1,1])
+    # Reaching the commanded endpoint is an empty close, not possession.
+    values[:] = [.008]*3
+    for _ in range(150): radial.update(.01)
     assert radial.holding_observation().state.value == 'unknown'
 
 
-def test_release_needs_measured_contraction_and_no_contact():
-    radial, values, writes = tool()
+def test_release_uses_measured_contraction_without_contact_truth():
+    radial, values, _ = tool()
     radial.command(ToolIntent.RELEASE)
     values[:] = [.009]*3
-    for _ in range(150): radial.update(.01, [0,0,0])
+    for _ in range(150): radial.update(.01)
     assert radial.holding_observation().state.value == 'unknown'
     values[:] = [.0192]*3
-    for _ in range(150): radial.update(.01, [1,1,1])
-    assert radial.holding_observation().state.value == 'unknown'
-    for _ in range(150): radial.update(.01, [0,0,0])
+    for _ in range(150): radial.update(.01)
     assert radial.holding_observation().state.value == 'released'
 
 
 def test_stop_holds_measured_position_without_releasing_or_teleporting():
     radial, values, writes = tool()
     radial.command(ToolIntent.GRASP)
-    radial.update(.01, [0,0,0])
+    radial.update(.01)
     values[:] = [.012]*3
     radial.command(ToolIntent.STOP)
     assert writes[-1] == pytest.approx(.012)
-    radial.update(.01, [0,0,0])
+    radial.update(.01)
     assert writes[-1] == pytest.approx(.012)
     assert radial.holding_observation().state.value == 'unknown'
 
 
-def test_missing_or_nonfinite_contacts_cannot_reuse_held_evidence():
+def test_loss_of_position_stability_invalidates_holding():
     radial, values, _ = tool()
     radial.command(ToolIntent.GRASP)
     values[:] = [.009]*3
-    for _ in range(150): radial.update(.01, [1,1,1])
-    radial.update(.01, None)
-    assert radial.holding_observation().state.value == 'unknown'
-    radial.update(.01, [float('nan')]*3)
+    for _ in range(150): radial.update(.01)
+    values[:] = [.010]*3
+    radial.update(.01)
     assert radial.holding_observation().state.value == 'unknown'
 
 
@@ -80,26 +76,13 @@ def test_stop_near_joint_limit_uses_a_legal_hold_target():
     assert writes[-1] == .0192
 
 
-def test_operational_update_consumes_injected_fresh_contacts_without_width_api():
-    radial, values, _ = tool()
-    samples = iter(([1.,1.,1.], None))
-    radial.read_contacts = lambda dt: next(samples)
-    radial.command(ToolIntent.GRASP)
-    values[:] = [.009]*3
-    radial.target = .008
-    radial.update(.2)
-    assert radial.holding_observation().state.value == 'held'
-    radial.update(.01)
-    assert radial.holding_observation().state.value == 'unknown'
-    assert not hasattr(radial, 'get_width')
-
 
 def test_stopped_actuator_stays_suspended_until_new_binding_on_play():
     radial, _, _ = tool()
     radial.reset_stopped_state()
     radial.measure = lambda: (_ for _ in ()).throw(RuntimeError('old DC handle'))
     radial.update(.01)
-    assert radial.observation()['positions_m'] is None
+    assert radial.observation()['primary_position_m'] is None
     assert radial.holding_observation().state.value == 'unknown'
     with pytest.raises(ValueError):
         radial.command(ToolIntent.GRASP)
@@ -117,3 +100,14 @@ def test_long_contact_links_follow_fixed_extensions_in_measured_joint_order():
     with pytest.raises(ValueError):contact_links_by_joint(urdf,['j1','j2','j3'],['tip1','tip2','base'])
     urdf.find("joint[@name='ext3']").set('type','revolute')
     with pytest.raises(ValueError):contact_links_by_joint(urdf,['j1','j2','j3'],['tip1','tip2','tip3'])
+
+
+def test_slow_continuous_motion_is_not_stable_possession():
+    radial, values, _ = tool()
+    radial.command(ToolIntent.GRASP)
+    radial.target=.008
+    values[:] = [.009]*3
+    for _ in range(100):
+        values[0]+=.0001
+        radial.update(.01)
+    assert radial.holding_observation().state.value=='unknown'

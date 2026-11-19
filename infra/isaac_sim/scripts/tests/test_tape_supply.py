@@ -26,7 +26,7 @@ def test_exhaustion_and_stop_restore_initial_supply():
         assert supply.select() == slot
         supply.complete(slot, transferred=True, released=True)
     assert supply.select() is None
-    assert supply.snapshot()['completed'] == 3
+    assert supply.snapshot()['completed'] == 0
     assert supply.snapshot()['exhausted']
     supply.reset()
     assert supply.snapshot() == {'occupied': [True]*3, 'completed': 0, 'selected': None, 'exhausted': False}

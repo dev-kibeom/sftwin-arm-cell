@@ -151,3 +151,12 @@ PICK/PLACE Trajectory 완료는 정확도·안정화 보증이 아니다. 관측
 - [Vision DetectTarget FDS](../components/vision/fds-detect-target.md)
 - [Safety Supervision FDS](../components/safety/fds-supervision.md)
 - [Orchestration Mission FDS](../components/orchestration/fds-mission-cycle.md)
+
+## Tape 사이클 Ground Truth 검증
+
+Simulation은 세션 diagnostic root의 `simulation/tape_cycles/`에 사이클별 `tape_cycle_verification`을
+기록한다. session_id, cycle_id, supply_epoch, slot_id, 로컬 monotonic 시작·종료와 관측 step coverage로
+범위를 연결한다. sequence_completed와 verification(PASS/FAIL/UNAVAILABLE)은 런타임 종료와
+독립 검증을 구별한다. 충돌 상세는 유계로 기록하고 상세 잘림·관측 누락을 coverage에 보존한다.
+작업 완료 의미는 [Tape Cell FDS](../components/simulation/fds-tape-cell-supply.md)가 소유한다.
+이 기록의 생성·저장·판정 결과는 공정 제어 입력이 아니다. 기록 부재나 저장 실패는 PASS가 아니다.

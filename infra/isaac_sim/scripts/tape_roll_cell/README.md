@@ -2,15 +2,25 @@
 
 Launcher에서 M0609, Hand-E C10 또는 C10 + 100 mm 핑거, Tape Handling Cell, Physical Real을 선택한다. Isaac 시작 → ROS 2 시작 후 공통 Simulation UI Hub의 **Supply**에 가득 찬 카트리지 개수를 입력한다. 한 카트리지는 17 mm 롤 15개를 30 mm 피치로 보관한다.
 
-Cell 설정은 `ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml`이다. 설비·슬롯·컨베이어·티칭은 Cell, 중공 형상·질량·마찰은 Material, 핑거 구동·접촉 판정은 Tool, 관절 제한·HOME은 Robot이 소유한다. 공통 UI는 Cell의 Supply capability를 사용하며 CNC의 기존 Gateway 공급 경로도 유지한다.
+Cell 설정은 `ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml`이다. 설비·슬롯·컨베이어·티칭은 Cell, 중공 형상·질량·마찰은 Material, 핑거 구동·장치 보유 추정은 Tool, 관절 제한·HOME은 Robot이 소유한다. 공통 UI는 Cell의 Supply capability를 사용하며 CNC의 기존 Gateway 공급 경로도 유지한다.
 
-Supply는 동적 카트리지와 자유 동적 롤을 인피드 위에 생성한다. 유한 힘의 프리즘 구동이 체인 구동 카트리지를 이동시키며 롤은 V자 받침·포켓과의 접촉·마찰로 운반된다. 각 슬롯을 같은 고정 Pick 기준점에 정렬하고 실제 위치·축·속도를 확인한 뒤 PnP를 요청한다. 별도 Vision은 없다.
+Supply는 동적 카트리지와 자유 동적 롤을 인피드 위에 생성한다. 유한 힘의 프리즘 구동이 체인 구동 카트리지를 이동시키며 롤은 V자 받침·포켓과의 접촉·마찰로 운반된다. 각 슬롯을 같은 고정 Pick 기준점으로 인덱싱하고 구동축 위치·정지 피드백을 확인한 뒤 티칭 사이클을 요청한다. 롤의 실제 위치·축·속도는 공정 입력이 아니다. 별도 Vision은 없다.
 
-Configured-source Mission → Cell 예약 → `/task_execution/execute_configured_grasp` → 공통 GraspCycle BT → 운영 MotionCore·Physical Tool Runtime → Isaac ROS Backend를 사용한다. 수평 Approach·Insert·Grasp·Lift·Extract 후 운반 통로에서 수직으로 회전하여 고정 아웃피드 수령점에 Place·Release·Retreat한다. 티칭은 인피드·아웃피드 또는 base 기준의 희소 6D TCP 포인트다. 각 포인트에 관절/직선 이동을 지정하며 모든 슬롯은 공통 순서를 사용한다. 실제 조립 URDF를 사용하는 운영 Motion이 실행할 때 충돌·관절·속도·가속도와 도달 가능성을 검사한다. 시작 시 슬롯별 IK·조밀한 관절 경로를 생성하지 않는다.
+Configured-source Mission → Cell 예약 → `/task_execution/execute_configured_grasp` → 공통 GraspCycle BT → 운영 MotionCore·Physical Tool Runtime → Isaac ROS Backend를 사용한다. 수평 Approach·Insert·Grasp·Lift·Extract 후 운반 통로에서 수직으로 회전하여 고정 아웃피드 수령점에 Place·Release·Retreat한다. 티칭은 인피드·아웃피드 또는 base 기준의 희소 6D TCP 포인트다. 각 포인트에 관절/직선 이동을 지정하며 모든 슬롯은 공통 순서를 사용한다. 실제 조립 URDF를 사용하는 운영 Motion이 관절·속도·가속도와 도달 가능성을 검사한다. 기본 MoveJ·MoveL은 환경 충돌 검사와 자동 우회를 하지 않는다. 물리 충돌 자체는 유지한다. 시작 시 슬롯별 IK·조밀한 관절 경로를 생성하지 않는다.
 
-실제 Release·수령 위치·축·정착 속도와 예약 token·epoch가 모두 맞아야 완료를 한 번 반영한다. Mission terminal 성공과 수량을 확인한 뒤 아웃피드 벨트가 롤을 배출한다. 실제 배출 위치 확인 후 다음 슬롯을 인덱싱한다. 마지막 롤 후 빈 카트리지를 회수하고 다음 카트리지를 공급한다. 실패 시 자동 재시도하지 않고 수량과 실제 물체 상태를 보존한다.
+성공한 티칭 시퀀스와 같은 예약의 장치 Release를 확인하면 해당 슬롯의 명목 순서를 퇴역한다.
+실제 이송 완료 수량은 집계하지 않는다. 아웃피드 벨트는 설정 피치/속도에 따른 시간 동안 운전한 뒤
+다음 슬롯을 인덱싱한다. 마지막 슬롯 후 빈 카트리지를 회수하고 다음 카트리지를 공급한다.
+실패 시 자동 재시도하지 않으며 실제 물체 상태를 보존한다.
 
-모든 롤의 중력·충돌·마찰을 유지한다. Playing 중 롤 강제 Attach·pose/velocity 재설정은 없다. MoveIt의 논리적 AttachedCollisionObject는 충돌 계획만 위한 것이며 PhysX Joint가 아니다. Stop은 생성 롤·카트리지와 대기 요청을 제거하고 초기 빈 컨베이어·완료 0·새 epoch로 복원한다. Pause는 초기화하지 않는다.
+모든 롤의 중력·충돌·마찰을 유지하며 Playing 중 강제 Attach·pose/velocity 재설정은 없다.
+파지는 기존 주축 위치의 목표 미도달·지속 정지로 추정하고 해제는 수축 위치로 확인한다.
+자재의 Stage identity·접촉 상대·정확한 물체/TCP 변환이나 동적 GT Planning Scene은 운전에 사용하지 않는다.
+Stop은 생성 자재와 대기 요청을 제거하고 초기 빈 컨베이어·새 epoch로 복원하며 Pause는 초기화하지 않는다.
+
+작업 완료 검증 기준은 충돌 없는 티칭 1사이클이다. 런타임 시퀀스 종료와 독립적으로 세션의
+`diagnostic/simulation/tape_cycles/`에 충돌 GT와 PASS/FAIL/UNAVAILABLE를 남긴다.
+관측 누락·저장 실패를 PASS로 간주하지 않으며 검증 결과는 다음 동작의 입력이 아니다.
 
 설비 이동은 인피드와 아웃피드 각각의 위치·자세를 변경한다. 연결된 티칭 포인트·물리 지지면·컨베이어 관측·계획 형상은 같은 변환을 사용하며 바닥과 Robot 지지대는 고정된다. 정지 상태에서 빈 장면에 변경을 적용한다. 티칭 포인트와 순서는 편집·캡처·추가·삭제할 수 있고 저장 경로는 기본 `config/teaching/<model_id>.json`이다. 저장 전 기본 티칭은 자재·설비·Tool의 기하 의미에서 생성한다. 저장한 프로그램은 다음 시작에 복원하며, 실제 경로의 물리 실행 검증은 별도로 필요하다. HCR-14는 정적 모델 검증 범위이며 운영 배포로 등록하지 않는다. 실행 기록은 `.run_records/`와 ROS/Kit 로그에 남긴다.
 

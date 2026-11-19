@@ -161,7 +161,12 @@ class Conveyor:
         # A settled release may sleep during Retreat. Surface velocity changes
         # alone do not wake the payload; resume contact solving without writing
         # its pose or velocity. Belt friction must produce the actual motion.
-        self._wake_roll(path)
+        try:
+            self._wake_roll(path)
+        except Exception:
+            # Solver wake is simulation actuation plumbing, not material detection.
+            # The belt command must also run if the payload is absent.
+            pass
         self.output_path=path;self.state='outfeed';self.elapsed=0.
 
     def _wake_roll(self,path):
@@ -187,8 +192,8 @@ class Conveyor:
             self._surface();return
         if self.state=='outfeed':
             self._surface(outfeed=self.settings['outfeed_speed_m_s'])
-            row=self._measure(self.output_path,'outfeed')
-            if row and row[0].p.y <= self.layout['place']['first_center_xy_m'][1]-self.settings['outfeed_pitch_m']:
+            # Open-loop belt travel; no released-material pose is observable.
+            if self.elapsed >= self.settings['outfeed_pitch_m']/self.settings['outfeed_speed_m_s']:
                 self._surface();self.output_path=None
                 if self.ordinal+1 < len(self.active_roll_paths):
                     self.ordinal+=1;self._target=self.layout['supply_center_m'][0]-self.ordinal*self.layout['cartridge']['slot_spacing_m']
@@ -208,21 +213,6 @@ class Conveyor:
         pose,velocity,angular=row
         settled=(self._command==self._target and abs(self._speed)<.008 and
                  abs(pose.p.x-self._target)<self.settings['position_tolerance_m'] and abs(velocity.x)<.008)
-        if settled and self.state!='returning':
-            # A full cartridge must retain every unprocessed roll, not just
-            # present one surviving roll while the remaining inventory is lost.
-            for index in range(self.ordinal,len(self.active_roll_paths)):
-                roll=self._measure(self.active_roll_paths[index])
-                if roll is None:
-                    settled=False;break
-                datum=list(self.layout['supply_center_m'])
-                datum[0]+=(index-self.ordinal)*self.layout['cartridge']['slot_spacing_m']
-                p,v,w=roll
-                axis_x=2*(p.r.x*p.r.z+p.r.w*p.r.y)
-                settled=settled and abs(axis_x)>math.cos(.03)
-                settled=settled and sum((a-b)**2 for a,b in zip((p.p.x,p.p.y,p.p.z),datum))<self.settings['position_tolerance_m']**2
-                settled=settled and v.x*v.x+v.y*v.y+v.z*v.z<.0001 and w.x*w.x+w.y*w.y+w.z*w.z<.04
-                if not settled:break
         self.settle=self.settle+dt if settled else 0.
         if self.settle>=self.settings['settle_s']:
             self._surface();self.elapsed=self.settle=0.

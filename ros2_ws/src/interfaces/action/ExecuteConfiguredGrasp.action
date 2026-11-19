@@ -5,6 +5,7 @@ string supply_epoch
 string reservation_id
 ---
 uint8 result_code
+# Release-sequence fact; does not prove physical receipt or cycle verification.
 bool material_placed
 string failure_stage
 string diagnostic_detail

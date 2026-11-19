@@ -218,13 +218,13 @@ def main(args=None):
             handle.publish_feedback(message)
 
         def execute(self,handle):
-            result=ExecuteCycle.Result();count=0;lease=None;child=None;terminal_known=True
+            result=ExecuteCycle.Result();sequence_completed=False;lease=None;child=None;terminal_known=True
             reason=MissionExitReason.MISSION_EXIT_MOTION_ERROR;detail='configured task did not complete'
             self.capture_event(handle,'mission_started')
             self.log_event('info',f'Configured Mission started / requested={handle.request.quantity}')
             try:
                 epoch=self.supply.supply_epoch
-                while count < handle.request.quantity:
+                while not sequence_completed:
                     if handle.is_cancel_requested:
                         reason=MissionExitReason.MISSION_EXIT_CANCELED;detail='Canceled before slot reservation';break
                     if not self.ready() or self.supply.supply_epoch != epoch:
@@ -260,7 +260,7 @@ def main(args=None):
                         supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
                     terminal_known=False
                     pending=child.get_result_async();cancel_sent=False;interrupted=None;cancel_deadline=None
-                    self.feedback(handle,count,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id)
+                    self.feedback(handle,0,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id)
                     while not pending.done():
                         if handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
                         elif not self.ready() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
@@ -279,21 +279,21 @@ def main(args=None):
                         task_result_code=outcome.result_code,material_placed=outcome.material_placed,
                         failure_stage=outcome.failure_stage,diagnostic_detail=outcome.diagnostic_detail,
                         supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
-                    if outcome.material_placed:
-                        deadline=time.monotonic()+2.
-                        while True:
-                            complete=self.command(ConfiguredSupply.Request.COMPLETE,lease.supply_epoch,lease.slot_id,lease.reservation_id,True)
-                            if complete.success:count+=1;lease=None;break
-                            if time.monotonic()>deadline:raise RuntimeError('Cell receiving confirmation failed: '+complete.diagnostic_detail)
-                            time.sleep(.05)
-                        self.feedback(handle,count,MissionPhase.MISSION_PHASE_PLACING,'Physically received and released')
+                    task_succeeded = task_result.status == 4 and outcome.result_code == 0
+                    if interrupted is None and task_succeeded and outcome.material_placed:
+                        complete=self.command(ConfiguredSupply.Request.COMPLETE,
+                            lease.supply_epoch,lease.slot_id,lease.reservation_id,True)
+                        if not complete.success:
+                            raise RuntimeError('Cell cycle retirement failed: '+complete.diagnostic_detail)
+                        sequence_completed=True;lease=None
+                        self.feedback(handle,0,MissionPhase.MISSION_PHASE_PLACING,'Teaching sequence ended')
                     if interrupted is not None:
                         reason=interrupted;detail='Task stopped after Mission interruption';break
                     if task_result.status != 4 or outcome.result_code != 0:
                         detail='Task failed: '+outcome.failure_stage+' '+outcome.diagnostic_detail;break
                     if not outcome.material_placed:raise RuntimeError('Successful Task lacks placement fact')
                 else:
-                    reason=MissionExitReason.MISSION_EXIT_QUANTITY_REACHED;detail='Requested configured supply quantity completed'
+                    reason=MissionExitReason.MISSION_EXIT_QUANTITY_REACHED;detail='Teaching sequence completed; collision verification is independent'
             except (RuntimeError,TimeoutError) as error:
                 detail=str(error)
             finally:
@@ -302,14 +302,14 @@ def main(args=None):
                     except (RuntimeError,TimeoutError) as error:detail+='; reservation cleanup failed: '+str(error)
                 with self.lock:self.busy=False
             result.exit_reason.value=reason;result.diagnostic_detail=detail
-            self.feedback(handle,count,MissionPhase.MISSION_PHASE_FINISHED,detail)
+            self.feedback(handle,0,MissionPhase.MISSION_PHASE_FINISHED,detail)
             if reason==MissionExitReason.MISSION_EXIT_CANCELED:handle.canceled()
             elif reason==MissionExitReason.MISSION_EXIT_QUANTITY_REACHED:handle.succeed()
             else:handle.abort()
             name=mission_reason_name(reason,MissionExitReason)
-            self.capture_event(handle,'mission_outcome',exit_reason=name,processed_count=count,diagnostic_detail=detail)
+            self.capture_event(handle,'mission_outcome',exit_reason=name,sequence_completed=sequence_completed,diagnostic_detail=detail)
             level='info' if reason==MissionExitReason.MISSION_EXIT_QUANTITY_REACHED else 'warning'
-            self.log_event(level,f'Configured Mission finished / {name}, processed={count}: {detail}')
+            self.log_event(level,f'Configured Mission finished / {name}, sequence_completed={sequence_completed}: {detail}')
             return result
 
     rclpy.init(args=args);node=Mission();executor=MultiThreadedExecutor(num_threads=4);executor.add_node(node)

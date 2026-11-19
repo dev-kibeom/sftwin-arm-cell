@@ -79,3 +79,10 @@ UUID, Goal ID, Acquisition ID, Execution ID는 내부 연결과 원본 참조에
 - [Simulator State, Time, and TF ICD](../interfaces/icd-sim-state-time-tf.md)
 - Live Test Analysis Report Template
 - Verification Policy
+
+## Tape 티칭 사이클 평가
+
+Tape Cell은 물리 자재 이송 완료 수량을 집계하지 않는다. 장치 피드백으로 보고한 시퀀스 종료와
+독립된 `tape_cycle_verification` 기록을 구분한다. 작업 완료는 충돌 없는 티칭 1사이클이며
+관측 구간이 불완전하거나 기록이 없으면 PASS로 추론하지 않는다. 상세 의미와 의도된 접촉 예외는
+[Tape Cell FDS](simulation/fds-tape-cell-supply.md)가 소유한다. 이 GT 평가를 운전 결과로 되먹이지 않는다.

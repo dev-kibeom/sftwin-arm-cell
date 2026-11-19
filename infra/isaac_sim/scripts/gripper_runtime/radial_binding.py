@@ -1,4 +1,4 @@
-"""Isaac services for selected radial Tools; joints and material identities are explicit."""
+"""Isaac radial actuator binding; primary encoder feedback and physical drives."""
 import math
 import os
 from pathlib import Path
@@ -93,7 +93,6 @@ class IsaacRadialBinding:
         from omni.isaac.dynamic_control import _dynamic_control as api
         from isaac_runtime.model_build_configuration import ModelBuildConfiguration
         from gripper_runtime.radial_geometry import ToolGeometry
-        from gripper_runtime.physical_contacts import PhysicalContactObserver
         self.stage = omni.usd.get_context().get_stage()
         self.robot_binding = robot_binding
         if not math.isclose(UsdGeom.GetStageMetersPerUnit(self.stage), 1., abs_tol=1e-9):
@@ -118,7 +117,7 @@ class IsaacRadialBinding:
         self.dofs = {name: self.dc.find_articulation_dof(self.articulation, name) for name in self.models}
         if (len(self.dofs) != 3 or len(set(self.dofs.values())) != 3
                 or any(dof == api.INVALID_HANDLE for dof in self.dofs.values())):
-            raise RuntimeError('Three independent measured radial DOFs required')
+            raise RuntimeError('Three radial actuator DOFs required')
         self.primary = self.settings['primary_joint']
         # Preserve selected model order with the primary first for actuator feedback.
         self.names = [self.primary] + [name for name in self.models if name != self.primary]
@@ -156,31 +155,17 @@ class IsaacRadialBinding:
         if len(set(fingers)) != 3:
             raise RuntimeError('Radial fingers require independent physical bodies')
         self.finger_bodies = tuple(fingers)
-        # Materials are Scene-owned; discover their identities, never Cell paths.
-        for prim in self.stage.Traverse():
-            if prim.HasAPI(UsdPhysics.RigidBodyAPI) and prim.GetAttribute('arm_cell:material_id').IsValid():
-                PhysxSchema.PhysxContactReportAPI.Apply(prim).CreateThresholdAttr(0.)
-        self.target_reference = None
-        self.observer = PhysicalContactObserver()
         if not self.reconcile_stale_owned_joint():
-            self.close()
             raise RuntimeError('Cannot clear stale attachment before radial Physical mode')
 
-    def measure_fingers(self):
-        values = []
-        for name in self.names:
-            state = self.dc.get_dof_state(self.dofs[name], self.api.STATE_ALL)
-            q = float(state.pos)
-            model = self.models[name]
-            tolerance = self.settings['position_tolerance_m']
-            if not math.isfinite(q) or not model['lower']-tolerance <= q <= model['upper']+tolerance:
-                raise RuntimeError(f'Invalid measured radial joint: {name}')
-            mimic = model.get('mimic', {})
-            multiplier = mimic.get('multiplier', 1.)
-            if multiplier == 0:
-                raise RuntimeError('Radial mimic multiplier must be nonzero')
-            values.append((q-mimic.get('offset', 0.))/multiplier)
-        return values
+    def measure_primary(self):
+        state = self.dc.get_dof_state(self.dofs[self.primary], self.api.STATE_ALL)
+        position = float(state.pos)
+        model = self.models[self.primary]
+        tolerance = self.settings['position_tolerance_m']
+        if not math.isfinite(position) or not model['lower']-tolerance <= position <= model['upper']+tolerance:
+            raise RuntimeError('Invalid measured radial primary position')
+        return position
 
     def write_primary(self, position):
         targets = {}
@@ -194,36 +179,6 @@ class IsaacRadialBinding:
             if not self.dc.set_dof_position_target(self.dofs[name], value):
                 raise RuntimeError(f'Failed to write radial drive target: {name}')
         self.dc.wake_up_articulation(self.articulation)
-
-    def resolve_target(self, reference):
-        from pxr import UsdPhysics
-        matches = []
-        for prim in self.stage.Traverse():
-            if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
-                continue
-            def read(name):
-                attr = prim.GetAttribute(name)
-                return attr.Get() if attr.IsValid() else None
-            if reserved_identity_matches(read, reference):
-                matches.append(str(prim.GetPath()))
-        return matches[0] if len(matches) == 1 else None
-
-    def read_contacts(self, dt):
-        self.observer.advance()
-        if self.target_reference is None:
-            # Initial RELEASE precedes material selection. Observe every finger
-            # contact; contraction alone never proves that the Tool is clear.
-            return finger_contact_forces(self.observer.snapshot, self.finger_bodies, dt)
-        target = self.resolve_target(self.target_reference)
-        return target_contact_forces(self.observer.snapshot, target, self.finger_bodies, dt)
-
-    def relative_transform(self, target):
-        from pxr import UsdGeom
-        cache = UsdGeom.XformCache()
-        # USD uses row vectors; transpose the body->world * world->TCP product.
-        matrix = (cache.GetLocalToWorldTransform(self.stage.GetPrimAtPath(target)) *
-                  cache.GetLocalToWorldTransform(self.stage.GetPrimAtPath(self.tcp_path)).GetInverse())
-        return [float(matrix[col][row]) for row in range(4) for col in range(4)]
 
     def reconcile_stale_owned_joint(self):
         from gripper_runtime.grasp_joint import UsdFixedJointOwner
@@ -240,8 +195,7 @@ class IsaacRadialBinding:
         return True
 
     def clear(self):
-        self.target_reference = None
-        self.observer.clear()
+        pass
 
     def close(self):
-        self.observer.close()
+        pass
