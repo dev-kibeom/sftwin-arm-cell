@@ -98,29 +98,28 @@ class Conveyor:
         self.drive.CreateDampingAttr(cfg['drive_damping_ns_m']);self.drive.CreateMaxForceAttr(cfg['drive_force_n'])
         self.drive.CreateTargetPositionAttr(x);self._command=x;self._speed=0.
         self.active_roll_paths=[]
-        faces=[(0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+        vertices,faces=self.roll.mesh()
         for i in range(n):
             path=f'{self.root}/Loads{self.number:04d}/Roll{i:03d}'
             body=UsdGeom.Xform.Define(self.stage,path);body.AddTranslateOp().Set(self.Gf.Vec3d(x+i*pitch,y,z))
             body.AddRotateYOp().Set(90.);UsdPhysics.RigidBodyAPI.Apply(body.GetPrim())
             mass=UsdPhysics.MassAPI.Apply(body.GetPrim());mass.CreateMassAttr(self.roll.mass_kg)
             mass.CreateCenterOfMassAttr(self.Gf.Vec3f(0.));mass.CreateDiagonalInertiaAttr(self.Gf.Vec3f(*self.roll.inertia()))
-            rb=PhysxSchema.PhysxRigidBodyAPI.Apply(body.GetPrim())
-            rb.CreateSolverPositionIterationCountAttr(32);rb.CreateSolverVelocityIterationCountAttr(8)
-            # Robot bodies already report every Robot/material contact. Pallet
-            # support contacts are not consumed by the supply controller; do
-            # not flood both Tool and Cell observers with all stored-roll pairs.
-            for j,vertices in enumerate(self.roll.convex_segments()):
-                mesh=UsdGeom.Mesh.Define(self.stage,path+f'/Sector{j:03d}')
-                mesh.CreatePointsAttr([self.Gf.Vec3f(*p) for p in vertices]);mesh.CreateFaceVertexCountsAttr([4]*6)
-                mesh.CreateFaceVertexIndicesAttr([v for face in faces for v in face]);mesh.CreateSubdivisionSchemeAttr('none')
-                UsdPhysics.CollisionAPI.Apply(mesh.GetPrim());UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr('convexHull')
-                contact=PhysxSchema.PhysxCollisionAPI.Apply(mesh.GetPrim())
-                contact.CreateContactOffsetAttr(.0002);contact.CreateRestOffsetAttr(0.)
-                UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(self.material,materialPurpose='physics')
-                mesh.CreateDisplayColorAttr([self.Gf.Vec3f(.65,.43,.2)])
-                paper=UsdShade.Material.Get(self.stage,'/World/TapeRollCell/Presentation/Looks/paper')
-                if paper:UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(paper)
+            # One mesh collider; PhysX cooks its convex decomposition while
+            # retaining the annular opening. Use the rigid body's solver defaults.
+            mesh=UsdGeom.Mesh.Define(self.stage,path+'/Mesh')
+            mesh.CreatePointsAttr([self.Gf.Vec3f(*p) for p in vertices])
+            mesh.CreateFaceVertexCountsAttr([len(face) for face in faces])
+            mesh.CreateFaceVertexIndicesAttr([v for face in faces for v in face])
+            mesh.CreateSubdivisionSchemeAttr('none')
+            UsdPhysics.CollisionAPI.Apply(mesh.GetPrim())
+            UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr('convexDecomposition')
+            contact=PhysxSchema.PhysxCollisionAPI.Apply(mesh.GetPrim())
+            contact.CreateContactOffsetAttr(.0002);contact.CreateRestOffsetAttr(0.)
+            UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(self.material,materialPurpose='physics')
+            mesh.CreateDisplayColorAttr([self.Gf.Vec3f(.65,.43,.2)])
+            paper=UsdShade.Material.Get(self.stage,'/World/TapeRollCell/Presentation/Looks/paper')
+            if paper:UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(paper)
             self.active_roll_paths.append(path)
         self.history.append((self.number,list(self.active_roll_paths)))
         self._target=self.layout['supply_center_m'][0];self.state='infeed';self.elapsed=self.settle=0.
