@@ -79,6 +79,7 @@ class IdentityTransformBuffer:
 def loader_with_services(services):
     loader = SimpleNamespace(
         artifact=artifact(),
+        planning_frame="world",
         apply_client="apply",
         read_client="read",
         validity_client="validity",
@@ -129,3 +130,112 @@ def test_loader_checks_nominal_robot_state_validity_when_enabled():
         module.StaticSceneLoadError, match="nominal current robot state"
     ):
         module.StaticSceneLoader.apply_and_verify(loader)
+
+
+class ModelFrameOnlyServices(FakePlanningSceneServices):
+    """MoveIt can apply model-frame geometry before its TF monitor is ready."""
+
+    def apply(self, request):
+        if any(obj.header.frame_id != "base_link"
+               for obj in request.scene.world.collision_objects):
+            return SimpleNamespace(success=False)
+        return super().apply(request)
+
+
+def test_loader_applies_world_geometry_in_model_frame_before_moveit_tf_is_ready():
+    module = load_loader_module()
+    services = ModelFrameOnlyServices()
+    loader = loader_with_services(services)
+    loader.planning_frame = "base_link"
+    transform = TransformStamped()
+    transform.header.frame_id = "base_link"
+    transform.child_frame_id = "world"
+    transform.transform.translation.x = 10.0
+    transform.transform.translation.y = -4.0
+    transform.transform.translation.z = 0.5
+    transform.transform.rotation.z = 2 ** -0.5
+    transform.transform.rotation.w = 2 ** -0.5
+
+    def lookup(target, source):
+        assert (target, source) == ("base_link", "world")
+        return transform
+
+    loader.lookup_transform_when_available = lookup
+    module.StaticSceneLoader.apply_and_verify(loader)
+
+    obj = services.objects["selected_box"]
+    assert obj.header.frame_id == "base_link"
+    assert [obj.pose.position.x, obj.pose.position.y, obj.pose.position.z] == (
+        pytest.approx([8.0, -3.0, 3.5])
+    )
+    assert [obj.pose.orientation.z, obj.pose.orientation.w] == (
+        pytest.approx([2 ** -0.5, 2 ** -0.5])
+    )
+    assert list(obj.primitives[0].dimensions) == [0.2, 0.3, 0.4]
+    assert obj.primitive_poses[0].orientation.w == 1.0
+    assert loader.artifact["objects"][0]["pose"]["position_m"] == [1.0, 2.0, 3.0]
+    assert "unrelated_object" in services.objects
+
+
+def test_loader_does_not_mutate_scene_when_source_transform_is_unavailable():
+    module = load_loader_module()
+    services = FakePlanningSceneServices()
+    loader = loader_with_services(services)
+    loader.planning_frame = "base_link"
+
+    def unavailable(_target, _source):
+        raise module.StaticSceneLoadError("TF unavailable before deadline")
+
+    loader.lookup_transform_when_available = unavailable
+    with pytest.raises(module.StaticSceneLoadError, match="TF unavailable"):
+        module.StaticSceneLoader.apply_and_verify(loader)
+    assert set(services.objects) == {"unrelated_object"}
+
+
+def test_loader_keeps_moveit_scene_rejection_fatal_after_frame_resolution():
+    module = load_loader_module()
+    services = ModelFrameOnlyServices()
+    loader = loader_with_services(services)
+
+    with pytest.raises(module.StaticSceneLoadError, match="MoveIt rejected"):
+        module.StaticSceneLoader.apply_and_verify(loader)
+    assert set(services.objects) == {"unrelated_object"}
+
+
+def test_transform_wait_processes_delayed_tf_before_returning(monkeypatch):
+    module = load_loader_module()
+    from tf2_ros import Buffer
+
+    loader = SimpleNamespace(tf_buffer=Buffer(), tf_wait_timeout_s=1.0)
+    transform = TransformStamped()
+    transform.header.frame_id = "base_link"
+    transform.child_frame_id = "world"
+    transform.transform.rotation.w = 1.0
+    transform.transform.translation.x = 4.0
+    updates = []
+
+    def spin_once(_node, timeout_sec):
+        updates.append(timeout_sec)
+        if len(updates) == 3:
+            loader.tf_buffer.set_transform_static(transform, "test")
+
+    monkeypatch.setattr(module.rclpy, "ok", lambda: True)
+    monkeypatch.setattr(module.rclpy, "spin_once", spin_once)
+    received = module.StaticSceneLoader.lookup_transform_when_available(
+        loader, "base_link", "world"
+    )
+    assert received.transform.translation.x == 4.0
+    assert len(updates) == 3
+
+
+def test_transform_wait_fails_within_deadline_when_tf_never_arrives(monkeypatch):
+    module = load_loader_module()
+    from tf2_ros import Buffer
+
+    loader = SimpleNamespace(tf_buffer=Buffer(), tf_wait_timeout_s=0.01)
+    monkeypatch.setattr(module.rclpy, "ok", lambda: True)
+    monkeypatch.setattr(module.rclpy, "spin_once", lambda *_a, **_kw: None)
+    with pytest.raises(module.StaticSceneLoadError, match="world -> base_link"):
+        module.StaticSceneLoader.lookup_transform_when_available(
+            loader, "base_link", "world"
+        )
