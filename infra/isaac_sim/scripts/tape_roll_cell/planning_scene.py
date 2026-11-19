@@ -30,6 +30,21 @@ class ConfiguredPlanningScene:
                     model_frames=(scene.robot_state.joint_state.header.frame_id,
                                   scene.robot_state.multi_dof_joint_state.header.frame_id)
                     transform=next((t for t in scene.fixed_frame_transforms if t.child_frame_id==frame),None)
+                    if transform is None:
+                        reverse=next((t for t in scene.fixed_frame_transforms
+                            if t.header.frame_id==frame and t.child_frame_id in model_frames),None)
+                        if reverse is not None:
+                            # GetPlanningScene may return the model's pose in
+                            # world; collision poses need the opposite mapping.
+                            transform=copy.deepcopy(reverse)
+                            transform.header.frame_id=reverse.child_frame_id
+                            transform.child_frame_id=frame
+                            q=reverse.transform.rotation;t=reverse.transform.translation
+                            inverse=Rotation.from_quat([q.x,q.y,q.z,q.w]).inv()
+                            translation=inverse.apply([-t.x,-t.y,-t.z])
+                            transform.transform.translation.x,transform.transform.translation.y,transform.transform.translation.z=translation.tolist()
+                            (transform.transform.rotation.x,transform.transform.rotation.y,
+                             transform.transform.rotation.z,transform.transform.rotation.w)=inverse.as_quat().tolist()
                     if frame in model_frames or transform is not None:
                         self.acm=scene.allowed_collision_matrix
                         self._frame_transform=transform

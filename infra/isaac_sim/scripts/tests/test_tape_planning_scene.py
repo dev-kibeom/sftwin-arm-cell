@@ -91,3 +91,36 @@ def test_moveit_model_frame_needs_no_external_transform():
     future.set_result(SimpleNamespace(scene=scene))
     planning.publish(packet)
     assert len(messages)==1
+
+
+def test_world_to_model_transform_is_inverted_before_publishing_geometry():
+    from concurrent.futures import Future
+    from moveit_msgs.msg import PlanningScene
+    from geometry_msgs.msg import TransformStamped
+    import math
+    messages = []
+    future = Future()
+    node = SimpleNamespace(create_publisher=lambda *args: SimpleNamespace(publish=messages.append),
+        create_client=lambda *args: SimpleNamespace(service_is_ready=lambda: True, call_async=lambda request: future))
+    planning = ConfiguredPlanningScene(node)
+    packet = dict(frame_id='world', rolls=[], finger_links=[], holding_state='unknown',
+                  selected_slot_id='', static_boxes=[dict(id='fixture', position=[1., 3., 0.], dimensions=[1., 1., .02])])
+    planning.publish(packet)
+    scene = PlanningScene()
+    scene.robot_state.joint_state.header.frame_id = 'base_link'
+    transform = TransformStamped()
+    transform.header.frame_id = 'world'
+    transform.child_frame_id = 'base_link'
+    transform.transform.translation.x = 1.
+    transform.transform.translation.y = 2.
+    transform.transform.rotation.z = math.sqrt(.5)
+    transform.transform.rotation.w = math.sqrt(.5)
+    scene.fixed_frame_transforms = [transform]
+    future.set_result(SimpleNamespace(scene=scene))
+    planning.publish(packet)
+    assert len(messages) == 1
+    obj = messages[0].world.collision_objects[0]
+    assert obj.header.frame_id == 'base_link'
+    assert [obj.pose.position.x, obj.pose.position.y, obj.pose.position.z] == pytest.approx([1., 0., 0.], abs=1e-12)
+    assert obj.pose.orientation.z == pytest.approx(-math.sqrt(.5))
+    assert obj.pose.orientation.w == pytest.approx(math.sqrt(.5))
