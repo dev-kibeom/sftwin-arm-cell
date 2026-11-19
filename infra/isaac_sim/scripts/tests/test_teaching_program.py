@@ -71,23 +71,6 @@ def test_independent_outfeed_se3_moves_fixture_and_receipt_but_not_pick_or_floor
     assert equipment_transform(config,'outfeed')[:3,:3]!=pytest.approx(np.eye(3))
 
 
-def test_rotated_infeed_surface_commands_follow_its_local_axis():
-    from tape_roll_cell.conveyor import Conveyor
-    from types import SimpleNamespace as NS
-    c=Conveyor.__new__(Conveyor)
-    c.configuration={'cell':{'teaching_program':program(),'tape_roll':{'equipment_reference_frames':{
-        'infeed':dict(pose=[0.]*6),'outfeed':dict(pose=[0.]*6)}}}}
-    measured={}
-    def surface(name):
-        return NS(GetSurfaceVelocityAttr=lambda:NS(Set=lambda value:measured.update({name:value})))
-    c.surfaces=[('/World/TapeRollCell/Infeed/InfeedBelt',surface('infeed')),
-                ('/World/TapeRollCell/Outfeed/OutfeedLeft',surface('outfeed'))]
-    c.Gf=NS(Vec3f=lambda *values:list(values))
-    c._surface(infeed=.04,outfeed=.06)
-    assert measured['infeed']==pytest.approx([0.,.04,0.],abs=1e-10)
-    assert measured['outfeed']==pytest.approx([0.,-.06,0.])
-
-
 def test_motion_names_select_bt_compositions_independently_of_point_geometry():
     p = program()
     for name in ('MoveJ', 'MoveL', 'MoveJChecked', 'MoveLChecked', 'MovePlanned'):

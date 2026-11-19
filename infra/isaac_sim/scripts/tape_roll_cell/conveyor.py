@@ -11,7 +11,7 @@ from tape_roll_cell.teaching_program import equipment_transform, matrix_pose7, p
 
 class Conveyor:
     def __init__(self, stage, configuration, roll):
-        from pxr import UsdGeom, UsdPhysics, PhysxSchema, UsdShade, Gf
+        from pxr import UsdPhysics, UsdShade, Gf
         self.stage,self.configuration,self.roll=stage,configuration,roll
         self.layout=configuration['cell']['tape_roll']
         self.settings=configuration['cell']['conveyor']
@@ -26,15 +26,8 @@ class Conveyor:
         api=UsdPhysics.MaterialAPI.Apply(self.material.GetPrim())
         api.CreateStaticFrictionAttr(roll.static_friction);api.CreateDynamicFrictionAttr(roll.dynamic_friction)
         api.CreateRestitutionAttr(0.)
-        self.surfaces=[]
-        for item in self.layout['static_boxes']:
-            if item['id'].endswith(('/InfeedBelt','/OutfeedLeft','/OutfeedRight')):
-                prim=stage.GetPrimAtPath(item['id'])
-                rb=UsdPhysics.RigidBodyAPI.Apply(prim);rb.CreateKinematicEnabledAttr(True)
-                surface=PhysxSchema.PhysxSurfaceVelocityAPI.Apply(prim)
-                surface.CreateSurfaceVelocityLocalSpaceAttr(False)
-                surface.CreateSurfaceVelocityAttr(Gf.Vec3f(0.))
-                self.surfaces.append((item['id'],surface))
+        from tape_roll_cell.conveyor_belts import ConveyorBelts
+        self.belts=ConveyorBelts(stage,self.layout['static_boxes'])
 
     def _box(self,path,position,size,angle=0.):
         from pxr import UsdGeom,UsdPhysics,UsdShade,PhysxSchema
@@ -176,11 +169,7 @@ class Conveyor:
         dc.wake_up_rigid_body(handle)
 
     def _surface(self,infeed=0.,outfeed=0.):
-        for path,api in self.surfaces:
-            frame='infeed' if path.endswith('/InfeedBelt') else 'outfeed'
-            local=[infeed,0.,0.] if frame=='infeed' else [0.,-outfeed,0.]
-            world=equipment_transform(self.configuration,frame)[:3,:3] @ local
-            api.GetSurfaceVelocityAttr().Set(self.Gf.Vec3f(*world))
+        self.belts.set_speeds(infeed=infeed,outfeed=outfeed)
 
     def on_physics_step(self,dt):
         if not math.isfinite(dt) or dt<=0:return

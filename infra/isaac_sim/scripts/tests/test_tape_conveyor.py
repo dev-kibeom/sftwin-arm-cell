@@ -69,3 +69,20 @@ def test_missing_simulated_payload_does_not_block_timed_outfeed():
     c._wake_roll=unavailable
     c.release_to_outfeed('missing-roll')
     assert c.state=='outfeed'
+
+
+def test_belt_commands_stop_both_directions_on_idle_and_timeout():
+    c=controller()
+    commands=[]
+    c.belts=NS(set_speeds=lambda **speeds:commands.append(speeds))
+    c._surface=Conveyor._surface.__get__(c)
+    c._surface(infeed=-.04, outfeed=.06)
+    assert commands[-1]==dict(infeed=-.04, outfeed=.06)
+    c.on_physics_step(.1)
+    assert commands[-1]==dict(infeed=0., outfeed=0.)
+    c.state='infeed'
+    c.on_physics_step(91.)
+    assert c.state=='failed'
+    assert commands[-1]==dict(infeed=0., outfeed=0.)
+    c.close()
+    assert commands[-1]==dict(infeed=0., outfeed=0.)
