@@ -92,6 +92,10 @@ class StaticSceneLoader(Node):
         self.declare_parameter("scene_file", "")
         self.declare_parameter("verify_nominal_state", False)
         self.declare_parameter("tf_wait_timeout_s", 20.0)
+        self.declare_parameter("planning_frame", "base_link")
+        self.planning_frame = self.get_parameter("planning_frame").value
+        if not self.planning_frame:
+            raise StaticSceneValidationError("planning_frame must not be empty")
         scene_file = self.get_parameter("scene_file").value
         if not scene_file:
             raise StaticSceneValidationError("scene_file parameter is required")
@@ -164,12 +168,21 @@ class StaticSceneLoader(Node):
         return result
 
     def apply_and_verify(self):
+        # Service availability does not mean MoveIt's separate TF monitor has
+        # received world yet. Resolve geometry here and submit it in the model
+        # frame, where MoveIt can apply it without an external-frame lookup.
+        transform = self.lookup_transform_when_available(
+            self.planning_frame, self.artifact["frame_id"]
+        )
         request = ApplyPlanningScene.Request()
         request.scene.is_diff = True
         request.scene.world.collision_objects = [
             make_collision_object(self.artifact, obj)
             for obj in self.artifact["objects"]
         ]
+        for collision in request.scene.world.collision_objects:
+            collision.pose = do_transform_pose(collision.pose, transform)
+            collision.header.frame_id = self.planning_frame
         response = self.call(self.apply_client, request)
         if not response.success:
             raise StaticSceneLoadError("MoveIt rejected the static planning scene")
