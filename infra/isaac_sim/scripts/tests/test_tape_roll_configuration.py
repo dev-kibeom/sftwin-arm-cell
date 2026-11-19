@@ -12,7 +12,7 @@ sys.path.insert(0,str(ROOT/'infra/isaac_sim/scripts'))
 sys.path.insert(0,str(ROOT/'ros2_ws/src/bringup'))
 from arm_cell_bringup.runtime import load_profile
 from gripper_runtime.radial_geometry import ToolGeometry
-from tape_roll_cell.teaching_program import resolve_point,pose7_matrix
+from tape_roll_cell.teaching_program import resolve_point,pose7_matrix,base_matrix
 
 
 @lru_cache(maxsize=2)
@@ -59,3 +59,12 @@ def test_startup_does_not_import_numerical_ik_solver():
     assert 'TeachingSolver' not in source and 'least_squares' not in source
     yaml=(ROOT/'ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml').read_text()
     assert '  teaching:' not in yaml
+
+
+@pytest.mark.parametrize('suffix', ['', '_long'])
+def test_default_turn_uses_the_selected_tools_configured_turn_position(suffix):
+    config, _ = selected(suffix)
+    cell = config['cell']
+    turn = resolve_point(cell['teaching_program'], 'turn', cell['world_to_base'])
+    world = base_matrix(cell['world_to_base']) @ pose7_matrix(turn)
+    assert world[:3, 3] == pytest.approx(cell['tape_roll']['place']['turn_position_m'])
