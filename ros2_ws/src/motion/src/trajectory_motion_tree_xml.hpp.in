@@ -1,0 +1,4 @@
+#pragma once
+namespace arm_cell_motion {
+inline constexpr char kTrajectoryMotionTreeXml[] = R"tree(@TRAJECTORY_MOTION_TREE_XML@)tree";
+}

@@ -47,7 +47,7 @@ def test_sequences_are_explicit_sparse_named_points():
     p['sequences']['tape_insert']=['other','pick']
     motions=resolve_program(p,{})
     assert len(motions['tape_insert']['cartesian_waypoints'])==2
-    assert motions['tape_insert']['cartesian_waypoints'][0]['mode']=='linear'
+    assert motions['tape_insert']['cartesian_waypoints'][0]['motion']=='MoveL'
     del p['points']['other']
     with pytest.raises(ValueError):validate_program(p)
 
@@ -86,3 +86,13 @@ def test_rotated_infeed_surface_commands_follow_its_local_axis():
     c._surface(infeed=.04,outfeed=.06)
     assert measured['infeed']==pytest.approx([0.,.04,0.],abs=1e-10)
     assert measured['outfeed']==pytest.approx([0.,-.06,0.])
+
+
+def test_motion_names_select_bt_compositions_independently_of_point_geometry():
+    p = program()
+    for name in ('MoveJ', 'MoveL', 'MoveJChecked', 'MoveLChecked', 'MovePlanned'):
+        p['points']['pick']['mode'] = name
+        waypoint = resolve_program(p, {})['tape_insert']['cartesian_waypoints'][0]
+        assert waypoint['motion'] == name
+        assert 'mode' not in waypoint
+        assert waypoint['pose'] == pytest.approx(resolve_point(p, 'pick', {}))

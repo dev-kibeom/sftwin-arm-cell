@@ -9,8 +9,8 @@ namespace arm_cell_motion
 {
 struct CartesianTeachingWaypoint
 {
-  std::array<double, 7> pose;
-  bool linear{false};
+  std::array<double, 7> pose{0., 0., 0., 0., 0., 0., 1.};
+  std::string motion{"MoveJ"};
 };
 
 struct TaughtMotion
@@ -22,6 +22,7 @@ struct TaughtMotion
   double duration_s{0.0};
   bool plan_to_start{false};
   std::vector<CartesianTeachingWaypoint> cartesian_waypoints{};
+  std::string movement{"MoveJ"};
 };
 
 using TaughtMotions = std::map<std::string, TaughtMotion>;

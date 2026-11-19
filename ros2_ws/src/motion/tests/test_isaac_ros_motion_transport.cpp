@@ -3200,3 +3200,96 @@ TEST_F(IsaacRosMotionTransportTest, TaughtEntryExecutesIntermediatePlannedWaypoi
   transport_->cancel();
 }
 }
+
+namespace arm_cell_motion
+{
+TEST_F(IsaacRosMotionTransportTest, CartesianTeachingExecutesWithoutSceneOrPlanningRequests)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  std::string urdf = "<robot name='teaching_slide'><link name='base_link'/>";
+  const std::array<std::string, 3> axes{"1 0 0", "0 1 0", "0 0 1"};
+  for (int i = 0; i < 6; ++i) {
+    const auto parent = i == 0 ? "base_link" : "link_" + std::to_string(i);
+    const auto child = "link_" + std::to_string(i + 1);
+    urdf += "<link name='" + child + "'/><joint name='joint_" + std::to_string(i + 1) +
+      "' type='prismatic'><parent link='" + parent + "'/><child link='" + child +
+      "'/><axis xyz='" + axes[i % 3] + "'/><limit lower='-2' upper='2' effort='1' velocity='1'/></joint>";
+  }
+  urdf += "<link name='sf_grasp_tcp'/><joint name='tcp_fixed' type='fixed'>"
+    "<parent link='link_6'/><child link='sf_grasp_tcp'/></joint></robot>";
+  node_->declare_parameter<std::string>("robot_description", urdf);
+  node_->declare_parameter<std::string>("robot_description_semantic",
+    "<robot name='teaching_slide'><group name='arm'><chain base_link='base_link' "
+    "tip_link='sf_grasp_tcp'/></group></robot>");
+  std::atomic<int> planning_requests{0};
+  auto server = rclcpp_action::create_server<MoveGroupAction>(observer_, "move_action",
+    [](const auto &, auto) {return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;},
+    [](auto) {return rclcpp_action::CancelResponse::ACCEPT;},
+    [&](const std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveGroupAction>> goal) {
+      ++planning_requests;
+      auto result = std::make_shared<MoveGroupAction::Result>();
+      result->error_code.val = moveit_msgs::msg::MoveItErrorCodes::PLANNING_FAILED;
+      goal->abort(result);
+    });
+  auto pending = std::async(std::launch::async, [&] {
+    return std::make_unique<moveit::planning_interface::MoveGroupInterface>(node_, "arm",
+      std::shared_ptr<tf2_ros::Buffer>(), rclcpp::Duration::from_seconds(3.));
+  });
+  // MoveGroupInterface also discovers its execution endpoint with the supplied
+  // 3 s bound; this fixture intentionally provides only the planning endpoint.
+  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+  while (pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready &&
+    std::chrono::steady_clock::now() < deadline)
+  {
+    executor_.spin_some();
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_EQ(pending.wait_for(std::chrono::seconds(0)), std::future_status::ready);
+  auto group = pending.get();
+  auto model = std::const_pointer_cast<moveit::core::RobotModel>(group->getRobotModel());
+  auto solver = std::make_shared<CartesianSlideIK>();
+  model->setKinematicsAllocators({{"arm", [solver](const auto *) {return solver;}}});
+  transport_->move_group_state_->move_group = std::move(group);
+  transport_->move_group_state_->ready = true;
+  transport_->diagnostics_capture_enabled_ = true;
+  transport_->set_teaching_submission_check([] {return Code::TASK_RESULT_SUCCESS;});
+  ASSERT_TRUE(transport_->set_motion_envelope({1.F, 1.F, true}));
+  TaughtMotion taught;
+  taught.velocity_scale = .3; taught.acceleration_scale = .2;
+  taught.cartesian_waypoints = {
+    {{.02, .03, .1, 0., 0., 0., 1.}, "MoveJ"},
+    {{.025, .04, .1, 0., 0., 0., 1.}, "MoveL"}};
+  transport_->configure_taught_motions({{"tape", taught}}, std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  publish_feedback(std::vector<double>(6, 0.));
+  double clock = 10.;
+  transport_->on_simulation_clock(clock_message(clock));
+  auto completion = std::async(std::launch::async, [&] {
+    return transport_->execute_taught_motion("tape", "teaching-goal", {});
+  });
+  // No /get_planning_scene service exists. Follow actual published commands
+  // with measured feedback, driving the normal worker and completion oracle.
+  pump_until([&] {
+    transport_->on_simulation_clock(clock_message(clock += .02));
+    if (!commands_.empty()) {publish_feedback(last_command());}
+    return completion.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+  });
+  EXPECT_EQ(completion.get(), Code::TASK_RESULT_SUCCESS);
+  EXPECT_EQ(planning_requests.load(), 0);
+  ASSERT_FALSE(commands_.empty());
+  EXPECT_NEAR(last_command()[0], .025, 1e-6);
+  EXPECT_NEAR(last_command()[1], .04, 1e-6);
+  const auto evidence = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
+  EXPECT_EQ(evidence.at("motion"), "MoveL");
+  EXPECT_FALSE(evidence.at("scene_collision_checked"));
+  // A checked motion must fail on unavailable Scene, and must not claim it
+  // checked collisions merely because its requested composition is checked.
+  taught.cartesian_waypoints.front().motion = "MoveJChecked";
+  transport_->configure_taught_motions({{"tape", taught}}, std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  publish_feedback(last_command());
+  EXPECT_EQ(transport_->execute_taught_motion("tape", "checked-goal", {}), Code::TASK_RESULT_BACKEND_UNAVAILABLE);
+  const auto failed = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
+  EXPECT_EQ(failed.at("failure_stage"), "CheckTrajectoryCollision");
+  EXPECT_TRUE(failed.at("scene_collision_check_requested"));
+  EXPECT_FALSE(failed.at("scene_collision_checked"));
+}
+}  // namespace arm_cell_motion

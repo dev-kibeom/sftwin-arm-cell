@@ -41,7 +41,7 @@ def compile_cell(*, configuration):
         grasp=dict(strategy='internal_radial',insertion_depth_m=layout['insertion_depth_m'],thickness_m=roll.width_m,
                    inner_radius_m=roll.inner_radius_m,release_position_m=solution['release_position_m'],grasp_position_m=solution['grasp_position_m']),
         approach_motion='tape_approach',insertion_motion='tape_insert',transfer_motion='tape_transfer',retreat_motion='tape_retreat') for slot in layout['slots']}
-    cell['motion_preparation']=dict(ready=True,detail='Sparse teaching loaded; execution planning validates reachability and collision.')
+    cell['motion_preparation']=dict(ready=True,detail='Teaching loaded; MoveJ/MoveL follow taught movements without Scene collision checks.')
     config['motion']['configured_grasp_cycles_json']=json.dumps(registry,allow_nan=False)
     config['motion']['taught_motions_json']=json.dumps(motions,allow_nan=False)
     static=dict(schema_version=1,frame_id='world',objects=layout['static_boxes'])

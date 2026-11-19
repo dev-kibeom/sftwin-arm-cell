@@ -12,6 +12,7 @@ import uuid
 import numpy as np
 
 from .teaching_program import (
+    motion_name,
     apply_layout, author_equipment_frames, base_matrix, base_pose_to_frame,
     capture_point, frame_pose_to_base, matrix_pose7, pose7_matrix, pose_matrix,
     matrix_pose, resolve_point, resolve_program, validate_program,
@@ -255,7 +256,7 @@ class TeachingSession:
             return
         elif operation == 'move':
             point = self.draft['points'][values['name']]
-            motion = dict(cartesian_waypoints=[dict(pose=resolve_point(self.draft, values['name'], self.world_to_base), mode=point['mode'])],
+            motion = dict(cartesian_waypoints=[dict(pose=resolve_point(self.draft, values['name'], self.world_to_base), motion=motion_name(point['mode']))],
                           velocity_scale=min(.1, point['velocity_scale']), acceleration_scale=min(.1, point['acceleration_scale']))
             self._request('move', motion=motion)
             return
@@ -284,7 +285,7 @@ class TeachingSession:
                     local_matrix[:3, :3] = rotation
                     from .teaching_program import matrix_pose
                     target = frame_pose_to_base(self.draft, frame, matrix_pose(local_matrix), self.world_to_base)
-            self._request('move', motion=dict(cartesian_waypoints=[dict(pose=target, mode='linear')],
+            self._request('move', motion=dict(cartesian_waypoints=[dict(pose=target, motion='MoveL')],
                                               velocity_scale=.05, acceleration_scale=.05))
             return
         else:
