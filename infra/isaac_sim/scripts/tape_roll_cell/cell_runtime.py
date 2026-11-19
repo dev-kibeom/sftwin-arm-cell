@@ -68,6 +68,7 @@ class ConfiguredSupplyAdapter:
         except Exception:
             # Missing GT observation is unavailable evidence, never a Cell fault.
             self.observer = None
+        self._physics_step_sequence = 0
         self.physics_sub = omni.physx.get_physx_interface().subscribe_physics_on_step_events(self._on_physics_step, True, 0)
         self.observation_sub = None
         try:
@@ -182,6 +183,14 @@ class ConfiguredSupplyAdapter:
             self._contact_observer_call('clear')
             return
         self.conveyor.on_physics_step(dt)
+        # Count executed steps on the device-driving callback, independently of
+        # the optional contact callback. This evidence never controls execution.
+        self._physics_step_sequence += 1
+        try:
+            if self._cycle_evidence is not None:
+                self._cycle_evidence.physics_step(self._physics_step_sequence)
+        except Exception:
+            self._cycle_evidence = None
 
     def _on_physics_observation(self, dt):
         if not self.timeline.is_playing():
@@ -220,7 +229,8 @@ class ConfiguredSupplyAdapter:
                         self.configuration['model_configuration']['isaac']['articulation_base']):
                     continue
                 collisions.append(contact)
-            self._cycle_evidence.observe(collisions, physics_step=physics_step)
+            self._cycle_evidence.observe(collisions,
+                step_id=getattr(self, '_physics_step_sequence', None), physics_step=physics_step)
         except Exception:
             self._cycle_evidence.observe(None)
 

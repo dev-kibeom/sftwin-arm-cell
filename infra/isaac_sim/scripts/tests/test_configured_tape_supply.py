@@ -1,6 +1,7 @@
 """Configured inventory consumes only a correlated, physically completed reservation."""
 import sys
 from pathlib import Path
+import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tape_roll_cell.supply import ConfiguredTapeSupply
 
@@ -202,7 +203,8 @@ def test_pending_terminal_contact_is_included_before_cycle_verdict():
     adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
     records=[];adapter._cycle_evidence=CycleEvidence(records.append)
     adapter._cycle_evidence.start('cycle')
-    adapter._cycle_evidence.observe([])
+    adapter._cycle_evidence.physics_step(1)
+    adapter._cycle_evidence.observe([], step_id=1)
     adapter._pending_cycle='cycle';adapter._cycle_slot=0
     adapter.paths=['/roll'];adapter.supply=S(_selected=None)
     adapter.robot_bodies={'/robot'};adapter.tool_session=None
@@ -216,3 +218,35 @@ def test_pending_terminal_contact_is_included_before_cycle_verdict():
     assert adapter.failure==''
     assert records[-1]['verification']=='FAIL'
     assert records[-1]['observed_steps']==1
+
+
+@pytest.mark.parametrize('observe_tail,expected', [(False,'UNAVAILABLE'),(True,'PASS')])
+def test_cycle_coverage_does_not_change_device_or_mission_progress(observe_tail, expected):
+    from types import SimpleNamespace as S
+    from tape_roll_cell.cell_runtime import ConfiguredSupplyAdapter
+    from tape_roll_cell.cycle_evidence import CycleEvidence
+    adapter=ConfiguredSupplyAdapter.__new__(ConfiguredSupplyAdapter)
+    records=[];adapter._cycle_evidence=CycleEvidence(records.append)
+    adapter._cycle_evidence.start('cycle')
+    adapter._physics_step_sequence=0
+    commands=[];adapter.conveyor=S(on_physics_step=commands.append,
+                                 release_to_outfeed=lambda path:commands.append('outfeed'))
+    adapter.timeline=S(is_playing=lambda:True)
+    adapter.observer=S(advance=lambda:None,snapshot=[])
+    adapter.robot_bodies=set();adapter.paths=['/roll'];adapter._cycle_slot=0
+    adapter.supply=S(_selected=None);adapter.tool_session=None
+    adapter._pending_cycle='cycle';adapter.failure=''
+    adapter._last_state_at=float('inf');adapter.teaching=S(tick=lambda:None)
+    adapter.sidecar=S(poll_messages=lambda:[dict(op='mission_result',request_id='cycle',success=True)],
+                      flush_outgoing=lambda:None)
+    adapter._on_physics_step(.01);adapter._on_physics_observation(.01)
+    # Physics and device commands continue while the observation callback stops.
+    for _ in range(2):
+        adapter._on_physics_step(.01)
+        if observe_tail:
+            adapter._on_physics_observation(.01)
+    adapter._poll_sidecar()
+    assert commands==[.01,.01,.01,'outfeed']
+    assert adapter.failure=='' and adapter._pending_cycle is None
+    assert records[-1]['sequence_completed'] is True
+    assert records[-1]['verification']==expected

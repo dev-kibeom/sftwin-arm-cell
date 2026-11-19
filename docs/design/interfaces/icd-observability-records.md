@@ -157,6 +157,10 @@ PICK/PLACE Trajectory 완료는 정확도·안정화 보증이 아니다. 관측
 Simulation은 세션 diagnostic root의 `simulation/tape_cycles/`에 사이클별 `tape_cycle_verification`을
 기록한다. session_id, cycle_id, supply_epoch, slot_id, 로컬 monotonic 시작·종료와 관측 step coverage로
 범위를 연결한다. sequence_completed와 verification(PASS/FAIL/UNAVAILABLE)은 런타임 종료와
-독립 검증을 구별한다. 충돌 상세는 유계로 기록하고 상세 잘림·관측 누락을 coverage에 보존한다.
+독립 검증을 구별한다. executed_steps/observed_steps와 first_step_id, last_executed_step_id,
+last_observed_step_id로 실행·관측 구간을 대조한다. coverage_complete는 실행된 모든 Step이
+순서대로 한 번씩 관측된 경우에만 참이며, 관측 콜백이 멈춰도 실행 Step 기록은 계속된다.
+종료 시 버퍼 비우기는 observed_steps를 증가시키지 않는다. 실행·관측 구간의 대조 근거가 없는
+기록은 전체 구간의 관측 완결성을 입증하지 않는다. 충돌 상세는 유계로 기록하고 상세 잘림·관측 누락을 coverage에 보존한다.
 작업 완료 의미는 [Tape Cell FDS](../components/simulation/fds-tape-cell-supply.md)가 소유한다.
 이 기록의 생성·저장·판정 결과는 공정 제어 입력이 아니다. 기록 부재나 저장 실패는 PASS가 아니다.
