@@ -1024,6 +1024,7 @@ TEST(MotionPlanningDiagnosticCaptureTest, PreservesPlaceRequestsAcrossHomeWithSa
   for (const auto & entry : std::filesystem::directory_iterator(stages)) {
     nlohmann::json record;
     std::ifstream(entry.path()) >> record;
+    EXPECT_TRUE(record.contains("recorded_steady_ns"));
     if (record["task_type"] == "TASK_TYPE_PLACE") {
       requests.insert(record["planning_evidence"]["request"].get<int>());
     } else if (record["task_type"] == "TASK_TYPE_GO_HOME") {home = true;}

@@ -18,6 +18,45 @@ MAX_SESSION_BYTES = 8 * 1024 * 1024
 MAX_SESSIONS = 20
 
 
+class PoseRecordWriter:
+    """Move JSONL formatting and append I/O off the Kit update thread."""
+    def __init__(self):
+        from gripper_runtime.capture_diagnostics import BoundedCaptureDiagnosticWriter
+        self.sizes = {}
+        self.directories = set()
+        self.writer = BoundedCaptureDiagnosticWriter('.', max_pending=256, write_record=self._write)
+
+    def submit(self, path, record):
+        self.directories.add(Path(path).parent)
+        return self.writer.submit(dict(path=str(path), record=record))
+
+    def _write(self, item):
+        path = Path(item['path'])
+        encoded = json.dumps(item['record'], separators=(',', ':'), sort_keys=True)+'\n'
+        size = self.sizes.get(path)
+        if size is None:
+            size = path.stat().st_size if path.exists() else 0
+        if size + len(encoded.encode()) > MAX_SESSION_BYTES:
+            raise OSError('pose recording segment byte limit reached')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a', encoding='utf-8') as stream:
+            stream.write(encoded)
+        self.sizes[path] = size + len(encoded.encode())
+
+    def close(self):
+        drained = self.writer.close()
+        summary = dict(schema_version=1, written_count=self.writer.written_count,
+            dropped_count=self.writer.dropped_count, write_failure_count=self.writer.write_failure_count,
+            capture_complete=bool(drained and not self.writer.dropped_count and not self.writer.write_failure_count))
+        for directory in tuple(self.directories):
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory/'pose_capture_summary.json').write_text(json.dumps(summary)+'\n')
+            except OSError:
+                pass
+        return drained
+
+
 class RawPartPoseRecorder:
     """Record changed PhysX poses from the Material Supply Kit update path."""
 
@@ -28,8 +67,12 @@ class RawPartPoseRecorder:
         live_test_session_id: str | None = None,
         *,
         delivery_root: str | None = None,
+        append_record=None,
+        material_paths=None,
     ):
         self.delivery_root = delivery_root if delivery_root is not None else selected_delivery_root()
+        self.append_record = append_record
+        self.material_paths = material_paths
         self.stage = stage
         self.artifact_directory = Path(artifact_directory)
         self._default_artifact_directory = self.artifact_directory
@@ -51,7 +94,8 @@ class RawPartPoseRecorder:
             return False
         current: dict[str, dict[str, Any]] = {}
         complete = True
-        for prim in self.stage.Traverse():
+        prims = (self.stage.GetPrimAtPath(path) for path in self.material_paths()) if self.material_paths else self.stage.Traverse()
+        for prim in prims:
             if not prim.IsValid() or not prim.GetName().startswith("Material_"):
                 continue
             path = str(prim.GetPath())
@@ -205,6 +249,8 @@ class RawPartPoseRecorder:
             "event": event,
             **pose,
         }
+        if self.append_record is not None:
+            return bool(self.append_record(self.session_path, record))
         encoded = json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n"
         size = self.session_path.stat().st_size if self.session_path.exists() else 0
         if size + len(encoded.encode("utf-8")) > MAX_SESSION_BYTES:

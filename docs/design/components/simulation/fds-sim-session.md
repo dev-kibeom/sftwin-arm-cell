@@ -51,6 +51,11 @@ Isaac Reset은 멱등적이며 Fresh Gripper `RELEASED`나 실제 Safety Recover
 
 ## 4. 참여 책임 및 관측 의미
 
+참여자는 실행에 실제 적용한 설정을 불변 Snapshot과 내용 Hash로 세션에 연결한다.
+시뮬레이션 시작 설정, ROS Bringup 설정 및 세션 중 적용된 티칭 변경을 생산자와 적용 사건별로
+구분한다. 현재 파일 경로·Git Revision만으로 과거의 적용값을 대신하지 않는다. 설정 기록 실패나
+이력 한도는 관측 가능한 진단 제한으로 남으며 실행 수락·종료를 바꾸지 않는다.
+
 `arm_cell_sim_adapter`는 정규 Joint-state 발행과 실제 측정 상태 유효성을 소유하고 Isaac Simulation은 Timeline 및 Scene Reset을 소유한다. Simulation Runtime은 이들 Epoch 경계를 조정한다. Vision·Motion·Orchestration 등 Consumer는 명시적 Simulator Epoch 전환 시 **자신이 소유한 시간 의존 Cache와 대기 작업만** 정리한다. 다른 Consumer가 경쟁 Session Authority를 생성하지 않는다. Session/Time/TF 공유 필드의 의미는 [Simulation ICD](../../interfaces/icd-sim-state-time-tf.md)를 따른다.
 
 ## 5. Verification Requirements

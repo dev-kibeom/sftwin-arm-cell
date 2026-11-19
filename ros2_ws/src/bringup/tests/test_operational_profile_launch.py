@@ -1091,6 +1091,9 @@ def test_session_indexes_selected_calibration_and_camera_topics(tmp_path):
     assert data["camera"]["camera_id"] == "real_d455_01"
     assert data["camera"]["vision_calibration"]["path"] == str(calibration)
     assert data["camera"]["vision_calibration"]["sha256"] == hashlib.sha256(calibration.read_bytes()).hexdigest()
+    reference = data['configuration_snapshots'][0]
+    assert reference['producer'] == 'ros_bringup'
+    assert json.loads((root / reference['path']).read_text()) == config
 
 
 def test_custom_record_root_reaches_writers_without_a_session(monkeypatch):

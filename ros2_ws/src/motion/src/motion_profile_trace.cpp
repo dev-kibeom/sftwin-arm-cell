@@ -54,8 +54,11 @@ void csv_values(std::ostream & out, const std::vector<double> & values, std::siz
 }
 }  // namespace
 
-MotionProfileTrace::MotionProfileTrace(std::string output_directory, std::size_t max_samples)
-: output_directory_(std::move(output_directory)), max_samples_(max_samples)
+MotionProfileTrace::MotionProfileTrace(
+  std::string output_directory, std::size_t max_samples,
+  std::uintmax_t max_directory_bytes)
+: storage_(std::make_shared<StorageBudget>(max_directory_bytes)),
+  output_directory_(std::move(output_directory)), max_samples_(max_samples)
 {
   rows_.reserve(std::min(max_samples_, static_cast<std::size_t>(100000)));
 }
@@ -111,12 +114,25 @@ MotionProfileTraceResult MotionProfileTrace::finish(
   const auto directory = std::filesystem::path(output_directory_);
   result.samples_path = (directory / (basename + ".csv")).string();
   result.manifest_path = (directory / (basename + ".manifest.json")).string();
+  const auto temporary_csv = result.samples_path + ".tmp";
+  const auto temporary_manifest = result.manifest_path + ".tmp";
   try {
+    std::lock_guard<std::mutex> storage_lock(storage_->mutex);
     std::filesystem::create_directories(directory);
-    std::ofstream csv(result.samples_path, std::ios::trunc);
+    if (!storage_->initialized) {
+      for (const auto & entry : std::filesystem::directory_iterator(directory)) {
+        if (entry.is_regular_file()) {storage_->retained_bytes += entry.file_size();}
+      }
+      storage_->initialized = true;
+    }
+    if (std::filesystem::exists(result.samples_path) || std::filesystem::exists(
+        result.manifest_path))
+    {
+      throw std::runtime_error("profile destination already exists");
+    }
+    std::ofstream csv(temporary_csv, std::ios::trunc);
     if (!csv) {
-      result.error = "unable to open profile samples artifact";
-      return result;
+      throw std::runtime_error("unable to open profile samples artifact");
     }
     csv << std::setprecision(17) << "simulation_time,kind";
     for (const auto & name : joint_names) {
@@ -135,6 +151,7 @@ MotionProfileTraceResult MotionProfileTrace::finish(
       csv << ",actual_velocity[" << name << ']';
     }
     csv << '\n';
+    std::size_t row_number = 0;
     for (const auto & row : rows_) {
       csv << row.simulation_time << ',' << row.kind;
       csv_values(csv, row.commanded_positions, joint_names.size());
@@ -143,16 +160,17 @@ MotionProfileTraceResult MotionProfileTrace::finish(
       csv_values(csv, row.actual_positions, joint_names.size());
       csv_values(csv, row.actual_velocities, joint_names.size());
       csv << '\n';
+      if (++row_number % 1024U == 0U &&
+        storage_->retained_bytes + static_cast<std::uintmax_t>(csv.tellp()) > storage_->limit)
+      {throw std::runtime_error("profile directory byte limit reached");}
     }
     csv.close();
     if (!csv) {
-      result.error = "failed while writing profile samples artifact";
-      return result;
+      throw std::runtime_error("failed while writing profile samples artifact");
     }
-    std::ofstream manifest(result.manifest_path, std::ios::trunc);
+    std::ofstream manifest(temporary_manifest, std::ios::trunc);
     if (!manifest) {
-      result.error = "unable to open profile evidence manifest";
-      return result;
+      throw std::runtime_error("unable to open profile evidence manifest");
     }
     manifest << "{\n"
              << "  \"evidence_id\": " << json_string("motion-profile-" + run_id_) << ",\n"
@@ -181,13 +199,26 @@ MotionProfileTraceResult MotionProfileTrace::finish(
              << "  \"truncated\": " << (dropped_sample_count_ != 0 ? "true" : "false") << "\n"
              << "}\n";
     if (!manifest) {
-      result.error = "failed while writing profile evidence manifest";
-      return result;
+      throw std::runtime_error("failed while writing profile evidence manifest");
     }
+    manifest.close();
+    if (!manifest) {throw std::runtime_error("profile manifest close failed");}
+    const auto csv_bytes = std::filesystem::file_size(temporary_csv);
+    const auto manifest_bytes = std::filesystem::file_size(temporary_manifest);
+    if (storage_->retained_bytes + csv_bytes + manifest_bytes > storage_->limit) {
+      throw std::runtime_error("profile directory byte limit reached");
+    }
+    std::filesystem::rename(temporary_csv, result.samples_path);
+    storage_->retained_bytes += csv_bytes;
+    std::filesystem::rename(temporary_manifest, result.manifest_path);
+    storage_->retained_bytes += manifest_bytes;
     result.success = true;
   } catch (const std::exception & error) {
     result.error = error.what();
   }
+  std::error_code cleanup_error;
+  std::filesystem::remove(temporary_csv, cleanup_error);
+  std::filesystem::remove(temporary_manifest, cleanup_error);
   return result;
 }
 
@@ -202,6 +233,7 @@ std::shared_ptr<MotionProfileTrace> MotionProfileTrace::take_snapshot()
   auto snapshot = std::make_shared<MotionProfileTrace>(output_directory_, max_samples_);
   std::lock_guard<std::mutex> lock(mutex_);
   snapshot->rows_ = std::move(rows_);
+  snapshot->storage_ = storage_;
   snapshot->dropped_sample_count_ = dropped_sample_count_;
   snapshot->run_id_ = std::move(run_id_);
   snapshot->runtime_identity_ = std::move(runtime_identity_);

@@ -36,7 +36,9 @@ struct MotionProfileTraceResult
 class MotionProfileTrace final
 {
 public:
-  explicit MotionProfileTrace(std::string output_directory, std::size_t max_samples = 100000);
+  explicit MotionProfileTrace(
+    std::string output_directory, std::size_t max_samples = 100000,
+    std::uintmax_t max_directory_bytes = 256U * 1024U * 1024U);
 
   void begin(
     std::string run_id, std::string runtime_identity, std::string profile_identity,
@@ -50,6 +52,16 @@ public:
   std::size_t sample_count() const;
 
 private:
+  struct StorageBudget
+  {
+    std::mutex mutex;
+    std::uintmax_t retained_bytes{0};
+    std::uintmax_t limit;
+    bool initialized{false};
+    explicit StorageBudget(std::uintmax_t maximum)
+    : limit(maximum) {}
+  };
+  std::shared_ptr<StorageBudget> storage_;
   std::string output_directory_;
   std::size_t max_samples_;
   mutable std::mutex mutex_;

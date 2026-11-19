@@ -14,6 +14,34 @@ namespace arm_cell_motion
 {
 namespace
 {
+TEST(MotionProfileTrace, FailedManifestWriteCleansTemporaryCsv)
+{
+  const auto directory = std::filesystem::temp_directory_path() / "motion_profile_cleanup_test";
+  std::filesystem::remove_all(directory);
+  std::filesystem::create_directories(directory / "blocked.manifest.json.tmp");
+  MotionProfileTrace trace(directory.string());
+  trace.begin("blocked", "runtime", "profile", "sim_time", "sha");
+  trace.add_row({0.0, "command", {0.1}, {}, {}, {}, {}});
+  const auto result = trace.finish("completed", {"joint"}, "config");
+  EXPECT_FALSE(result.success);
+  EXPECT_FALSE(std::filesystem::exists(directory / "blocked.csv.tmp"));
+  std::filesystem::remove_all(directory);
+}
+
+TEST(MotionProfileTrace, FullDirectoryRejectsCaptureWithoutPublishingPartialSuccess)
+{
+  const auto directory = std::filesystem::temp_directory_path() / "motion_profile_budget_test";
+  std::filesystem::remove_all(directory);
+  MotionProfileTrace trace(directory.string(), 100, 16);
+  trace.begin("budget", "runtime", "profile", "sim_time", "sha");
+  trace.add_row({0.0, "command", {0.1}, {}, {}, {}, {}});
+  const auto snapshot = trace.take_snapshot();
+  const auto result = snapshot->finish("completed", {"joint"}, "config");
+  EXPECT_FALSE(result.success);
+  EXPECT_FALSE(std::filesystem::exists(result.manifest_path));
+  std::filesystem::remove_all(directory);
+}
+
 TEST(MotionProfileTrace, BoundsSamplesAndWritesManifestWithArtifactReference)
 {
   const auto directory = std::filesystem::temp_directory_path() / "motion_profile_trace_test";

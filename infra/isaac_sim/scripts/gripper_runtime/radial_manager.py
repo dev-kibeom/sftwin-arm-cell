@@ -216,12 +216,14 @@ class RadialGraspManager:
             coverage={'detailed_enabled':self._detailed_diagnostics,
                       'detail_sample_limit_per_command':128,
                       'detail_samples_submitted':self._diagnostic_samples})
-        if detailed:
-            self._diagnostic_elapsed = 0.
-            self._diagnostic_samples += 1
+        if detailed or (changed and self._detailed_diagnostics):
+            if detailed:
+                self._diagnostic_elapsed = 0.
+                self._diagnostic_samples += 1
             record['coverage']['detail_samples_submitted'] = self._diagnostic_samples
+            record['coverage']['detail_reason'] = 'state_change' if changed else 'periodic'
             record.update(self.diagnostics())
-            record['coverage']['contacts'] = 'latest_physics_step_only'
+            record['coverage']['contacts'] = 'not_captured'
         self._writer.submit(record)
 
     def release_receipt(self):

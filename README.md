@@ -266,6 +266,15 @@ Isaac Sim의 **UI Hub**는 카메라·Vision 결과와 운영자 조작을 제�
   설정 파일의 기본 경로는 `.run_records/runtime_configuration.json`입니다.
 - 자재 정의는 `ros2_ws/src/bringup/config/materials/`에 있습니다. UI Hub 목록은 실행 시 읽은 설정을 사용합니다.
 - 진단 기록은 기본 `.run_records/` 아래에 저장됩니다. 런처 터미널 출력은 창이 닫히면 사라집니다.
+- 실행별 진단은 `.run_records/YYYYMMDD/HHMMSS[-NN]/diagnostic/`에 모이며
+  같은 실행의 이미지는 형제 `snapshots/`에 저장됩니다. `diagnostic/session.json`에서
+  컴포넌트 기록·원본 로그 참조·적용 설정 Snapshot을 찾습니다. `configuration/`의
+  내용 Hash별 설정은 시작 및 티칭 Apply 당시 값이며, 런처 입력 파일과 구분합니다.
+- Gripper의 `execution_index.jsonl`은 작업별 상세 파일을 연결하고 `capture_summary.json`은
+  저장·유실 범위를 설명합니다. `grasp_state_evidence`는 장치 보유 판정과 독립된 실제
+  자재·TCP 관측이며, 상세 선택 시 상태 변화 전후를 유계로 보존합니다.
+- Vision 저장 예산은 `diagnostics.storage_budget_bytes`(기본 256 MiB)이며
+  예산 소진·출력 실패는 종료 요약에 남습니다. 진단 실패는 제어 결과를 바꾸지 않습니다.
 - 호스트 ROS 상세 로그는 `log_level:=debug`로 켭니다. 기본 `info`는 선택적 진단 수집을 끄고,
   `debug`는 모든 ROS 진단 수집을 켭니다. `diagnostics:=none`, `all`, 또는
   `motion,vision,safety,orchestration` 중 쉼표 구분 목록으로 수집 범위를 선택합니다.

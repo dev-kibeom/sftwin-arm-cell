@@ -1,6 +1,7 @@
 """Best-effort Isaac-owned live test session descriptors."""
 
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,39 @@ from datetime import datetime
 
 
 COMPONENTS = ("vision", "motion", "gripper", "safety", "orchestration", "clock", "simulation")
+
+
+def record_configuration_snapshot(descriptor, configuration, producer, reason):
+    """Retain the applied values; source files may change after this event."""
+    descriptor = Path(descriptor)
+    payload = json.dumps(configuration, sort_keys=True, allow_nan=False, separators=(',', ':'))
+    digest = hashlib.sha256(payload.encode()).hexdigest()
+    directory = descriptor.parent / 'configuration'
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f'{digest}.json'
+    with _descriptor_lock(descriptor):
+        data = json.loads(descriptor.read_text())
+        if data.get('status') != 'open':
+            return None
+        events = data.setdefault('configuration_snapshots', [])
+        if len(events) >= 256:
+            data['configuration_history_truncated'] = True
+            temporary = descriptor.with_suffix('.json.tmp')
+            temporary.write_text(json.dumps(data, indent=2)+'\n', encoding='utf-8')
+            os.replace(temporary, descriptor)
+            return None
+        if not path.exists():
+            temporary = path.with_suffix('.json.tmp')
+            temporary.write_text(payload+'\n', encoding='utf-8')
+            os.replace(temporary, path)
+        import time
+        events.append(dict(producer=producer, reason=reason, sha256=digest,
+            path=str(path.relative_to(descriptor.parent)), observed_monotonic_ns=time.monotonic_ns(),
+            time_basis='producer_local_monotonic'))
+        temporary = descriptor.with_suffix('.json.tmp')
+        temporary.write_text(json.dumps(data, indent=2)+'\n', encoding='utf-8')
+        os.replace(temporary, descriptor)
+    return path
 
 
 def _git_provenance(project_root):

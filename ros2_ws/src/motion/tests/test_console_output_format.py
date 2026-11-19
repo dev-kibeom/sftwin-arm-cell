@@ -87,3 +87,19 @@ def test_ompl_raw_ros_logs_remain_on_console_if_file_logging_fails(
     error_line = "[ERROR] [ompl] ./src/ompl/RRTConnect.cpp:265 - planner failed"
 
     assert formatter.format(line=error_line, this=move_group).endswith(error_line)
+
+
+def test_formatter_records_in_the_selected_run_instead_of_global_launch_directory(
+    tmp_path, monkeypatch
+):
+    source = Path(__file__).resolve().parents[1] / 'launch/console_output_format.py'
+    formatter_type = _load_formatter(source, 'console_output_format_run')
+    monkeypatch.setattr(launch_config, '_log_dir', str(tmp_path / 'global-logs'))
+    monkeypatch.setattr(launch_config, 'file_handlers', {})
+    formatter = formatter_type('{line}')
+    formatter.record_directory = tmp_path / '20261120/001122/diagnostic/ros_logs'
+    process = SimpleNamespace(process_description=SimpleNamespace(final_name='motion'))
+    assert formatter.format(line='completed', this=process).endswith('completed')
+    saved = formatter.record_directory / 'ros_output_nanoseconds.log'
+    assert '[motion] completed' in saved.read_text()
+    assert not (tmp_path / 'global-logs/ros_output_nanoseconds.log').exists()

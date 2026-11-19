@@ -327,3 +327,18 @@ def test_first_play_adopts_initialization_run_after_helper_reload(initialization
 
     assert session.root == diagnostic
     assert len(list(artifact_root.glob("[0-9]*/*"))) == 1
+
+
+def test_applied_configuration_snapshots_are_immutable_and_indexed(tmp_path):
+    import json
+    from isaac_runtime.live_test_session import LiveTestSession, record_configuration_snapshot
+    session = LiveTestSession(tmp_path)
+    first = {'tool': {'mode': 'physical'}, 'taught_motions': {'transfer': [1]}}
+    path = record_configuration_snapshot(session.descriptor, first, 'isaac', 'session_start')
+    original = path.read_bytes()
+    second = {'tool': {'mode': 'physical'}, 'taught_motions': {'transfer': [2]}}
+    updated = record_configuration_snapshot(session.descriptor, second, 'isaac', 'teaching_applied')
+    assert path != updated and path.read_bytes() == original
+    data = json.loads(session.descriptor.read_text())
+    assert [item['reason'] for item in data['configuration_snapshots']] == ['session_start', 'teaching_applied']
+    assert data['configuration_snapshots'][0]['sha256'] != data['configuration_snapshots'][1]['sha256']

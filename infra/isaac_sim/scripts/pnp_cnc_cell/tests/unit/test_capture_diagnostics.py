@@ -149,7 +149,8 @@ def test_writer_enforces_record_and_directory_byte_limits(tmp_path, monkeypatch)
     import gripper_runtime.capture_diagnostics as capture_diagnostics
 
     monkeypatch.setattr(capture_diagnostics, "MAX_CAPTURE_RECORD_BYTES", 1024)
-    monkeypatch.setattr(capture_diagnostics, "MAX_CAPTURE_DIRECTORY_BYTES", 100)
+    # The budget includes the durable execution index as well as record bytes.
+    monkeypatch.setattr(capture_diagnostics, "MAX_CAPTURE_DIRECTORY_BYTES", 160)
     writer = BoundedCaptureDiagnosticWriter(tmp_path)
     assert writer.submit({"motion_goal_uuid": "goal-one", "payload": "x"})
     assert writer.submit({"motion_goal_uuid": "goal-two", "payload": "x"})
@@ -562,3 +563,29 @@ def test_writer_logging_failure_does_not_stop_storage(monkeypatch):
     assert writer.submit({'id':'kept'})
     assert writer.close()
     assert written==[{'id':'kept'}]
+
+
+def test_writer_persists_execution_index_and_loss_summary(tmp_path):
+    from gripper_runtime.capture_diagnostics import BoundedCaptureDiagnosticWriter
+    writer = BoundedCaptureDiagnosticWriter(tmp_path)
+    assert writer.submit({'record_id': 'radial-event', 'execution_id': 'execution-a', 'coverage': {}})
+    assert writer.close()
+    index = [json.loads(line) for line in (tmp_path / 'execution_index.jsonl').read_text().splitlines()]
+    assert index[0]['execution_id'] == 'execution-a'
+    assert index[0]['path'] == 'radial-event.json'
+    summary = json.loads((tmp_path / 'capture_summary.json').read_text())
+    assert summary['capture_complete'] and summary['written_count'] == 1
+    assert writer.submit({'record_id': 'late', 'coverage': {}}) is False
+    assert writer.close()
+    assert not json.loads((tmp_path / 'capture_summary.json').read_text())['capture_complete']
+
+
+def test_storage_failure_has_durable_incomplete_coverage(tmp_path, monkeypatch):
+    from gripper_runtime import capture_diagnostics as module
+    monkeypatch.setattr(module, 'MAX_CAPTURE_RECORD_BYTES', 8)
+    writer = module.BoundedCaptureDiagnosticWriter(tmp_path)
+    assert writer.submit({'record_id': 'too-large', 'coverage': {}})
+    assert writer.close()
+    summary = json.loads((tmp_path / 'capture_summary.json').read_text())
+    assert not summary['capture_complete']
+    assert summary['write_failure_count'] == 1

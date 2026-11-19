@@ -385,3 +385,14 @@ def test_failed_segment_initialization_is_retried_after_storage_recovers(tmp_pat
     assert [event['event'] for event in _events(recorder.session_path)] == [
         'session_started', 'created'
     ]
+
+
+def test_background_pose_writer_drains_frozen_records_and_reports_coverage(tmp_path):
+    from scene_builder.material_supply_pose_recorder import PoseRecordWriter
+    writer = PoseRecordWriter()
+    path = tmp_path / 'object_poses-01.jsonl'
+    assert writer.submit(path, {'event': 'pose_changed', 'position_xyz': [1, 2, 3]})
+    assert writer.close()
+    assert _events(path)[0]['position_xyz'] == [1, 2, 3]
+    summary = json.loads((tmp_path / 'pose_capture_summary.json').read_text())
+    assert summary['capture_complete'] and summary['written_count'] == 1

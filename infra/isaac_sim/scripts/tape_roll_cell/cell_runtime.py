@@ -94,11 +94,20 @@ class ConfiguredSupplyAdapter:
         self._cart_number=0;self._pending_cycle=None;self._mission_available=False;self._mission_available_at=0.
         self._cycle_slot=None;self.last_mission_status=''
         self._cycle_evidence=None;self._cycle_writer=None
+        from isaac_runtime.material_observations import register_material_source
+        register_material_source(self, self.diagnostic_materials)
         register_supply_port(self,dict(materials=[dict(id=self.supply.material_id,label='Tape Roll 17 mm')],
             count_label=f'Full cartridges ({self.supply._count} rolls each)',default_count=1),
             self.request_supply,self.supply_status)
         from tape_roll_cell.teaching_runtime import TeachingSession
         self.teaching = TeachingSession(self)
+
+    def diagnostic_materials(self):
+        return [dict(prim_path=path, material_id=self.supply.material_id,
+                     supply_epoch=self.supply.epoch, slot_id=f'slot_{index}',
+                     reservation_id=self.supply.reservation_id if index == self.supply._selected else None,
+                     selected=index == self.supply._selected,
+                     association='configured_supply_slot') for index, path in enumerate(self.paths)]
 
     def request_supply(self,material_id,count):
         if not self.timeline.is_playing():return dict(accepted=False,detail='Press Play before requesting Supply.')
@@ -331,6 +340,8 @@ class ConfiguredSupplyAdapter:
         if self._closed:
             return
         self._closed = True
+        from isaac_runtime.material_observations import clear_material_source
+        clear_material_source(self)
         if self.physics_sub is not None:
             unsubscribe = getattr(self.physics_sub, 'unsubscribe', None)
             if callable(unsubscribe): unsubscribe()

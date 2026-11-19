@@ -308,7 +308,8 @@ def join_live_test_session(artifact_directory):
         "git_provenance": _git_provenance(),
     }
     recording_locations = {
-        "ros_logs": str(launch_config.log_dir),
+        "ros_logs": str(descriptor.parent / "ros_logs"),
+        "launcher_logs": str(launch_config.log_dir),
         "clock": str(descriptor.parent / "clock"),
         "simulation": str(descriptor.parent / "simulation"),
         "snapshots": str(
@@ -450,7 +451,8 @@ def create_recording_session(artifact_directory, runtime, related_session_id=Non
                 if not source.is_absolute():
                     source = related_root / source
                 data["recording_locations"][component] = str(source)
-        data["recording_locations"]["ros_logs"] = str(launch_config.log_dir)
+        data["recording_locations"]["ros_logs"] = str(root / "ros_logs")
+        data["recording_locations"]["launcher_logs"] = str(launch_config.log_dir)
         data["recording_locations"]["snapshots"] = str(
             run_root / record_directory_name("snapshots"))
         descriptor = root / "session.json"
@@ -501,6 +503,16 @@ def record_session_configuration(root, config, profile_path, selection, include_
             if data.get("status") != "open":
                 return
             data.update(selection_record)
+            payload = json.dumps(config, sort_keys=True, allow_nan=False, separators=(',', ':'))
+            digest = hashlib.sha256(payload.encode()).hexdigest()
+            configuration_directory = Path(root) / 'configuration'
+            configuration_directory.mkdir(exist_ok=True)
+            snapshot = configuration_directory / f'{digest}.json'
+            if not snapshot.exists():
+                snapshot.write_text(payload+'\n', encoding='utf-8')
+            data.setdefault('configuration_snapshots', []).append(dict(
+                producer='ros_bringup', reason='bringup_start', sha256=digest,
+                path=str(snapshot.relative_to(root))))
             data['camera_configuration'] = camera_configuration_provenance(config.get('cell', {}).get('camera'))
             temporary = descriptor.with_suffix(".json.tmp")
             temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -685,6 +697,8 @@ def compose(context):
         if live_session_root
         else diagnostic_root(artifact_directory) / "orchestration"
     )
+    run_log_directory = (live_session_root if live_session_root else diagnostic_root(artifact_directory)) / 'ros_logs'
+    CONSOLE_OUTPUT_FORMAT.record_directory = run_log_directory
     selected_action_logger_level = LaunchConfiguration("action_logger_level").perform(
         context
     )
@@ -698,6 +712,7 @@ def compose(context):
                                      selected_diagnostics, include_simulation)
     common_actions = [
         SetEnvironmentVariable("SFTWIN_PROJECT_ROOT", str(project_checkout_root())),
+        SetEnvironmentVariable("ROS_LOG_DIR", str(run_log_directory / 'nodes')),
         SetEnvironmentVariable(
             "RCUTILS_CONSOLE_OUTPUT_FORMAT",
             "[{severity}] [{name}] {message}",

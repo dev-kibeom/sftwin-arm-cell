@@ -41,6 +41,9 @@ class PhysicalGraspManager:
         self._writer = None
         self._diagnostic_elapsed = 0.0
         self._diagnostic_failure_logged = False
+        self._detailed_diagnostics = False
+        self._diagnostic_key = None
+        self._diagnostic_samples = 0
         if stage is not None:
             from gripper_runtime.physical_contacts import PhysicalContactObserver
             try:
@@ -105,6 +108,7 @@ class PhysicalGraspManager:
 
     def arm_close_transaction(self, execution_id=None, command_generation=None):
         self.cancel_tool_transaction()
+        self._diagnostic_samples = 0
         self._close_transaction_failure_reason = None
         if (not self.ready or not self.capture_reference_id
                 or execution_id != self.capture_reference_id or self.holding_settings is None):
@@ -143,6 +147,7 @@ class PhysicalGraspManager:
 
     def note_open_release_command_applied(self, generation, width_mm):
         self.cancel_tool_transaction()
+        self._diagnostic_samples = 0
         self._opening = True
         self._sequence += 1
         self._record(HoldingState.UNKNOWN)
@@ -183,17 +188,30 @@ class PhysicalGraspManager:
             self.state = GraspState.GRASPED if inferred is HoldingState.HELD else GraspState.SEEKING
             self._record(inferred)
         self._diagnostic_elapsed += max(0., float(dt))
-        if self._writer is not None and self._diagnostic_elapsed >= 0.1:
-            self._diagnostic_elapsed = 0.0
+        execution = self._close_reference_id or self.capture_reference_id
+        key = (execution, self._opening, self._holding.state)
+        changed = key != self._diagnostic_key
+        detailed = (self._detailed_diagnostics and execution and
+                    self._diagnostic_samples < 128 and self._diagnostic_elapsed >= .1)
+        if self._writer is not None and execution and (changed or detailed):
+            if execution != (self._diagnostic_key or (None,))[0]:
+                self._diagnostic_samples = 0
+            self._diagnostic_key = key
+            if detailed:
+                self._diagnostic_elapsed = 0.0
+                self._diagnostic_samples += 1
             try:
+                detail = self.diagnostics() if self._detailed_diagnostics else dict(holding_state=self._holding.state.value)
                 self._writer.submit(dict(
                     schema_version=1, record_type='physical_grasp',
                     record_id=f'physical-{time.monotonic_ns()}',
                     execution_id=self._close_reference_id or self.capture_reference_id,
                     observed_monotonic_ns=time.monotonic_ns(),
                     time_bases={'observed_monotonic_ns': 'host monotonic clock'},
-                    coverage={'contacts': 'latest_physics_step_only'},
-                    **self.diagnostics()))
+                    coverage={'contacts': 'latest_physics_step_only' if self._detailed_diagnostics and self._observer else 'not_captured',
+                              'detail_reason': 'state_change' if changed else 'periodic',
+                              'detail_samples_submitted': self._diagnostic_samples},
+                    **detail))
             except Exception as error:
                 if not self._diagnostic_failure_logged:
                     LOGGER.warning('Physical grasp diagnostics unavailable: %s', error)
@@ -219,6 +237,9 @@ class PhysicalGraspManager:
 
     def set_diagnostic_observers(self, writer=None, physx_observer=None):
         self._writer = writer
+
+    def set_detailed_diagnostics_enabled(self, enabled):
+        self._detailed_diagnostics = bool(enabled)
 
     @property
     def attach_joint_path(self):

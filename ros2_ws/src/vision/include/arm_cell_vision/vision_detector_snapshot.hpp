@@ -156,6 +156,7 @@ private:
     bool metadata_saved{false};
   };
   void run();
+  bool reserve_storage_bytes(std::size_t bytes);
   arm_cell_interfaces::msg::VisionDetectorSnapshot render(VisionDetectorSnapshotJob & job);
   cv::Mat render_annotation(
     const VisionDetectorSnapshotJob & job, bool & source_image_rendered,
@@ -194,6 +195,14 @@ private:
   std::optional<VisionDetectorSnapshotJob> progress_pending_;
   std::deque<VisionDetectorSnapshotJob> terminal_pending_;
   uint64_t revision_ = 0;
+  uint64_t accepted_terminal_ = 0;
+  uint64_t dropped_terminal_ = 0;
+  uint64_t failed_outputs_ = 0;
+  uint64_t storage_bytes_ = 0;
+  uint64_t storage_budget_bytes_ = 256U * 1024U * 1024U;
+  bool storage_initialized_ = false;
+  bool storage_budget_exhausted_ = false;
+  bool storage_scan_failed_ = false;
   bool stopping_ = false;
   std::thread worker_;
 };

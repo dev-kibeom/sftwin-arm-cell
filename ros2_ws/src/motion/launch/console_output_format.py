@@ -11,6 +11,7 @@ class ConsoleOutputFormat(str):
         instance = super().__new__(cls, template)
         instance._started_at_ns = time.monotonic_ns()
         instance._file_log = None
+        instance.record_directory = None
         from launch.logging import launch_config
 
         session = launch_config.file_handlers
@@ -38,7 +39,9 @@ class ConsoleOutputFormat(str):
             if self._file_log is None:
                 from launch.logging import launch_config
 
-                log_path = Path(launch_config.log_dir) / "ros_output_nanoseconds.log"
+                directory = Path(self.record_directory or launch_config.log_dir)
+                directory.mkdir(parents=True, exist_ok=True)
+                log_path = directory / "ros_output_nanoseconds.log"
                 self._file_log = log_path.open("a", encoding="utf-8", buffering=1)
                 if not launch_config._console_output_header_written:
                     self._file_log.write(
