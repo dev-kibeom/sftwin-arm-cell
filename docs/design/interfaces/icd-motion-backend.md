@@ -138,13 +138,14 @@ Capture Reference는 CLOSE 선택 근거다. 취소·실패의 `invalidate:true`
 
 ## Configured radial Tool
 
-C10 Physical Real은 `internal_radial` 요구와 선택 Tool의 기하를 검증한다. 세 개의 예약 대상 접촉,
-측정 팽창 obstruction 및 dwell을 사용하며 폭·두 핑거 힘 API를 요구하지 않는다. 실제 수축과 접촉 소실이
-확인돼야 RELEASED다. 공통 Holding의 신선도·UNKNOWN·STOP·실행 상관 규칙은 유지한다.
+C10 Physical Real은 `internal_radial` 요구와 선택 Tool의 명목 기하를 검증한다. 주축 위치의
+목표 미도달·관절 한계 안쪽의 지속 정지로 HELD를 추정하며 실제 수축 위치로 RELEASED를 확인한다.
+이는 장치 보유 추정이며 예약 자재의 동일성·실제 수령을 증명하지 않는다. 공통 Holding의
+신선도·UNKNOWN·STOP·실행 상관 규칙은 유지한다. 별도 접촉력 센서를 가정하지 않는다.
 
 `/gripper/capture_reference`의 radial 참조는 motion_goal_uuid, strategy, material_id, supply_id, slot_id,
-supply_epoch, reservation_id와 insertion_depth_m/thickness_m/inner_radius_m을 전달한다. 예약 대상의
-Stage identity와 일치하고 선택 Tool의 기하가 유효한 경우만 ACK한다. status의 선택적
-relation_execution_id와 grasp_relation(JSON 16개 row-major 수치)은 측정 TCP→자재 관계다.
-Motion은 새로운 HELD 및 같은 실행 관계와 Planning Scene의 중공 payload 반영을 확인한 후 이송하며,
-새 RELEASED와 world geometry 복귀를 확인한 후 후퇴한다. Planning Attachment는 PhysX 부착을 뜻하지 않는다.
+supply_epoch, reservation_id와 insertion_depth_m/thickness_m/inner_radius_m을 전달한다.
+ACK는 유효 요청과 명목 Tool 기하 적용을 뜻하며 Stage identity의 조회·일치를 요구하지 않는다.
+Motion은 같은 실행의 fresh HELD로 파지 단계를 확정하고 fresh RELEASED로 해제 단계를 확정한다.
+정확한 자재/TCP GT 변환이나 동적 Planning Scene payload의 반영·복귀를 요구하지 않는다.
+Configured radial 티칭은 환경 충돌 검사 없이 명시된 TCP 경로를 실행하며 물리 충돌은 진단에서 평가한다.

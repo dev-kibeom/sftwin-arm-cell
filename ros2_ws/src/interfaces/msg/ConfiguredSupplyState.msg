@@ -6,6 +6,7 @@ string[] slot_ids
 bool[] occupied
 string selected_slot_id
 string reservation_id
+# Reserved compatibility field; always zero. Not a physical material count.
 uint32 completed_count
 bool valid
 bool exhausted

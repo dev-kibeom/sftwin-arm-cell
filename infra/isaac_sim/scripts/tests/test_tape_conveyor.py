@@ -32,32 +32,25 @@ def controller():
     return c
 
 
-def test_docking_requires_all_remaining_rolls_and_observed_settling():
+def test_docking_uses_drive_feedback_without_reading_material_ground_truth():
     c=controller();c.state='infeed'
-    c.observations['r1']=pose(.9)
+    def measured(path, frame='infeed'):
+        assert path == 'carrier', 'material truth entered conveyor control'
+        return pose(.53)
+    c._measure=measured
     c.on_physics_step(.3)
-    assert not c.dock_ready
-    c.observations['r1']=pose(.56)
-    c.on_physics_step(.1)
-    assert not c.dock_ready
-    c.on_physics_step(.2)
     assert c.dock_ready
-    assert c.ordinal==0 and c.finished==0
 
 
-def test_next_slot_waits_for_physical_outfeed_clearance():
+def test_outfeed_uses_belt_travel_time_without_measuring_released_material():
     c=controller();c.state='docked'
+    c._measure=lambda *args: (_ for _ in ()).throw(AssertionError('material truth queried'))
     c.release_to_outfeed('r0')
-    assert c.awakened==['r0'] and c.finished==0 and c.ordinal==0
-    assert c.awakened==['r0']
-    c.observations['r0']=pose(.3,y=-.25,z=.31)
     c.on_physics_step(.1)
-    assert c.state=='outfeed' and c.ordinal==0
-    c.observations['r0']=pose(.3,y=-.44,z=.31)
-    c.on_physics_step(.1)
+    assert c.state=='outfeed'
+    c.on_physics_step(c.settings['outfeed_pitch_m']/c.settings['outfeed_speed_m_s'])
     assert c.state=='indexing' and c.ordinal==1
-    assert c._target==pytest.approx(.5) and c.finished==0
-    with pytest.raises(RuntimeError):c.release_to_outfeed('r1')
+    assert c._target==pytest.approx(.5)
 
 
 def test_timeout_and_busy_requests_do_not_report_completion():
@@ -68,3 +61,11 @@ def test_timeout_and_busy_requests_do_not_report_completion():
     c.state='infeed';c.on_physics_step(91.)
     assert c.state=='failed' and c.finished==0
     assert not c.enqueue_cartridges(1)['accepted']
+
+
+def test_missing_simulated_payload_does_not_block_timed_outfeed():
+    c=controller();c.state='docked'
+    def unavailable(path): raise RuntimeError('simulated payload unavailable')
+    c._wake_roll=unavailable
+    c.release_to_outfeed('missing-roll')
+    assert c.state=='outfeed'

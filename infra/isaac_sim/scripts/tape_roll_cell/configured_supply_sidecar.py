@@ -141,7 +141,7 @@ def serve(fd):
     replies = {}
     pending = set()
     operator_requests = []
-    cache = {'state':None, 'scene':None, 'received_at':0., 'connected':True}
+    cache = {'state':None, 'received_at':0., 'connected':True}
     def send(packet):
         with send_lock:
             sock.sendall((json.dumps(packet, allow_nan=False)+'\n').encode())
@@ -159,7 +159,7 @@ def serve(fd):
                                                   'teaching_apply','teaching_move','teaching_cancel','teaching_settings'):
                             operator_requests.append(packet)
                         elif packet.get('op') == 'state':
-                            cache.update(state=packet['state'], scene=packet.get('scene'), received_at=time.monotonic())
+                            cache.update(state=packet['state'], received_at=time.monotonic())
                         condition.notify_all()
         except (OSError, ValueError, KeyError):
             pass
@@ -171,8 +171,6 @@ def serve(fd):
     node = rclpy.create_node('configured_supply_sidecar')
     node.set_parameters([rclpy.parameter.Parameter('use_sim_time', value=False)])
     publisher = node.create_publisher(ConfiguredSupplyState, '/cell/configured_supply/state', 10)
-    from tape_roll_cell.planning_scene import ConfiguredPlanningScene
-    planning = ConfiguredPlanningScene(node)
     from rclpy.action import ActionClient
     from arm_cell_interfaces.action import ExecuteCycle
     cycle = ActionClient(node, ExecuteCycle, '/orchestration/execute_cycle')
@@ -254,7 +252,6 @@ def serve(fd):
             cycle.send_goal_async(goal).add_done_callback(cycle_response)
         with condition:
             state = dict(cache['state']) if cache['state'] else None
-            scene = cache['scene']
             fresh = cache['connected'] and time.monotonic()-cache['received_at'] <= .5
         teaching.publish()
         if state is None: return
@@ -271,7 +268,6 @@ def serve(fd):
         message.header.stamp = node.get_clock().now().to_msg()
         publisher.publish(message)
         published_supply['epoch']=message.supply_epoch if message.valid else None
-        if fresh and scene is not None: planning.publish(scene)
     node.create_timer(.1, publish)
     thread = threading.Thread(target=reader, daemon=True)
     thread.start()

@@ -3074,7 +3074,7 @@ TEST_F(IsaacRosMotionTransportTest, NamedJointMotionKeepsSafetyCauseAcrossRacedW
 
 namespace arm_cell_motion
 {
-TEST_F(IsaacRosMotionTransportTest, ConfiguredRadialRequiresCorrelatedMeasuredRelation)
+TEST_F(IsaacRosMotionTransportTest, ConfiguredRadialUsesDeviceHoldingWithoutGroundTruthScene)
 {
   transport_->tool_width_control_ = false;
   transport_->tool_grasp_strategies_ = {"internal_radial"};
@@ -3085,58 +3085,19 @@ TEST_F(IsaacRosMotionTransportTest, ConfiguredRadialRequiresCorrelatedMeasuredRe
   GraspExecutionIdentity identity{
     "1234567890abcdef1234567890abcdef", "Tape", "supply", "slot_0", "epoch", "reservation"};
   ASSERT_TRUE(transport_->prepare_configured_grasp(spec, identity));
-  pump_until([&]() {return !capture_reference_payloads().empty();});
-  const auto payload = nlohmann::json::parse(capture_reference_payloads().back());
-  EXPECT_EQ(payload.at("slot_id"), "slot_0");
-  EXPECT_EQ(payload.at("motion_goal_uuid"), identity.execution_id);
   EXPECT_FALSE(transport_->commit_pending_grasp_relation());
   auto status = std::make_shared<String>();
-  status->data = "ready=1;grasp=1;attached=0;released=0;seq=1;capture_reference_id=" + identity.execution_id +
-    ";relation_execution_id=wrong;grasp_relation=[1,0,0,0.1,0,1,0,0.2,0,0,1,0.3,0,0,0,1]";
+  status->data = "ready=1;grasp=1;attached=0;released=0;seq=1;capture_reference_id=wrong";
   transport_->on_gripper_status(status);
   EXPECT_FALSE(transport_->commit_pending_grasp_relation());
-  status->data = "ready=1;grasp=1;attached=0;released=0;seq=2;capture_reference_id=" + identity.execution_id +
-    ";relation_execution_id=" + identity.execution_id +
-    ";grasp_relation=[1,0,0,0.1,0,1,0,0.2,0,0,1,0.3,0,0,0,1]";
+  status->data = "ready=1;grasp=1;attached=0;released=0;seq=2;capture_reference_id=" + identity.execution_id;
   transport_->on_gripper_status(status);
-  // Fresh HELD alone cannot authorize transfer before the measured payload
-  // appears in the authoritative scene.
-  EXPECT_FALSE(transport_->commit_pending_grasp_relation());
-  std::atomic_bool attached{true};
-  auto scene_service = observer_->create_service<moveit_msgs::srv::GetPlanningScene>(
-    "/get_planning_scene", [&attached](
-      const std::shared_ptr<moveit_msgs::srv::GetPlanningScene::Request>,
-      std::shared_ptr<moveit_msgs::srv::GetPlanningScene::Response> response) {
-      moveit_msgs::msg::CollisionObject object;
-      object.id = "supply_slot_0";
-      shape_msgs::msg::SolidPrimitive primitive;
-      primitive.type = shape_msgs::msg::SolidPrimitive::CYLINDER;
-      primitive.dimensions = {.017, .05};
-      object.primitives = {primitive};
-      if (attached.load()) {
-        moveit_msgs::msg::AttachedCollisionObject payload;
-        payload.object = object;
-        response->scene.robot_state.attached_collision_objects = {payload};
-      } else {response->scene.world.collision_objects = {object};}
-    });
-  // Refresh the physical observation after the intentionally failed wait.
-  status->data = "ready=1;grasp=1;attached=0;released=0;seq=3;capture_reference_id=" + identity.execution_id +
-    ";relation_execution_id=" + identity.execution_id +
-    ";grasp_relation=[1,0,0,0.1,0,1,0,0.2,0,0,1,0.3,0,0,0,1]";
-  transport_->on_gripper_status(status);
-  auto committing = std::async(std::launch::async, [this]() {return transport_->commit_pending_grasp_relation();});
-  pump_until([&]() {return committing.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;});
-  ASSERT_TRUE(committing.get());
-  EXPECT_NEAR(transport_->accepted_object_to_tcp_.translation.x, -.1, 1e-9);
-  EXPECT_NEAR(transport_->accepted_object_to_tcp_.translation.z, -.3, 1e-9);
-  EXPECT_FALSE(transport_->holding_observation().width_mm.has_value());
-  attached.store(false);
-  status->data = "ready=1;grasp=0;attached=0;released=1;seq=4";
-  transport_->on_gripper_status(status);
-  auto clearing = std::async(std::launch::async, [this]() {transport_->clear_grasp_relation_after_release();});
-  pump_until([&]() {return clearing.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;});
-  EXPECT_NO_THROW(clearing.get());
+  EXPECT_TRUE(transport_->commit_pending_grasp_relation());
   EXPECT_FALSE(transport_->accepted_object_to_tcp_valid_);
+  EXPECT_THROW(transport_->clear_grasp_relation_after_release(), std::runtime_error);
+  status->data = "ready=1;grasp=0;attached=0;released=1;seq=3";
+  transport_->on_gripper_status(status);
+  EXPECT_NO_THROW(transport_->clear_grasp_relation_after_release());
 }
 
 }  // namespace arm_cell_motion

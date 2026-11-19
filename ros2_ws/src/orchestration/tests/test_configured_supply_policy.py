@@ -134,7 +134,7 @@ def test_configured_mission_rejects_non_unit_quantity_before_any_work(configured
     assert not requests and not tasks
 
 
-def test_unit_quantity_runs_one_reserved_roll_and_counts_confirmed_placement(configured_mission):
+def test_unit_request_runs_one_sequence_without_material_count(configured_mission):
     from arm_cell_interfaces.action import ExecuteCycle
     from arm_cell_interfaces.msg import MissionExitReason
     from arm_cell_interfaces.srv import ConfiguredSupply
@@ -153,5 +153,5 @@ def test_unit_quantity_runs_one_reserved_roll_and_counts_confirmed_placement(con
     assert [request.command for request in requests]==[ConfiguredSupply.Request.RESERVE,ConfiguredSupply.Request.COMPLETE]
     assert requests[-1].material_placed
     assert len(tasks)==1 and tasks[0].slot_id=='slot_0'
-    assert feedback[-1].batch_processed_count==1
+    assert feedback[-1].batch_processed_count==0
     assert not mission.busy

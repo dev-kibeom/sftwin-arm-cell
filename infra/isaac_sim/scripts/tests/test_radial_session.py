@@ -42,19 +42,16 @@ def test_decoder_rejects_missing_identity_and_nonfinite_geometry():
         assert manager.tool.capture.decode_reference({**PACKET, **replacement}) is None
 
 
-def test_only_correlated_reserved_target_can_publish_holding_and_relation():
+def test_correlated_holding_needs_no_stage_identity_or_true_relative_pose():
     manager, binding, actuator = make()
+    def forbidden(*args): raise AssertionError('Stage truth entered holding control')
+    binding.resolve_target=binding.relative_transform=forbidden
     assert manager.configure_selected_grasp_reference(PACKET)
     assert not manager.arm_close_transaction('d'*32)
     assert manager.arm_close_transaction('a'*32)
     actuator.sample = HoldingObservation(HoldingState.HELD, 1., 2)
     manager.update(.01)
     assert manager.holding_observation().state is HoldingState.HELD
-    assert manager.accepted_execution_id == 'a'*32
-    assert manager.accepted_relation[3] == .1
-    binding.valid = False
-    manager.update(.01)
-    assert manager.holding_observation().state is HoldingState.UNKNOWN
     assert manager.accepted_relation is None
 
 
@@ -142,24 +139,6 @@ def test_stopped_reset_does_not_touch_destroyed_dynamic_control_handles():
     assert writes == ['stopped_reset']
 
 
-def test_unselected_release_observes_all_fingers_without_accepting_invalid_lease():
-    from types import SimpleNamespace
-    from gripper_runtime.radial_binding import IsaacRadialBinding
-    binding = IsaacRadialBinding.__new__(IsaacRadialBinding)
-    binding.finger_bodies = ('/finger1', '/finger2', '/finger3')
-    binding.target_reference = None
-    binding.observer = SimpleNamespace(snapshot=[], advance=lambda:None)
-    assert binding.read_contacts(.01) == [0., 0., 0.]
-    binding.observer.snapshot = [dict(actor0='/fixture',actor1='/finger2',lost=False,
-        points=[dict(impulse=(.01,0.,0.))])]
-    assert binding.read_contacts(.01) == [0., 1., 0.]
-    binding.observer.snapshot = None
-    assert binding.read_contacts(.01) is None
-    binding.observer.snapshot = []
-    binding.target_reference = {'reservation_id':'invalid'}
-    binding.resolve_target = lambda _:None
-    assert binding.read_contacts(.01) is None
-
 
 def test_radial_records_are_sparse_by_default_and_release_keeps_identity():
     manager, _, actuator = make()
@@ -211,4 +190,4 @@ def test_diagnostic_observation_failure_preserves_physical_holding():
     actuator.sample=HoldingObservation(HoldingState.HELD,1.,2)
     manager.update(.1)
     assert manager.holding_observation().state is HoldingState.HELD
-    assert manager.accepted_execution_id==PACKET['motion_goal_uuid']
+    assert manager.holding_observation().state is HoldingState.HELD

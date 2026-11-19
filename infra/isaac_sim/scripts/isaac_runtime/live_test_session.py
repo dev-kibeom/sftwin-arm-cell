@@ -121,6 +121,7 @@ class LiveTestSession:
                 ],
                 "artifacts": {},
                 "recording_locations": {
+                    "tape_cycle_verification": str(candidate / "simulation" / "tape_cycles"),
                     **{name: f"{name}/" for name in COMPONENTS},
                     "motion_planning_details": str(
                         candidate

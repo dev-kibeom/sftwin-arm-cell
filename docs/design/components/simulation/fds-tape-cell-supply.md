@@ -1,95 +1,84 @@
-# Tape Handling Cell 공급·물리 이송 FDS
+# Tape Handling Cell 공급·티칭 사이클 FDS
 
 - **Function ID:** Tape Cell Cartridge Processing
 - **Owner:** Tape Cell Simulation 공급 관리
 
 ## 목적과 동작 범위
 
-선택된 Tape Cell의 정렬된 카트리지 자재를 한 슬롯씩 공통 Task Execution에 맡겨 수령 위치로 옮기고,
-확인된 물리 이송·해제만 공급 완료 수량에 반영한다. 시작은 명시적인 Cell 실행 요청이며,
-종료는 공급 소진 또는 첫 실패다. ROS Mission Admission·Safety 승인·Motion 계획은 해당 Owner가 수행한다. 정렬 슬롯은 Vision 관측과 다른 typed 작업 원천이다.
+고정 치구와 티칭을 사용하는 Tape Cell에서 한 슬롯의 Approach·Insert·Grasp·Transfer·Release·Retreat를
+한 사이클로 실행한다. 런타임은 장치 피드백으로 시퀀스 종료를 보고한다. 작업 완료의 검증 기준은
+의도하지 않은 충돌 없이 시퀀스 1사이클이 종료된 것이며, 독립된 진단·Ground Truth로 평가한다.
+실제 자재 이송 완료 수량은 별도로 집계하지 않는다. 빈 집기·낙하·잘못된 안착은 물리 결과와 진단으로 보존한다.
+
+시뮬레이터에서만 얻을 수 있는 자재의 정확한 위치·자세·속도, 객체 식별자, 접촉 상대 및 충격량을
+공정 준비·파지·성공·실패·다음 슬롯 진행의 입력으로 사용하지 않는다. 센서 모사는 실제 장치가
+관측할 수 있는 범위의 신호만 제공한다. GT 평가 결과와 기록 성공 여부는 공정 제어로 되돌아가지 않는다.
 
 ## 참여 책임과 계약
 
 | 참여 책임 | 역할 | 관련 계약 |
 |---|---|---|
-| Cell 공급 관리 | 슬롯 배치·선택, 슬롯 점유·완료 수량, Stop 복원 | 이 FDS |
-| Material | 중공 롤 치수·질량·마찰·관성·Collision 형상 | Material Profile 및 [환경 의미](../simulation-environment-semantics.md) |
-| Task Execution | 단일 자재 GraspCycle 순서와 terminal 결과 | [Task Execution CDS](../task-execution/cds.md) |
-| Tool Runtime | Internal Radial Grasp 구동·Holding·Release 관측 | [Motion Backend ICD](../../interfaces/icd-motion-backend.md) |
-| Simulation | 중력·접촉에 의한 물리 이송, Timeline lifecycle | [Simulation Session FDS](fds-sim-session.md) |
+| Cell 공급 관리 | 명목 슬롯 순서·예약, 컨베이어 운전, Stop 복원 | 이 FDS |
+| Material | 중공 롤 치수·질량·마찰·관성·Collision 형상 | Material Profile |
+| Task Execution | 단일 티칭 GraspCycle 및 시퀀스 종료 | [Task Execution CDS](../task-execution/cds.md) |
+| Tool Runtime | 기존 장치 피드백에 따른 보유 추정·해제 | [Motion Backend ICD](../../interfaces/icd-motion-backend.md) |
+| Motion | 티칭 이동·기구학·한계·시간 매개화·실행 감시 | [Motion FDS](../motion/fds-motion-execution.md) |
+| Simulation 진단 | 충돌 관측과 사이클 작업 완료 검증 | [Observability ICD](../../interfaces/icd-observability-records.md) |
 
-## 핵심 시나리오
+## 실행 순서
 
-```mermaid
-sequenceDiagram
-    participant C as Cell 공급 관리
-    participant T as 공통 Task GraspCycle
-    participant P as 운영 Motion·Physical Tool Runtime
-    loop 미완료 슬롯이 있는 동안
-        C->>C: 로봇 쪽 미완료 슬롯 선택
-        C->>T: 선택 슬롯의 단일 물리 이송
-        T->>P: Approach·수평 Insert·Grasp·Holding·Relation
-        T->>P: 지지면 이탈·수평 Extract·수령 위치 이동
-        T->>P: Release·Relation 해제·Retreat
-        alt 실제 이송·해제·안착과 작업 성공
-            T-->>C: 성공 및 물리 관측 근거
-            C->>C: 선택 슬롯만 완료, 수량 한 번 반영
-        else 실패
-            T-->>C: 실패와 관측 근거
-            Note over C: 기존 완료 수량 및 미완료 점유 보존, 반복 종료
-        end
-    end
-```
+1. 운영자의 Supply 요청으로 가득 찬 카트리지를 생성하고 인피드 구동을 시작한다.
+2. 컨베이어 구동축 위치·정지 피드백이 정착하면 공급을 유효하게 발행한다. 롤별 정렬은 조회하지 않는다.
+3. 같은 epoch의 유효 공급이 발행되고 Safety·Task 준비가 확인되면 한 슬롯을 예약한다.
+4. Task가 같은 고정 Pick 기준점의 티칭을 실행하고 장치 피드백으로 파지·해제를 추정한다.
+5. 성공한 시퀀스의 예약을 한 번만 퇴역한다. 슬롯 상태는 명목 공정 진행이며 실물 점유·이송 수량을 증명하지 않는다.
+6. 아웃피드는 설정된 피치와 벨트 속도로 정한 시간 동안 운전하고 다음 슬롯을 인덱싱한다.
+7. 마지막 슬롯의 시퀀스 종료 뒤 빈 카트리지 반환·회수를 진행한다. 롤의 실제 배출 위치로 진행을 승인하지 않는다.
 
-Cell은 위치·지지면·티칭을 소유한다. Robot·Tool·Assembly 설정의 관절과 TCP 의미를 바꾸지 않는다.
-티칭은 인피드·아웃피드 설비 또는 Robot base에 상대적인 6D TCP 포인트와 명시적인 포인트 순서로 소유한다. 포인트는 관절 이동 또는 직선 이동 의미와 속도·가속도 비율을 가진다. 설비의 위치·자세를 변경하면 연결된 포인트·장면·공급 관측 기준·계획 충돌 형상이 같은 변환을 사용한다. 실제 선택 기구학의 도달 가능성·관절 제한·시간 매개화·충돌은 실행 계획에서 검증하며, 실제 경로의 접촉·충돌은 물리 실행으로 검증한다.
-수령 위치는 이전 완료 자재가 다음 Tool 삽입 통로를 막지 않는 순서로 사용한다.
+작업은 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)의 예약을 사용한다.
+Vision 검출이나 자재 수령 성공을 합성하지 않는다. 기존 CNC·2F-85 경로의 의미는 유지한다.
 
-## 상태·실패·복원
+## 티칭과 물리 동작
 
-미완료 슬롯은 선택할 수 있으며, 한 번에 하나만 활성화한다. 완료는 활성 슬롯의 실제 이송과 물리 Release,
-수령 위치에 롤 축이 수직으로 안착한 것이 확인된 뒤에만 가능하다. Tool 명령 수락·BT 반환·Relation 생성만으로 차감하지 않는다.
-동일 예약의 완료 재확인은 수량을 중복 차감하지 않는다. 공급 소진 시 새 작업을 시작하지 않는다.
+티칭은 Robot base 또는 독립된 인피드·아웃피드 설비 프레임의 6D TCP 포인트와 순서를 소유한다.
+기본 MoveJ·MoveL은 환경 충돌 검사·자동 우회 없이 실행하며 IK·관절 한계·속도·가속도 제한,
+시간 매개화·피드백 신선도·Safety·취소·실행 감시는 유지한다. 명시적으로 선택한 Checked/Planned 이동은
+실물에서도 얻을 수 있는 설치 모델이나 센서 추정 Scene만 소비할 수 있다. 자재의 동적 Stage GT를
+Planning Scene에 발행하지 않으며 물체와 TCP의 정확한 GT 변환을 파지·후퇴의 선행 조건으로 요구하지 않는다.
 
-실패는 물체를 원래 위치로 되돌리지 않고 실행을 종료한다. 공급 점유는 미완료 기록이며 물체의 실제 위치를
-보장하지 않는다. 실패 원인과 종료 전 물리 상태·수량을 보존하며 자동 재시도하지 않는다.
-Playing 동안 강제 Attach·물체 pose/velocity 재설정·중력 또는 Collision 해제로 성공을 만들지 않는다.
-PhysX의 접촉 오프셋 안에 있는 근접 보고는 모든 접촉점의 간격이 양수이고 충격량이 0으로 확인된 경우에만
-실접촉에서 제외한다. 간격 0 이하, 충격량 발생 또는 관측 누락·비유한 값은 보수적으로 접촉으로 처리한다.
+카트리지는 유한 힘의 선형 구동으로 이동하며 롤은 V 받침·포켓·벨트와의 접촉·마찰로 이송된다.
+물리 충돌·중력·마찰은 유지한다. 운전 중 강제 Attach, 물체 pose/velocity 재설정, 중력·Collision 해제로
+성공을 만들지 않는다. 정지된 Scene 준비와 새 자재 생성은 Simulation lifecycle의 책임이다.
+설비 프레임 변경은 정지 상태에서 적용하며 생성 자재가 남은 상태의 강제 위치 수정은 금지한다.
 
-Timeline Stop은 종료 상태 기록 뒤 생성된 롤·카트리지를 제거하고 초기의 빈 컨베이어·공급 대기 상태와 새 예약 epoch로 복원한다.
-이 복원은 성공 이력을 새 완료 수량으로 이월하지 않는다. Pause는 초기화 조건이 아니다.
+## 실패·복원
 
-## 실행 범위
+실제 장치에 대응하는 피드백 손실·동작 시간 초과·Task 실패·Safety·취소는 기존 경로로 실행을 종료한다.
+Physics 접촉 관측의 부재·모호성·충돌 분류나 기록 실패가 공급 valid·Motion·Mission을 변경해서는 안 된다.
+실패 시 자동 재시도하거나 물체를 원래 위치로 돌리지 않는다. 예약이 불확실하면 Stop까지 보존한다.
 
-Cell 선택·Scene Builder·Tool bootstrap은 공통 Runtime Workflow의 Plugin 경계를 사용한다.
-M0609 + C10/Long은 정식 Physical Real 모드이며 운영 ROS Backend·Task/Mission으로 실행한다.
-Orchestration의 configured source는 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)의 예약을 사용한다.
-Vision source의 Acquisition을 생성하거나 검출 성공을 합성하지 않는다. CNC Cell과 2F-85의 동작은 유지한다.
+Timeline Stop은 진행 중인 진단 사이클을 미완료로 마무리하고 생성 롤·카트리지를 제거한 뒤
+새 epoch의 빈 컨베이어·공급 대기로 복원한다. Pause는 같은 세션이며 초기화하지 않는다.
 
-Robot HOME 초기화는 정지된 Scene 준비다. HOME에서 Cell 진입점까지는 Motion이 실제 Scene을 사용해
-전역 계획한다. Cartesian 티칭 구간은 구간 FK·관절 제한·시간 매개화·충돌 검사를 통과해야 하며,
-관절/Clock 관측으로 실행 결과를 확인한다. Physics Scene의 Attach·중력·충돌 설정을 성공 판정에 맞춰 바꾸지 않는다.
+## 독립된 사이클 검증
+
+진단은 Cell 사이클 ID·세션·공급 epoch·슬롯과 관측 구간을 연결한다. 예약 롤과 핑거의 의도된 접촉 및
+고정 Robot base와 지지대의 접촉을 제외한 Robot 접촉은 작업 완료 검증의 충돌이다.
+물리 모델이 제공하는 접촉 관측 범위에서 전체 시퀀스 종료와 충돌 부재가 확인되면 PASS,
+충돌 또는 시퀀스 미완료면 FAIL, 관측 부재·구간 누락이면 UNAVAILABLE다.
+실행된 Physics Step과 관측된 Step을 독립적으로 기록하고 각 실행 Step의 관측이 연속적으로 한 번씩
+존재해야 관측 구간이 완결된다. 관측 콜백의 중단·누락·중복·지연 및 미관측 마지막 Step은 PASS가
+될 수 없으며 종료 시의 버퍼 비우기는 누락된 Step 관측을 대신하지 않는다. 물리 모델의 비활성 충돌쌍까지
+검증했다고 주장하지 않는다. 제한된 상세 기록이 잘려도 관측한 충돌의 존재를 소거하지 않는다.
+기록 누락·저장 실패는 PASS 증거가 아니며 운전 결과도 바꾸지 않는다.
 
 ## Verification Requirements
 
-| ID | 조건·자극 | 관찰 가능한 기대 결과·금지 결과 |
+| ID | 조건·자극 | 관찰 가능한 결과 |
 |---|---|---|
-| VR-TAPE-SUPPLY-01 | 기본 17 mm 롤 15개 보관 및 순차 처리 | 각 슬롯에서 수평 삽입·물리 파지·지지면 이탈·이송·해제·후퇴, 수량 단일 증가 및 전체 소진 |
-| VR-TAPE-SUPPLY-02 | 슬롯별 실행 및 실패 | Robot/설비·비핑거/롤·미선택 롤 접촉은 실패, 실패한 슬롯을 완료로 반영하지 않고 이전 수량 보존 |
-| VR-TAPE-SUPPLY-03 | 처리 또는 실패 뒤 Timeline Stop | 생성 롤·카트리지 제거, 대기 공급·완료 0·예약 초기화, Pause에는 보존 |
-| VR-TAPE-SUPPLY-04 | 기본 C10 및 기존 Cell/Tool 회귀 | 기본 C10의 같은 운영 ROS 물리 공정과 CNC·2F-85 관련 기존 동작 보존, 시험 Adapter 없이 실제 Task/Mission 실행 |
-| VR-TAPE-SUPPLY-05 | 정식 Launcher 및 configured-source Mission | 실험 전용 제어 없이 Physical Real 선택, 실제 슬롯 예약·Task·수령 확인, Safety/공급 신선도 손실 시 중단, Vision 성공 합성 금지 |
-
-## 장면 및 수직 Place
-
-Cell은 SDK default Ground Plane을 사용하지 않는다. 초록색 에폭시 바닥과 로봇 지지대의 상면·충돌 형상은 Cell 설정에서 소유한다. Robot base는 지지대 상면이며 임의의 runtime 위치 보정으로 경로를 성공 처리하지 않는다.
-
-카트리지는 15개 롤을 한 줄로 정렬하며 슬롯 수·피치를 설정한다. 공통 Hub의 Supply 입력 단위는 가득 찬 카트리지 수다. Cell이 요청을 수락하면 대기 카트리지를 한 개씩 실제 인피드 벨트 위에 생성한다. 유한 힘의 선형 구동 체인이 동적 카트리지를 이동시키고 롤은 V자 받침·포켓과의 접촉·마찰로 이동한다. 롤 자체의 pose/velocity를 써서 정렬하지 않는다.
-
-비전 없이 작업하므로 컨베이어가 각 슬롯을 같은 고정 Pick 기준점에 순차 정렬한다. 구동 목표가 고정된 뒤 실제 카트리지·롤의 위치·축·속도가 정착 조건을 만족해야 공급을 ready로 발행한다. 해당 epoch의 유효 공급 상태를 ROS에 발행한 뒤 Mission 요청을 허용한다. Pick 및 Extract는 수평이며 운반 통로에서 아래 방향으로 전환한 후 고정 수령점으로 수직 하강·Release·수직 Retreat한다. 수령점의 두 벨트는 내경을 열어 두고 외주를 지지한다. Tool 길이에 따른 수령 높이·회전 지점은 Cell 설정으로 정하며 실제 선택 기구학을 사용한다.
-
-실제 Mission 성공과 물리 안착 수량이 일치한 뒤에만 아웃피드 벨트를 구동한다. 해제된 롤이 다음 Place 통로를 벗어난 것을 측정한 뒤 다음 슬롯을 인덱싱한다. 마지막 롤 처리 후 빈 카트리지를 인피드로 반환·회수하고 다음 가득 찬 카트리지를 공급한다. 생성·회수는 Cell이 소유하며 미완료 롤이나 실패 상태를 삭제해 성공 처리하지 않는다. 첫 실패에는 자동 재시도하지 않는다.
-
-티칭 포인트와 순서는 편집·추가·삭제·측정 TCP로 캡처·저장할 수 있다. 저장된 프로그램은 다음 실행에서 복원한다. Cell 시작 시 슬롯별 수치 IK 또는 조밀한 관절 경로를 생성하지 않는다. 모든 슬롯은 같은 고정 Pick 기준점의 공통 티칭을 사용한다. 선택된 Robot의 관절 속도·가속도 한계와 포인트 이동 의미는 운영 Motion이 실행 전에 검증한다. 설비의 인피드·아웃피드는 독립적인 6D 변환을 가지며 바닥과 Robot 지지대는 이동시키지 않는다. 설비 변경은 정지 상태에서 적용하고 생성 자재가 남은 상태의 강제 위치 수정으로 성공을 만들지 않는다.
+| VR-TAPE-SUPPLY-01 | 정상 티칭 1사이클 | 장치 피드백으로 순서 종료, 독립 진단의 충돌 없는 사이클만 작업 완료 PASS |
+| VR-TAPE-SUPPLY-02 | 롤 이동·정렬 불량·낙하·접촉 | 정확한 물리 상태나 GT 접촉 상대를 공정 입력으로 사용하지 않음, 물리 결과·충돌은 진단 보존 |
+| VR-TAPE-SUPPLY-03 | Stop 및 Pause | Stop에서 미완료 진단·새 epoch·빈 공급 복원, Pause는 보존 |
+| VR-TAPE-SUPPLY-04 | 기본 C10·Long 및 CNC·2F-85 | 공통 Task·Motion 경로 사용, 다른 Cell/Tool의 기존 의미 보존 |
+| VR-TAPE-SUPPLY-05 | Safety·취소·장치 피드백 손실 | 기존 중단·신선도·예약 fence 유지, GT·기록 실패에 의한 중단 없음 |
+| VR-TAPE-SUPPLY-06 | 충돌 관측·저장 실패 | 공정 결과 불변, 불완전 진단으로 작업 완료 PASS를 주장하지 않음 |

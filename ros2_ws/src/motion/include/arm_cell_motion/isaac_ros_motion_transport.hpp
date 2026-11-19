@@ -356,11 +356,6 @@ private:
   std::vector<std::string> tool_grasp_strategies_{"box_exterior"};
   bool radial_prepared_{false};
   std::string radial_execution_id_;
-  std::string radial_object_id_;
-  bool wait_configured_payload_scene(const std::string & object_id, bool attached);
-  std::string measured_relation_execution_id_;
-  bool measured_relation_valid_{false};
-  geometry_msgs::msg::Transform measured_relation_;
   std::vector<std::string> payload_touch_links_;
   std::string pick_retract_contact_object_;
   std::vector<std::string> pick_retract_contact_links_;

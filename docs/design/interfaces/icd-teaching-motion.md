@@ -26,7 +26,7 @@ Registry 교체 성공은 정의가 적용됐다는 뜻이며 IK·경로·물리
 | 데이터 | 의미·단위·유효성 |
 |---|---|
 | `cartesian_waypoints` | 순서가 있는 희소 TCP 목표. 위치는 base_link 기준 m, 자세는 정규 quaternion xyzw |
-| `mode` | `joint`는 목표 TCP를 향한 계획 이동, `linear`는 TCP 직선 구간. 서로의 실패 fallback이 아님 |
+| `mode` | `MoveJ`는 TCP 목표의 IK 후 관절 이동, `MoveL`은 TCP 직선 구간. 기본 환경 충돌 검사·자동 우회 없음. 명시적 Checked/Planned 이동과 구별하며 실패 fallback 금지 |
 | 속도·가속도 비율 | Robot 한계 대비 `(0,1]`. 수동 Action에서는 각각 최대 0.1로 제한하며 Safety envelope를 추가 소비 |
 | 수동 Action identity | ROS Goal UUID가 이동·취소의 상관관계. UI의 로컬 요청 수락과 Motion 수락은 구별 |
 | 수동 결과 | 기존 MotionTaskResultCode와 설명. Action 종료 상태와 함께 해석하며 그리퍼·자재 처리 완료를 뜻하지 않음 |

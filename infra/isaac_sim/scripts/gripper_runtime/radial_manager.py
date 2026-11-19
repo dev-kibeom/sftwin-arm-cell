@@ -1,4 +1,4 @@
-"""Correlate radial contact Holding with a reserved material, without attachment."""
+"""Correlate device possession estimates with commands, without identifying bodies."""
 import math
 import logging
 import re
@@ -108,9 +108,6 @@ class RadialGraspManager:
             self.gripper.cancel_motion()
             return False
         try:
-            target = self.binding.resolve_target(decoded)
-            if not target:
-                raise ValueError('Reserved material is unavailable')
             strategy = self.tool.capture.select(decoded)
         except (ValueError, RuntimeError):
             self.capture_reference_id = None
@@ -122,9 +119,8 @@ class RadialGraspManager:
             self.cancel_tool_transaction()
             self.gripper.cancel_motion()
         self.gripper.strategy = strategy
-        self._reference, self._target_path = decoded, target
+        self._reference = decoded
         self.capture_reference_id = decoded['motion_goal_uuid']
-        self.binding.target_reference = decoded
         return True
 
     def cancel_tool_transaction(self):
@@ -142,8 +138,7 @@ class RadialGraspManager:
     def arm_close_transaction(self, execution_id=None, command_generation=None):
         self.cancel_tool_transaction()
         self._failure = None
-        if (not self.ready or not self._reference or execution_id != self.capture_reference_id
-                or self.binding.resolve_target(self._reference) != self._target_path):
+        if not self.ready or not self._reference or execution_id != self.capture_reference_id:
             self._failure = 'radial_reference_or_reserved_material_unavailable'
             self.gripper.cancel_motion()
             return False
@@ -175,21 +170,15 @@ class RadialGraspManager:
         state = HoldingState.UNKNOWN
         fresh_sample = observation.sequence > max(self._sample_floor, self._last_sample)
         self._last_sample = max(self._last_sample, observation.sequence)
-        valid = (self._reference is not None and
-                 self.binding.resolve_target(self._reference) == self._target_path)
+        valid = self._reference is not None
         if self.ready and fresh_sample and self._opening and observation.state is HoldingState.RELEASED:
             state = HoldingState.RELEASED
             if self._release_reference is not None:
                 self._confirmed_release = {**self._release_reference,
                     'execution_id': self._release_reference['motion_goal_uuid']}
         elif self.ready and fresh_sample and self._close_id and valid and observation.state is HoldingState.HELD:
-            if self.accepted_relation is None:
-                relation = self.binding.relative_transform(self._target_path)
-                if len(relation) == 16 and all(math.isfinite(v) for v in relation):
-                    self.accepted_relation = relation
-                    self.accepted_execution_id = self._close_id
-            if self.accepted_relation is not None:
-                state = HoldingState.HELD
+            # Possession is an estimate; no claim about which body was held.
+            state = HoldingState.HELD
         if state is not HoldingState.HELD:
             self.accepted_relation = self.accepted_execution_id = None
         self._record(state)
@@ -253,7 +242,7 @@ class RadialGraspManager:
 
     def diagnostics(self):
         return dict(holding_state=self._holding.state.value, attach_joint_path=None,
-                    holding_inference={'source':'three_reserved_target_contacts_and_obstruction'},
+                    holding_inference={'source':'primary_encoder_obstruction'},
                     accepted_relation=self.accepted_relation, actuator=self.gripper.observation())
 
     def reset_for_simulation_stop(self):
