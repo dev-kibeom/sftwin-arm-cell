@@ -33,6 +33,18 @@ moveit::core::RobotModelPtr make_kinematic_model(
 
 // Targets are expressed in the robot model frame. These operations use only
 // kinematics and joint bounds; neither requires a Scene or a planner service.
+struct LinearJointChangeDiagnostics
+{
+  bool available{false};
+  double relative_threshold_factor{1.5};
+  double average_step_distance{0.0};
+  double maximum_step_distance{0.0};
+  std::size_t maximum_step_end_index{0};  // Zero-based trajectory point index.
+  std::size_t exceeding_step_count{0};
+  std::vector<std::string> joint_names;
+  std::vector<double> maximum_step_joint_deltas;
+};
+
 std::uint8_t resolve_pose_joint_target(
   const moveit::core::RobotState & start, const std::string & group,
   const std::string & tcp_link, const Eigen::Isometry3d & target,
@@ -41,7 +53,8 @@ std::uint8_t generate_linear_joint_trajectory(
   const moveit::core::RobotState & start, const std::string & group,
   const std::string & tcp_link, const Eigen::Isometry3d & target,
   moveit_msgs::msg::RobotTrajectory & trajectory,
-  const std::function<std::uint8_t()> & interruption = {});
+  const std::function<std::uint8_t()> & interruption = {},
+  LinearJointChangeDiagnostics * diagnostics = nullptr);
 bool retime_joint_trajectory(
   const moveit::core::RobotModelConstPtr & model, const std::string & group,
   const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,

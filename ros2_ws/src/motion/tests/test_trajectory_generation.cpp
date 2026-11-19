@@ -21,9 +21,12 @@ TEST(TrajectoryGeneration, MissingIkSolverAndInvalidGroupNeverProduceATrajectory
   EXPECT_EQ(resolve_pose_joint_target(start, "missing", "sf_grasp_tcp", target, joints),
     Code::TASK_RESULT_INVALID_GOAL);
   moveit_msgs::msg::RobotTrajectory trajectory;
+  LinearJointChangeDiagnostics diagnostics;
+  diagnostics.available = true;
   EXPECT_EQ(generate_linear_joint_trajectory(start, "arm", "sf_grasp_tcp", target,
-    trajectory, [] {return Code::TASK_RESULT_CANCELED;}), Code::TASK_RESULT_CANCELED);
+    trajectory, [] {return Code::TASK_RESULT_CANCELED;}, &diagnostics), Code::TASK_RESULT_CANCELED);
   EXPECT_TRUE(trajectory.joint_trajectory.points.empty());
+  EXPECT_FALSE(diagnostics.available);
 }
 
 TEST(NearbyJoint, KeepsTheSamePoseWithoutUnnecessaryFullTurnsOrLimitClamping) {

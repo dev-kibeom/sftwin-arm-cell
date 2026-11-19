@@ -9,26 +9,28 @@ isaac:
   action_graph_path: /World/TapeRollCell/ROS2/ActionGraph
   operator_ui: tape_roll_cell.runtime:enable_operator_ui
 tape_roll:
-  insertion_depth_m: 0.02
+  insertion_depth_m: 0.014
   supply_center_m:
   - 0.53
   - 0.35
-  - 0.5
-  extract_lift_m: 0.015
+  # Lower the infeed and pick datum by the added 85 mm of extraction lift.
+  - 0.415
+  extract_lift_m: 0.10
   release_clearance_m: 0.004
   move_duration_s: 1.0
   material: package://arm_cell_bringup/config/materials/tape_roll/17mm.yaml
   place:
-    first_center_xy_m: [0.3, -0.25]
+    # Move both support rails and the place datum 100 mm away from the robot.
+    first_center_xy_m: [0.3, -0.35]
     surface_z_m: 0.3
     approach_clearance_m: 0.08
     transport_height_m: 0.72
     yaw_rad: 0.0
-    turn_position_m: [0.3, -0.25, 0.38]
+    turn_position_m: [0.3, -0.35, 0.38]
     tool_overrides:
       hand_e_c10:
         surface_z_m: 0.38
-        turn_position_m: [0.3, -0.25, 0.46]
+        turn_position_m: [0.3, -0.35, 0.46]
   cartridge:
     slot_count: 15
     slot_spacing_m: 0.03

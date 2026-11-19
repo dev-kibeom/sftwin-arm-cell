@@ -94,6 +94,7 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     std::vector<double> target_joints;
     std::string detail;
     bool scene_collision_checked = false;
+    LinearJointChangeDiagnostics linear_joint_change;
     const auto record = [&](const std::string & stage, uint8_t code, bool terminal = false) {
         if (!diagnostics_capture_enabled_) {return;}
         const auto duration = plan.trajectory.points.empty() ? 0.0 :
@@ -113,6 +114,19 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
           {"scene_collision_check_requested", waypoint.motion == "MoveJChecked" ||
             waypoint.motion == "MoveLChecked" || waypoint.motion == "MovePlanned"}};
         evidence["movement_phase"] = terminal ? "waypoint_terminal" : "waypoint_prepared";
+        if (waypoint.motion == "MoveL" || waypoint.motion == "MoveLChecked") {
+          evidence["linear_joint_change"] = {
+            {"available", linear_joint_change.available}, {"execution_gate", false},
+            {"relative_threshold_factor", linear_joint_change.relative_threshold_factor},
+            {"distance_metric", "moveit_joint_model_group_distance"},
+            {"average_step_distance", linear_joint_change.average_step_distance},
+            {"maximum_step_distance", linear_joint_change.maximum_step_distance},
+            {"maximum_step_end_index", linear_joint_change.available ?
+              nlohmann::json(linear_joint_change.maximum_step_end_index) : nlohmann::json(nullptr)},
+            {"exceeding_step_count", linear_joint_change.exceeding_step_count},
+            {"joint_names", linear_joint_change.joint_names},
+            {"maximum_step_joint_deltas", linear_joint_change.maximum_step_joint_deltas}};
+        }
         if (terminal) {
           sensor_msgs::msg::JointState feedback;
           if (measured_joint_state(feedback)) {
@@ -157,7 +171,8 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         std::lock_guard<std::mutex> lock(move_group_state_->mutex);
         moveit_msgs::msg::RobotTrajectory trajectory;
         const auto result = generate_linear_joint_trajectory(
-          *start, planning_group_, "sf_grasp_tcp", target, trajectory, interruption);
+          *start, planning_group_, "sf_grasp_tcp", target, trajectory, interruption,
+          diagnostics_capture_enabled_ ? &linear_joint_change : nullptr);
         return result == Code::TASK_RESULT_SUCCESS ? retime(trajectory) : result;
       };
     operations.check_trajectory_collision = [&]() -> uint8_t {
