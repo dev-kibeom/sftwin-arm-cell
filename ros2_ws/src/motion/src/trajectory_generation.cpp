@@ -79,9 +79,11 @@ std::uint8_t generate_linear_joint_trajectory(
   const moveit::core::RobotState & start, const std::string & group,
   const std::string & tcp_link, const Eigen::Isometry3d & target,
   moveit_msgs::msg::RobotTrajectory & trajectory,
-  const std::function<std::uint8_t()> & interruption)
+  const std::function<std::uint8_t()> & interruption,
+  LinearJointChangeDiagnostics * diagnostics)
 {
   trajectory = moveit_msgs::msg::RobotTrajectory();
+  if (diagnostics) {*diagnostics = LinearJointChangeDiagnostics{};}
   const auto interrupted = [&] {return interruption ? interruption() : Code::TASK_RESULT_SUCCESS;};
   if (const auto cause = interrupted(); cause != Code::TASK_RESULT_SUCCESS) {return cause;}
   const auto * jmg = start.getRobotModel()->getJointModelGroup(group);
@@ -98,8 +100,35 @@ std::uint8_t generate_linear_joint_trajectory(
     };
   const double fraction = moveit::core::CartesianInterpolator::computeCartesianPath(
     &current, jmg, states, link, target, true, moveit::core::MaxEEFStep(0.005),
-    moveit::core::JumpThreshold(1.5), bounds);
+    moveit::core::JumpThreshold(0.0), bounds);
   if (const auto cause = interrupted(); cause != Code::TASK_RESULT_SUCCESS) {return cause;}
+  // Observe the former relative jump criterion without letting it truncate
+  // a valid Cartesian path. Keep the same MoveIt group-distance metric.
+  if (diagnostics && states.size() >= 2U) {
+    diagnostics->available = true;
+    diagnostics->joint_names = jmg->getVariableNames();
+    std::vector<double> distances;
+    for (std::size_t i = 1; i < states.size(); ++i) {
+      const double distance = states[i - 1]->distance(*states[i], jmg);
+      distances.push_back(distance);
+      diagnostics->average_step_distance += distance;
+      if (i == 1U || distance > diagnostics->maximum_step_distance) {
+        diagnostics->maximum_step_distance = distance;
+        diagnostics->maximum_step_end_index = i;
+        diagnostics->maximum_step_joint_deltas.clear();
+        for (const auto & name : diagnostics->joint_names) {
+          diagnostics->maximum_step_joint_deltas.push_back(
+            states[i]->getVariablePosition(name) - states[i - 1]->getVariablePosition(name));
+        }
+      }
+    }
+    diagnostics->average_step_distance /= distances.size();
+    for (const double distance : distances) {
+      if (distance > diagnostics->relative_threshold_factor * diagnostics->average_step_distance) {
+        ++diagnostics->exceeding_step_count;
+      }
+    }
+  }
   if (!std::isfinite(fraction) || fraction < 1.0 - 1e-9 || states.size() < 2U) {
     return Code::TASK_RESULT_IK_UNREACHABLE;
   }
