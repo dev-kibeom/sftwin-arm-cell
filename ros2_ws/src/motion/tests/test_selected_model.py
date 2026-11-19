@@ -32,3 +32,9 @@ def test_selected_model_in_moveit(profile, tmp_path):
     }))
     subprocess.run([os.environ['ARM_CELL_MODEL_PROBE']], check=True,
                    env=dict(os.environ, ARM_CELL_MODEL_TEST_INPUT=str(fixture)))
+
+
+@pytest.mark.parametrize('profile', ['tape_m0609_c10_profile.yaml', 'tape_m0609_c10_long_profile.yaml'])
+def test_tape_teaching_in_moveit(profile, tmp_path, monkeypatch):
+    monkeypatch.setenv('ARM_CELL_MODEL_PROBE', os.environ['ARM_CELL_TEACHING_MODEL_PROBE'])
+    test_selected_model_in_moveit(profile, tmp_path)

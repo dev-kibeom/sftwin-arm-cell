@@ -8,6 +8,11 @@ import math
 import numpy as np
 
 MOTIONS = ('tape_approach', 'tape_insert', 'tape_transfer', 'tape_retreat')
+MOVEMENTS = ('MoveJ', 'MoveL', 'MoveJChecked', 'MoveLChecked', 'MovePlanned')
+
+
+def motion_name(mode):
+    return {'joint': 'MoveJ', 'linear': 'MoveL'}.get(mode, mode)
 
 
 def _vector(value, size, label):
@@ -77,7 +82,7 @@ def validate_program(program):
         if not isinstance(name,str) or not name or not isinstance(point,dict):raise ValueError('Invalid point name or definition')
         if point.get('frame') not in ('infeed','outfeed','base'):raise ValueError(f'Unknown point frame: {name}')
         point['pose']=_vector(point.get('pose'),6,name)
-        if point.get('mode') not in ('joint','linear'):raise ValueError(f'Invalid interpolation mode: {name}')
+        if motion_name(point.get('mode')) not in MOVEMENTS:raise ValueError(f'Invalid interpolation mode: {name}')
         for field in ('velocity_scale','acceleration_scale'):
             value=point.get(field)
             if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not 0<value<=1:
@@ -111,7 +116,7 @@ def capture_point(program,name,base_pose7,world_to_base):
 def resolve_program(program,world_to_base):
     program=validate_program(program);result={}
     for name,sequence in program['sequences'].items():
-        result[name]=dict(cartesian_waypoints=[dict(pose=resolve_point(program,p,world_to_base),mode=program['points'][p]['mode']) for p in sequence],
+        result[name]=dict(cartesian_waypoints=[dict(pose=resolve_point(program,p,world_to_base),motion=motion_name(program['points'][p]['mode'])) for p in sequence],
             velocity_scale=min(program['points'][p]['velocity_scale'] for p in sequence),
             acceleration_scale=min(program['points'][p]['acceleration_scale'] for p in sequence))
     return result
@@ -122,20 +127,20 @@ def default_program(configuration):
     px,py=place['first_center_xy_m'];pz=place['surface_z_m'];width=layout['material']['width_m'];depth=layout['insertion_depth_m']
     frames=dict(infeed=dict(pose=[sx,sy,sz,0.,0.,0.]),outfeed=dict(pose=[px,py,pz,0.,0.,0.]))
     points={}
-    def point(name,frame,xyz,rpy,mode='linear'):
+    def point(name,frame,xyz,rpy,mode='MoveL'):
         points[name]=dict(frame=frame,pose=[*xyz,*rpy],mode=mode,velocity_scale=.1,acceleration_scale=.1)
     # TCP +Z = +X points from the robot through the horizontal bore. The
     # distal TCP extends depth beyond the ring centre at insertion.
     horizontal=[0.,math.pi/2,0.];down=[math.pi,0.,place.get('yaw_rad',0.)]
     clearance=max(.08,layout['material']['outer_radius_m']*2)
     lift=layout['extract_lift_m'];height=place['transport_height_m']
-    point('approach','infeed',[depth-clearance,0.,0.],horizontal,'joint')
+    point('approach','infeed',[depth-clearance,0.,0.],horizontal,'MoveJ')
     point('insert','infeed',[depth,0.,0.],horizontal)
     point('lift','infeed',[depth,0.,lift],horizontal)
     point('extract','infeed',[depth-clearance,0.,lift],horizontal)
     point('carry','infeed',[depth-clearance,0.,height-sz],horizontal)
     tx,ty,tz=place['turn_position_m']
-    point('turn','outfeed',[tx-px,ty-py,tz-pz],down,'joint')
+    point('turn','outfeed',[tx-px,ty-py,tz-pz],down,'MoveJ')
     place_z=width/2+layout['release_clearance_m']-depth
     point('place_approach','outfeed',[0.,0.,place_z+place['approach_clearance_m']],down)
     point('place','outfeed',[0.,0.,place_z],down)

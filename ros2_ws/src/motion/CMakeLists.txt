@@ -57,7 +57,15 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config/pick_approach_planning.xml" PICK_APPROACH_TREE_XML)
 configure_file(src/pick_approach_tree_xml.hpp.in generated/pick_approach_tree_xml.hpp @ONLY)
 
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/config/trajectory_motions.xml")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/config/trajectory_motions.xml" TRAJECTORY_MOTION_TREE_XML)
+configure_file(src/trajectory_motion_tree_xml.hpp.in generated/trajectory_motion_tree_xml.hpp @ONLY)
+
 add_library(${PROJECT_NAME}_core
+  src/trajectory_generation.cpp
+  src/motion_transport_teaching.cpp
+  src/trajectory_motion_bt.cpp
   src/taught_motion_trajectory.cpp
   src/taught_motion.cpp
   src/motion_core.cpp
@@ -182,6 +190,12 @@ if(BUILD_TESTING)
   target_link_libraries(test_taught_entry_timing ${PROJECT_NAME}_core)
   ament_add_gtest(test_taught_motion_trajectory tests/test_taught_motion_trajectory.cpp)
   target_link_libraries(test_taught_motion_trajectory ${PROJECT_NAME}_core)
+  ament_add_gtest(test_trajectory_generation tests/test_trajectory_generation.cpp)
+  target_link_libraries(test_trajectory_generation ${PROJECT_NAME}_core)
+
+  ament_add_gtest(test_trajectory_motion_bt tests/test_trajectory_motion_bt.cpp)
+  target_link_libraries(test_trajectory_motion_bt ${PROJECT_NAME}_core)
+
   ament_add_gtest(test_taught_motion tests/test_taught_motion.cpp)
   target_link_libraries(test_taught_motion ${PROJECT_NAME}_core nlohmann_json::nlohmann_json)
   find_package(moveit_ros_planning REQUIRED)
@@ -367,8 +381,12 @@ if(BUILD_TESTING)
   ament_add_gtest_executable(selected_model_probe tests/test_selected_model.cpp)
   ament_target_dependencies(selected_model_probe moveit_ros_planning_interface moveit_core rclcpp)
   target_link_libraries(selected_model_probe ${PROJECT_NAME}_core nlohmann_json::nlohmann_json)
+  ament_add_gtest_executable(teaching_model_probe tests/test_teaching_model.cpp)
+  target_link_libraries(teaching_model_probe ${PROJECT_NAME}_core nlohmann_json::nlohmann_json)
+  ament_target_dependencies(teaching_model_probe moveit_ros_planning_interface moveit_core rclcpp)
   ament_add_pytest_test(test_selected_model tests/test_selected_model.py
-    ENV "ARM_CELL_MODEL_PROBE=$<TARGET_FILE:selected_model_probe>")
+    ENV "ARM_CELL_MODEL_PROBE=$<TARGET_FILE:selected_model_probe>"
+        "ARM_CELL_TEACHING_MODEL_PROBE=$<TARGET_FILE:teaching_model_probe>")
   foreach(asset_test test_robot_description test_moveit_configuration test_static_scene_loader test_console_output_format)
     ament_add_pytest_test(${asset_test} tests/${asset_test}.py)
   endforeach()

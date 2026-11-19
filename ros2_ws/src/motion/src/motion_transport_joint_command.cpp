@@ -376,8 +376,8 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
       taught = found->second;
     }
   }
-  if (!taught.cartesian_waypoints.empty()) {
-    return execute_cartesian_teaching(taught, execution_id, interruption);
+  if (!taught.cartesian_waypoints.empty() || taught.joint_path.empty()) {
+    return execute_teaching_motion(taught, motion, execution_id, interruption);
   }
   const auto interrupted = [&]() {
       return interruption ? interruption() : Code::TASK_RESULT_SUCCESS;
@@ -522,133 +522,5 @@ bool IsaacRosMotionTransport::replace_teaching(const std::string & json, std::st
   }
 }
 
-uint8_t IsaacRosMotionTransport::execute_cartesian_teaching(
-  const TaughtMotion & taught, const std::string & execution_id,
-  const std::function<uint8_t()> & interruption)
-{
-  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
-  if (!teaching_submission_check_) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
-  for (const auto & waypoint : taught.cartesian_waypoints) {
-    const auto admission = teaching_submission_check_();
-    if (admission != Code::TASK_RESULT_SUCCESS) {return admission;}
-    if (interruption && interruption() != Code::TASK_RESULT_SUCCESS) {return interruption();}
-    sensor_msgs::msg::JointState measured;
-    if (!measured_joint_state(measured) || !current_state_fresh()) {
-      return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
-    }
-    if (!planning_scene_client_ ||
-      !planning_scene_client_->wait_for_service(std::chrono::milliseconds(500)))
-    {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
-    auto query = std::make_shared<moveit_msgs::srv::GetPlanningScene::Request>();
-    query->components.components = pick_retract_planning_scene_components();
-    auto future = planning_scene_client_->async_send_request(query);
-    if (future.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
-      return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
-    }
-    const auto response = future.get();
-    const auto envelope = applied_motion_envelope();
-    if (!envelope.valid) {return Code::TASK_RESULT_PERMISSION_DENIED;}
-    const auto scales = apply_motion_envelope_to_planning_scales(
-      taught.velocity_scale, taught.acceleration_scale, envelope);
-    NormalizedTrajectoryPlan plan;
-    plan.planning_scales = scales;
-    plan.request.task_type.value = arm_cell_interfaces::msg::MotionTaskType::TASK_TYPE_GO_HOME;
-    plan.request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
-    plan.request.motion_goal_uuid = execution_id;
-    plan.request.interruption_result = interruption;
-    {
-      std::lock_guard<std::mutex> group_lock(move_group_state_->mutex);
-      auto & group = move_group_state_->move_group;
-      if (!response || !group || !measured_joint_state(measured) || !current_state_fresh()) {
-        return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
-      }
-      planning_scene::PlanningScene scene(group->getRobotModel());
-      if (!scene.setPlanningSceneMsg(response->scene)) {return Code::TASK_RESULT_BACKEND_ERROR;}
-      auto start = scene.getCurrentState();
-      std::vector<double> positions;
-      if (!extract_arm_positions(measured, positions) ||
-        !moveit::core::jointStateToRobotState(measured, start))
-      {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
-      start.update();
-      if (!start.satisfiesBounds()) {
-        RCLCPP_WARN(node_->get_logger(), "Teaching start state exceeds joint bounds");
-        return Code::TASK_RESULT_PATH_OBSTRUCTED;
-      }
-      collision_detection::CollisionRequest collision_request;
-      collision_request.group_name = planning_group_;
-      collision_request.contacts = true;
-      collision_detection::CollisionResult collision_result;
-      scene.checkCollision(collision_request, collision_result, start);
-      if (collision_result.collision) {
-        for (const auto & contact : collision_result.contacts) {
-          RCLCPP_WARN(node_->get_logger(), "Teaching start state collision: %s / %s",
-            contact.first.first.c_str(), contact.first.second.c_str());
-        }
-        return Code::TASK_RESULT_PATH_OBSTRUCTED;
-      }
-      group->setStartState(start);
-      group->setPoseReferenceFrame("base_link");
-      if (!group->setEndEffectorLink("sf_grasp_tcp")) {return Code::TASK_RESULT_BACKEND_ERROR;}
-      group->setMaxVelocityScalingFactor(scales.max_velocity);
-      group->setMaxAccelerationScalingFactor(scales.max_acceleration);
-      group->clearPoseTargets();
-      group->clearPathConstraints();
-      group->setPlanningTime(planning_time_s_);
-      geometry_msgs::msg::Pose pose;
-      pose.position.x = waypoint.pose[0]; pose.position.y = waypoint.pose[1];
-      pose.position.z = waypoint.pose[2]; pose.orientation.x = waypoint.pose[3];
-      pose.orientation.y = waypoint.pose[4]; pose.orientation.z = waypoint.pose[5];
-      pose.orientation.w = waypoint.pose[6];
-      moveit_msgs::msg::RobotTrajectory trajectory;
-      if (waypoint.linear) {
-        const double fraction = group->computeCartesianPath({pose}, 0.005, 1.5, trajectory, true);
-        if (!std::isfinite(fraction) || fraction < 1.0 - 1e-9) {
-          return Code::TASK_RESULT_PATH_OBSTRUCTED;
-        }
-      } else {
-        if (!group->setPoseTarget(pose, "sf_grasp_tcp")) {return Code::TASK_RESULT_INVALID_GOAL;}
-        moveit::planning_interface::MoveGroupInterface::Plan joint_plan;
-        const auto result = group->plan(joint_plan);
-        group->clearPoseTargets();
-        if (result != moveit::core::MoveItErrorCode::SUCCESS) {
-          return Code::TASK_RESULT_PATH_OBSTRUCTED;
-        }
-        trajectory = joint_plan.trajectory_;
-      }
-      if (trajectory.joint_trajectory.points.size() < 2U ||
-        !retime_taught_entry(
-          group->getRobotModel(), planning_group_, start, trajectory, scales, &taught_joint_limits_))
-      {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
-      moveit_msgs::msg::RobotState start_message;
-      moveit::core::robotStateToRobotStateMsg(start, start_message, true);
-      if (!scene.isPathValid(start_message, trajectory, planning_group_)) {
-        return Code::TASK_RESULT_PATH_OBSTRUCTED;
-      }
-      plan.trajectory = trajectory.joint_trajectory;
-    }
-    auto effective_limits = taught_joint_limits_;
-    for (auto & limit : effective_limits) {
-      limit.max_velocity *= scales.max_velocity;
-      limit.max_acceleration *= scales.max_acceleration;
-    }
-    const auto discard = [&]() {
-        if (!interruption) {return false;}
-        const auto result = interruption();
-        if (result == Code::TASK_RESULT_SUCCESS) {return false;}
-        std::lock_guard<std::mutex> lock(mutex_);
-        normalized_failure_result_ = result;
-        return true;
-      };
-    const auto permission = teaching_submission_check_();
-    if (permission != Code::TASK_RESULT_SUCCESS) {return permission;}
-    if (!execute_taught_entry(plan, discard, effective_limits)) {
-      if (interruption && interruption() != Code::TASK_RESULT_SUCCESS) {return interruption();}
-      return Code::TASK_RESULT_BACKEND_ERROR;
-    }
-    const auto result = wait_for_joint_target_result();
-    if (result != Code::TASK_RESULT_SUCCESS) {return result;}
-  }
-  return Code::TASK_RESULT_SUCCESS;
-}
 
 }  // namespace arm_cell_motion

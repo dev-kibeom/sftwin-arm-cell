@@ -54,6 +54,7 @@ struct MoveGroupInitializationState
   std::unique_ptr<moveit::planning_interface::MoveGroupInterface> move_group;
   std::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> pick_ik_loader;
   kinematics::KinematicsBasePtr pick_ik_solver;
+  moveit::core::RobotModelPtr teaching_model;
   rclcpp::Node::SharedPtr pick_ik_node;
   bool required{false};
   bool ready{false};
@@ -191,8 +192,9 @@ private:
     const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,
     const MotionPlanningScales & scales,
     const std::vector<JointMotionLimit> * limits = nullptr);
-  uint8_t execute_cartesian_teaching(
-    const TaughtMotion &, const std::string &, const std::function<uint8_t()> &);
+  uint8_t execute_teaching_motion(
+    const TaughtMotion &, const std::string &, const std::string &,
+    const std::function<uint8_t()> &);
   bool execute_taught_entry(
     const NormalizedTrajectoryPlan & entry, const std::function<bool()> & discard_if_interrupted,
     const std::vector<JointMotionLimit> & effective_limits);

@@ -1,0 +1,36 @@
+<root BTCPP_format="3">
+  <BehaviorTree ID="MoveJ">
+    <Sequence>
+      <ResolveJointTarget/>
+      <GenerateJointTrajectory/>
+      <ExecuteTrajectory/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="MoveL">
+    <Sequence>
+      <GenerateLinearTrajectory/>
+      <ExecuteTrajectory/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="MoveJChecked">
+    <Sequence>
+      <ResolveJointTarget/>
+      <GenerateJointTrajectory/>
+      <CheckTrajectoryCollision/>
+      <ExecuteTrajectory/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="MoveLChecked">
+    <Sequence>
+      <GenerateLinearTrajectory/>
+      <CheckTrajectoryCollision/>
+      <ExecuteTrajectory/>
+    </Sequence>
+  </BehaviorTree>
+  <BehaviorTree ID="MovePlanned">
+    <Sequence>
+      <PlanCollisionFreePath/>
+      <ExecuteTrajectory/>
+    </Sequence>
+  </BehaviorTree>
+</root>

@@ -81,8 +81,8 @@ TEST(TaughtMotion, SparseCartesianWaypointsPreserveModeAndTcpPose)
     {}, {}, 6);
   const auto & points = motions.at("tape_insert").cartesian_waypoints;
   ASSERT_EQ(points.size(), 2U);
-  EXPECT_FALSE(points[0].linear);
-  EXPECT_TRUE(points[1].linear);
+  EXPECT_EQ(points[0].motion, "MoveJ");
+  EXPECT_EQ(points[1].motion, "MoveL");
   EXPECT_DOUBLE_EQ(points[1].pose[2], 0.4);
 }
 
@@ -100,4 +100,31 @@ TEST(TaughtMotion, RejectsAmbiguousMalformedOrUnframedCartesianDefinitions)
   for (const auto & value : bad) {
     EXPECT_THROW(parse_taught_motions(value.dump(), {}, {}, 6), std::exception);
   }
+}
+
+TEST(TaughtMotion, AcceptsNamedMotionCompositionsAndRejectsAmbiguousSelection)
+{
+  auto registry = nlohmann::json::parse(R"({"approach":{
+    "cartesian_waypoints":[{"pose":[0.4,0.35,0.5,0,0.7071067811865476,0,0.7071067811865476],"motion":"MoveJ"}],
+    "velocity_scale":0.1,"acceleration_scale":0.1}})");
+  for (const auto * name : {"MoveJ", "MoveL", "MoveJChecked", "MoveLChecked", "MovePlanned"}) {
+    registry["approach"]["cartesian_waypoints"][0]["motion"] = name;
+    EXPECT_NO_THROW(parse_taught_motions(registry.dump(), {}, {}, 6)) << name;
+  }
+  registry["approach"]["cartesian_waypoints"][0]["motion"] = "UnknownMotion";
+  EXPECT_THROW(parse_taught_motions(registry.dump(), {}, {}, 6), std::invalid_argument);
+  registry["approach"]["cartesian_waypoints"][0]["motion"] = "MoveJ";
+  registry["approach"]["cartesian_waypoints"][0]["mode"] = "joint";
+  EXPECT_THROW(parse_taught_motions(registry.dump(), {}, {}, 6), std::invalid_argument);
+}
+
+TEST(TaughtMotion, JointTargetsCanSelectCheckedOrPlannedCompositions)
+{
+  auto registry = nlohmann::json::parse(R"({"home":{
+    "target":"home","motion":"MoveJChecked","velocity_scale":0.3,"acceleration_scale":0.2}})");
+  EXPECT_EQ(parse_taught_motions(registry.dump(), {0.1}, {}, 1).at("home").movement, "MoveJChecked");
+  registry["home"]["motion"] = "MovePlanned";
+  EXPECT_EQ(parse_taught_motions(registry.dump(), {0.1}, {}, 1).at("home").movement, "MovePlanned");
+  registry["home"]["motion"] = "MoveL";
+  EXPECT_THROW(parse_taught_motions(registry.dump(), {0.1}, {}, 1), std::invalid_argument);
 }

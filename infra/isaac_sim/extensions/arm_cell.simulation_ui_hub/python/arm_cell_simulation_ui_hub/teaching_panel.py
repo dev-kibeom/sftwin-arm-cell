@@ -6,6 +6,7 @@ import math
 
 _AXES = ('X (mm)', 'Y (mm)', 'Z (mm)', 'Roll (deg)', 'Pitch (deg)', 'Yaw (deg)')
 _POINT_FRAMES = ('base', 'infeed', 'outfeed')
+_MOVEMENTS = ['MoveJ', 'MoveL', 'MoveJChecked', 'MoveLChecked', 'MovePlanned']
 
 
 def display_pose(pose):
@@ -71,7 +72,7 @@ class TeachingPanel:
                         self._selector('point_frame', 'Point reference frame', self._point_frame_changed,
                                        list(_POINT_FRAMES))
                         self._point_pose = self._pose_fields()
-                        self._selector('mode', 'Motion', None, ['joint', 'linear'])
+                        self._selector('mode', 'Motion', None, _MOVEMENTS)
                         with ui.HStack(height=26):
                             ui.Label('Speed (%)', width=100)
                             self._speed = ui.FloatField()
@@ -227,7 +228,8 @@ class TeachingPanel:
             return
         self._set_pose(self._point_pose, point['pose'])
         self._set_choices('point_frame', list(_POINT_FRAMES), point['frame'], self._point_frame_changed)
-        self._set_choices('mode', ['joint', 'linear'], point['mode'])
+        self._set_choices('mode', _MOVEMENTS,
+                          {'joint': 'MoveJ', 'linear': 'MoveL'}.get(point['mode'], point['mode']))
         self._speed.model.set_value(point['velocity_scale'] * 100)
         self._acceleration.model.set_value(point['acceleration_scale'] * 100)
 

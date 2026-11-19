@@ -111,7 +111,7 @@ GO_HOME·트레이 반환·payload HOME 및 추가 티칭 자세는 단일 Regis
 참조 또는 `arm_joint_names` 순서의 유한 관절 위치(rad)로 등록하며, 실행기는 이름별로
 분기하지 않는다. GO_HOME 등 기존 작업 요청을 이름으로 연결하는 부분은 호출 경계에 둔다.
 
-단일 목표 Named Joint Motion은 현재 측정 관절값에서 목표까지 직접 Joint Trajectory를 생성한다.
+기본 MoveJ 조합의 단일 목표 Named Joint Motion은 현재 측정 관절값에서 목표까지 직접 Joint Trajectory를 생성한다.
 MoveIt 경로 계획·IK·Planning Scene 조회·충돌 경로 탐색을 수행하지 않는다. Robot의
 위치·속도 한계와 설정된 관절 가속도 한계를 소비하고, 표준 동기화 속도 프로파일을 사용한다.
 별도의 보간기나 작업별 궤적 생성기를 두지 않으며 기존 simulation-clock sampler·명령
@@ -133,18 +133,36 @@ GO_HOME과 독립 티칭 이동은 궤적 전송 완료 이후에도 기존 연�
 
 ### 희소 Cartesian 티칭과 운영자 시험 실행
 
-티칭 Registry는 `cartesian_waypoints`를 가진 이름별 동작을 지원한다. 각 waypoint는
-`base_link` 기준 `sf_grasp_tcp`의 `[x,y,z,qx,qy,qz,qw]` Pose와 `joint` 또는
-`linear` 이동 mode를 가진다. Quaternion은 유한 단위 회전이며, 알 수 없는 frame·mode,
-불완전 Pose, 혼합 목표 형식 및 유효하지 않은 배율은 이동 없이 거부한다.
+티칭 Registry의 이름은 공정에서 사용하는 동작 목록을 식별하며, 각 waypoint의 동작 방식은
+재사용 가능한 BT 기능 액션을 조합한 SubTree를 선택한다. 기능 액션은 목표 관절 해 계산,
+관절 보간 궤적 생성, TCP 직선 궤적 생성, 충돌 회피 경로 탐색, 궤적 충돌 검사 및 궤적 실행을
+각각 담당한다. 동작 이름은 이 기능들의 조합을 뜻하며 특정 planner/backend API 이름이 아니다.
 
-각 구간은 현재의 신선한 측정 관절값과 유효한 전체 Planning Scene에서 시작한다.
-`joint`는 Pose 목표의 전역 관절 경로를 계획하고, `linear`는 TCP 직선 Cartesian
-경로를 계산한다. Cartesian 부분 경로는 실행하지 않는다. 완전한 경로의 충돌 검사와
-속도·가속도 제한에 따른 시간 매개화를 통과한 뒤 기존 Trajectory 실행기로 제출하고,
-실제 관절 피드백의 목표 도달을 확인한 다음 다음 waypoint를 계획한다. 실패 시 다음
-구간을 시작하지 않으며, Gripper 조작·직접 관절 순간이동·충돌 허용으로 대체하지 않는다.
-기존 CNC의 `target`·`joint_positions`·등록 `joint_path` 의미는 유지한다.
+| 동작 방식 | 기능 조합과 의미 |
+|---|---|
+| MoveJ | 목표 관절 해 확립 → 관절 보간 → 실행. 관절 목표는 그대로 사용하고 TCP 자세 목표는 IK로 관절 목표를 구한다. TCP 직선 이동은 보장하지 않는다. |
+| MoveL | TCP 직선 보간·연속 IK → 시간 매개화 → 실행. 부분 경로는 실행하지 않는다. |
+| MoveJChecked / MoveLChecked | 각각 MoveJ / MoveL의 생성 궤적을 Scene으로 검사한 뒤 동일 궤적을 실행한다. 충돌 시 실패하며 우회하지 않는다. |
+| MovePlanned | Scene 충돌 검사를 포함한 회피 경로 탐색·시간 매개화 → 실행. 실패를 무검사 이동으로 대체하지 않는다. |
+
+MoveJ와 MoveL은 Scene 조회, 환경·자기 충돌 검사 또는 장애물 회피 탐색을 수행하지 않는다.
+이는 Safety 권한·Stop, 관절 위치·속도·가속도 한계, 입력 유효성 또는 신선한 측정 상태
+요구를 해제하지 않는다. Scene을 검사하지 않은 실행 성공을 충돌 없음으로 표현하지 않는다.
+검사형 동작은 현재 전체 Scene을 사용하며, 검사한 궤적을 실행 단계에서 다시 생성하지 않는다.
+
+TCP 목표의 IK는 현재 측정 관절값을 seed로 사용하고 설정된 근접 해 선택 정책을 적용한다.
+회전 관절의 2π 동치 해는 실제 위치 한계 안에서 현재 관절값에 가장 가까운 표현을 선택하여
+불필요한 전체 회전을 피한다. planner와 티칭의 IK 모델·설정은 서로의 정책을 변경하지 않는다.
+각 구간은 신선한 측정 관절값에서 시작하고 실제 목표 도달을 확인한 뒤 다음 구간으로 진행한다.
+속도·가속도는 기존 티칭 비율과 Safety envelope를 적용한다. 실패나 중단 시 후속 구간을
+시작하지 않는다. 실패 기록은 IK, 보간, 회피 계획, Scene 검사, 실행 단계를 구별한다.
+
+`cartesian_waypoints`의 목표는 `base_link` 기준 `sf_grasp_tcp`의
+`[x,y,z,qx,qy,qz,qw]` Pose이며 동작 방식 이름을 명시한다. 이전 `joint` / `linear` mode는
+각각 MoveJ / MoveL로 읽는다. Quaternion은 유한 단위 회전이며 알 수 없는 동작 방식,
+불완전 Pose, 혼합 목표 형식 및 유효하지 않은 비율은 이동 없이 거부한다.
+기존 CNC의 `target`·`joint_positions`는 기본 MoveJ 조합으로 실행하며, 검사형 MoveJ 또는 회피 계획 조합도 명시적으로 선택할 수 있다. 등록 `joint_path`의
+명시적 진입 계획 및 전체 경로 검사 계약은 유지한다.
 
 운영자 `/motion/execute_teaching` Action은 한 희소 Cartesian 동작을 시험한다.
 수락 전에 Motion 실행을 예약하고 현재 fresh `MOTION_NORMAL` 권한을 요구하며,

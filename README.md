@@ -343,11 +343,33 @@ JSON 값이 같으면 파일 내용·수정 시각을 보존하고 실제 값이
 속도·가속도 한계 대비 `(0, 1]` 비율이며, 현재 Safety 제한을 추가 적용합니다.
 기존 직접 위치 명령의 실제 속도와 비례하는 감속률은 아닙니다.
 기본 `home`·`return_material`·`payload_home` 항목은 기존 Robot 목표를 참조합니다.
+관절 목표 항목도 선택적 `motion`으로 `MoveJ`(기본값), `MoveJChecked`, `MovePlanned`를 고를 수 있습니다.
 다른 티칭 자세는 같은 파일에 추가할 수 있습니다.
-이름을 Registry에서 조회한 뒤 현재 관절값에서 목표까지 표준 KDL 속도 프로파일로 직접
-Joint Trajectory를 생성합니다. MoveIt 경로 계획·IK·Scene 조회를 호출하지 않고 기존
+기본 MoveJ 조합은 이름을 Registry에서 조회한 뒤 현재 관절값에서 관절 목표까지
+표준 KDL 속도 프로파일로 직접 Joint Trajectory를 생성합니다. MoveIt 경로 계획·IK·Scene 조회를 호출하지 않고 기존
 simulation-clock 궤적 실행기와 최종 관절 도달 확인을 사용합니다. 직접 관절 이동 경로는
 운영 티칭으로 검증하며, 실제 Isaac 라이브 검증은 별도로 수행합니다.
+
+희소 TCP 티칭은 waypoint의 `motion`으로 동작 조합을 선택합니다. 목표 Pose는
+`base_link` 기준 `[x,y,z,qx,qy,qz,qw]`이며 위치 단위는 m입니다.
+
+| 동작 | 처리 |
+|---|---|
+| `MoveJ` | TCP 목표를 IK로 관절 목표로 변환한 뒤 관절 보간·실행 |
+| `MoveL` | TCP 직선 보간·IK·시간 매개화·실행 |
+| `MoveJChecked` / `MoveLChecked` | 생성 궤적을 Scene으로 검사한 뒤 같은 궤적 실행. 충돌 시 중단 |
+| `MovePlanned` | 충돌 검사를 포함하는 MoveIt 회피 경로 계획 후 실행 |
+
+`MoveJ`와 `MoveL`은 환경·자기 충돌 검사를 하지 않습니다. 관절 한계·Safety·Stop은
+동일하게 적용합니다. 이전 `mode: joint` / `mode: linear`는 각각 `MoveJ` / `MoveL`로
+읽으며, 티칭 UI에서도 동작 방식을 선택할 수 있습니다. 공정 접근·삽입·이송·후퇴와
+운영자 시험은 같은 동작 조합을 사용합니다.
+
+기능별 BT 액션과 조합은
+[`trajectory_motions.xml`](ros2_ws/src/motion/config/trajectory_motions.xml)에 있습니다.
+`ResolveJointTarget`, `GenerateJointTrajectory`, `GenerateLinearTrajectory`,
+`PlanCollisionFreePath`, `CheckTrajectoryCollision`, `ExecuteTrajectory`를 조합하며,
+`MoveJ`·`MoveL`은 액션 이름이 아닌 서브트리 이름입니다.
 
 ```yaml
 motions:
