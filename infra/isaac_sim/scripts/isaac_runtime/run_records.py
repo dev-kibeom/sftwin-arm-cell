@@ -94,6 +94,16 @@ def release_standalone_run_directory(artifact_root, run_root):
 
 
 def diagnostic_component_directory(checkout, component):
+    descriptor_path = (os.environ.get('SFTWIN_LIVE_TEST_SESSION_PATH') or
+                       os.environ.get('ARM_CELL_RECORDING_SESSION_PATH'))
+    if descriptor_path:
+        try:
+            descriptor = Path(descriptor_path).resolve()
+            data = json.loads(descriptor.read_text())
+            if data.get('status') == 'open' and data.get('session_id'):
+                return descriptor.parent / component
+        except (OSError, ValueError, AttributeError):
+            pass
     config = run_records_config(checkout)
     diagnostic = config.get("directories", {}).get("diagnostic", "diagnostic")
     artifact_root = run_records_root(checkout)

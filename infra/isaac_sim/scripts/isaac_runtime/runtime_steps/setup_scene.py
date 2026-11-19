@@ -53,6 +53,12 @@ def _start_live_test_session():
             selected,
         )
         os.environ["SFTWIN_LIVE_TEST_SESSION_PATH"] = str(_live_test_session.descriptor)
+        from isaac_runtime.live_test_session import record_configuration_snapshot
+        try:
+            record_configuration_snapshot(_live_test_session.descriptor, runtime_configuration,
+                                          'isaac', 'session_start')
+        except Exception as error:
+            print(f'Isaac configuration evidence unavailable: {error}')
         if _material_supply_adapter is not None:
             _material_supply_adapter.set_live_test_session_id(
                 _live_test_session.session_id, _live_test_session.root

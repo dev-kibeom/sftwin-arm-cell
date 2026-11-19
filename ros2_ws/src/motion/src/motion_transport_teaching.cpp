@@ -94,23 +94,43 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     std::vector<double> target_joints;
     std::string detail;
     bool scene_collision_checked = false;
-    const auto record = [&](const std::string & stage, uint8_t code) {
+    const auto record = [&](const std::string & stage, uint8_t code, bool terminal = false) {
         if (!diagnostics_capture_enabled_) {return;}
         const auto duration = plan.trajectory.points.empty() ? 0.0 :
           plan.trajectory.points.back().time_from_start.sec +
           plan.trajectory.points.back().time_from_start.nanosec * 1e-9;
-        set_pending_motion_planning_evidence(execution_id, plan.request.task_type.value,
-          nlohmann::json{{"motion", waypoint.motion}, {"motion_name", motion_name},
-            {"planner", waypoint.motion == "MovePlanned" ? "moveit" : "not_used"},
-            {"waypoint_number", waypoint_number}, {"start_joint_positions", start_positions},
-            {"target_joint_positions", target_joints},
-            {"velocity_scale", scales.max_velocity}, {"acceleration_scale", scales.max_acceleration},
-            {"duration_s", duration}, {"target_tcp_pose", joint_target ? nlohmann::json(nullptr) : nlohmann::json(waypoint.pose)},
-            {"trajectory_point_count", plan.trajectory.points.size()},
-            {"failure_stage", stage}, {"detail", detail}, {"result_code", code},
-            {"scene_collision_checked", scene_collision_checked},
-            {"scene_collision_check_requested", waypoint.motion == "MoveJChecked" ||
-              waypoint.motion == "MoveLChecked" || waypoint.motion == "MovePlanned"}}.dump());
+        auto evidence = nlohmann::json{{"motion", waypoint.motion}, {"motion_name", motion_name},
+          {"planner", waypoint.motion == "MovePlanned" ? "moveit" : "not_used"},
+          {"waypoint_number", waypoint_number}, {"start_joint_positions", start_positions},
+          {"target_joint_positions", target_joints},
+          {"velocity_scale", scales.max_velocity}, {"acceleration_scale", scales.max_acceleration},
+          {"duration_s", duration},
+          {"target_tcp_pose", joint_target ? nlohmann::json(nullptr) : nlohmann::json(
+              waypoint.pose)},
+          {"trajectory_point_count", plan.trajectory.points.size()},
+          {"failure_stage", stage}, {"detail", detail}, {"result_code", code},
+          {"scene_collision_checked", scene_collision_checked},
+          {"scene_collision_check_requested", waypoint.motion == "MoveJChecked" ||
+            waypoint.motion == "MoveLChecked" || waypoint.motion == "MovePlanned"}};
+        evidence["movement_phase"] = terminal ? "waypoint_terminal" : "waypoint_prepared";
+        if (terminal) {
+          sensor_msgs::msg::JointState feedback;
+          if (measured_joint_state(feedback)) {
+            evidence["measured_joint_feedback"] = {
+              {"status", "observed"}, {"names", feedback.name},
+              {"positions_rad", feedback.position}, {"velocities_rad_s", feedback.velocity},
+              {"source_stamp_sec", feedback.header.stamp.sec},
+              {"source_stamp_nanosec", feedback.header.stamp.nanosec}};
+          } else {evidence["measured_joint_feedback"] = {{"status", "unavailable"}};}
+          if (planning_diagnostic_capture_) {
+            planning_diagnostic_capture_->enqueue(
+              execution_id, "TAUGHT_WAYPOINT", code,
+              evidence.dump());
+          }
+        }
+        set_pending_motion_planning_evidence(
+          execution_id, plan.request.task_type.value,
+          evidence.dump());
       };
     TrajectoryMotionOperations operations;
     operations.interruption = permission;
@@ -212,9 +232,10 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         return wait_for_joint_target_result();
       };
     const auto result = run_trajectory_motion(waypoint.motion, operations);
-    record(result.failure_stage, result.code);
+    record(result.failure_stage, result.code, true);
     if (result.code != Code::TASK_RESULT_SUCCESS) {
-      RCLCPP_WARN(node_->get_logger(),
+      RCLCPP_WARN(
+        node_->get_logger(),
         "Taught motion failed motion=%s waypoint=%zu stage=%s result=%s detail=%s",
         waypoint.motion.c_str(), waypoint_number, result.failure_stage.c_str(),
         motion_result_code_name(result.code), detail.c_str());

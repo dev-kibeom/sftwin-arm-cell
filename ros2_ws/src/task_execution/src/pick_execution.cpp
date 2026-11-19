@@ -34,7 +34,11 @@ std::uint8_t PickExecution::record_stage(
     std::string{} : stage + ":" + motion_result_code_name(result);
   queue_pick_execution_record(
     state_.goal, report_->motion_execution_id, stage, result, held, retract_succeeded,
-    state_.approach_submitted ? support_.motion_port()->lastPickCandidateEvaluation() : "");
+    state_.approach_submitted ? support_.motion_port()->lastPickCandidateEvaluation() : "",
+    support_.prepared_grasp() ?
+    (stage.find("retract") == 0U ? support_.prepared_grasp()->transfer_motion :
+    stage == "approach" ? support_.prepared_grasp()->approach_motion :
+    support_.prepared_grasp()->insertion_motion) : std::string{});
   report_->result_code = result;
   return result;
 }

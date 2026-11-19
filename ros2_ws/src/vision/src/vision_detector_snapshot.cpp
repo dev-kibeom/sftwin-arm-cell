@@ -273,6 +273,13 @@ VisionDetectorSnapshotOutput::VisionDetectorSnapshotOutput(
   live_test_session_id_(std::move(live_test_session_id)),
   vision_run_id_(std::move(vision_run_id)), save_(std::move(save)), publish_(std::move(publish))
 {
+  storage_budget_bytes_ = static_cast<uint64_t>(std::max<int64_t>(
+      1,
+      node.has_parameter("diagnostics.storage_budget_bytes") ?
+      node.get_parameter("diagnostics.storage_budget_bytes").as_int() :
+      node.declare_parameter<int64_t>(
+        "diagnostics.storage_budget_bytes",
+        256LL * 1024LL * 1024LL)));
   std::pair<std::string, std::string> generated_run_date_time;
   try {
     generated_run_date_time = snapshot_utc_run_date_time();
@@ -363,6 +370,7 @@ void VisionDetectorSnapshotOutput::submit(VisionDetectorSnapshotJob job) noexcep
     std::lock_guard<std::mutex> lock(mutex_);
     if (stopping_ || !worker_.joinable()) {
       if (terminal_job) {
+        ++dropped_terminal_;
         RCLCPP_WARN(logger_, "vision terminal evidence not enqueued cause=writer_unavailable");
       }
       return;
@@ -380,14 +388,17 @@ void VisionDetectorSnapshotOutput::submit(VisionDetectorSnapshotJob job) noexcep
         break;
       default:
         if (terminal_pending_.size() == kMaxPendingTerminalSnapshots) {
-          RCLCPP_WARN(logger_, "vision terminal evidence not enqueued "
-                               "cause=bounded_output_capacity_exhausted");
+          ++dropped_terminal_;
+          RCLCPP_WARN(
+            logger_, "vision terminal evidence not enqueued "
+            "cause=bounded_output_capacity_exhausted");
           return;
         }
         if (progress_pending_ &&
           progress_pending_->acquisition_id == job.acquisition_id)
         {progress_pending_.reset();}
         terminal_pending_.push_back(std::move(job));
+        ++accepted_terminal_;
         break;
     }
     ready_.notify_one();
@@ -407,6 +418,50 @@ void VisionDetectorSnapshotOutput::shutdown()
   }
   ready_.notify_all();
   if (worker_.joinable()) {worker_.join();}
+  try {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::filesystem::create_directories(diagnostic_root_);
+    std::ofstream summary(diagnostic_root_ / ("capture-summary-" + vision_run_id_ + ".json"));
+    summary << "{\"schema_version\":1,\"accepted_terminal\":" << accepted_terminal_
+            << ",\"dropped_terminal\":" << dropped_terminal_
+            << ",\"failed_outputs\":" << failed_outputs_
+            << ",\"storage_budget_exhausted\":" << (storage_budget_exhausted_ ? "true" : "false")
+            << ",\"storage_scan_failed\":" << (storage_scan_failed_ ? "true" : "false")
+            << ",\"capture_complete\":" <<
+      (dropped_terminal_ == 0 && failed_outputs_ == 0 ? "true" : "false") << "}\n";
+    if (!summary) {RCLCPP_WARN(logger_, "Vision capture summary write failed");}
+  } catch (const std::exception & error) {
+    RCLCPP_WARN(logger_, "Vision capture summary unavailable: %s", error.what());
+  }
+}
+
+bool VisionDetectorSnapshotOutput::reserve_storage_bytes(std::size_t bytes)
+{
+  if (storage_scan_failed_) {return false;}
+  try {
+    if (!storage_initialized_) {
+      storage_initialized_ = true;
+      const auto snapshot_root = !snapshot_run_directory_.empty() ? snapshot_run_directory_ :
+        (run_directory_ ? *run_directory_ : std::filesystem::path{});
+      for (const auto & root : {diagnostic_root_, snapshot_root}) {
+        std::error_code error;
+        if (root.empty() || !std::filesystem::exists(root, error)) {continue;}
+        for (const auto & entry : std::filesystem::recursive_directory_iterator(root)) {
+          if (entry.is_regular_file()) {storage_bytes_ += entry.file_size();}
+        }
+      }
+    }
+    if (storage_bytes_ > storage_budget_bytes_ || bytes > storage_budget_bytes_ - storage_bytes_) {
+      storage_budget_exhausted_ = true;
+      return false;
+    }
+    storage_bytes_ += bytes;
+    return true;
+  } catch (const std::exception & error) {
+    storage_scan_failed_ = true;
+    RCLCPP_WARN(logger_, "Vision storage accounting unavailable: %s", error.what());
+    return false;
+  }
 }
 
 void VisionDetectorSnapshotOutput::run()
@@ -437,6 +492,7 @@ void VisionDetectorSnapshotOutput::run()
     try {
       message = render(job);
     } catch (const std::exception & error) {
+      ++failed_outputs_;
       message.snapshot_id = job.vision_run_id + ":" + std::to_string(job.revision);
       message.revision = job.revision;
       message.event_kind = job.event_kind;
@@ -494,16 +550,28 @@ void VisionDetectorSnapshotOutput::run()
       try {
         std::string failure_cause;
         if (!save_job(job, message, failure_cause)) {
-          RCLCPP_WARN(logger_, "detector snapshot local save failed cause=%s", failure_cause.c_str());
+          ++failed_outputs_;
+          RCLCPP_WARN(
+            logger_, "detector snapshot local save failed cause=%s",
+            failure_cause.c_str());
         }
       } catch (const std::exception & error) {
+        ++failed_outputs_;
         RCLCPP_WARN(logger_, "detector snapshot local save failed cause=%s", error.what());
       }
     }
     if (terminal_snapshot) {
-      std::string diagnostic_failure;
-      if (!save_diagnostic_record(job, diagnostic_failure, message.diagnostic_record_json)) {
-        RCLCPP_WARN(logger_, "vision diagnostic record save failed cause=%s", diagnostic_failure.c_str());
+      try {
+        std::string diagnostic_failure;
+        if (!save_diagnostic_record(job, diagnostic_failure, message.diagnostic_record_json)) {
+          ++failed_outputs_;
+          RCLCPP_WARN(
+            logger_, "vision diagnostic record save failed cause=%s",
+            diagnostic_failure.c_str());
+        }
+      } catch (const std::exception & error) {
+        ++failed_outputs_;
+        RCLCPP_WARN(logger_, "vision diagnostic record unavailable: %s", error.what());
       }
     }
     if (message.image_png.data.empty() && !encoding_failure_logged) {
@@ -511,7 +579,10 @@ void VisionDetectorSnapshotOutput::run()
           logger_,
           "detector snapshot PNG unavailable cause=png_encoder_returned_empty");
     }
-    try {publish_job(message);} catch (const std::exception & error) {
+    try {
+      publish_job(message);
+    } catch (const std::exception & error) {
+      ++failed_outputs_;
       RCLCPP_WARN(logger_, "detector snapshot publication failed cause=%s", error.what());
     }
     if (terminal_job) {
@@ -575,6 +646,15 @@ bool VisionDetectorSnapshotOutput::save_job(
       failure_cause = "save_callback_returned_failure";
     }
     return saved;
+  }
+  std::size_t reserved_bytes = message.image_png.data.size() + message.metadata_json.size() + 4096U;
+  for (const auto & image : job.cuboid_stage_images) {
+    reserved_bytes += image.png.size();
+  }
+  reserved_bytes += job.depth_scene_panorama_png.size();
+  if (!reserve_storage_bytes(reserved_bytes)) {
+    failure_cause = "vision_storage_budget_exhausted";
+    return false;
   }
   std::error_code error;
   if (snapshot_run_directory_.empty() && (run_date_.empty() || run_time_.empty())) {

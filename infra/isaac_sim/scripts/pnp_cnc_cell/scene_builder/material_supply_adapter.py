@@ -13,7 +13,7 @@ from isaac_runtime.run_records import diagnostic_component_directory, run_record
 from typing import Any
 
 from .material_supply import MaterialSupplyProfile, sample_initial_poses
-from .material_supply_pose_recorder import RawPartPoseRecorder
+from .material_supply_pose_recorder import RawPartPoseRecorder, PoseRecordWriter
 from .cuboid_demonstration import bind_adapter
 from .material_supply_run import MaterialSupplyRun
 from .material_supply_sidecar import simulation_time_ns
@@ -65,12 +65,16 @@ class IsaacMaterialSupplyAdapter:
         self.profile = profile
         self.material_profiles = dict(material_profiles or {profile.material_type: profile})
         self._delivery_profiles: dict[str, MaterialSupplyProfile] = {}
+        self._diagnostic_material_paths = set()
+        self._pose_writer = PoseRecordWriter()
         self.pose_recorder = RawPartPoseRecorder(
             stage,
             artifact_directory if artifact_directory is not None else (
                 diagnostic_component_directory(Path(__file__).resolve().parents[5], "simulation")
             ),
             delivery_root=self.delivery_root,
+            append_record=self._pose_writer.submit,
+            material_paths=lambda: tuple(self._diagnostic_material_paths),
         )
         self.shelf_origin_m = shelf_origin_m
         if type(delivery_deadline_ms) is not int or delivery_deadline_ms <= 0:
@@ -88,7 +92,15 @@ class IsaacMaterialSupplyAdapter:
         self._terminal_pending_counts: dict[str, int] = {}
         self._logger = logging.getLogger(__name__)
         self._pose_recorder_error_reported = False
+        from isaac_runtime.material_observations import register_material_source
+        register_material_source(self, self.diagnostic_materials)
         bind_adapter(self)
+
+    def diagnostic_materials(self):
+        paths = getattr(self, '_diagnostic_material_paths', set())
+        live = {path for path in paths if self.stage.GetPrimAtPath(path).IsValid()}
+        self._diagnostic_material_paths = live
+        return [dict(prim_path=path, association='cell_created_material') for path in sorted(live)]
 
     def spin_once(self) -> None:
         """Pump sidecar messages and author USD on Kit's update thread."""
@@ -119,7 +131,12 @@ class IsaacMaterialSupplyAdapter:
         if self._closed:
             return
         self._closed = True
+        from isaac_runtime.material_observations import clear_material_source
+        clear_material_source(self)
         self.pose_recorder.stop()
+        writer = getattr(self, '_pose_writer', None)
+        if writer is not None:
+            writer.close()
         from scene_builder import cuboid_demonstration
 
         if cuboid_demonstration._adapter is self:
@@ -134,6 +151,11 @@ class IsaacMaterialSupplyAdapter:
         self, session_id: str | None, session_directory: Path | None = None
     ) -> None:
         """Bind pose observations to the active Isaac Play-to-Stop session."""
+        if (getattr(self, '_pose_writer', None) is not None and
+                self.pose_recorder.live_test_session_id != session_id):
+            self._pose_writer.close()
+            self._pose_writer = PoseRecordWriter()
+            self.pose_recorder.append_record = self._pose_writer.submit
         self.pose_recorder.bind_live_test_session(session_id, session_directory)
 
     def reset_generated_materials(self, attachment_reset=None) -> bool:
@@ -340,7 +362,8 @@ class IsaacMaterialSupplyAdapter:
             if self.timeline is None or not self.timeline.is_playing():
                 return
             import omni.physx
-
+            if hasattr(self, '_diagnostic_material_paths'):
+                self.diagnostic_materials()
             recorded = self.pose_recorder.sample(
                 omni.physx.get_physx_interface(),
                 float(self.timeline.get_current_time()),
@@ -737,6 +760,9 @@ class IsaacMaterialSupplyAdapter:
                 Sdf.ValueTypeNames.Double3,
                 custom=True,
             ).Set(Gf.Vec3d(*pose[3:]))
+        if not hasattr(self, '_diagnostic_material_paths'):
+            self._diagnostic_material_paths = set()
+        self._diagnostic_material_paths.add(part_path)
         return part_path
 
 

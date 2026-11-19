@@ -17,6 +17,7 @@ void queue_pick_execution_record(
   std::uint8_t result_code,
   bool held,
   bool retract_succeeded,
-  const std::string & candidate_evaluation);
+  const std::string & candidate_evaluation,
+  const std::string & movement_name = {});
 
 }  // namespace arm_cell_task_execution

@@ -720,8 +720,12 @@ bool VisionDetectorSnapshotOutput::save_diagnostic_record(
   std::string replay_reason;
   static std::atomic<uint64_t> temporary_file_sequence{0};
   const auto atomic_write = [&](
-      const std::filesystem::path & path, size_t expected_bytes,
-      const std::function<bool(std::ofstream &)> & write) {
+    const std::filesystem::path & path, size_t expected_bytes,
+    const std::function<bool(std::ofstream &)> & write) {
+      if (!reserve_storage_bytes(expected_bytes)) {
+        failure_cause = "vision_storage_budget_exhausted";
+        return false;
+      }
       std::error_code io_error;
       if (std::filesystem::exists(path, io_error) || io_error) {
         failure_cause = io_error ? "inspect destination: " + io_error.message() :

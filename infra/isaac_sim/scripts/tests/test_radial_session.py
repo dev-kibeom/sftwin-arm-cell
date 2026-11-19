@@ -191,3 +191,21 @@ def test_diagnostic_observation_failure_preserves_physical_holding():
     manager.update(.1)
     assert manager.holding_observation().state is HoldingState.HELD
     assert manager.holding_observation().state is HoldingState.HELD
+
+
+def test_late_holding_loss_keeps_decision_values_after_periodic_budget():
+    manager, _, actuator = make()
+    records = []
+    actuator.observation = lambda: {'primary_position_m': .01, 'target_m': .009}
+    manager.set_diagnostic_observers(SimpleNamespace(submit=lambda record: records.append(record)))
+    manager.set_detailed_diagnostics_enabled(True)
+    manager.configure_selected_grasp_reference(PACKET)
+    manager.arm_close_transaction(PACKET['motion_goal_uuid'])
+    for sequence in range(2, 502):
+        actuator.sample = HoldingObservation(HoldingState.HELD, 1., sequence)
+        manager.update(.1)
+    actuator.sample = HoldingObservation(HoldingState.UNKNOWN, 1., 502)
+    manager.update(.1)
+    assert records[-1]['holding_state'] == 'unknown'
+    assert records[-1]['actuator']['primary_position_m'] == .01
+    assert records[-1]['coverage']['contacts'] == 'not_captured'

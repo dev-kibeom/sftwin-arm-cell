@@ -106,6 +106,15 @@ class TeachingSession:
                 motions = self._motions(candidate)
                 self.configuration['motion']['taught_motions_json'] = json.dumps(motions, allow_nan=False)
                 self.active = deepcopy(candidate)
+                try:
+                    import os
+                    from isaac_runtime.live_test_session import record_configuration_snapshot
+                    descriptor = os.environ.get('SFTWIN_LIVE_TEST_SESSION_PATH')
+                    if descriptor:
+                        record_configuration_snapshot(descriptor, self.configuration, 'isaac', 'teaching_applied')
+                except Exception as error:
+                    import logging
+                    logging.getLogger(__name__).warning('Applied teaching evidence unavailable: %s', error)
                 self.apply_uncertain = False
                 self.motion_uncertain = self.requires_restart = False
                 self.detail = 'Teaching applied. Saved and applied versions are tracked separately.'

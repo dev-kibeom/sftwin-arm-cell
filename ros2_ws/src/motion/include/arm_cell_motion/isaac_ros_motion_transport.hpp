@@ -6,10 +6,12 @@
 #include "arm_cell_motion/grasp_collision_validator.hpp"
 
 #include <chrono>
+#include <atomic>
 #include <cstddef>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -435,6 +437,10 @@ private:
   bool pending_object_to_tcp_valid_{false};
   std::shared_ptr<TrajectoryExecutionWorker> trajectory_worker_;
   std::shared_ptr<MotionProfileTrace> profile_trace_;
+  std::future<void> profile_write_;
+  std::atomic<uint64_t> profile_write_saved_{0U};
+  std::atomic<uint64_t> profile_write_failed_{0U};
+  uint64_t profile_write_dropped_{0U};
   bool diagnostics_capture_enabled_{false};
   std::string diagnostics_output_directory_;
   std::string snapshot_run_directory_;

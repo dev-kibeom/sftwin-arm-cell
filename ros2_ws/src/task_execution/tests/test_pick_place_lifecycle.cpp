@@ -25,6 +25,7 @@
 #include <rcutils/logging.h>
 
 #include "arm_cell_task_execution/task_executor.hpp"
+#include "arm_cell_task_execution/pick_execution_record.hpp"
 #include "legacy_backend_motion_port.hpp"
 
 namespace arm_cell_task_execution
@@ -1728,6 +1729,33 @@ TEST(TaskExecutorPickPlaceTest, PickExecutionRecordKeepsCompactCandidateSummaryA
     record->at("candidate_evaluation").at("motion_planning_summary_reference").at("path"),
     "motion_planning_summaries/motion-goal-compact-test.json");
   EXPECT_FALSE(record->at("candidate_evaluation").contains("grasp_pose_candidates"));
+  std::filesystem::remove_all(root);
+}
+
+TEST(TaskExecutorPickPlaceTest, PickRecordKeepsProducerIndexReferenceBeforeAsyncEvidenceArrives)
+{
+  ScopedEnvironmentVariable record_directory("ARM_CELL_PICK_EXECUTION_RECORD_DIR");
+  const auto root = std::filesystem::temp_directory_path() /
+    ("pick-index-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  ASSERT_EQ(
+    ::setenv(
+      "ARM_CELL_PICK_EXECUTION_RECORD_DIR",
+      (root / "motion/pick_execution_records").c_str(), 1), 0);
+  queue_pick_execution_record(
+    pick_goal(), "async-radial-goal", "retract_held_confirmation", 4, true, false, "{}");
+  const auto path = root / "motion/pick_execution_records/async-radial-goal.json";
+  std::optional<nlohmann::json> record;
+  for (int attempt = 0; attempt < 100 && !record; ++attempt) {
+    try {
+      std::ifstream input(path); nlohmann::json value; input >> value; record = value;
+    } catch (...) {
+    }
+    if (!record) {std::this_thread::sleep_for(std::chrono::milliseconds(5));}
+  }
+  ASSERT_TRUE(record.has_value());
+  const auto reference = record->at("capture_diagnostic_reference");
+  EXPECT_EQ(reference.at("execution_id"), "async-radial-goal");
+  EXPECT_EQ(reference.at("index_path"), "../../gripper/execution_index.jsonl");
   std::filesystem::remove_all(root);
 }
 

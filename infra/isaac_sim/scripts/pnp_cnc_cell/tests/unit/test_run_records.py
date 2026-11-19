@@ -54,3 +54,15 @@ def test_cleanup_preserves_existing_records(tmp_path):
     run_records.remove_empty_run(run)
     assert record.read_text() == 'evidence'
     assert not (run / 'logs/diag/empty').exists()
+
+
+def test_component_paths_reuse_explicit_active_session_for_every_producer(tmp_path, monkeypatch):
+    session_root = tmp_path / '.run_records/20261120/001122/diagnostic'
+    session_root.mkdir(parents=True)
+    descriptor = session_root / 'session.json'
+    descriptor.write_text(json.dumps({'session_id': 'active', 'status': 'open', 'session_association': 'associated'}))
+    monkeypatch.setenv('SFTWIN_LIVE_TEST_SESSION_PATH', str(descriptor))
+    for component in ('motion', 'gripper', 'simulation', 'vision', 'clock'):
+        assert run_records.diagnostic_component_directory(tmp_path, component) == session_root / component
+    descriptor.write_text(json.dumps({'session_id': 'active', 'status': 'closed'}))
+    assert run_records.diagnostic_component_directory(tmp_path, 'gripper').parent != session_root

@@ -104,3 +104,21 @@ def test_missing_final_observation_is_reported_as_incomplete_coverage():
     e.finish(True)
     assert records[-1]['verification']=='UNAVAILABLE'
     assert not records[-1]['coverage_complete']
+
+
+def test_late_distinct_contact_keeps_its_step_and_aggregate_after_detail_limit():
+    records = []
+    evidence = CycleEvidence(records.append)
+    evidence.start('cycle')
+    for step in range(1, 50):
+        evidence.physics_step(step)
+        evidence.observe([{'actor0': 'robot', 'actor1': 'fixture'}], step_id=step)
+    evidence.physics_step(50)
+    evidence.observe([{'actor0': 'robot', 'actor1': 'late-obstacle'}], step_id=50)
+    evidence.finish(False)
+    summary = records[0]['contact_pairs']
+    assert len(summary) == 2
+    late = next(pair for pair in summary if pair['actor1'] == 'late-obstacle')
+    assert late['first_step_id'] == late['last_step_id'] == 50
+    assert late['report_count'] == 1
+    assert summary[0]['report_count'] == 49

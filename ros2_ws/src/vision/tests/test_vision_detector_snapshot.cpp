@@ -3785,3 +3785,51 @@ TEST_F(VisionDetectorSnapshotTest, NormalizedInclinedCandidateKeepsRecordAndPane
         canonical_id)), std::string::npos);
   std::filesystem::remove_all(root);
 }
+
+TEST_F(VisionDetectorSnapshotTest, StorageBudgetFailureStillPublishesAndKeepsCoverageSummary)
+{
+  const auto root = temporary_snapshot_root("storage-budget");
+  const auto diagnostics = root / "diagnostic";
+  node->declare_parameter<int64_t>("diagnostics.storage_budget_bytes", 1);
+  std::vector<arm_cell_interfaces::msg::VisionDetectorSnapshot> published;
+  arm_cell_vision::VisionDetectorSnapshotOutput output(
+    *node, root / "snapshots", "budget-run", {},
+    [&](const auto & message) {published.push_back(message);}, "20261120", diagnostics,
+    "session", "010101");
+  arm_cell_vision::VisionDetectorSnapshotJob job;
+  job.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
+  job.acquisition_id = "budget-run-acq-1";
+  job.save = true;
+  output.submit(std::move(job));
+  output.shutdown();
+  ASSERT_EQ(published.size(), 1U);
+  const auto summary = diagnostics / "capture-summary-budget-run.json";
+  ASSERT_TRUE(std::filesystem::exists(summary));
+  std::ifstream input(summary);
+  const std::string data((std::istreambuf_iterator<char>(input)), {});
+  EXPECT_NE(data.find("\"capture_complete\":false"), std::string::npos);
+  EXPECT_NE(data.find("\"storage_budget_exhausted\":true"), std::string::npos);
+  std::filesystem::remove_all(root);
+}
+
+TEST_F(VisionDetectorSnapshotTest, ThrownSnapshotSaveKeepsPublicationAndIncompleteSummary)
+{
+  const auto root = temporary_snapshot_root("throwing-save-summary");
+  const auto diagnostics = root / "diagnostic";
+  std::vector<arm_cell_interfaces::msg::VisionDetectorSnapshot> published;
+  arm_cell_vision::VisionDetectorSnapshotOutput output(
+    *node, root / "snapshots", "throw-run",
+    [](const auto &, const auto &) -> bool {throw std::runtime_error("injected save failure");},
+    [&](const auto & message) {published.push_back(message);}, "20261120", diagnostics);
+  arm_cell_vision::VisionDetectorSnapshotJob job;
+  job.event_kind = arm_cell_interfaces::msg::VisionDetectorSnapshot::DETECT_TARGET_FAILURE;
+  job.acquisition_id = "throw-run-acq-1";
+  job.save = true;
+  output.submit(std::move(job));
+  output.shutdown();
+  ASSERT_EQ(published.size(), 1U);
+  std::ifstream input(diagnostics / "capture-summary-throw-run.json");
+  const std::string summary((std::istreambuf_iterator<char>(input)), {});
+  EXPECT_NE(summary.find("\"capture_complete\":false"), std::string::npos);
+  std::filesystem::remove_all(root);
+}

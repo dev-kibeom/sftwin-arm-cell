@@ -49,6 +49,9 @@ class BoundedCaptureDiagnosticWriter:
         self._write_log_count = 0
         self.written_count = 0
         self.shutdown_status = "open"
+        self._retained_bytes = None
+        self._capacity_reached = False
+        self.instance_id = f'{os.getpid()}-{time.monotonic_ns()}'
 
     def submit(self, record):
         """Transfer ownership of a completed record to the bounded writer."""
@@ -81,6 +84,7 @@ class BoundedCaptureDiagnosticWriter:
             return
         coverage["writer_queued"] = bool(queued)
         coverage["writer_dropped_count_at_submit"] = self.dropped_count
+        coverage["producer_instance"] = self.instance_id
 
     @staticmethod
     def _log(level, message, *args):
@@ -112,11 +116,36 @@ class BoundedCaptureDiagnosticWriter:
         if not started:
             self.shutdown_status = "complete"
             self._report_drops(recovered=True)
+            self._write_summary(True)
             return True
         self._thread.join(timeout=max(0.0, float(timeout)))
         complete = not self._thread.is_alive() and self._queue.empty()
         self.shutdown_status = "complete" if complete else "incomplete"
+        self._write_summary(complete)
         return complete
+
+    def _write_summary(self, drained):
+        if self._write_record != self._write_json:
+            return
+        try:
+            self.output_directory.mkdir(parents=True, exist_ok=True)
+            with self._state_lock:
+                summary = dict(schema_version=1, record_type='capture_summary',
+                    producer_instance=self.instance_id,
+                    written_count=self.written_count, dropped_count=self.dropped_count,
+                    write_failure_count=self.write_failure_count,
+                    pending_count=self._queue.unfinished_tasks,
+                    capture_complete=bool(drained and not self.dropped_count and not self.write_failure_count),
+                    shutdown_status=self.shutdown_status)
+            path = self.output_directory / 'capture_summary.json'
+            history = self.output_directory / 'coverage'
+            history.mkdir(exist_ok=True)
+            (history / f'{self.instance_id}.json').write_text(json.dumps(summary)+'\n', encoding='utf-8')
+            temporary = path.with_suffix('.json.tmp')
+            temporary.write_text(json.dumps(summary) + '\n', encoding='utf-8')
+            os.replace(temporary, path)
+        except Exception as error:
+            self._log(logging.WARNING, 'Capture diagnostic summary unavailable: %s', error)
 
     def _run(self):
         while True:
@@ -168,12 +197,16 @@ class BoundedCaptureDiagnosticWriter:
             raise ValueError(
                 f"Capture Diagnostic Record exceeds {MAX_CAPTURE_RECORD_BYTES} bytes"
             )
-        retained_bytes = sum(
-            item.stat().st_size
-            for item in self.output_directory.glob("*.json")
-            if item.is_file()
-        )
-        if retained_bytes + len(encoded) > MAX_CAPTURE_DIRECTORY_BYTES:
+        if self._retained_bytes is None:
+            self._retained_bytes = sum(item.stat().st_size
+                for item in self.output_directory.iterdir() if item.is_file()
+                and item.suffix in ('.json', '.jsonl'))
+        execution = record.get('execution_id') or record.get('motion_goal_uuid')
+        index_line = (json.dumps(dict(execution_id=execution, path=f'{record_id}.json'),
+                      separators=(',', ':')) + '\n') if execution else ''
+        required = len(encoded) + 1 + len(index_line.encode('utf-8'))
+        if self._capacity_reached or self._retained_bytes + required > MAX_CAPTURE_DIRECTORY_BYTES:
+            self._capacity_reached = True
             raise OSError(
                 f"Capture Diagnostic Record directory limit of "
                 f"{MAX_CAPTURE_DIRECTORY_BYTES} bytes would be exceeded"
@@ -193,6 +226,11 @@ class BoundedCaptureDiagnosticWriter:
                 "Capture Diagnostic Record already exists"
             )
         os.replace(temporary, destination)
+        self._retained_bytes += len(encoded) + 1
+        if index_line:
+            with (self.output_directory / 'execution_index.jsonl').open('a', encoding='utf-8') as index:
+                index.write(index_line)
+            self._retained_bytes += len(index_line.encode('utf-8'))
 
 
 class IsaacGripperDiagnosticRecord:

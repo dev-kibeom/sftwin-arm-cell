@@ -1141,3 +1141,12 @@ def test_selected_delivery_root_reset_preserves_unrelated_objects():
     assert path not in adapter.stage.paths
     assert path + '/Material_0000' not in adapter.stage.paths
     assert '/World/Unrelated/Material_0000' in adapter.stage.paths
+
+
+def test_diagnostic_registration_preserves_demonstration_adapter_binding():
+    from scene_builder import cuboid_demonstration
+    adapter = _adapter(_FakeSidecar())
+    try:
+        assert cuboid_demonstration._adapter is adapter
+    finally:
+        adapter.close()

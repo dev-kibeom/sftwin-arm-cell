@@ -89,6 +89,19 @@ PICK/PLACE Trajectory 완료는 정확도·안정화 보증이 아니다. 관측
 
 ## 기록의 공통 의미와 무결성
 
+Simulation의 보유 진단은 Cell과 Tool의 장치 판정에서 독립된 물리 관측을 보존한다.
+Cell이 제공한 자재 식별과 실제 PhysX 위치·자세·속도, 같은 관측의 TCP 상태를 연결하며
+후보 집합을 관측한 경우 이를 선택된 자재의 확정 식별로 표시하지 않는다. TCP가 고정 Frame이면
+측정 Rigid Body Pose와 고정 변환으로 계산한 출처를 명시한다. 미관측·비유한 값과 자재 수 제한은
+미가용·누락으로 남기고, USD 작성 Pose로 실제 물리 상태를 대체하지 않는다.
+보유 상태 변화와 명령 경계는 경량 기록으로, 선택적 상세 기록은 유계 전후 관측으로 해석한다.
+초기 상세 예산의 소진이 이후 상태 변화 당시의 판단 근거를 없애서는 안 된다.
+이 관측과 저장 결과는 보유·해제 판정, Motion·Mission·Safety의 입력이 아니다.
+
+비동기 생산자의 작업별 index 참조는 결과 파일이 아직 도착하지 않아도 유효한 검색 근거다.
+index의 경로·execution identity와 생산자의 coverage를 함께 읽고, 미도착을 미수집이나 성공으로
+단정하지 않는다. Producer의 종료 요약은 저장·유실 범위이며 세션 종료나 업무 성공을 뜻하지 않는다.
+
 - Operational Log, Execution Record, Diagnostic Record, Visual Artifact, Replay Evidence, Performance Trace는 목적에 따라 구별하되 공통 Schema·파일 포맷이나 Writer 클래스를 요구하지 않는다.
 - Decision 근거는 판단에 실제 사용한 값·출처·기준을 해당 시점에 보존한다. 나중에 가변 상태나 Clock을 다시 읽어 과거 판단을 재구성하지 않는다.
 - Outcome은 기존 Action Result·Service Response·SafetyState·Mission Result를 참조하며 대체하지 않는다. 기록·쓰기 실패가 실행 결과·Retry·Safety를 바꾸지 않는다.

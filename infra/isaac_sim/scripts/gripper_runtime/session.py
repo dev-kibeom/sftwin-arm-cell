@@ -155,6 +155,35 @@ class GripperRuntimeSession:
         configure_detail = getattr(self.grasp_manager, "set_detailed_diagnostics_enabled", None)
         if callable(configure_detail):
             configure_detail(detailed_enabled)
+        self._state_evidence = None
+        try:
+            from gripper_runtime.grasp_state_evidence import GraspStateEvidence
+            from isaac_runtime.material_observations import DynamicBodyObserver, material_observation_targets
+            body_observer = DynamicBodyObserver()
+            tcp_path = getattr(self.grasp_manager, 'tcp_path', '')
+            if tcp_path:
+                body_observer.prepare_tcp(tcp_path)
+            def observe_materials():
+                targets = material_observation_targets()
+                if not targets:
+                    targets = [dict(prim_path=path, association='registered_candidate')
+                               for path in self.registry.paths()]
+                selected = getattr(getattr(self.grasp_manager, 'joint_owner', None), 'target_path', None)
+                if selected:
+                    for target in targets:
+                        if target['prim_path'] == selected:
+                            target.update(selected=True, association='attachment_owner_target')
+                return body_observer.snapshot(tcp_path, targets)
+            self._state_evidence = GraspStateEvidence(
+                self.capture_diagnostic_writer.submit, observe_materials, detailed=detailed_enabled)
+        except Exception as error:
+            LOGGER.warning('Physical state diagnostics unavailable: %s', error)
+            from gripper_runtime.grasp_state_evidence import GraspStateEvidence
+            unavailable = dict(status='unavailable', reason=f'{type(error).__name__}: {error}')
+            submit_state = getattr(self.capture_diagnostic_writer, 'submit', None)
+            if callable(submit_state):
+                self._state_evidence = GraspStateEvidence(submit_state, lambda: unavailable,
+                                                          detailed=detailed_enabled)
         restore_sequence = getattr(self.grasp_manager, "restore_holding_sequence", None)
         if callable(restore_sequence):
             self._status_sequence = int(restore_sequence(initial_status_sequence))
@@ -320,6 +349,19 @@ class GripperRuntimeSession:
         self.gripper.feedback_generation = self._feedback_generation
         if not close_rejected:
             self.grasp_manager.update(dt)
+        try:
+            evidence = getattr(self, '_state_evidence', None)
+            if evidence is not None:
+                manager = self.grasp_manager
+                identity = (getattr(manager, '_close_id', None) or
+                            getattr(manager, '_close_reference_id', None) or
+                            getattr(manager, '_capture_execution_id', None) or
+                            getattr(manager, 'capture_reference_id', None))
+                evidence.update(dt, identity, manager.holding_observation().state.value,
+                                self._physics_step_sequence)
+        except Exception:
+            # Diagnostic observation and submission cannot change a Tool decision.
+            LOGGER.warning('Physical state diagnostic sample unavailable')
         consume_detach = getattr(
             self.grasp_manager, "consume_release_detach_event", None
         )

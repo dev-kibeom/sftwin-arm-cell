@@ -39,7 +39,8 @@ std::string json_escape(const std::string & value)
 void write_pick_execution_record(
   const ExecuteTask::Goal & goal, const std::string & motion_goal_uuid,
   const std::string & stage, uint8_t result_code, bool held, bool retract_succeeded,
-  const std::string & candidate_evaluation, const std::filesystem::path & directory)
+  const std::string & candidate_evaluation, const std::filesystem::path & directory,
+  const std::string & movement_name)
 {
   std::string file_id = motion_goal_uuid.empty() ? "unknown-goal" : motion_goal_uuid;
   for (auto & ch : file_id) {
@@ -111,6 +112,16 @@ void write_pick_execution_record(
     }
     output << "  \"capture_diagnostic_record_status\": \"" <<
       (capture_saved ? "saved" : "not_available_at_record_write") << "\",\n";
+    const auto index_path =
+      std::filesystem::absolute(capture_root / "execution_index.jsonl").lexically_relative(
+      std::filesystem::absolute(directory)).generic_string();
+    output << "  \"capture_diagnostic_reference\": " << nlohmann::json{
+      {"index_path", index_path}, {"execution_id", motion_goal_uuid},
+      {"status", "producer_index_resolves_async_records"}}.dump() << ",\n";
+    output << "  \"movement_name\": " << nlohmann::json(movement_name).dump() << ",\n";
+    output << "  \"physical_phase\": " << nlohmann::json(
+      !movement_name.empty() && stage == "retract_held_confirmation" ?
+      "post_transfer_holding_confirmation" : stage).dump() << ",\n";
     output
       << "  \"vision_acquisition_id\": \"" << json_escape(goal.vision_acquisition_id) << "\",\n"
       << "  \"target_frame_id\": \"" << json_escape(goal.target_pose.header.frame_id) << "\",\n"
@@ -230,7 +241,7 @@ PickExecutionRecordWriter & pick_execution_record_writer()
 void queue_pick_execution_record_impl(
   const ExecuteTask::Goal & goal, const std::string & motion_goal_uuid,
   const std::string & stage, uint8_t result_code, bool held, bool retract_succeeded,
-  const std::string & candidate_evaluation)
+  const std::string & candidate_evaluation, const std::string & movement_name)
 {
   // Copy the bounded terminal snapshot here; formatting and filesystem I/O run
   // on the single writer thread. Queue saturation drops evidence only.
@@ -241,10 +252,10 @@ void queue_pick_execution_record_impl(
     std::filesystem::path(".")) / ".run_records/diagnostic/motion/pick_execution_records";
   const auto accepted = pick_execution_record_writer().submit(
     [goal, motion_goal_uuid, stage, result_code, held, retract_succeeded,
-    candidate_evaluation, directory]() {
+    candidate_evaluation, directory, movement_name]() {
       write_pick_execution_record(
         goal, motion_goal_uuid, stage, result_code, held, retract_succeeded,
-        candidate_evaluation, directory);
+        candidate_evaluation, directory, movement_name);
     });
   if (!accepted) {
     RCLCPP_WARN(
@@ -258,10 +269,11 @@ void queue_pick_execution_record_impl(
 void queue_pick_execution_record(
   const ExecuteTask::Goal & goal, const std::string & motion_goal_uuid,
   const std::string & stage, std::uint8_t result_code, bool held, bool retract_succeeded,
-  const std::string & candidate_evaluation)
+  const std::string & candidate_evaluation, const std::string & movement_name)
 {
   queue_pick_execution_record_impl(
-    goal, motion_goal_uuid, stage, result_code, held, retract_succeeded, candidate_evaluation);
+    goal, motion_goal_uuid, stage, result_code, held, retract_succeeded, candidate_evaluation,
+    movement_name);
 }
 
 }  // namespace arm_cell_task_execution

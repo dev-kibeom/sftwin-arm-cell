@@ -18,6 +18,8 @@ class CycleEvidence:
             executed_steps=0, observed_steps=0, first_step_id=None,
             last_executed_step_id=None, last_observed_step_id=None,
             coverage_complete=True, collisions=[], collision_count=0,
+            collision_count_unit='physics_contact_report', contact_pairs=[],
+            omitted_contact_pair_reports=0,
             **identity)
 
     def physics_step(self, step_id):
@@ -54,7 +56,24 @@ class CycleEvidence:
             else:
                 record['coverage_complete'] = False
         record['collision_count'] += len(collisions)
-        record['collisions'].extend(collisions[:max(0, 32-len(record['collisions']))])
+        observed_at = time.monotonic_ns()
+        for contact in collisions:
+            key = tuple(sorted((contact['actor0'], contact['actor1'])))
+            pair = next((item for item in record['contact_pairs']
+                         if tuple(sorted((item['actor0'], item['actor1']))) == key), None)
+            if pair is None and len(record['contact_pairs']) < 32:
+                pair = dict(actor0=contact['actor0'], actor1=contact['actor1'],
+                            first_step_id=step_id, first_observed_monotonic_ns=observed_at,
+                            report_count=0)
+                record['contact_pairs'].append(pair)
+            if pair is not None:
+                pair.update(last_step_id=step_id, last_observed_monotonic_ns=observed_at,
+                            report_count=pair['report_count']+1)
+            else:
+                record['omitted_contact_pair_reports'] += 1
+            if len(record['collisions']) < 32:
+                record['collisions'].append(dict(contact, physics_step_id=step_id,
+                                                observed_monotonic_ns=observed_at))
 
     def finish(self, sequence_completed):
         record, self.active = self.active, None
@@ -70,7 +89,8 @@ class CycleEvidence:
         record['verification'] = ('FAIL' if not sequence_completed or record['collision_count'] else
                                   'PASS' if complete else 'UNAVAILABLE')
         record['coverage'] = dict(contact_observation_complete=complete,
-            collision_details_truncated=record['collision_count'] > len(record['collisions']))
+            collision_details_truncated=record['collision_count'] > len(record['collisions']),
+            contact_pairs_truncated=record['omitted_contact_pair_reports'] > 0)
         try:
             self.submit(record)
         except Exception:

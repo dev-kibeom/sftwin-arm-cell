@@ -1102,6 +1102,13 @@ bool MotionPlanningDiagnosticCapture::enqueue_pick_summary(
 bool MotionPlanningDiagnosticCapture::enqueue_serialized(
   const std::string & goal_uuid, std::string serialized)
 {
+  if (!serialized.empty() && serialized.back() == '}') {
+    serialized.pop_back();
+    serialized += ",\"recorded_steady_ns\":" + std::to_string(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count()) +
+      ",\"time_basis\":\"producer_local_steady\"}";
+  }
   if (serialized.size() > kMaxRecordBytes) {
     RCLCPP_WARN(
       logger_,
@@ -1362,12 +1369,17 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
       for (const auto & output_path : destinations) {
         const auto directory = output_path.parent_path();
         std::filesystem::create_directories(directory);
-        std::uintmax_t retained_bytes = 0;
-        for (const auto & entry : std::filesystem::directory_iterator(directory)) {
-          if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            retained_bytes += entry.file_size();
+        auto found = retained_directory_bytes_.find(directory.string());
+        if (found == retained_directory_bytes_.end()) {
+          std::uintmax_t initial_bytes = 0;
+          for (const auto & entry : std::filesystem::directory_iterator(directory)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".json") {
+              initial_bytes += entry.file_size();
+            }
           }
+          found = retained_directory_bytes_.emplace(directory.string(), initial_bytes).first;
         }
+        auto retained_bytes = found->second;
         if (std::filesystem::exists(output_path)) {
           retained_bytes -= std::min<std::uintmax_t>(
             retained_bytes, std::filesystem::file_size(output_path));
@@ -1386,6 +1398,7 @@ void MotionPlanningDiagnosticCapture::write_loop() noexcept
             if (!output) {throw std::runtime_error("write failed");}
           }
           std::filesystem::rename(temporary, output_path);
+          found->second = retained_bytes + record.serialized.size() + 1U;
           persisted_record = true;
         }
       }
@@ -1905,6 +1918,23 @@ IsaacRosMotionTransport::~IsaacRosMotionTransport()
 {
   if (move_group_worker_.joinable()) {
     move_group_worker_.join();
+  }
+  if (profile_write_.valid()) {profile_write_.wait();}
+  if (profile_trace_) {
+    try {
+      const auto directory = std::filesystem::path(diagnostics_output_directory_) /
+        "motion_profile_trace";
+      std::filesystem::create_directories(directory);
+      std::ofstream summary(directory / "capture_summary.json");
+      summary << nlohmann::json{{"written_count", profile_write_saved_.load()},
+        {"write_failure_count", profile_write_failed_.load()},
+        {"dropped_count", profile_write_dropped_},
+        {"capture_complete",
+          profile_write_dropped_ == 0U && profile_write_failed_.load() == 0U}}.dump();
+      if (!summary) {RCLCPP_WARN(node_->get_logger(), "Profile coverage summary write failed");}
+    } catch (const std::exception & error) {
+      RCLCPP_WARN(node_->get_logger(), "Profile coverage summary unavailable: %s", error.what());
+    }
   }
 }
 
@@ -2912,6 +2942,14 @@ void IsaacRosMotionTransport::finish_profile_trace(const std::string & outcome)
     if (trajectory_worker_) {
       trajectory_worker_->set_profile_trace(nullptr);
     }
+    if (profile_write_.valid() &&
+      profile_write_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+    {
+      ++profile_write_dropped_;
+      RCLCPP_WARN(node_->get_logger(), "Motion profile evidence dropped: bounded writer busy");
+      return;
+    }
+    if (profile_write_.valid()) {profile_write_.get();}
     auto snapshot = profile_trace_->take_snapshot();
     const auto joint_names = arm_joint_names_;
     const auto configuration = active_profile_configuration_ +
@@ -2922,20 +2960,24 @@ void IsaacRosMotionTransport::finish_profile_trace(const std::string & outcome)
       std::to_string(planning_acceleration_scaling_factor_) +
       ";trajectory_goal_tolerance_rad=" + std::to_string(trajectory_goal_tolerance_rad_);
     const auto logger = node_->get_logger();
-    std::thread(
+    profile_write_ = std::async(
+      std::launch::async,
       [
-        snapshot, joint_names, configuration, outcome, logger]() {
+        this, snapshot, joint_names, configuration, outcome, logger]() {
         const auto result = snapshot->finish(outcome, joint_names, configuration);
         if (!result.success) {
+          ++profile_write_failed_;
           RCLCPP_WARN(
             logger, "Motion profile trace could not be saved; motion result is unaffected cause=%s",
             result.error.c_str());
           return;
         }
+        ++profile_write_saved_;
         RCLCPP_DEBUG(
           logger, "Motion profile trace completed outcome=%s", outcome.c_str());
-      }).detach();
+      });
   } catch (...) {
+    ++profile_write_failed_;
     RCLCPP_WARN(
       node_->get_logger(), "Motion profile capture unavailable; motion result is unaffected");
   }

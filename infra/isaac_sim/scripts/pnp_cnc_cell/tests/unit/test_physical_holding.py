@@ -344,3 +344,17 @@ def test_motor_obstruction_does_not_use_uncalibrated_width_as_gate(position):
         tick(result, gripper)
     assert result.holding_observation().state is HoldingState.HELD
     assert result.attach_joint_path is None
+
+
+def test_idle_physical_diagnostics_are_sparse_and_late_changes_keep_detail():
+    result, gripper, _ = manager()
+    records = []
+    result.set_diagnostic_observers(SimpleNamespace(submit=lambda record: records.append(record)))
+    for _ in range(600):
+        result.update(.1)
+    assert len(records) <= 1
+    result.set_detailed_diagnostics_enabled(True)
+    close(result, gripper)
+    for _ in range(600):
+        result.update(.1)
+    assert len(records) < 150
