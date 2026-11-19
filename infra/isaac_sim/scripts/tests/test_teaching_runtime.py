@@ -186,3 +186,23 @@ def test_unknown_move_acceptance_requires_new_motion_instance_and_idle_reapply(p
     pendant.consume(dict(op='teaching_result', request_id=pendant.pending['id'], success=True))
     assert not pendant.motion_uncertain
     assert pendant.command('manual_mode', enabled=False)['accepted']
+
+
+@pytest.mark.parametrize('operation,values', [
+    ('move', dict(name='approach')),
+    ('jog', dict(frame='base', axis=0, step=.001)),
+])
+def test_uncertain_apply_blocks_manual_moves_until_successful_reapply(pendant, monkeypatch, operation, values):
+    import tape_roll_cell.teaching_runtime as runtime
+    monkeypatch.setattr(runtime, 'apply_layout', lambda *_: None)
+    monkeypatch.setattr(runtime, 'author_equipment_frames', lambda *_: None)
+    assert pendant.command('manual_mode', enabled=True)['accepted']
+    assert pendant.command('apply')['accepted']
+    pendant.consume(dict(op='teaching_result', request_id=pendant.pending['id'],
+                         success=False, uncertain=True))
+    sent = len(pendant._test_packets)
+    assert not pendant.command(operation, **values)['accepted']
+    assert len(pendant._test_packets) == sent
+    assert pendant.command('apply')['accepted']
+    pendant.consume(dict(op='teaching_result', request_id=pendant.pending['id'], success=True))
+    assert pendant.command(operation, **values)['accepted']

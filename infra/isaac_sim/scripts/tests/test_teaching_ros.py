@@ -18,6 +18,7 @@ from tape_roll_cell.teaching_ros import TeachingRosBridge
 def test_only_complete_finite_arm_snapshot_can_feed_fk(names, positions):
     bridge = TeachingRosBridge.__new__(TeachingRosBridge)
     bridge.arm_joint_names = ('j1', 'j2')
+    bridge.query = None
     bridge.pose_at = time.monotonic()
     bridge._joints(NS(name=names, position=positions))
     assert bridge.joints is None
@@ -49,10 +50,10 @@ def test_failed_fk_future_invalidates_pose_without_breaking_bridge(monkeypatch):
     monkeypatch.setattr('tape_roll_cell.teaching_ros.time.monotonic', lambda: 10.)
     bridge.publish()
     future.set_exception(RuntimeError('FK service disconnected'))
-    assert bridge.query is None
-    assert bridge.pose_at == float('-inf')
     bridge.fk.service_is_ready = lambda: False
     bridge.publish()
+    assert bridge.query is None
+    assert bridge.pose_at == float('-inf')
     assert packets[-1]['pose_valid'] is False
 
 
@@ -117,3 +118,64 @@ def test_humble_single_argument_callback_tracks_unique_motion_endpoint_across_re
     bridge._motion(NS())
     assert bridge.motion_instance == ''
     assert bridge.motion_at == float('-inf')
+
+
+@pytest.mark.parametrize('invalidate', ['incomplete_feedback', 'joint_settings'])
+def test_invalidated_feedback_cannot_be_restored_by_late_fk(invalidate):
+    import rclpy
+    from sensor_msgs.msg import JointState
+    from moveit_msgs.srv import GetPositionFK
+    from geometry_msgs.msg import PoseStamped
+    rclpy.init()
+    node = rclpy.create_node('teaching_fk_invalidation_test')
+    bridge = TeachingRosBridge(node, lambda _: None)
+    try:
+        bridge.command(dict(op='teaching_settings', arm_joint_names=['j1', 'j2']))
+        future = Future()
+        future.set_running_or_notify_cancel()
+        bridge.fk = NS(service_is_ready=lambda: True, call_async=lambda _: future)
+        bridge._joints(JointState(name=['j1', 'j2'], position=[0., 0.]))
+        bridge.publish()
+        if invalidate == 'incomplete_feedback':
+            bridge._joints(JointState(name=['j1'], position=[0.]))
+        else:
+            bridge.command(dict(op='teaching_settings', arm_joint_names=['new_j1', 'new_j2']))
+        if not future.cancelled():
+            response = GetPositionFK.Response()
+            response.error_code.val = 1
+            pose = PoseStamped()
+            pose.pose.orientation.w = 1.
+            response.pose_stamped = [pose]
+            future.set_result(response)
+        packets = []
+        bridge.send = packets.append
+        bridge.publish()
+        assert packets[-1]['pose_valid'] is False
+    finally:
+        bridge.close()
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+def test_motion_state_topic_supplies_idle_and_process_identity():
+    import rclpy
+    from arm_cell_interfaces.msg import MotionStatus
+    rclpy.init()
+    node = rclpy.create_node('teaching_motion_state_test')
+    packets = []
+    bridge = TeachingRosBridge(node, packets.append)
+    publisher = node.create_publisher(MotionStatus, '/motion/state', 10)
+    state = MotionStatus(execution_state=MotionStatus.MOTION_STATE_IDLE,
+                         backend_inactivity_confirmed=True)
+    try:
+        deadline = time.monotonic()+3.
+        while bridge.motion is None and time.monotonic()<deadline:
+            publisher.publish(state)
+            rclpy.spin_once(node, timeout_sec=.05)
+        bridge.publish()
+        assert packets[-1]['motion_idle'] is True
+        assert packets[-1]['motion_instance']
+    finally:
+        bridge.close()
+        node.destroy_node()
+        rclpy.shutdown()

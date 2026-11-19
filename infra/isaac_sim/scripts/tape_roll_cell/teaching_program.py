@@ -134,7 +134,8 @@ def default_program(configuration):
     point('lift','infeed',[depth,0.,lift],horizontal)
     point('extract','infeed',[depth-clearance,0.,lift],horizontal)
     point('carry','infeed',[depth-clearance,0.,height-sz],horizontal)
-    point('turn','outfeed',[0.,0.,height-pz],down,'joint')
+    tx,ty,tz=place['turn_position_m']
+    point('turn','outfeed',[tx-px,ty-py,tz-pz],down,'joint')
     place_z=width/2+layout['release_clearance_m']-depth
     point('place_approach','outfeed',[0.,0.,place_z+place['approach_clearance_m']],down)
     point('place','outfeed',[0.,0.,place_z],down)

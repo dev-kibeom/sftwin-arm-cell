@@ -31,24 +31,31 @@ class TeachingRosBridge:
         self.operation = None
         self.motion_instance = ''
         node.create_subscription(JointState, '/joint_states', self._joints, 10)
-        node.create_subscription(MotionStatus, '/motion/status', self._motion, 10)
+        node.create_subscription(MotionStatus, '/motion/state', self._motion, 10)
 
     def _joints(self, message):
         if (not self.arm_joint_names or len(message.name) != len(message.position) or
                 len(set(message.name)) != len(message.name) or
                 not set(self.arm_joint_names).issubset(message.name) or
                 not all(math.isfinite(value) for value in message.position)):
-            self.joints = None
-            self.pose_at = float('-inf')
+            self._invalidate_observation()
             return
         self.joints, self.joints_at = message, time.monotonic()
+
+    def _invalidate_observation(self):
+        self.joints = None
+        self.pose_at = float('-inf')
+        query = self.query
+        self.query = None
+        if query is not None:
+            query.cancel()
 
     def _motion(self, message):
         self.motion, self.motion_at = message, time.monotonic()
         # Humble rclpy subscriptions supply only the message, not MessageInfo.
         # A unique graph endpoint identifies the Motion process across restart.
         try:
-            publishers = self.node.get_publishers_info_by_topic('/motion/status')
+            publishers = self.node.get_publishers_info_by_topic('/motion/state')
             self.motion_instance = bytes(publishers[0].endpoint_gid).hex() if len(publishers) == 1 else ''
             if not self.motion_instance:
                 self.motion_at = float('-inf')
@@ -92,8 +99,7 @@ class TeachingRosBridge:
             if (isinstance(names, list) and names and len(set(names)) == len(names) and
                     all(isinstance(name, str) and name for name in names)):
                 self.arm_joint_names = tuple(names)
-                self.joints = None
-                self.pose_at = float('-inf')
+                self._invalidate_observation()
             return
         if operation == 'teaching_cancel':
             self.cancel_requested = True
@@ -199,6 +205,24 @@ class TeachingRosBridge:
                 self._result(operation['id'], False,
                              'Teaching response unavailable. Confirm idle Motion and reapply; restart ROS if acceptance was unknown.',
                              uncertain=True, requires_restart=operation['kind'] == 'move' and not operation['accepted'])
+        # Consume FK on the timer's mutually-exclusive callback group. Future
+        # done callbacks run independently in a MultiThreadedExecutor and could
+        # otherwise restore a pose after joint feedback has invalidated it.
+        if self.query is not None and self.query.done():
+            query = self.query
+            self.query = None
+            try:
+                response = query.result()
+                if response.error_code.val == 1 and len(response.pose_stamped) == 1:
+                    value = response.pose_stamped[0].pose
+                    self.pose = [value.position.x, value.position.y, value.position.z,
+                                 value.orientation.x, value.orientation.y,
+                                 value.orientation.z, value.orientation.w]
+                    self.pose_at = self.query_observation_at
+                else:
+                    self.pose_at = float('-inf')
+            except Exception:
+                self.pose_at = float('-inf')
         if self.query is not None and now-self.query_at > 1.:
             expired = self.query
             self.query = None
@@ -211,7 +235,7 @@ class TeachingRosBridge:
             request.fk_link_names = ['sf_grasp_tcp']
             request.robot_state.joint_state = self.joints
             request.robot_state.is_diff = True
-            observation_at = self.joints_at
+            self.query_observation_at = self.joints_at
             try:
                 self.query = self.fk.call_async(request)
             except Exception:
@@ -219,27 +243,6 @@ class TeachingRosBridge:
                 self.pose_at = float('-inf')
             self.query_at = now
 
-            def measured(future):
-                if future is not self.query:
-                    return
-                try:
-                    response = future.result()
-                    if response.error_code.val == 1 and len(response.pose_stamped) == 1:
-                        value = response.pose_stamped[0].pose
-                        self.pose = [value.position.x, value.position.y, value.position.z,
-                                     value.orientation.x, value.orientation.y,
-                                     value.orientation.z, value.orientation.w]
-                        self.pose_at = observation_at
-                    else:
-                        self.pose_at = float('-inf')
-                except Exception:
-                    # FK is a read-only observation. Its service failure must
-                    # not take down the shared Supply ROS process.
-                    self.pose_at = float('-inf')
-                finally:
-                    self.query = None
-            if self.query is not None:
-                self.query.add_done_callback(measured)
         idle = bool(self.motion is not None and now-self.motion_at <= .5 and
                     not self.motion.has_active_execution and not self.motion.execution_active and
                     self.motion.backend_inactivity_confirmed and self.motion.execution_state in (1, 4))

@@ -118,3 +118,81 @@ TEST(TaughtMotionPath, PreservesIntermediateKnotsAndRejectsWrongStart)
   EXPECT_FALSE(make_taught_path_trajectory(names, {.1,0.}, path, limits, 4., .5,.5).valid);
   EXPECT_FALSE(make_taught_path_trajectory(names, {0.,0.}, path, limits, .01,.5,.5).valid);
 }
+
+
+TEST(TaughtTrajectoryTiming, SlowsTimedFieldsWithoutChangingThePlannedPath)
+{
+  trajectory_msgs::msg::JointTrajectory trajectory;
+  trajectory.joint_names = {"joint"};
+  for (int i = 0; i < 3; ++i) {
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.positions = {i == 2 ? 1.5 : double(i)};
+    point.velocities = {i == 1 ? 2. : 0.};
+    point.accelerations = {i == 1 ? 8. : 0.};
+    point.time_from_start.sec = i;
+    trajectory.points.push_back(point);
+  }
+  const auto original = trajectory;
+  ASSERT_TRUE(arm_cell_motion::stretch_taught_trajectory_to_limits(trajectory, {.5}, {.5}));
+  EXPECT_EQ(trajectory.joint_names, original.joint_names);
+  for (std::size_t i = 0; i < trajectory.points.size(); ++i) {
+    EXPECT_EQ(trajectory.points[i].positions, original.points[i].positions);
+    EXPECT_LE(std::abs(trajectory.points[i].velocities[0]), .5 + 1e-9);
+    EXPECT_LE(std::abs(trajectory.points[i].accelerations[0]), .5 + 1e-9);
+  }
+  EXPECT_NEAR(seconds(trajectory.points.back().time_from_start), 8., 1e-6);
+}
+
+TEST(TaughtTrajectoryTiming, AlsoBoundsTheExecutionSamplerSegmentVelocity)
+{
+  trajectory_msgs::msg::JointTrajectory trajectory;
+  trajectory.joint_names = {"joint"};
+  trajectory.points.resize(2);
+  for (auto & point : trajectory.points) {
+    point.positions = {0.}; point.velocities = {0.}; point.accelerations = {0.};
+  }
+  trajectory.points.back().positions = {1.};
+  trajectory.points.back().time_from_start.nanosec = 100000000;
+  ASSERT_TRUE(arm_cell_motion::stretch_taught_trajectory_to_limits(trajectory, {.5}, {.5}));
+  EXPECT_NEAR(seconds(trajectory.points.back().time_from_start), 2., 1e-6);
+}
+
+
+TEST(TaughtTrajectoryTiming, RejectsInvalidTimingOrLimitsWithoutChangingTheTrajectory)
+{
+  trajectory_msgs::msg::JointTrajectory trajectory;
+  trajectory.joint_names = {"joint"};
+  trajectory.points.resize(2);
+  for (auto & point : trajectory.points) {
+    point.positions = {0.}; point.velocities = {0.}; point.accelerations = {0.};
+  }
+  const auto original = trajectory;
+  EXPECT_FALSE(stretch_taught_trajectory_to_limits(trajectory, {1.}, {1.}));
+  EXPECT_EQ(trajectory, original);
+  trajectory.points.back().time_from_start.sec = 1;
+  const auto timed = trajectory;
+  EXPECT_FALSE(stretch_taught_trajectory_to_limits(trajectory, {0.}, {1.}));
+  EXPECT_EQ(trajectory, timed);
+  EXPECT_FALSE(stretch_taught_trajectory_to_limits(trajectory, {1.}, {NAN}));
+  EXPECT_EQ(trajectory, timed);
+  EXPECT_TRUE(stretch_taught_trajectory_to_limits(trajectory, {1.}, {1.}));
+  EXPECT_EQ(trajectory, timed);
+}
+
+
+TEST(TaughtTrajectoryTiming, NanosecondRoundingCannotShortenAnIntermediateSegment)
+{
+  trajectory_msgs::msg::JointTrajectory trajectory;
+  trajectory.joint_names = {"joint"};
+  for (int i = 0; i < 3; ++i) {
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.positions = {1.5e-9 * i};
+    point.velocities = {0.}; point.accelerations = {0.};
+    point.time_from_start.nanosec = i;
+    trajectory.points.push_back(point);
+  }
+  ASSERT_TRUE(stretch_taught_trajectory_to_limits(trajectory, {1.}, {1.}));
+  LinearTrajectorySampler sampler({1.});
+  TimedJointSample sample;
+  EXPECT_TRUE(sampler.sample_timed(trajectory, 2e-9, sample).valid);
+}

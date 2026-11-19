@@ -570,7 +570,20 @@ uint8_t IsaacRosMotionTransport::execute_cartesian_teaching(
         !moveit::core::jointStateToRobotState(measured, start))
       {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
       start.update();
-      if (!start.satisfiesBounds() || scene.isStateColliding(start, planning_group_)) {
+      if (!start.satisfiesBounds()) {
+        RCLCPP_WARN(node_->get_logger(), "Teaching start state exceeds joint bounds");
+        return Code::TASK_RESULT_PATH_OBSTRUCTED;
+      }
+      collision_detection::CollisionRequest collision_request;
+      collision_request.group_name = planning_group_;
+      collision_request.contacts = true;
+      collision_detection::CollisionResult collision_result;
+      scene.checkCollision(collision_request, collision_result, start);
+      if (collision_result.collision) {
+        for (const auto & contact : collision_result.contacts) {
+          RCLCPP_WARN(node_->get_logger(), "Teaching start state collision: %s / %s",
+            contact.first.first.c_str(), contact.first.second.c_str());
+        }
         return Code::TASK_RESULT_PATH_OBSTRUCTED;
       }
       group->setStartState(start);
@@ -603,7 +616,8 @@ uint8_t IsaacRosMotionTransport::execute_cartesian_teaching(
         trajectory = joint_plan.trajectory_;
       }
       if (trajectory.joint_trajectory.points.size() < 2U ||
-        !retime_taught_entry(group->getRobotModel(), planning_group_, start, trajectory, scales))
+        !retime_taught_entry(
+          group->getRobotModel(), planning_group_, start, trajectory, scales, &taught_joint_limits_))
       {return Code::TASK_RESULT_PATH_OBSTRUCTED;}
       moveit_msgs::msg::RobotState start_message;
       moveit::core::robotStateToRobotStateMsg(start, start_message, true);
