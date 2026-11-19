@@ -86,7 +86,13 @@ class RawPartPoseRecorder:
         self._disabled_at_capacity = False
 
     def sample(self, physx: Any, simulation_time_seconds: float, *, now: float) -> bool:
-        """Return true only when this call persisted pose evidence."""
+        """Return whether at least one pose event was accepted for recording.
+
+        With append_record, True means submission was accepted, not that the
+        file was written. Background write outcomes are reported by the writer's
+        coverage statistics. Without append_record, True means an inline append
+        completed.
+        """
         if now - self._last_sampled_at < SAMPLE_INTERVAL_SECONDS:
             return False
         self._last_sampled_at = now
@@ -167,7 +173,7 @@ class RawPartPoseRecorder:
         for path, previous in self._last_samples.items():
             if path not in current:
                 recorded = self._append("removed", previous, sim_time_ns) or recorded
-        # Thresholds compare to the last persisted pose, so sub-threshold motion
+        # Thresholds compare to the last pose selected for recording, so small motion
         # accumulates and is not lost when it eventually crosses the threshold.
         updated = dict(self._last_samples)
         for path, pose in current.items():
