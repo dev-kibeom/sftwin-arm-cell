@@ -4,6 +4,15 @@ Launcher에서 M0609, Hand-E C10 또는 C10 + 100 mm 핑거, Tape Handling Cell,
 
 Cell 설정은 `ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml`이다. 설비·슬롯·컨베이어·티칭은 Cell, 중공 형상·질량·마찰은 Material, 핑거 구동·장치 보유 추정은 Tool, 관절 제한·HOME은 Robot이 소유한다. 공통 UI는 Cell의 Supply capability를 사용하며 CNC의 기존 Gateway 공급 경로도 유지한다.
 
+벨트 표면 구동은 Isaac Sim 5.1의 `isaacsim.asset.gen.conveyor` 내장 `IsaacConveyor` 노드를 사용한다.
+Cell 시작 시 확장을 활성화하고 `/World/TapeRollCell/ConveyorGraph`에 인피드·아웃피드 좌우의
+노드 3개를 생성한다. Python은 물리 Step마다 속도 명령을 전달하고 해당 그래프만 즉시 평가한다.
+설비 회전은 월드 방향으로 변환하며 벨트 형상의 크기가 이송 속도를 바꾸지 않는다.
+0 명령은 표면 이송을 명시적으로 비활성화한다. Isaac 5.1에서 작은 속도 변경 뒤 이전 속도값이
+남는 경우에도 저속→정지, Pause·Stop·종료 시 정지를 보장하며 속도 벡터는 내장 노드가 작성한다.
+내장 노드의 텍스처 애니메이션은 사용하지 않는다.
+인피드 카트리지의 유한 힘 선형 구동과 구동축 정착 판정, 아웃피드의 시간 기반 운전은 유지한다.
+
 Supply는 동적 카트리지와 자유 동적 롤을 인피드 위에 생성한다. 유한 힘의 프리즘 구동이 체인 구동 카트리지를 이동시키며 롤은 V자 받침·포켓과의 접촉·마찰로 운반된다. 각 슬롯을 같은 고정 Pick 기준점으로 인덱싱하고 구동축 위치·정지 피드백을 확인한 뒤 티칭 사이클을 요청한다. 롤의 실제 위치·축·속도는 공정 입력이 아니다. 별도 Vision은 없다.
 
 Configured-source Mission → Cell 예약 → `/task_execution/execute_configured_grasp` → 공통 GraspCycle BT → 운영 MotionCore·Physical Tool Runtime → Isaac ROS Backend를 사용한다. 수평 Approach·Insert·Grasp·Lift·Extract 후 운반 통로에서 수직으로 회전하여 고정 아웃피드 수령점에 Place·Release·Retreat한다. 티칭은 인피드·아웃피드 또는 base 기준의 희소 6D TCP 포인트다. 각 포인트에 관절/직선 이동을 지정하며 모든 슬롯은 공통 순서를 사용한다. 실제 조립 URDF를 사용하는 운영 Motion이 관절·속도·가속도와 도달 가능성을 검사한다. 기본 MoveJ·MoveL은 환경 충돌 검사와 자동 우회를 하지 않는다. 물리 충돌 자체는 유지한다. 시작 시 슬롯별 IK·조밀한 관절 경로를 생성하지 않는다.
