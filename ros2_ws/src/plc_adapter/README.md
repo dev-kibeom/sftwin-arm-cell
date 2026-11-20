@@ -30,3 +30,9 @@ ros2 run arm_cell_plc_adapter plc_task_adapter --ros-args \
 `receipt_file`은 요청 스트림마다 전용 영속 경로를 지정한다. 동일 스트림에는 Adapter 하나만 연결한다. 초기 시운전은 PLC 요청 ID 0과 빈 기록에서 시작한다. heartbeat의 변화와 유휴 응답을 확인한 뒤 ID 1을 유지하고 응답 ID·상태·사유·배치 값을 관찰한다. 같은 ID를 유지한 채 TCP를 끊었다 복원하면 같은 작업의 기록이 재전달된다. 실제 운전 중인 스트림의 기록을 지우거나 다른 PLC에 연결하면 상관관계를 잃는다.
 
 ConveyorPart는 예시 자재 키다. 같은 Pick 위치에 연속 도착하는 자재는 Cell 공급자가 도착 건마다 현재 epoch의 서로 다른 미완료 논리 슬롯을 제공하고 같은 티칭 위치에 대응시킨다. PLC 요청만으로 점유나 새 슬롯을 생성하지 않는다. 실제 컨베이어 공급자·티칭 registry와 배출/Commit 프로그램은 Cell 통합 범위다. 패키지 통합 시험은 루프백 Modbus 서버, 실제 Configured Mission, 시험용 슬롯·Robot Task를 사용한다.
+
+### CODESYS 4 로컬 실통신 시험
+
+[시험용 PLC_PRG](tests/codesys/PLC_PRG.prg.st)는 위와 같은 FC04·FC16 블록을 CODESYS의 `ModbusServer` 함수 블록으로 제공한다. CODESYS 4에서 Linux SL 프로젝트를 생성하고 기본 주기 Task의 `PLC_PRG`를 이 소스로 교체한다. 애플리케이션의 `Libraries.json`에서 `Standard` 참조를 유지하고 `ModbusTCP Server, 4.6.0 (CODESYS)`를 `MB` 네임스페이스로 참조한다. `placeholderOverrides`에서 `IoDrvModbus`와 `IoDrvModbusBase`는 각각 동명의 4.6.0 (CODESYS) 라이브러리로, `CommFB`는 `CommFB, 3.5.21 (CODESYS)`로 지정한 뒤 라이브러리를 resolve하고 빌드한다. Control for Linux SL 4.23.0.0에서 실행했으며 서버는 `lo`의 TCP 1502에 바인딩한다. [CODESYS ModbusServer](https://content.helpme-codesys.com/en/CODESYS%20Modbus/_mod_lib_modbusserver.html)
+
+별도의 시험 클라이언트가 FC06으로 holding register 6에 작은 요청 ID를 쓰면 PLC가 다음 주기에 해당 ID를 게시한다. FC04로 input register 0부터 8 WORD를 읽으면 요청 ID(0–1), PLC가 관측한 응답 ID의 하위 WORD·상태·사유·배치·heartbeat(2–6), 시험 프로그램 식별값 `0xC04E`(7)를 확인할 수 있다. Holding register 7에 1을 쓰면 PLC가 서버를 3초 동안 내린다. 시험을 마치면 holding register 6에 0을 쓴다. 이 추가 레지스터는 로컬 시험 프로그램 전용이다.

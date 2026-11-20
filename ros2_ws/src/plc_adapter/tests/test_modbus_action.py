@@ -46,6 +46,7 @@ def process(package, executable, *args):
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
+    assert proc.returncode == 0, f"{executable} exited with {proc.returncode}"
 
 
 @contextmanager

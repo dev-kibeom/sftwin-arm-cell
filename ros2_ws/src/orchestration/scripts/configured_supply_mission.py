@@ -126,7 +126,7 @@ def main(args=None):
     from rclpy.node import Node
     from rclpy.action import ActionServer, ActionClient, GoalResponse, CancelResponse
     from rclpy.callback_groups import ReentrantCallbackGroup
-    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
     from arm_cell_interfaces.action import ExecuteCycle, ExecuteConfiguredGrasp
     from arm_cell_interfaces.srv import ConfiguredSupply
     from arm_cell_interfaces.msg import ConfiguredSupplyState, SafetyState, MissionExitReason, MissionPhase
@@ -319,8 +319,15 @@ def main(args=None):
             return result
 
     rclpy.init(args=args);node=Mission();executor=MultiThreadedExecutor(num_threads=4);executor.add_node(node)
-    try:executor.spin()
-    finally:executor.shutdown();node.capture.close();node.destroy_node();rclpy.shutdown()
+    try:
+        executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        executor.shutdown()
+        node.capture.close()
+        node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__=='__main__':main()
