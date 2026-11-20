@@ -8,4 +8,7 @@ uint8 MISSION_EXIT_CONFIGURATION_ERROR=6
 uint8 MISSION_EXIT_QUANTITY_REACHED=7
 uint8 MISSION_EXIT_QUANTITY_SHORTFALL=8
 
+# Configured Task could not claim execution ownership. No BT or movement started.
+uint8 MISSION_EXIT_TASK_ADMISSION_BUSY=9
+
 uint8 value

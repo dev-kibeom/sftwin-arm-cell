@@ -67,6 +67,7 @@ std::uint8_t HeldObjectReturn::finalize()
   if (support_.prepared_grasp() && support_.prepared_grasp()->identity.valid()) {
     // Configured supply owns physical receiving confirmation and inventory.
     // Preserve the measured release fact if its scene handoff subsequently fails.
+    report_->released_at_configured_destination = true;
     support_.object_state_tracker().mark_detached();
     report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED;
   }

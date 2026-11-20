@@ -55,6 +55,7 @@ Result에는 `MissionExitReason exit_reason`과 비규범적 `diagnostic_detail`
 | `MISSION_EXIT_SAFETY_PREEMPTED` | Safety가 Mission 선점 |
 | `MISSION_EXIT_CANCELED` | Caller의 취소로 Mission 중단 |
 | `MISSION_EXIT_CONFIGURATION_ERROR` | Orchestration이 요청된 Mission Recipe·설정을 로드하거나 검증할 수 없음 |
+| `MISSION_EXIT_TASK_ADMISSION_BUSY` | Conveyor Configured Mission 전용. Task 실행권을 얻기 전 거부되어 BT에 진입하지 않은 ABORTED 결과. 동일 Pick 자재의 재수락 조건은 [PLC 계약](icd-plc-task.md)을 따른다. |
 
 로컬 비Safety 종료 판단 경계마다 Orchestration은 Caller 취소·Vision 결과·Motion 결과를 확정하기 직전에 현재 Safety 상태를 다시 관측해야 한다(SHALL). 현재 Safety 상태가 정상 Motion을 더 이상 허용하지 않으면 결과는 `MISSION_EXIT_SAFETY_PREEMPTED`여야 한다(SHALL). 그렇지 않을 때만 해당 비Safety 결과를 확정할 수 있다. 이 규칙은 결정적인 로컬 재검증이지 분산 컴포넌트 전체의 원자적 관측을 주장하지 않는다. Safety 선점은 구별 가능하게 유지되며 로봇 정지는 Action 취소에 의존하지 않는다.
 

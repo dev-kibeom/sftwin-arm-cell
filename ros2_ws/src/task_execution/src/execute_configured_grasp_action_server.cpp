@@ -126,7 +126,9 @@ void ExecuteConfiguredGraspActionServer::execute(
   }
   std::unique_lock<std::mutex> lock(*task->execution_mutex(), std::try_to_lock);
   if (!lock.owns_lock()) {
-    result->result_code = Code::TASK_RESULT_BUSY; handle->abort(result); return;
+    result->result_code = Code::TASK_RESULT_BUSY;
+    result->failure_stage = "configured_supply:execution_admission";
+    handle->abort(result); return;
   }
   auto interruption = [&]() -> std::uint8_t {
       if (canceled()) {return Code::TASK_RESULT_CANCELED;}
@@ -190,10 +192,11 @@ void ExecuteConfiguredGraspActionServer::execute(
     result->result_code = Code::TASK_RESULT_BACKEND_ERROR;
     result->diagnostic_detail = "unknown configured grasp exception";
   }
-  result->material_placed = task->object_disposition() ==
-    arm_cell_interfaces::action::ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED;
+  result->material_placed = task->released_at_configured_destination();
   result->failure_stage = task->last_failure_stage();
-  {
+  const bool placed_failure = result->material_placed &&
+    result->result_code != Code::TASK_RESULT_SUCCESS && result->result_code != Code::TASK_RESULT_CANCELED;
+  if (!placed_failure) {
     try {
       const auto cause = interruption();
       if (cause != Code::TASK_RESULT_SUCCESS) {result->result_code = cause;}
@@ -207,7 +210,7 @@ void ExecuteConfiguredGraspActionServer::execute(
       result->diagnostic_detail += ";configured_supply_lease_invalid_or_stale";
     }
   }
-  if (canceled()) {
+  if (!placed_failure && canceled()) {
     result->result_code = Code::TASK_RESULT_CANCELED;
     handle->canceled(result);
   } else if (result->result_code == Code::TASK_RESULT_SUCCESS) {handle->succeed(result);} else {

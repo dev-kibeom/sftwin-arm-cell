@@ -158,11 +158,19 @@ TEST(GraspCycle, UnconfirmedExpansionUsesExistingReleaseRecoveryWithoutTransfer)
   auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::INTERNAL_RADIAL);
   tool->confirm_grasp = false;
   TaskExecutor executor(motion, tool, {}, {}, std::chrono::milliseconds(1));
-  EXPECT_EQ(executor.execute_grasp_cycle(cycle(GraspStrategy::INTERNAL_RADIAL), execution_id),
+  auto request = cycle(GraspStrategy::INTERNAL_RADIAL);
+  request.identity.execution_id = execution_id;
+  request.identity.supply_id = "supply";
+  request.identity.material_id = "material";
+  request.identity.slot_id = "slot_0";
+  request.identity.supply_epoch = "epoch";
+  request.identity.reservation_id = "reservation";
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id),
             Code::TASK_RESULT_GRASP_FAILURE);
   EXPECT_EQ(motion->events, (std::vector<std::string>{"contract", "fixture_approach",
                                                       "fixture_insert", "expand", "contract"}));
   EXPECT_EQ(motion->committed, 0);
+  EXPECT_FALSE(executor.released_at_configured_destination());
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
 }
 TEST(GraspCycle, SafetyAtInsertionDoesNotExpandOrReleaseAgain)
@@ -268,6 +276,7 @@ TEST(ConfiguredGraspExecution, SuppliesTrustedMetadataAndPreservesReleaseOnRetre
   EXPECT_EQ(tool->configured_identity.slot_id, "slot_0");
   EXPECT_EQ(tool->configured_identity.material_id, "Tape17");
   EXPECT_EQ(tool->configured_identity.execution_id, execution_id);
+  EXPECT_TRUE(executor.released_at_configured_destination());
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
 }
 

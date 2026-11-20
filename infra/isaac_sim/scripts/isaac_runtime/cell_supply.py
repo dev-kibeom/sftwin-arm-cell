@@ -11,7 +11,7 @@ from typing import Callable
 _port = None
 
 
-def register_supply_port(owner, descriptor: dict, request: Callable, status: Callable):
+def register_supply_port(owner, descriptor: dict, request: Callable, status: Callable, *, set_automatic=None):
     """Bind the active Cell. Descriptor contains materials (id/label), count_label,
     and default_count. Callbacks take (material_id, count) and no args respectively.
     """
@@ -21,7 +21,10 @@ def register_supply_port(owner, descriptor: dict, request: Callable, status: Cal
     materials = descriptor.get("materials", [])
     if not materials or any(not material.get("id") for material in materials):
         raise ValueError("Supply descriptor requires materials with ids")
-    _port = (owner, deepcopy(descriptor), request, status)
+    descriptor = deepcopy(descriptor)
+    if set_automatic is not None:
+        descriptor["automatic_control"] = True
+    _port = (owner, descriptor, request, status, set_automatic)
 
 
 def clear_supply_port(owner):
@@ -58,3 +61,9 @@ def request_supply(material_id: str, count: int):
                 "detail": str(result.get("detail", ""))}
     except (RuntimeError, ValueError, KeyError, TypeError, AttributeError) as error:
         return {"accepted": False, "detail": str(error)}
+
+
+def set_automatic(enabled: bool):
+    if type(enabled) is not bool or _port is None or _port[4] is None:
+        return {"accepted": False, "detail": "Automatic feed control unavailable"}
+    return _port[4](enabled)

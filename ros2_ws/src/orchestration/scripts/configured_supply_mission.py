@@ -92,6 +92,13 @@ def safety_permits(state, received_at, now):
                 state.motion_capability.value == 2 and state.max_velocity_scale > 0 and state.max_acceleration_scale > 0)
 
 
+def motion_allows_admission(status, received_at, now):
+    if status is None or now - received_at > 1. or status.execution_active or status.has_active_execution:
+        return False
+    return (status.execution_state == status.MOTION_STATE_IDLE or
+            (status.execution_state == status.MOTION_STATE_STOPPED and status.backend_inactivity_confirmed))
+
+
 def supply_permits(state, received_at, now, supply_id, material_id):
     return bool(state is not None and now-received_at <= .5 and state.valid and
                 state.supply_id == supply_id and state.material_id == material_id and state.supply_epoch and
@@ -129,7 +136,12 @@ def main(args=None):
     from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
     from arm_cell_interfaces.action import ExecuteCycle, ExecuteConfiguredGrasp
     from arm_cell_interfaces.srv import ConfiguredSupply
-    from arm_cell_interfaces.msg import ConfiguredSupplyState, SafetyState, MissionExitReason, MissionPhase
+    from arm_cell_interfaces.msg import ConfiguredSupplyState, SafetyState, MissionExitReason, MissionPhase, MotionStatus
+
+    from arm_cell_interfaces.msg import MotionTaskResultCode as TaskCode
+    from std_msgs.msg import Bool
+    from rclpy.qos import QoSProfile
+    from rclpy.duration import Duration
 
     class Mission(Node):
         def __init__(self):
@@ -147,6 +159,15 @@ def main(args=None):
             self.capture=ConfiguredMissionDiagnostics(
                 self.declare_parameter('diagnostics.output_directory','').value,
                 self.declare_parameter('diagnostics.capture_enabled',False).value,logger=self.get_logger())
+            self.plc_admission = self.declare_parameter('plc_admission_enabled', False).value
+            self.motion_sample = (None, 0.)
+            if self.plc_admission:
+                self.create_subscription(MotionStatus, '/motion/state', self.on_motion, 1)
+                admission_topic = self.declare_parameter('mission_admission_topic',
+                    '/orchestration/mission_admission_available').value
+                self.admission_publisher = self.create_publisher(
+                    Bool, admission_topic, QoSProfile(depth=1, lifespan=Duration(seconds=.5)))
+                self.create_timer(.1, self.publish_admission)
             self.startup_timer=self.create_timer(.1,self.advertise_when_ready)
 
         def advertise_when_ready(self):
@@ -185,15 +206,32 @@ def main(args=None):
         def on_safety(self,state):self.safety=state;self.safety_at=time.monotonic()
         def on_supply(self,state):self.supply=state;self.supply_at=time.monotonic()
 
-        def ready(self):
-            now=time.monotonic()
-            return (safety_permits(self.safety,self.safety_at,now) and
-                supply_permits(self.supply,self.supply_at,now,self.supply_id,self.target))
+        def on_motion(self, status):
+            self.motion_sample = (status, time.monotonic())
+
+        def safety_allows_motion(self):
+            return safety_permits(self.safety, self.safety_at, time.monotonic())
+
+        def supply_is_current(self):
+            return supply_permits(self.supply, self.supply_at, time.monotonic(), self.supply_id, self.target)
+
+        def inputs_permit_execution(self):
+            return self.safety_allows_motion() and self.supply_is_current()
+
+        def available_for_job(self):
+            return (not self.busy and self.inputs_permit_execution() and not self.supply.reservation_id
+                    and (not self.plc_admission or motion_allows_admission(*self.motion_sample, time.monotonic()))
+                    and self.task.server_is_ready() and self.cell.service_is_ready())
+
+        def publish_admission(self):
+            with self.lock:
+                ready = self.server is not None and self.available_for_job()
+                self.admission_publisher.publish(Bool(data=ready))
 
         def accept(self,goal):
             with self.lock:
-                if (self.busy or not self.ready() or self.supply.reservation_id or goal.target_id != self.target or
-                        goal.quantity != 1 or any(goal.delivery_id.uuid) or not self.task.server_is_ready() or not self.cell.service_is_ready()):
+                if (not self.available_for_job() or goal.target_id != self.target or
+                        goal.quantity != 1 or any(goal.delivery_id.uuid)):
                     return GoalResponse.REJECT
                 self.busy=True
             return GoalResponse.ACCEPT
@@ -204,7 +242,12 @@ def main(args=None):
             while not future.done():
                 if time.monotonic()>=deadline:raise TimeoutError('ROS operation result deadline exceeded')
                 time.sleep(.01)
-            return future.result()
+            if future.cancelled():
+                raise RuntimeError('ROS operation response canceled')
+            try:
+                return future.result()
+            except Exception as error:
+                raise RuntimeError(f'ROS operation response unavailable: {error}') from error
 
         def command(self,command,epoch='',slot='',reservation='',placed=False):
             request=ConfiguredSupply.Request();request.command=command;request.supply_id=self.supply_id
@@ -220,6 +263,7 @@ def main(args=None):
         def execute(self,handle):
             result=ExecuteCycle.Result();sequence_completed=False;lease=None;child=None;terminal_known=True
             reason=MissionExitReason.MISSION_EXIT_MOTION_ERROR;detail='configured task did not complete'
+            safety_preempted = False
             self.capture_event(handle,'mission_started')
             self.log_event('info',f'Configured Mission started / requested={handle.request.quantity}')
             try:
@@ -227,17 +271,18 @@ def main(args=None):
                 while not sequence_completed:
                     if handle.is_cancel_requested:
                         reason=MissionExitReason.MISSION_EXIT_CANCELED;detail='Canceled before slot reservation';break
-                    if not self.ready() or self.supply.supply_epoch != epoch:
+                    if not self.inputs_permit_execution() or self.supply.supply_epoch != epoch:
                         reason=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED;detail='Safety or configured supply became unavailable';break
-                    lease=self.command(ConfiguredSupply.Request.RESERVE,epoch)
-                    if lease.supply_epoch != epoch:
+                    reserved=self.command(ConfiguredSupply.Request.RESERVE,epoch)
+                    if reserved.supply_epoch != epoch:
                         raise RuntimeError('Cell session changed during reservation')
-                    if lease.exhausted:
+                    if reserved.success and reserved.exhausted:
                         reason=MissionExitReason.MISSION_EXIT_QUANTITY_SHORTFALL;detail='Configured supply exhausted before requested quantity';lease=None;break
-                    if not lease.success:
-                        raise RuntimeError('Cell reservation rejected: '+lease.diagnostic_detail)
+                    if not reserved.success:
+                        raise RuntimeError('Cell reservation rejected: '+reserved.diagnostic_detail)
+                    lease=reserved
                     deadline=time.monotonic()+1.
-                    while not (self.ready() and lease_matches(self.supply,lease)):
+                    while not (self.inputs_permit_execution() and lease_matches(self.supply,lease)):
                         if time.monotonic()>deadline or self.supply.supply_epoch != epoch or handle.is_cancel_requested:
                             raise RuntimeError('Cell reservation state not confirmed')
                         time.sleep(.01)
@@ -246,24 +291,30 @@ def main(args=None):
                     goal=ExecuteConfiguredGrasp.Goal();goal.supply_id=self.supply_id;goal.slot_id=lease.slot_id
                     goal.supply_epoch=lease.supply_epoch;goal.reservation_id=lease.reservation_id
                     abandoned=threading.Event()
+                    terminal_known=False
                     sent=self.task.send_goal_async(goal)
                     def accepted_late(future, abandoned=abandoned):
                         cancel_abandoned_acceptance(future, abandoned)
                     sent.add_done_callback(accepted_late)
                     try:child=self.wait(sent,3.)
                     except TimeoutError as error:
-                        terminal_known=False
                         abandon_pending_acceptance(sent, abandoned)
                         raise PendingTaskUncertain('Task acceptance uncertain; reservation retained until Stop') from error
-                    if child is None or not child.accepted:raise RuntimeError('Task goal rejected')
+                    if child is None:
+                        raise PendingTaskUncertain('Task acceptance unavailable; reservation retained until Stop')
+                    if not child.accepted:
+                        terminal_known=True
+                        raise RuntimeError('Task goal rejected')
                     self.capture_event(handle,'task_accepted',task_goal_uuid=bytes(child.goal_id.uuid).hex(),
                         supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
-                    terminal_known=False
                     pending=child.get_result_async();cancel_sent=False;interrupted=None;cancel_deadline=None
                     self.feedback(handle,0,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id)
                     while not pending.done():
-                        if handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
-                        elif not self.ready() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                        if not self.safety_allows_motion():
+                            safety_preempted = True
+                            interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                        elif handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
+                        elif not self.supply_is_current() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                         if interrupted is not None and not cancel_sent:
                             name=mission_reason_name(interrupted,MissionExitReason)
                             self.log_event('warning','Configured Mission interrupted / '+name)
@@ -273,7 +324,7 @@ def main(args=None):
                         if cancel_deadline and time.monotonic()>cancel_deadline:
                             raise PendingTaskUncertain('Task terminal uncertain after interruption; reservation retained until Stop')
                         time.sleep(.01)
-                    task_result = pending.result()
+                    task_result = self.wait(pending, 0.)
                     if task_result is None or task_result.status not in (4, 5, 6):
                         raise PendingTaskUncertain('Task terminal unavailable; reservation retained until Stop')
                     terminal_known = True
@@ -285,7 +336,13 @@ def main(args=None):
                         task_result_code=outcome.result_code,material_placed=outcome.material_placed,
                         failure_stage=outcome.failure_stage,diagnostic_detail=outcome.diagnostic_detail,
                         supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
+                    if outcome.result_code == TaskCode.TASK_RESULT_SAFETY_PREEMPTED or not self.safety_allows_motion():
+                        safety_preempted = True
+                        interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                     task_succeeded = task_result.status == 4 and outcome.result_code == 0
+                    if not task_succeeded:
+                        detail = (f'Task failed (result_code={outcome.result_code}): '
+                                  f'{outcome.failure_stage} {outcome.diagnostic_detail}')
                     if interrupted is None and task_succeeded and outcome.material_placed:
                         complete=self.command(ConfiguredSupply.Request.COMPLETE,
                             lease.supply_epoch,lease.slot_id,lease.reservation_id,True)
@@ -293,10 +350,19 @@ def main(args=None):
                             raise RuntimeError('Cell cycle retirement failed: '+complete.diagnostic_detail)
                         sequence_completed=True;lease=None
                         self.feedback(handle,0,MissionPhase.MISSION_PHASE_PLACING,'Teaching sequence ended')
+                    if (outcome.material_placed and task_result.status == 6 and
+                            outcome.result_code not in (TaskCode.TASK_RESULT_SUCCESS, TaskCode.TASK_RESULT_CANCELED,
+                                                        TaskCode.TASK_RESULT_SAFETY_PREEMPTED)):
+                        break
                     if interrupted is not None:
                         reason=interrupted;detail='Task stopped after Mission interruption';break
-                    if task_result.status != 4 or outcome.result_code != 0:
-                        detail='Task failed: '+outcome.failure_stage+' '+outcome.diagnostic_detail;break
+                    if (self.plc_admission and task_result.status == 6 and not outcome.material_placed
+                            and outcome.result_code == TaskCode.TASK_RESULT_BUSY
+                            and outcome.failure_stage == 'configured_supply:execution_admission'):
+                        reason=MissionExitReason.MISSION_EXIT_TASK_ADMISSION_BUSY
+                        detail='Task execution owner busy before BT entry';break
+                    if not task_succeeded:
+                        break
                     if not outcome.material_placed:raise RuntimeError('Successful Task lacks placement fact')
                 else:
                     reason=MissionExitReason.MISSION_EXIT_QUANTITY_REACHED;detail='Teaching sequence completed; collision verification is independent'
@@ -304,9 +370,17 @@ def main(args=None):
                 detail=str(error)
             finally:
                 if lease is not None and terminal_known:
-                    try:self.command(ConfiguredSupply.Request.ABANDON,lease.supply_epoch,lease.slot_id,lease.reservation_id)
+                    try:
+                        cleanup = self.command(ConfiguredSupply.Request.ABANDON,lease.supply_epoch,
+                            lease.slot_id,lease.reservation_id,placed=result.has_material_placed and result.material_placed)
+                        if not cleanup.success:
+                            detail += '; reservation cleanup rejected: '+cleanup.diagnostic_detail
                     except (RuntimeError,TimeoutError) as error:detail+='; reservation cleanup failed: '+str(error)
                 with self.lock:self.busy=False
+            # Preserve the child outcome and placement while arbitrating the public Mission terminal.
+            if safety_preempted or not self.safety_allows_motion():
+                reason = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                detail = 'Safety preempted Mission; ' + detail
             result.exit_reason.value=reason;result.diagnostic_detail=detail
             self.feedback(handle,0,MissionPhase.MISSION_PHASE_FINISHED,detail)
             if reason==MissionExitReason.MISSION_EXIT_CANCELED:handle.canceled()
