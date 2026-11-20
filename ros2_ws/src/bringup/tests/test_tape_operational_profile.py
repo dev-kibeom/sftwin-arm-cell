@@ -78,3 +78,22 @@ def test_configured_launch_preserves_common_observation_settings(tmp_path, monke
                  if isinstance(action,SetEnvironmentVariable)}
     assert 'ARM_CELL_RECORDING_SESSION_PATH' in environment
     assert 'RCUTILS_CONSOLE_OUTPUT_FORMAT' in environment
+
+
+def test_configured_supply_exports_motion_experiment_settings(tmp_path):
+    from arm_cell_bringup.runtime import component_experiment_settings
+
+    profile = ROOT / 'ros2_ws/src/bringup/config/tape_m0609_c10_profile.yaml'
+    settings = component_experiment_settings(profile)
+    assert not settings['simulation'][1]
+    assert 'vision' not in settings
+    output = export_runtime_configuration(
+        profile, tmp_path / 'runtime.json',
+        component_parameters={'motion': {'planning_velocity_scaling_factor': 0.05}},
+    )
+    assert load_profile(output)['motion']['planning_velocity_scaling_factor'] == 0.05
+    with pytest.raises(ValueError, match='Unsupported experiment setting'):
+        export_runtime_configuration(
+            profile, output,
+            component_parameters={'simulation': {'external_handoff_default_quantity': 2}},
+        )

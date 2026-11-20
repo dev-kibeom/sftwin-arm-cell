@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 from pathlib import Path
 import sys
 
@@ -182,3 +183,58 @@ def test_live_validation_note_uses_profile_evidence_and_marks_parameter_override
     assert '변경 설정 미검증' in validation_note(entry)
     entry['validation_status']='live-pending'
     assert '검증 전' in validation_note(entry)
+
+
+def test_root_launcher_imports_components():
+    subprocess.run([sys.executable, '-c', 'import launcher; assert callable(launcher.main)'],
+                   cwd=ROOT, check=True)
+
+
+def test_experiment_settings_are_only_exported_for_selected_run(tmp_path):
+    from arm_cell_bringup.runtime import load_profile
+    from launcher import preparation_command
+
+    entry = deployments(ROOT)[0]
+    defaults = load_profile(entry['profile'])
+    overrides = {
+        'simulation': {'external_handoff_default_quantity': 2},
+        'motion': {'planning_velocity_scaling_factor': 0.05},
+        'vision': {'reusable_pair_max_age_ms': 150.0},
+    }
+    sources = [ROOT / 'infra/isaac_sim/config/simulation.yaml',
+               ROOT / 'ros2_ws/src/motion/config/operational.yaml',
+               ROOT / 'ros2_ws/src/vision/config/operational.yaml']
+    originals = [path.read_bytes() for path in sources]
+    selection = dict(entry, component_parameters=overrides)
+    output = tmp_path / 'settings.json'
+    export_selection(selection, output)
+    result = load_profile(output)
+    for section, edits in overrides.items():
+        assert all(result[section][key] == value for key, value in edits.items())
+        assert result[section] == dict(defaults[section], **edits)
+    assert [path.read_bytes() for path in sources] == originals
+    assert load_profile(entry['profile'])['motion'] == defaults['motion']
+
+    cli_output = tmp_path / 'cli.json'
+    subprocess.run(
+        preparation_command(selection, cli_output), cwd=ROOT, check=True,
+        env=dict(os.environ, PYTHONPATH=os.pathsep.join(
+            [str(ROOT / 'ros2_ws/src/bringup'), *filter(None, [os.environ.get('PYTHONPATH')])]
+        )),
+    )
+    assert cli_output.read_bytes() == output.read_bytes()
+
+
+@pytest.mark.parametrize('edits', [
+    {'safety': {'fail_closed_until_inputs_fresh': False}},
+    {'simulation': {'static_scene': False}},
+    {'simulation': {'external_handoff_default_quantity': 1.5}},
+    {'motion': {'planning_velocity_scaling_factor': 0.0}},
+    {'vision': {'reusable_pair_max_age_ms': float('nan')}},
+])
+def test_experiment_settings_reject_unsupported_values(tmp_path, edits):
+    with pytest.raises(ValueError, match='experiment|실험'):
+        export_selection(
+            dict(deployments(ROOT)[0], component_parameters=edits),
+            tmp_path / 'invalid.json',
+        )
