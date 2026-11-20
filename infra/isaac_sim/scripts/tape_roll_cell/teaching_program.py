@@ -169,7 +169,6 @@ def default_program(configuration):
     point('insert','infeed',[depth,0.,0.],horizontal)
     point('lift','infeed',[depth,0.,lift],horizontal)
     point('extract','infeed',[depth-clearance,0.,lift],horizontal)
-    points['extract']['blend'] = True
     point('carry','infeed',[depth-clearance,0.,height-sz],horizontal)
     tx,ty,tz=place['turn_position_m']
     point('turn','outfeed',[tx-px,ty-py,tz-pz],down,'MoveJ')
@@ -180,8 +179,16 @@ def default_program(configuration):
     model_id = configuration.get('model_configuration', {}).get('model_id')
     for name, target in layout.get('default_movej_targets', {}).get(model_id, {}).items():
         points[name]['joint_target'] = deepcopy(target)
-    return validate_program(dict(schema_version=1,frames=frames,points=points,sequences=dict(
-        tape_approach=['approach'],tape_insert=['insert'],tape_transfer=['lift','extract','carry','turn','place_approach','place'],tape_retreat=['retreat'])))
+    transfer = ['lift', 'extract', 'carry', 'turn', 'place_approach', 'place']
+    for name in transfer[:-1]:
+        points[name]['blend'] = True
+    if model_id == 'm0609_hand_e_c10':
+        points['place_approach']['blend'] = False
+    for name in ('approach', 'insert', 'retreat'):
+        points[name].update(velocity_scale=.15, acceleration_scale=.15)
+    return validate_program(dict(schema_version=1, frames=frames, points=points, sequences=dict(
+        tape_approach=['approach'], tape_insert=['insert'], tape_transfer=transfer,
+        tape_retreat=['retreat'])))
 
 
 def equipment_transform(configuration,name):

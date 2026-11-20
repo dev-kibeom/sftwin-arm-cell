@@ -214,17 +214,22 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
         ASSERT_TRUE(retime_joint_trajectory(model, group_name, blend_start, combined,
           taught.velocity_scale, taught.acceleration_scale, &limits));
 
-        const auto & junction = blend_segments.front().points.back().positions;
-        const auto closest = std::min_element(
-          combined.joint_trajectory.points.begin(), combined.joint_trajectory.points.end(),
-          [&](const auto & first, const auto & second) {
-            const Eigen::Map<const Eigen::VectorXd> q(junction.data(), junction.size());
-            return (Eigen::Map<const Eigen::VectorXd>(first.positions.data(), q.size()) - q).squaredNorm() <
-                   (Eigen::Map<const Eigen::VectorXd>(second.positions.data(), q.size()) - q).squaredNorm();
-          });
-        ASSERT_NE(closest, combined.joint_trajectory.points.end());
-        const Eigen::Map<const Eigen::VectorXd> velocity(closest->velocities.data(), names.size());
-        EXPECT_GT(velocity.norm(), 1e-3) << "The generated path stops at the blend junction";
+        for (std::size_t i = 0; i + 1 < blend_segments.size(); ++i) {
+          SCOPED_TRACE(i);
+          const auto & junction = blend_segments[i].points.back().positions;
+          const auto closest = std::min_element(
+            combined.joint_trajectory.points.begin(), combined.joint_trajectory.points.end(),
+            [&](const auto & first, const auto & second) {
+              const Eigen::Map<const Eigen::VectorXd> q(junction.data(), junction.size());
+              return (Eigen::Map<const Eigen::VectorXd>(first.positions.data(), q.size()) - q)
+                     .squaredNorm() <
+                     (Eigen::Map<const Eigen::VectorXd>(second.positions.data(), q.size()) - q)
+                     .squaredNorm();
+            });
+          ASSERT_NE(closest, combined.joint_trajectory.points.end());
+          const Eigen::Map<const Eigen::VectorXd> velocity(closest->velocities.data(), names.size());
+          EXPECT_GT(velocity.norm(), 1e-3) << "The generated path stops at the blend junction";
+        }
         moveit::core::RobotState collision_state(blend_start);
         for (const auto & sample : combined.joint_trajectory.points) {
           collision_state.setJointGroupPositions(group, sample.positions);
