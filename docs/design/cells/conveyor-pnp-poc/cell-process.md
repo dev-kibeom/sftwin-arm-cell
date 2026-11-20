@@ -53,11 +53,11 @@ stateDiagram-v2
 | 컨베이어 순간 정지/드라이브 Busy | 활성 Cycle과 해당 이송의 감지 이력 보존, 새 공급 보류 | PLC가 구동기와 자재 위치 재확인 | 이미 Pick 위치이면 정지·고정 상태를 확인하고, 자재가 이송 경로에 있고 위치가 확인되면 P2 이송 재개 |
 | `pick_station_part_detected` 지연·일시 소실, 정지 피드백 지연·무효 | P2 미완료, P3 요청 금지 | PLC가 해당 이송의 해제→신규 감지와 현재 점유, 실제 정지 및 고정 위치를 대조 | 유효한 증거가 모두 복원되면 P2 완료, 누락된 전이를 복원할 수 없으면 보류 |
 | 센서 위치 오설정·지속 고장 | 자재 위치 미확정, 중복 공급 금지 | PLC가 불일치를 보고하고 필요 시 재관측 또는 작업자 확인 | 증거 없이는 자동 재개 금지. PoC의 자동 복구 대상에서 제외 |
-| Mission 수락 거부 또는 Task 실행권 획득 전 Busy | 기존 요청 ID의 거부·미실행 결과와 자재 ID를 보존 | PLC는 동일 자재의 Pick 위치·슬롯과 거부 이후 새 Mission 수락 가능 표본을 확인 | 같은 자재에 다음 연속 요청 ID로 P3 재진입. 추가 공급·Commit 없음 |
+| Mission 수락 거부 또는 Task 실행권 획득 전 Busy | 기존 요청 ID의 거부·미실행 결과와 자재 ID를 보존 | PLC는 동일 Pick·슬롯·현재 수락 가능을 재확인한다. 거부는 수락 상태 복원 또는 운영자 자동운전 재개, 실행권 Busy는 재시도 간격 경과를 기다린다 | 같은 자재에 다음 연속 요청 ID로 P3 재진입. 추가 공급·Commit 없음 |
 | 로봇 Busy/응답 지연 | 요청 ID 보존, 새 작업 중복 제출 금지 | PLC–Adapter가 마지막 수락/실행 결과 대조 | 동일 작업 진행 또는 terminal 결과 관측 후 P3/P4 |
 | 복구 가능한 일반 Motion 실패 | 활성 작업과 자재 상태 보존 | Task Execution BT가 기존 작업 내부 복구를 수행. 상위 재시도 여부는 Orchestration 계약을 따름 | 허용된 복구가 성공하면 자동으로 계속한다. PLC가 PnP를 다시 제출하지 않는다 |
 | Place 결과 전송 누락 | 슬롯의 자재를 유지하고 미확정 상태 보존 | PLC–Adapter가 같은 ID의 terminal 결과와 배치 사실 조회 | P4 근거가 일치하면 정확히 한 번 확정, 불명확하면 보류 |
-| 배치 후 Retreat·GO_HOME 실패 | 원래 실패 결과와 `material_placed=true` 보존. 재Pick·재Place 금지 | PLC는 슬롯 점유를 확인하고, 로봇 Owner는 기존 계약에 따라 복구 | P4 근거가 갖춰지면 복구 완료 전에도 Commit. 배출과 다음 작업은 각각 P5 조건에 따라 진행 |
+| 배치 후 Retreat·GO_HOME 실패 | 원래 Task 실패와 `material_placed=true` 보존. Safety 선점이 겹치면 Mission 종료 사유는 Safety 우선. 재Pick·재Place 금지 | PLC는 슬롯 점유를 확인하고, 로봇 Owner는 기존 계약에 따라 복구 | P4 근거가 갖춰지면 복구 완료 전에도 Commit. 배출과 다음 작업은 각각 P5 조건에 따라 진행 |
 | 배출 슬롯 점유 지속 | 슬롯의 자재와 해당 Cycle의 Commit 기록 보존 | PLC가 기록과 실제 점유를 대조 | 인수 미확정이면 배출 보류. 이미 Commit됐으면 P5의 영역 이탈·동작 허가를 확인한 뒤 배출 |
 | PLC–Adapter 통신 단절 | 요청 ID·실행 결과·Commit 기록 보존 | Adapter가 기존 요청을 조회하고 PLC가 실제 자재 위치·슬롯 점유와 대조 | 상태가 일치하는 미완료 단계에서 계속한다. 불명확하면 재실행·Commit 없이 보류 |
 | Safety 선점 | 중단 결과와 확정된 배치 사실 보존. 중단 작업 재실행 금지 | PLC는 유효한 P4 근거로 정지 중에도 인수를 기록. 동작은 [Safety](../../components/safety/fds-stop-recovery.md) 및 [Controlled Recovery](../../components/orchestration/fds-controlled-recovery.md) 계약을 따름 | 안전 제어계가 금지한 배출·로봇 동작은 보류. 필요한 관리자 Reset과 해당 동작의 허가·재개 조건을 확인한 뒤 P5 진행 |

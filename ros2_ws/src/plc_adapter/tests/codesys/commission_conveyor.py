@@ -13,6 +13,7 @@ import time
 from pymodbus.client.sync import ModbusTcpClient
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
+from std_msgs.msg import Bool
 
 tests = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(tests))
@@ -29,7 +30,10 @@ from isaac_runtime import cell_supply
 class ConveyorRobot(RobotFixture):
     def __init__(self):
         super().__init__()
-        self.busy_once = True
+        self.busy_at = None
+        self.admission_samples = []
+        self.create_subscription(Bool, '/orchestration/mission_admission_available',
+                                 lambda message: self.admission_samples.append(message.data), 10)
         self.pick_supply = ConveyorPickSupply('commission-epoch')
         self.motion = MotionStatus(execution_state=MotionStatus.MOTION_STATE_IDLE)
         self.motion_pub = self.create_publisher(MotionStatus, '/motion/state', 10)
@@ -44,10 +48,12 @@ class ConveyorRobot(RobotFixture):
 
     def execute(self, goal):
         slot = goal.request.slot_id
-        if slot == 'slot_2' and self.busy_once:
-            self.busy_once = False
+        if slot == 'slot_2' and self.busy_at is None:
+            self.busy_at = time.monotonic()
             goal.abort()
             return ExecuteConfiguredGrasp.Result(result_code=10, failure_stage='configured_supply:execution_admission')
+        if slot == 'slot_2':
+            assert time.monotonic() - self.busy_at >= 1.
         self.goals.append(slot)
         assert self.finish.wait(30)
         result = ExecuteConfiguredGrasp.Result(material_placed=True)
@@ -175,12 +181,36 @@ def commission(port):
                 hold('robot not ready', lambda c: c.phase == 22 and not robot.goals)
                 robot.safety.valid = True
                 until('request issued', lambda c: c.phase in (23, 30))
-                bound = 0
-                until('explicit rejection', lambda c: c.phase == 23 and c.result_state == 7)
-                hold('no admission retry without same pick', lambda c: c.phase == 23 and not robot.goals)
+                def rejection_is(command_id):
+                    # Request ID, phase and terminal state must come from the same PLC scan.
+                    words = client.read_input_registers(0, 27, unit=1).registers
+                    return (words[0] << 16 | words[1], words[18], words[26]) == (command_id, 23, 7)
+
+                until('explicit rejection', lambda c: rejection_is(1))
+
+                def awaiting_rearm(c):
+                    return c.confirmed and not robot.goals and rejection_is(rejected_id)
+
+                rejected_id = 1
+                sample_start = len(robot.admission_samples)
+                hold('bound Pick and unchanged TRUE across admission samples', awaiting_rearm, 1.5)
+                samples = robot.admission_samples[sample_start:]
+                assert len(samples) >= 3 and all(samples), samples
+                robot.safety.valid = False
+                hold('new FALSE admission sample', awaiting_rearm, .8)
+                robot.safety.valid = True
+                until('one new rejection after FALSE to TRUE', lambda c: rejection_is(2))
+                rejected_id = 2
+                hold('each recovery allows only one retry', awaiting_rearm, 1.)
                 adapter.close()
                 start_adapter()
-                bound = cycle
+                hold('configuration repaired, admission remains TRUE', awaiting_rearm, 1.5)
+                assert cell_supply.set_automatic(False)['accepted']
+                hold('operator disabled automatic after repair', lambda c: rejection_is(2))
+                assert cell_supply.set_automatic(True)['accepted']
+            if cycle == 2:
+                until('pre-BT executor busy', lambda c: c.phase == 23 and c.reason == 9)
+                hold('busy retry delay', lambda c: c.phase == 23 and c.confirmed and slot not in robot.goals, .6)
             until('one robot job', lambda c: c.phase == 30 and robot.goals[-1:] == [slot])
             if cycle == 6:
                 robot.finish.set()
@@ -200,6 +230,8 @@ def commission(port):
                      and c.committed < cycle and not c.feed and not c.discharge, 1.5)
                 start_adapter()
             else:
+                if cycle == 3:
+                    robot.safety.motion_capability.value = 1
                 hold('robot busy', lambda c: c.phase == 30 and c.committed < cycle)
                 robot.finish.set()
                 until('terminal before occupancy', lambda c: c.phase == 40)
@@ -209,8 +241,8 @@ def commission(port):
                 hold('invalid occupied observation', lambda c: c.phase == 40)
                 valid = True
             cmd = until('commit', lambda c: c.phase == 50 and c.committed == cycle)
-            assert (cmd.result_state, cmd.reason, cmd.placement) == (
-                (6, 3, 2) if cycle in (2, 3) else (4, 7, 2)), cmd
+            expected_result = {2: (6, 3, 2), 3: (6, 4, 2)}.get(cycle, (4, 7, 2))
+            assert (cmd.result_state, cmd.reason, cmd.placement) == expected_result, cmd
             assert not robot.pick_supply.expose_slot(slot), 'placed arrival became reservable again'
             hold('duplicate terminal during blocked discharge', lambda c: c.committed == cycle
                  and c.phase == 50 and not c.discharge and not c.feed)
@@ -220,6 +252,8 @@ def commission(port):
             if cycle == 1:
                 robot.safety.valid = False
                 hold('robot recovery', lambda c: c.phase == 50, 1.)
+            if cycle == 3:
+                robot.safety.motion_capability.value = 2
             sensors.permitted = True
             until('permitted discharge', lambda c: c.discharge)
             sensors.occupied = False
@@ -237,9 +271,9 @@ def commission(port):
         with sqlite3.connect(run / 'receipt.sqlite') as db:
             history = db.execute('SELECT command_id,state,reason,placement FROM receipt ORDER BY command_id').fetchall()
         assert [row[0] for row in history] == list(range(len(history)))
-        assert history[1][1] == 7
+        assert [row[0] for row in history if row[1] == 7] == [1, 2]
         assert [row[1:] for row in history if row[1] not in (0, 7)] == [
-            (4, 7, 2), (6, 9, 1), (6, 3, 2), (6, 3, 2), (4, 7, 2), (4, 7, 2), (6, 3, 1)]
+            (4, 7, 2), (6, 9, 1), (6, 3, 2), (6, 4, 2), (4, 7, 2), (4, 7, 2), (6, 3, 1)]
         print('Adapter receipts', history, flush=True)
         assert spawned == [('ConveyorPart', n) for n in range(1, 7)] and feeder.remaining == 1
 

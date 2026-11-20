@@ -10,9 +10,10 @@ VAR
     server : MB.ModbusServer;
     ir : ARRAY[0..31] OF WORD;
     hr : ARRAY[0..25] OF WORD;
-    lastEquipment, lastReply, lastAdmission, rejectedSample : WORD;
+    lastEquipment, lastReply, lastAdmission : WORD;
     seenEquipment, seenReply, seenAdmission : BOOL;
-    equipmentAge, replyAge, admissionAge : TON;
+    equipmentAge, replyAge, admissionAge, busyRetry : TON;
+    retryArmed : BOOL;
     valid, link, admissionAvailable, automatic, permitted, equipmentEnabled, reusable, feedAllowed : BOOL;
     infeed, pick, stopped, extended, occupied, pathClear : BOOL;
     driveAvailable, pickZoneClear, dischargeZoneClear, onBelt : BOOL;
@@ -31,7 +32,7 @@ lastReply := hr[5];
 lastAdmission := hr[6];
 valid := seenEquipment AND NOT equipmentAge.Q AND hr[17] = 1;
 link := seenReply AND NOT replyAge.Q;
-admissionAvailable := link AND seenAdmission AND NOT admissionAge.Q AND hr[7] = 1;
+admissionAvailable := link AND seenAdmission AND NOT admissionAge.Q AND hr[6] <> 0 AND hr[7] = 1;
 automatic := hr[18] = 1;
 infeed := hr[21].0;
 pick := hr[21].1;
@@ -58,6 +59,15 @@ runBelt := FALSE;
 extend := FALSE;
 discharge := FALSE;
 confirmed := FALSE;
+
+// An explicit negative sample or an operator pause can rearm one rejected request.
+IF phase = 30 OR phase = 40 OR phase = 23 THEN
+    IF (link AND seenAdmission AND NOT admissionAge.Q AND hr[6] <> 0 AND hr[7] = 0)
+       OR (valid AND NOT automatic) THEN
+        retryArmed := TRUE;
+    END_IF;
+END_IF;
+busyRetry(IN := phase = 23 AND resultState = 6 AND resultReason = 9 AND placement = 1, PT := T#1s);
 
 CASE phase OF
 0:  // P1: reconcile both owners before allocating a new material identity.
@@ -92,7 +102,8 @@ CASE phase OF
     extend := equipmentEnabled AND pick AND stopped AND pickZoneClear AND generated = cycle;
     confirmed := extend AND extended AND NOT occupied;
     IF confirmed AND boundSlot = cycle AND admissionAvailable AND requested < 16#FFFFFFFF AND
-       (phase = 22 OR hr[6] <> rejectedSample) THEN
+       (phase = 22 OR (resultState = 7 AND retryArmed) OR busyRetry.Q) THEN
+        retryArmed := FALSE;
         requested := requested + 1;
         resultState := 0;
         resultReason := 0;
@@ -109,8 +120,7 @@ CASE phase OF
     END_IF;
 40: // Interpret the retained terminal (including phase 40 from earlier applications).
     IF resultState = 7 OR (resultState = 6 AND resultReason = 9 AND placement = 1) THEN
-        // Mission rejected, or the Task could not claim the executor. No BT ran. Recheck the same physical slot on a new admission sample.
-        rejectedSample := hr[6];
+        // No BT ran. Keep the same physical slot until the matching retry condition.
         phase := 23;
     ELSIF placement <> 2 OR resultState < 4 OR resultState > 6 THEN
         // Executed or possibly executed, without proof of placement: reconcile on site.

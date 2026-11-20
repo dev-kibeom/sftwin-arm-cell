@@ -250,3 +250,60 @@ def test_interruption_preserves_observed_task_outcome(configured_mission, placed
     assert requests[-1].material_placed == placed
     if placed:
         assert 'RETREAT' in result.diagnostic_detail
+
+
+@pytest.mark.parametrize('preemption', ['while_running', 'with_terminal', 'during_cleanup'])
+def test_mission_safety_precedence_preserves_placed_task_failure(configured_mission, preemption):
+    from concurrent.futures import Future
+    from arm_cell_interfaces.action import ExecuteCycle, ExecuteConfiguredGrasp
+    from arm_cell_interfaces.msg import MissionExitReason, MotionTaskResultCode
+    from arm_cell_interfaces.srv import ConfiguredSupply
+    mission, requests, _ = configured_mission
+    goal = ExecuteCycle.Goal(target_id=mission.target, quantity=1)
+    mission.accept(goal)
+    terminals = []
+    handle = State(request=goal, goal_id=State(uuid=[2]*16), is_cancel_requested=False,
+                   publish_feedback=lambda _: None, abort=lambda: terminals.append('aborted'))
+    failure = ExecuteConfiguredGrasp.Result(result_code=MotionTaskResultCode.TASK_RESULT_PATH_OBSTRUCTED,
+                                            failure_stage='RETREAT', diagnostic_detail='blocked', material_placed=True)
+    terminal = State(status=6, result=failure)
+    pending = Future()
+    events = []
+    mission.capture_event = lambda _, event, **facts: events.append((event, facts))
+
+    def cancel():
+        mission.safety.motion_capability.value = 2  # Safety had preempted before the Task terminal arrived.
+        pending.set_result(terminal)
+
+    def send_task(_):
+        if preemption != 'during_cleanup':
+            mission.safety.motion_capability.value = 1
+        if preemption == 'while_running':
+            handle.is_cancel_requested = True
+        else:
+            pending.set_result(terminal)
+        sent = Future()
+        sent.set_result(State(accepted=True, goal_id=State(uuid=[1]*16), get_result_async=lambda: pending,
+                              cancel_goal_async=cancel))
+        return sent
+
+    command = mission.command
+
+    def cell_command(cmd, *args, **kwargs):
+        if cmd == ConfiguredSupply.Request.ABANDON:
+            if preemption == 'during_cleanup':
+                mission.safety.motion_capability.value = 1
+            elif preemption == 'with_terminal':
+                mission.safety.motion_capability.value = 2
+        return command(cmd, *args, **kwargs)
+
+    mission.task.send_goal_async = send_task
+    mission.command = cell_command
+    result = mission.execute(handle)
+    assert result.exit_reason.value == MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+    assert terminals == ['aborted'] and result.has_material_placed and result.material_placed
+    assert requests[-1].command == ConfiguredSupply.Request.ABANDON and requests[-1].material_placed
+    assert f'result_code={failure.result_code}' in result.diagnostic_detail
+    assert 'RETREAT' in result.diagnostic_detail and 'blocked' in result.diagnostic_detail
+    task_outcome, = [facts for event, facts in events if event == 'task_outcome']
+    assert task_outcome['task_result_code'] == failure.result_code and task_outcome['material_placed']

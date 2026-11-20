@@ -79,7 +79,7 @@ class PlcTaskAdapter(Node):
 
     def on_admission(self, message):
         self.admission, self.admission_at = message.data, time.monotonic()
-        self.admission_sequence = (self.admission_sequence + 1) & 0xffff
+        self.admission_sequence = self.admission_sequence % 0xffff + 1
 
     def submit(self, receipt):
         goal = ExecuteCycle.Goal(target_id=self.target, quantity=1)
@@ -144,7 +144,9 @@ class PlcTaskAdapter(Node):
                     self.mark_uncertain(claimed.command_id, error)
         self.plc.write_receipt(self.receipts.reply(command_id))
         if self.plc.admission_offset >= 0:
-            self.plc.write_admission(self.admission_sequence, self.admission and time.monotonic() - self.admission_at <= .5)
+            # Sequence zero marks missing/expired evidence. Only an observed FALSE can rearm a rejection.
+            fresh = time.monotonic() - self.admission_at <= .5
+            self.plc.write_admission(self.admission_sequence if fresh else 0, fresh and self.admission)
 
     def mark_uncertain(self, command_id, error):
         # Drop local waits only. The robot can still complete this Goal UUID.

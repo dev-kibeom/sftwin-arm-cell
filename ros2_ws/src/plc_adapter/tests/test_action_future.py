@@ -41,3 +41,24 @@ def test_unconfirmed_action_keeps_id_and_uuid(tmp_path, pending, outcome):
         adapter.exchange.assert_called_once()
     finally:
         adapter.receipts.close()
+
+
+def test_expired_admission_is_distinct_from_observed_false_even_at_rollover(monkeypatch):
+    from std_msgs.msg import Bool
+    from arm_cell_plc_adapter import node
+
+    adapter = PlcTaskAdapter.__new__(PlcTaskAdapter)
+    adapter.plc = Mock(admission_offset=6)
+    adapter.plc.read_command.return_value = 0
+    adapter.receipts = Mock()
+    adapter.admission_sequence = 65535
+    monkeypatch.setattr(node.time, 'monotonic', lambda: 10.)
+    adapter.on_admission(Bool(data=False))
+    adapter.exchange()
+    adapter.plc.write_admission.assert_called_with(1, False)
+    monkeypatch.setattr(node.time, 'monotonic', lambda: 11.)
+    adapter.exchange()
+    adapter.plc.write_admission.assert_called_with(0, False)
+    adapter.on_admission(Bool(data=True))
+    adapter.exchange()
+    adapter.plc.write_admission.assert_called_with(2, True)

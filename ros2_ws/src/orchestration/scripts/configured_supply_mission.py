@@ -209,10 +209,14 @@ def main(args=None):
         def on_motion(self, status):
             self.motion_sample = (status, time.monotonic())
 
+        def safety_allows_motion(self):
+            return safety_permits(self.safety, self.safety_at, time.monotonic())
+
+        def supply_is_current(self):
+            return supply_permits(self.supply, self.supply_at, time.monotonic(), self.supply_id, self.target)
+
         def inputs_permit_execution(self):
-            now=time.monotonic()
-            return (safety_permits(self.safety,self.safety_at,now) and
-                supply_permits(self.supply,self.supply_at,now,self.supply_id,self.target))
+            return self.safety_allows_motion() and self.supply_is_current()
 
         def available_for_job(self):
             return (not self.busy and self.inputs_permit_execution() and not self.supply.reservation_id
@@ -259,6 +263,7 @@ def main(args=None):
         def execute(self,handle):
             result=ExecuteCycle.Result();sequence_completed=False;lease=None;child=None;terminal_known=True
             reason=MissionExitReason.MISSION_EXIT_MOTION_ERROR;detail='configured task did not complete'
+            safety_preempted = False
             self.capture_event(handle,'mission_started')
             self.log_event('info',f'Configured Mission started / requested={handle.request.quantity}')
             try:
@@ -305,8 +310,11 @@ def main(args=None):
                     pending=child.get_result_async();cancel_sent=False;interrupted=None;cancel_deadline=None
                     self.feedback(handle,0,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id)
                     while not pending.done():
-                        if handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
-                        elif not self.inputs_permit_execution() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                        if not self.safety_allows_motion():
+                            safety_preempted = True
+                            interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                        elif handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
+                        elif not self.supply_is_current() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                         if interrupted is not None and not cancel_sent:
                             name=mission_reason_name(interrupted,MissionExitReason)
                             self.log_event('warning','Configured Mission interrupted / '+name)
@@ -328,7 +336,13 @@ def main(args=None):
                         task_result_code=outcome.result_code,material_placed=outcome.material_placed,
                         failure_stage=outcome.failure_stage,diagnostic_detail=outcome.diagnostic_detail,
                         supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
+                    if outcome.result_code == TaskCode.TASK_RESULT_SAFETY_PREEMPTED or not self.safety_allows_motion():
+                        safety_preempted = True
+                        interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                     task_succeeded = task_result.status == 4 and outcome.result_code == 0
+                    if not task_succeeded:
+                        detail = (f'Task failed (result_code={outcome.result_code}): '
+                                  f'{outcome.failure_stage} {outcome.diagnostic_detail}')
                     if interrupted is None and task_succeeded and outcome.material_placed:
                         complete=self.command(ConfiguredSupply.Request.COMPLETE,
                             lease.supply_epoch,lease.slot_id,lease.reservation_id,True)
@@ -339,7 +353,6 @@ def main(args=None):
                     if (outcome.material_placed and task_result.status == 6 and
                             outcome.result_code not in (TaskCode.TASK_RESULT_SUCCESS, TaskCode.TASK_RESULT_CANCELED,
                                                         TaskCode.TASK_RESULT_SAFETY_PREEMPTED)):
-                        detail='Task failed: '+outcome.failure_stage+' '+outcome.diagnostic_detail
                         break
                     if interrupted is not None:
                         reason=interrupted;detail='Task stopped after Mission interruption';break
@@ -348,8 +361,8 @@ def main(args=None):
                             and outcome.failure_stage == 'configured_supply:execution_admission'):
                         reason=MissionExitReason.MISSION_EXIT_TASK_ADMISSION_BUSY
                         detail='Task execution owner busy before BT entry';break
-                    if task_result.status != 4 or outcome.result_code != 0:
-                        detail='Task failed: '+outcome.failure_stage+' '+outcome.diagnostic_detail;break
+                    if not task_succeeded:
+                        break
                     if not outcome.material_placed:raise RuntimeError('Successful Task lacks placement fact')
                 else:
                     reason=MissionExitReason.MISSION_EXIT_QUANTITY_REACHED;detail='Teaching sequence completed; collision verification is independent'
@@ -364,6 +377,10 @@ def main(args=None):
                             detail += '; reservation cleanup rejected: '+cleanup.diagnostic_detail
                     except (RuntimeError,TimeoutError) as error:detail+='; reservation cleanup failed: '+str(error)
                 with self.lock:self.busy=False
+            # Preserve the child outcome and placement while arbitrating the public Mission terminal.
+            if safety_preempted or not self.safety_allows_motion():
+                reason = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                detail = 'Safety preempted Mission; ' + detail
             result.exit_reason.value=reason;result.diagnostic_detail=detail
             self.feedback(handle,0,MissionPhase.MISSION_PHASE_FINISHED,detail)
             if reason==MissionExitReason.MISSION_EXIT_CANCELED:handle.canceled()

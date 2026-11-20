@@ -49,7 +49,7 @@ ConveyorPart는 예시 자재 키다. 같은 Pick 위치에 연속 도착하는 
 | 영역 | 생산자 → 소비자 | 순서와 의미 |
 |---|---|---|
 | IR0–1 / HR0–5 | PLC → Adapter / Adapter → PLC | 기존 단일 작업 요청 / 결과 블록 |
-| HR6–7 | Adapter → PLC | 새 Mission 수락 표본의 순번, 수락 가능 여부 |
+| HR6–7 | Adapter → PLC | 새 Mission 수락 표본의 순번(1~65535), 수락 가능 여부. 미수신·만료는 (0, 0) |
 | HR16–20 | 설비 → PLC | 표본 순번, 전체 관측 유효, UI 자동운전, 자재 코드(1 = ConveyorPart), 남은 공급 가능 수량 |
 | HR21 | 설비 → PLC | bit 0부터 투입 감지, Pick 감지, 벨트 실제 정지, 스토퍼 실제 고정, 트레이 점유, 이송로 비움, 드라이브 가동 가능, 로봇 Pick 영역 이탈, 로봇 배출 영역 이탈, 설비 동작 허가, 이번 자재 이송로 위 확인 |
 | HR22–23 / 24–25 | 설비 → PLC | 마지막으로 실제 생성한 자재 ID / 현재 Pick 자재의 Configured Supply 슬롯 연결 확인 ID(근거 없으면 0) |
@@ -67,4 +67,4 @@ ConveyorPart는 예시 자재 키다. 같은 Pick 위치에 연속 도착하는 
 python3 ros2_ws/src/plc_adapter/tests/codesys/commission_conveyor.py --port 1502
 ```
 
-시험은 실제 Adapter와 Mission을 별도 프로세스로 시작하고 Conveyor 공급자에 Mock 도착을 연결하고 설비·Motion·Safety 입력과 Robot Task를 모의한다. PLC 단계·Commit은 FC04로 읽는다. 기동 시 공급 가능 수량을 5로 설정한다. 수락 거부와 Task 실행권 Busy를 주입하고 동일 자재의 새 요청을 확인한다. 입력 지연·구동 불가·로봇 대기, Adapter 재시작과 terminal 재전달, 인수·배출 보류, 5회 Commit과 재고 소진을 확인한다. 재보충 후 여섯 번째 자재의 배치 전 실행 실패에서 Commit과 재공급이 보류되는지 확인한다. 구 통신 시험용 앱(0xC04E)은 공정 시험 전에 교체해야 한다.
+시험은 실제 Adapter와 Mission을 별도 프로세스로 시작하고 Conveyor 공급자에 Mock 도착을 연결하고 설비·Motion·Safety 입력과 Robot Task를 모의한다. PLC 단계·Commit은 FC04로 읽는다. 기동 시 공급 가능 수량을 5로 설정한다. 잘못된 대상의 수락 거부에서 Pick 슬롯을 유지하고 수락 가능 표본을 반복한다. 수락 상태 복원 또는 설정 수정 후 자동운전 재개에서만 같은 자재를 재요청한다. BT 진입 전 실행권 Busy에는 1초 재시도 간격을 적용한다. 배치 후 GO_HOME 실패와 Safety 선점이 겹치면 Mission 종료 사유와 배치 사실을 함께 확인한다. 입력 지연·구동 불가·로봇 대기, Adapter 재시작과 terminal 재전달, 인수·배출 보류, 5회 Commit과 재고 소진을 확인한다. 재보충 후 여섯 번째 자재의 배치 전 실행 실패에서 Commit과 재공급이 보류되는지 확인한다. 구 통신 시험용 앱(0xC04E)은 공정 시험 전에 교체해야 한다.
