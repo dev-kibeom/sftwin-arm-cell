@@ -699,17 +699,8 @@ class IsaacMaterialSupplyAdapter:
                 )
             )
 
-        shape = UsdGeom.Cube.Define(self.stage, f"{part_path}/collision")
-        shape.CreateSizeAttr(1.0)
-        shape_xform = UsdGeom.Xformable(shape.GetPrim())
-        shape_xform.ClearXformOpOrder()
-        shape_xform.AddScaleOp(precision=UsdGeom.XformOp.PrecisionDouble).Set(
-            Gf.Vec3d(*dimensions)
-        )
-
-        color = Gf.Vec3f(*profile.display_color_rgb)
-        UsdGeom.Gprim(shape.GetPrim()).CreateDisplayColorPrimvar().Set([color])
-        UsdPhysics.CollisionAPI.Apply(shape.GetPrim())
+        from isaac_runtime.cuboid import author_cuboid_body
+        shape = author_cuboid_body(self.stage, prim, dimensions, mass, profile.display_color_rgb)
         if profile.static_friction is not None:
             from pxr import UsdShade
             material = UsdShade.Material.Define(self.stage, f"{part_path}/PhysicsMaterial")
@@ -721,11 +712,6 @@ class IsaacMaterialSupplyAdapter:
             UsdShade.MaterialBindingAPI.Apply(shape.GetPrim()).Bind(material,
                 UsdShade.Tokens.strongerThanDescendants, 'physics')
 
-        UsdPhysics.RigidBodyAPI.Apply(prim)
-        mass_api = UsdPhysics.MassAPI.Apply(prim)
-        mass_api.CreateMassAttr(mass)
-        physx_body = PhysxSchema.PhysxRigidBodyAPI.Apply(prim)
-        physx_body.CreateDisableGravityAttr(False)
         if demonstration_position is None:
             prim.CreateAttribute(
                 "sf_twin:delivery_id", Sdf.ValueTypeNames.String, custom=True

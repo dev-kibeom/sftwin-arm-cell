@@ -97,6 +97,10 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 이 흐름은 현재 공개 구현의 역할과 연결을 요약합니다. 전체 시나리오가 실시간 Isaac Sim 환경에서 최종 acceptance를 통과했다는 의미는 아닙니다.
 
+## Conveyor PnP Cell
+
+CODESYS가 공급·이송·스토퍼·트레이 배출을 제어하는 Isaac Sim 설비의 프로필, UI 설정과 반복 시운전 절차는 [Conveyor PnP Cell 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)에 있습니다.
+
 ## Tape Handling Cell
 
 M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Launcher의 정식 Physical Real 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.

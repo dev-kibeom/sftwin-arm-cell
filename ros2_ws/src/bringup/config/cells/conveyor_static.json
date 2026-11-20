@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "frame_id": "world",
+  "objects": [
+    {
+      "id": "/World/ConveyorPnP/InfeedBelt",
+      "pose": {
+        "position_m": [
+          0.44,
+          0.38,
+          0.28
+        ],
+        "quaternion_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.72,
+          0.16,
+          0.04
+        ]
+      }
+    },
+    {
+      "id": "/World/ConveyorPnP/EndGuide",
+      "pose": {
+        "position_m": [
+          0.792,
+          0.38,
+          0.33
+        ],
+        "quaternion_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.016,
+          0.16,
+          0.06
+        ]
+      }
+    },
+    {
+      "id": "/World/ConveyorPnP/Tray",
+      "pose": {
+        "position_m": [
+          0.46,
+          -0.38,
+          0.28
+        ],
+        "quaternion_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          0.16,
+          0.16,
+          0.04
+        ]
+      }
+    },
+    {
+      "id": "/World/ConveyorPnP/Floor",
+      "pose": {
+        "position_m": [
+          0,
+          0,
+          -0.075
+        ],
+        "quaternion_xyzw": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "geometry": {
+        "type": "box",
+        "dimensions_m": [
+          3,
+          3,
+          0.1
+        ]
+      }
+    }
+  ]
+}

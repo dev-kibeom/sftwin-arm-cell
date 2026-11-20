@@ -1,0 +1,34 @@
+display_name: Conveyor PnP Cell
+isaac:
+  scene_builder: conveyor_pnp_cell.scene:build_scene
+  robot_prim_path: /World/Robot
+  configuration_compiler: conveyor_pnp_cell.configuration:compile_cell
+  material_supply_factory: conveyor_pnp_cell.runtime:create_adapter
+  action_graph_builder: tape_roll_cell.runtime:build_action_graph
+  camera_snapshot: tape_roll_cell.runtime:snapshot_camera
+  action_graph_path: /World/ConveyorPnP/ROS2/ActionGraph
+world_to_base: {x: 0, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0}
+static_scene: conveyor_static.json
+configured_supply: {supply_id: conveyor_pick, material_id: ConveyorPart}
+conveyor:
+  plc_profile: package://arm_cell_plc_adapter/config/conveyor_pnp_codesys.yaml
+  equipment_permit_topic: /cell/conveyor/equipment_permitted
+  speed_m_s: 0.14
+  stopped_tolerance_m_s: 0.004
+  part_size_m: [0.06, 0.04, 0.03]
+  mass_kg: 0.08
+  spawn_m: [0.15, 0.38, 0.40]
+  stopper_retracted_m: [0.754, 0.432, 0.32]
+  stopper_size_m: [0.05, 0.02, 0.04]
+  stopper_travel_m: 0.022
+  stopper_speed_m_s: 0.06
+  # Material centre detection windows in world metres.
+  regions:
+    infeed: {center: [0.15, 0.38, 0.317], size: [0.10, 0.14, 0.05]}
+    pick: {center: [0.754, 0.38, 0.317], size: [0.008, 0.09, 0.05]}
+    belt: {center: [0.44, 0.38, 0.36], size: [0.72, 0.16, 0.16]}
+    tray: {center: [0.46, -0.38, 0.317], size: [0.12, 0.12, 0.05]}
+    robot_pick: {center: [0.754, 0.38, 0.39], size: [0.18, 0.18, 0.24]}
+    robot_discharge: {center: [0.46, -0.38, 0.39], size: [0.2, 0.2, 0.24]}
+  # Enable only with a commissioned Task catalog and matching taught motions.
+  teaching: {first: 1, count: 0, cycle: null}

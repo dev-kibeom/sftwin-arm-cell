@@ -29,7 +29,7 @@ class ConfiguredSupplyClient:
         self.available = True
 
     @classmethod
-    def launch(cls):
+    def launch(cls, script=None):
         root = Path(os.environ['SFTWIN_PROJECT_ROOT'])
         setup = Path(os.environ.get('ARM_CELL_ROS_SETUP', root/'ros2_ws/install/setup.bash'))
         if not setup.is_file():
@@ -37,9 +37,11 @@ class ConfiguredSupplyClient:
         parent, child = socket.socketpair()
         env = os.environ.copy()
         env.pop('PYTHONHOME', None)
+        # Rebuild Humble's native search path too; Kit ships a different spdlog ABI.
+        env.pop('LD_LIBRARY_PATH', None)
         env['PYTHONPATH'] = ''
         command = ('source /opt/ros/humble/setup.bash && source '+shlex.quote(str(setup))+
-                   ' && exec /usr/bin/python3.10 '+shlex.quote(str(Path(__file__).resolve()))+
+                   ' && exec /usr/bin/python3.10 '+shlex.quote(str(Path(script or __file__).resolve()))+
                    ' '+str(child.fileno()))
         try:
             process = subprocess.Popen(['/bin/bash','-c',command], env=env,

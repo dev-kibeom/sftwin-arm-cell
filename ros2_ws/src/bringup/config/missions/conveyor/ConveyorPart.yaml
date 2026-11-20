@@ -1,0 +1,6 @@
+schema_version: 3
+mission_id: conveyor_pnp
+target_id: ConveyorPart
+source:
+  type: configured_slots
+  supply_id: conveyor_pick
