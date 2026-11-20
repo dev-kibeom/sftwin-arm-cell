@@ -59,6 +59,15 @@ def load_artifact(path):
     return artifact
 
 
+def box_pose(obj):
+    pose = Pose()
+    pose.position.x, pose.position.y, pose.position.z = map(float, obj["pose"]["position_m"])
+    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = (
+        map(float, obj["pose"]["quaternion_xyzw"])
+    )
+    return pose
+
+
 def make_collision_object(artifact, obj):
     collision = CollisionObject()
     collision.header.frame_id = artifact["frame_id"]
@@ -66,12 +75,7 @@ def make_collision_object(artifact, obj):
     primitive = SolidPrimitive()
     primitive.type = SolidPrimitive.BOX
     primitive.dimensions = [float(value) for value in obj["geometry"]["dimensions_m"]]
-    pose = Pose()
-    pose.position.x, pose.position.y, pose.position.z = obj["pose"]["position_m"]
-    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = (
-        obj["pose"]["quaternion_xyzw"]
-    )
-    collision.pose = pose
+    collision.pose = box_pose(obj)
     collision.primitives = [primitive]
     collision.primitive_poses = [Pose()]
     collision.primitive_poses[0].orientation.w = 1.0
@@ -212,18 +216,7 @@ class StaticSceneLoader(Node):
                 expected["geometry"]["dimensions_m"],
                 f"{object_id} dimensions",
             )
-            expected_pose = Pose()
-            (
-                expected_pose.position.x,
-                expected_pose.position.y,
-                expected_pose.position.z,
-            ) = expected["pose"]["position_m"]
-            (
-                expected_pose.orientation.x,
-                expected_pose.orientation.y,
-                expected_pose.orientation.z,
-                expected_pose.orientation.w,
-            ) = expected["pose"]["quaternion_xyzw"]
+            expected_pose = box_pose(expected)
             transform = self.lookup_transform_when_available(
                 received.header.frame_id, self.artifact["frame_id"]
             )

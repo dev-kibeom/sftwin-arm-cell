@@ -24,9 +24,19 @@ Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /
 
 ## 고정 Pick과 Robot BT
 
-공급자는 PLC의 위치 확정과 실제 도착 ID를 대조하고 설치한 카탈로그에 있는 `slot_<ID>`를 공개한다. 한 Pick 티칭을 명시한 연속 ID 구간에 전개하므로 슬롯·예약은 자재마다 구분된다. 구간을 넘은 ID는 P2에서 기다린다. 기본 프로필의 카탈로그는 비어 있다. 직육면체용 티칭이 준비되기 전에도 공급·이송·감지·고정까지 시운전할 수 있다.
+공급자는 PLC의 위치 확정과 실제 도착 ID를 대조하고 설치한 카탈로그에 있는 `slot_<ID>`를 공개한다. 한 Pick 티칭을 명시한 연속 ID 구간에 전개하므로 슬롯·예약은 자재마다 구분된다. 구간을 넘은 ID는 P2에서 기다린다. 기본 프로필은 M0609와 지름 30 mm 흡착컵을 사용하며 `slot_1`·`slot_2`에 같은 수직 Pick/Place를 배포한다. 로봇 베이스는 월드 X=0.30 m에 설치한다. TCP는 컵의 접촉면 중앙이며 +Z가 자재 상면을 향한다. Pick은 월드 (0.754, 0.38, 0.332) m, Release는 (0.46, −0.38, 0.38) m다.
 
-실제 로봇 통합에는 직육면체용 Tool과 Logical Attach/Release 전략, 고정 Pick·Place 티칭, epoch·예약 ID와 물리 자재의 연결이 필요하다. 현재 Configured Grasp parser와 선택된 radial Tool은 내경 파지만 지원한다. 새 전략을 Task 쪽에 등록하고 같은 motion 이름을 참조하는 슬롯 구간을 공급자·Task에 함께 배포해야 한다. PLC의 무제한 반복을 단일 티칭으로 지원하려면 도착 ID를 보존하는 Task catalog 조회 규칙도 필요하다.
+Tool은 Isaac 5.1 Surface Gripper의 상태와 Gripped Objects를 매 물리 스텝 읽는다. HELD에는 현재 공급·epoch·예약·슬롯으로 확인된 단일 자재 prim과의 결합이 필요하다. 목적지에서 기존 GraspCycle이 확인한 Release는 `material_placed`로 전달된다. 설비는 별도로 트레이 점유를 관측하고 기존 PLC가 Commit과 배출을 결정한다. 무제한 도착 ID의 단일 티칭 조회는 후속 범위다.
+
+단일 Robot BT 시운전은 같은 프로필·ROS 도메인에서 다음 두 프로세스를 각각 시작한다. 새 시험 스트림에서는 전용 PLC 인스턴스와 기록 경로를 사용한다. 설비 허가를 공급하고 UI 가용 수량을 1로 설정한 뒤 자동운전을 켠다.
+
+```bash
+ros2 launch arm_cell_bringup arm_cell.launch.py profile:="$ARM_CELL_PROFILE"
+
+ros2 run arm_cell_plc_adapter plc_task_adapter --ros-args \
+  --params-file ros2_ws/src/plc_adapter/config/conveyor_pnp_codesys.yaml \
+  --params-file ros2_ws/src/plc_adapter/config/conveyor_process.yaml
+```
 
 ## 실제 설비 반복 시험
 

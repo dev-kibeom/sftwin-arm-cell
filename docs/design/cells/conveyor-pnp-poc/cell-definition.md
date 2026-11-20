@@ -60,7 +60,7 @@ flowchart LR
 | Sensor | 위치/점유 관측 및 Fault Injection | 입력 변화는 가상 설비에서 생성 |
 | Robot | 기존 ROS 2 / BT / Motion 및 Robot Backend | 기존 ARM Cell 계약 재사용 가능 범위 검토 필요 |
 | Target Source | 정적 Pick 위치에 대한 Configured Supply 티칭 또는 기존 Vision 기반 PnP | 적용 경계는 [Cell Control](cell-control.md)의 구현 선행 확인 사항 참조 |
-| Grip | Logical Attach / Detach | 로봇의 파지·해제를 장면에 반영. 슬롯 점유는 설비에서 별도 관측 |
+| Grip | 상면 수직 흡착·해제 | Tool은 실제 결합 대상과 예약 자재를 대조한다. 트레이 슬롯 점유는 설비가 별도로 관측 |
 
 Cell별 설정은 Plugin 선택, 설비 배치, 센서/명령 매핑과 명목 Pose를 참조한다. 새로 필요한 범용 기능이 있는 경우에만 System 설계를 별도로 보완한다.
 
@@ -70,7 +70,7 @@ Cell별 설정은 Plugin 선택, 설비 배치, 센서/명령 매핑과 명목 P
 |---|---|---|---|
 | 컨베이어 | Kinematic/Physical 자재 이동, 명령 기반 정지 | 정지·재개, 센서 관측, 공정 Gate | 실제 모터 속도·토크·가감속·부하 |
 | 스토퍼 | Joint 구동과 종단 상태 | 진입/후퇴 및 다음 작업 허가 | 실제 공압 응답·스트로크·센서 설치 |
-| 로봇 | 명목 경로 + Logical Attach | 요청/완료·복구 협력 및 간섭 사전 검토 | 티칭·TCP·경로 간섭·파지 성공 |
+| 로봇 | 명목 경로 + 흡착컵 결합 | 요청/완료·복구 협력 및 간섭 사전 검토 | 티칭·TCP·경로 간섭·파지 성공 |
 | PLC | 가능한 실제 ST 프로그램을 SoftPLC에서 실행 | 상태 전이·명령·복구·재동기화 | 실제 PLC 하드웨어, Field I/O, 통신·스캔 타이밍 |
 | 센서 | 위치 기반 모의 신호 + 오류 주입 | 순서 위반·응답 소실·지연 대응 | 설치 오차·응답 특성·내구성 |
 | 안전 | 논리적인 요청 정지/재개 시나리오만 모사 | 업무 Gate가 안전 권한을 우회하지 않는지 | 실제 Safety PLC, E-Stop/STO, 위험성 평가, 재기동 시험 |

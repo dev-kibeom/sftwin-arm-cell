@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="m0609_suction">
+  <group name="arm">
+    <chain base_link="base_link" tip_link="sf_grasp_tcp" />
+  </group>
+  <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="base_link" />
+  <disable_collisions link1="base_link" link2="base" reason="Adjacent" />
+  <disable_collisions link1="base_link" link2="link_1" reason="Adjacent" />
+  <disable_collisions link1="link_1" link2="link_2" reason="Adjacent" />
+  <disable_collisions link1="link_2" link2="link_3" reason="Adjacent" />
+  <disable_collisions link1="link_3" link2="link_4" reason="Adjacent" />
+  <disable_collisions link1="link_4" link2="link_5" reason="Adjacent" />
+  <disable_collisions link1="link_5" link2="link_6" reason="Adjacent" />
+  <disable_collisions link1="link_6" link2="tool0" reason="Adjacent" />
+  <disable_collisions link1="tool0" link2="sf_tool_adapter" reason="Adjacent" />
+  <disable_collisions link1="sf_tool_adapter" link2="tool_mount" reason="Adjacent" />
+  <group name="gripper"><link name="suction_cup"/></group>
+  <end_effector name="suction" parent_link="tool_mount" group="gripper" parent_group="arm"/>
+  <disable_collisions link1="link_6" link2="suction_cup" reason="Rigid tool mount"/>
+</robot>

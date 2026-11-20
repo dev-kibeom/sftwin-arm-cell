@@ -367,8 +367,8 @@ private:
   std::vector<std::string> tool_grasp_collision_links_;
   bool tool_width_control_{true};
   std::vector<std::string> tool_grasp_strategies_{"box_exterior"};
-  bool radial_prepared_{false};
-  std::string radial_execution_id_;
+  std::optional<GraspStrategy> configured_strategy_;
+  std::string configured_execution_id_;
   std::vector<std::string> payload_touch_links_;
   std::string pick_retract_contact_object_;
   std::vector<std::string> pick_retract_contact_links_;

@@ -1,0 +1,30 @@
+tool_id: suction
+display_name: Suction Cup
+tool_type: suction_gripper
+runtime:
+  implementation: surface_suction
+  grasp_strategies: [surface_suction]
+  actuator: physics
+  grasp: surface_gripper
+  supported_combinations: [[physics, surface_gripper]]
+  launcher_modes:
+    - id: surface_suction
+      label: Surface Suction
+      combination: [physics, surface_gripper]
+      description: D6 결합 대상과 예약 자재를 대조합니다.
+  capabilities: [actuator_observation]
+  carrier_link: tool_mount
+  retry_interval_s: 0.25
+  cup_link: suction_cup
+  max_grip_distance_m: 0.005
+  coaxial_force_limit_n: 150.0
+  shear_force_limit_n: 100.0
+  isaac_prepare: gripper_runtime.surface_suction:prepare
+  isaac_bootstrap: gripper_runtime.configured_bootstrap:bootstrap
+contact_links:
+  payload_touch_links: [suction_cup]
+  pick_retract: [suction_cup]
+grasp_pose_collision_links: [suction_cup]
+motion:
+  tool_axis_quaternion_xyzw: [0.0, 0.0, 0.0, 1.0]
+  insertion_axis_tcp: [0.0, 0.0, 1.0]

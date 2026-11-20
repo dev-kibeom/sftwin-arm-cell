@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from arm_cell_bringup.assembly_model import load_assembly_model
-from arm_cell_bringup.configured_supply import radial_tool_model
+from arm_cell_bringup.configured_supply import configured_tool_model
 from arm_cell_bringup.model_validation import validate_assembly_configuration, joint_pose, planning_limits
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -24,7 +24,7 @@ def test_invalid_radial_assembly_rejected(mutation):
     else:
         config['tool']['runtime']['max_velocity_fraction'] = 1.01
     with pytest.raises(ValueError):
-        radial_tool_model(config)
+        configured_tool_model(config)
 
 
 @pytest.mark.parametrize('mutation', ['missing_pose', 'joint_limit', 'nonfinite'])

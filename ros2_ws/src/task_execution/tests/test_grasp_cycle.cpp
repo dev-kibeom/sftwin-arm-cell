@@ -312,3 +312,11 @@ TEST(ConfiguredGraspExecution, PhysicalReleaseRemainsPlacedWhenSceneSynchronizat
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
 }
 }
+
+TEST(ConfiguredGraspCatalog, SuctionRequiresNoBoreGeometry)
+{
+  auto catalog = arm_cell_task_execution::parse_configured_grasp_cycles(R"({"slot_1":{
+    "grasp":{"strategy":"surface_suction"},"approach_motion":"above","insertion_motion":"pick",
+    "transfer_motion":"place","retreat_motion":"exit","material_id":"part","supply_id":"belt"}})");
+  EXPECT_TRUE(catalog.at("slot_1").valid());
+}

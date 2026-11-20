@@ -145,7 +145,8 @@ def select_tool_runtime(profile, binding, *, implementations=None, configuration
     """One explicit assembly boundary; test implementations never enter production."""
     if implementations is None:
         from gripper_runtime.radial_physical import radial_physical_runtime
-        implementations = {'robotiq_2f85': _robotiq_runtime, 'hand_e_c10_physical': radial_physical_runtime}
+        from gripper_runtime.surface_suction import suction_runtime
+        implementations = {'surface_suction': suction_runtime, 'robotiq_2f85': _robotiq_runtime, 'hand_e_c10_physical': radial_physical_runtime}
     name = profile['runtime']['implementation']
     try:
         build = implementations[name]

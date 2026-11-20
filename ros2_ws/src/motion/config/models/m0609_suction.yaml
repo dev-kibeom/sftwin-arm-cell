@@ -1,0 +1,14 @@
+urdf: package://arm_cell_motion/assets/robots/m0609_suction/urdf/m0609_suction.urdf.xacro
+mesh_root: package://arm_cell_motion/assets/robots/m0609_robotiq_2f85/meshes
+semantic: package://arm_cell_motion/config/moveit/m0609_suction.srdf
+robot_id: m0609
+tool_id: suction
+model_id: m0609_suction
+planning_group: arm
+mount_collision_links:
+- base_link
+isaac:
+  robot_drive_profile: radial_precision
+  build_missing_on_startup: true
+  articulation_root: root_joint
+  articulation_base: base_link

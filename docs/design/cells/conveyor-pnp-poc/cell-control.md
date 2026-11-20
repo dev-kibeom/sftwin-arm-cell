@@ -94,7 +94,7 @@ PLC 상태 대기와 오류는 공정상 영향받는 단계에 국한한다. Sa
 | SoftPLC ↔ 설비 I/O | P1·P2 공급/이송/스토퍼 명령과 설비 피드백, P4·P5 슬롯 점유 및 배출 명령 | [Conveyor I/O 매핑](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램) |
 | SoftPLC ↔ Robot Task | 요청 ID, 수락·실행·terminal 결과, `material_placed`, Mission 수락 가능 표본 | PLC Adapter Mapping Configuration |
 | Isaac 설비 | Asset/Joint, 센서 Prim과 I/O Binding | Cell / Equipment Configuration |
-| Robot Task | 정적 Pick/Place 목표, Logical Attach, Task Profile | Robot/Tool/Cell Profiles + Calibration |
+| Robot Task | 정적 Pick/Place 목표, 상면 흡착 전략, Task Profile | Robot/Tool/Cell Profiles + Calibration |
 
 Modbus 레지스터 번호, PLC 타이머, 실제 티칭 좌표와 속도는 이 설계서가 아닌 해당 구성의 정식 원본에서 관리한다.
 

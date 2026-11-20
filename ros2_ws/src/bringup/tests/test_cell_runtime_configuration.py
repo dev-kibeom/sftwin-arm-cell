@@ -103,7 +103,10 @@ def test_exported_catalog_requires_the_same_installed_teaching_for_each_arrival(
     config = load_profile(CONFIG / 'conveyor_pnp_profile.yaml')
     from conveyor_pnp_cell.configuration import compile_cell
     cell = config['cell']
-    assert json.loads(config['motion']['configured_grasp_cycles_json']) == {}
+    catalog = json.loads(config['motion']['configured_grasp_cycles_json'])
+    assert set(catalog) == {'slot_1', 'slot_2'}
+    assert catalog['slot_1']['grasp'] == {'strategy': 'surface_suction'}
+    assert config['motion']['tool_grasp_strategies'] == ['surface_suction']
     fixed = dict(cell['configured_supply'], approach_motion='approach', insertion_motion='pick',
                  transfer_motion='place', retreat_motion='retreat')
     cell['conveyor']['teaching'] = dict(cycle=fixed, first=10, count=2)

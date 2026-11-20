@@ -32,7 +32,7 @@ def build_robot_world(configuration, world_cls=None, add_reference_to_stage=None
     import xml.etree.ElementTree as ET
     from isaac_runtime.robot_binding import RobotBinding, author_initial_pose
     tool=configuration['tool']['runtime']
-    contracted={name:model['upper'] for name,model in tool['joint_model'].items()}
+    contracted={name:model['upper'] for name,model in tool.get('joint_model', {}).items()}
     author_initial_pose(stage,RobotBinding.from_runtime(configuration),ET.parse(model.generated_urdf).getroot(),contracted)
     old = world.scene.get_object('selected_robot')
     if old is not None:

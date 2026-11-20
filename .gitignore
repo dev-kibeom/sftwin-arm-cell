@@ -28,3 +28,8 @@
 
 # Derived long-finger C10 experiment artifacts.
 /infra/isaac_sim/assets/urdf/generated/m0609_hand_e_c10_long.urdf
+
+# Derived suction assembly artifacts.
+/infra/isaac_sim/assets/urdf/generated/m0609_suction.urdf
+/infra/isaac_sim/assets/usd/m0609_suction_generated.*
+/infra/isaac_sim/assets/usd/configuration/m0609_suction_generated_*
