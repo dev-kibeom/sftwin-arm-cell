@@ -36,3 +36,40 @@ TEST(NearbyJoint, KeepsTheSamePoseWithoutUnnecessaryFullTurnsOrLimitClamping) {
   bounds.min_position_=0.;
   EXPECT_DOUBLE_EQ(arm_cell_motion::nearest_revolute_equivalent(6.2682,0.,bounds),6.2682);
 }
+
+TEST(TeachingBlend, RoundsOnlyTheJunctionAndPreservesBothStopEndpoints)
+{
+  trajectory_msgs::msg::JointTrajectory incoming, outgoing;
+  incoming.joint_names = outgoing.joint_names = {"j1", "j2"};
+  const auto add = [](auto & path, double x, double y) {
+      trajectory_msgs::msg::JointTrajectoryPoint point;
+      point.positions = {x, y};
+      path.points.push_back(point);
+    };
+  add(incoming, 0., 0.);
+  add(incoming, .5, 0.);
+  add(incoming, 1., 0.);
+  add(outgoing, 1., 0.);
+  add(outgoing, 1., .5);
+  add(outgoing, 1., 1.);
+  moveit_msgs::msg::RobotTrajectory result;
+  ASSERT_TRUE(blend_taught_joint_paths({incoming, outgoing}, result));
+  const auto & points = result.joint_trajectory.points;
+  ASSERT_GT(points.size(), 5U);
+  EXPECT_EQ(points.front().positions, incoming.points.front().positions);
+  EXPECT_EQ(points[1].positions, incoming.points[1].positions);
+  EXPECT_EQ(points[points.size() - 2].positions, outgoing.points[1].positions);
+  EXPECT_EQ(points.back().positions, outgoing.points.back().positions);
+  bool curved = false;
+  for (const auto & point : points) {
+    EXPECT_NE(point.positions, incoming.points.back().positions);
+    if (point.positions[0] < 1. && point.positions[1] > 0.) {
+      EXPECT_LT(std::hypot(1. - point.positions[0], point.positions[1]), .04);
+      curved = true;
+    }
+  }
+  EXPECT_TRUE(curved);
+  outgoing.points.front().positions[0] += .01;
+  EXPECT_FALSE(blend_taught_joint_paths({incoming, outgoing}, result));
+  EXPECT_TRUE(result.joint_trajectory.points.empty());
+}

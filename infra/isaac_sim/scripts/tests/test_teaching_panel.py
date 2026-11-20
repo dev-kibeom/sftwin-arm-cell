@@ -20,7 +20,7 @@ def field(value):
 
 def test_point_update_submits_operator_units_as_metres_radians_and_scales():
     panel = module.TeachingPanel(None)
-    selected = {'point': 'insert', 'point_frame': 'infeed', 'mode': 'linear'}
+    selected = {'point': 'insert', 'point_frame': 'infeed', 'mode': 'linear', 'junction': 'Blend'}
     panel._selected = selected.get
     panel._point_pose = [field(v) for v in [100, -200, 300, 90, -45, 180]]
     panel._speed = field(25)
@@ -37,6 +37,7 @@ def test_point_update_submits_operator_units_as_metres_radians_and_scales():
     assert point['pose'] == pytest.approx([.1, -.2, .3, math.pi / 2, -math.pi / 4, math.pi])
     assert point['velocity_scale'] == .25
     assert point['acceleration_scale'] == .1
+    assert point['blend'] is True
 
 
 @pytest.mark.parametrize('axis,sign,expected', [(0, -1, -.002), (5, 1, math.pi / 180)])

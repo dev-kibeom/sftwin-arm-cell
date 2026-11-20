@@ -236,6 +236,7 @@ class TeachingSession:
             if not name or name in candidate['points']:
                 raise ValueError('Use a new nonempty point name.')
             point = deepcopy(next(iter(candidate['points'].values())))
+            point.pop('blend', None)
             candidate['points'][name] = point
             self._changed(candidate)
         elif operation == 'delete_point':

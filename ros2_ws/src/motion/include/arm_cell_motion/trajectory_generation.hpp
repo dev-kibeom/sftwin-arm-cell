@@ -55,6 +55,10 @@ std::uint8_t generate_linear_joint_trajectory(
   moveit_msgs::msg::RobotTrajectory & trajectory,
   const std::function<std::uint8_t()> & interruption = {},
   LinearJointChangeDiagnostics * diagnostics = nullptr);
+// Join adjacent rest-to-rest geometric segments at their shared endpoint.
+bool blend_taught_joint_paths(
+  const std::vector<trajectory_msgs::msg::JointTrajectory> & segments,
+  moveit_msgs::msg::RobotTrajectory & result);
 bool retime_joint_trajectory(
   const moveit::core::RobotModelConstPtr & model, const std::string & group,
   const moveit::core::RobotState & start, moveit_msgs::msg::RobotTrajectory & trajectory,

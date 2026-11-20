@@ -64,6 +64,7 @@ configure_file(src/trajectory_motion_tree_xml.hpp.in generated/trajectory_motion
 
 add_library(${PROJECT_NAME}_core
   src/trajectory_generation.cpp
+  src/teaching_blend.cpp
   src/motion_transport_teaching.cpp
   src/trajectory_motion_bt.cpp
   src/taught_motion_trajectory.cpp

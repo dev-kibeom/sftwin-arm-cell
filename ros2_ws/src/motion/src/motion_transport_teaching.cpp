@@ -6,6 +6,7 @@
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/robot_state/conversions.h>
 #include <nlohmann/json.hpp>
+#include <algorithm>
 
 namespace arm_cell_motion
 {
@@ -29,8 +30,12 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     waypoints.push_back(waypoint);
   }
   std::size_t waypoint_number = 0;
+  std::vector<trajectory_msgs::msg::JointTrajectory> blend_segments;
+  sensor_msgs::msg::JointState blend_start;
+  bool blend_check_requested = false;
   for (const auto & waypoint : waypoints) {
     ++waypoint_number;
+    const bool blended = waypoint.blend || !blend_segments.empty();
     const auto permission = [&]() -> uint8_t {
         if (interruption) {
           const auto cause = interruption();
@@ -52,10 +57,17 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
     if (taught_joint_limits_.size() != arm_joint_names_.size())
     {return Code::TASK_RESULT_INVALID_GOAL;}
+    if (blended && blend_segments.empty()) {
+      blend_start = measured;
+      blend_check_requested = false;
+    }
+    if (!blend_segments.empty()) {
+      start_positions = blend_segments.back().points.back().positions;
+    }
     moveit::core::RobotModelConstPtr model;
     std::unique_ptr<moveit::core::RobotState> start;
     const auto & joint_goal = joint_target ? taught.joint_positions : waypoint.joint_positions;
-    if (joint_goal.empty() || waypoint.motion != "MoveJ") {
+    if (blended || joint_goal.empty() || waypoint.motion != "MoveJ") {
       std::lock_guard<std::mutex> lock(move_group_state_->mutex);
       if (!move_group_state_->move_group) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
       if (!move_group_state_->teaching_model) {
@@ -70,10 +82,13 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
       start->setToDefaultValues();
       if (!moveit::core::jointStateToRobotState(measured, *start))
       {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
-      start->update();
       const auto * joints = model->getJointModelGroup(planning_group_);
-      if (!joints || joints->getVariableNames() != arm_joint_names_ ||
-        !start->satisfiesBounds(joints)) {return Code::TASK_RESULT_INVALID_GOAL;}
+      if (!joints || joints->getVariableNames() != arm_joint_names_) {
+        return Code::TASK_RESULT_INVALID_GOAL;
+      }
+      if (blended) {start->setJointGroupPositions(joints, start_positions);}
+      start->update();
+      if (!start->satisfiesBounds(joints)) {return Code::TASK_RESULT_INVALID_GOAL;}
     }
     geometry_msgs::msg::Pose pose;
     pose.position.x = waypoint.pose[0]; pose.position.y = waypoint.pose[1];
@@ -91,10 +106,11 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     plan.request.phase = arm_cell_interfaces::msg::MotionTaskPhase::TASK_PHASE_EXECUTING;
     plan.request.motion_goal_uuid = execution_id;
     plan.request.interruption_result = interruption;
-    plan.start_state = measured;
+    plan.start_state = blended ? blend_start : measured;
     std::vector<double> target_joints;
     std::string detail;
     bool scene_collision_checked = false;
+    const auto first_waypoint_number = waypoint_number - blend_segments.size();
     LinearJointChangeDiagnostics linear_joint_change;
     const auto record = [&](const std::string & stage, uint8_t code, bool terminal = false) {
         if (!diagnostics_capture_enabled_) {return;}
@@ -115,6 +131,15 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
           {"scene_collision_check_requested", waypoint.motion == "MoveJChecked" ||
             waypoint.motion == "MoveLChecked" || waypoint.motion == "MovePlanned"}};
         evidence["movement_phase"] = terminal ? "waypoint_terminal" : "waypoint_prepared";
+        if (blended) {
+          evidence["blend_first_waypoint_number"] = first_waypoint_number;
+          evidence["start_joint_positions"] = nlohmann::json::array();
+          std::vector<double> group_start_positions;
+          if (extract_arm_positions(blend_start, group_start_positions)) {
+            evidence["start_joint_positions"] = group_start_positions;
+          }
+          evidence["scene_collision_check_requested"] = blend_check_requested;
+        }
         if (waypoint.motion == "MoveL" || waypoint.motion == "MoveLChecked") {
           evidence["linear_joint_change"] = {
             {"available", linear_joint_change.available}, {"execution_gate", false},
@@ -177,9 +202,12 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         const auto result = generate_linear_joint_trajectory(
           *start, planning_group_, "sf_grasp_tcp", target, trajectory, interruption,
           diagnostics_capture_enabled_ ? &linear_joint_change : nullptr);
-        return result == Code::TASK_RESULT_SUCCESS ? retime(trajectory) : result;
+        if (result != Code::TASK_RESULT_SUCCESS) {return result;}
+        if (!blended) {return retime(trajectory);}
+        plan.trajectory = std::move(trajectory.joint_trajectory);
+        return Code::TASK_RESULT_SUCCESS;
       };
-    operations.check_trajectory_collision = [&]() -> uint8_t {
+    const auto check_trajectory_collision = [&]() -> uint8_t {
         if (!planning_scene_client_ ||
           !planning_scene_client_->wait_for_service(std::chrono::milliseconds(500)))
         {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
@@ -202,6 +230,11 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
           detail = "trajectory_collision_or_invalid_state";
           return Code::TASK_RESULT_PATH_OBSTRUCTED;
         }
+        return Code::TASK_RESULT_SUCCESS;
+      };
+    operations.check_trajectory_collision = [&]() -> uint8_t {
+        if (!blended) {return check_trajectory_collision();}
+        blend_check_requested = true;
         return Code::TASK_RESULT_SUCCESS;
       };
     operations.plan_collision_free_path = [&]() -> uint8_t {
@@ -231,6 +264,40 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         return operations.check_trajectory_collision();
       };
     operations.execute_trajectory = [&]() -> uint8_t {
+        if (blended) {
+          blend_segments.push_back(std::move(plan.trajectory));
+          if (waypoint.blend) {return Code::TASK_RESULT_SUCCESS;}
+
+          moveit_msgs::msg::RobotTrajectory trajectory;
+          if (!blend_taught_joint_paths(blend_segments, trajectory)) {
+            detail = "invalid_teaching_blend_junction";
+            return Code::TASK_RESULT_INVALID_GOAL;
+          }
+          if (!moveit::core::jointStateToRobotState(blend_start, *start)) {
+            return Code::TASK_RESULT_BACKEND_UNAVAILABLE;
+          }
+          start->update();
+          if (const auto timed = retime(trajectory); timed != Code::TASK_RESULT_SUCCESS) {
+            return timed;
+          }
+          if (blend_check_requested) {
+            const auto checked = check_trajectory_collision();
+            if (checked != Code::TASK_RESULT_SUCCESS) {return checked;}
+          }
+          sensor_msgs::msg::JointState latest;
+          std::vector<double> actual;
+          if (const auto cause = permission(); cause != Code::TASK_RESULT_SUCCESS) {return cause;}
+          if (!measured_joint_state(latest) || !current_state_fresh() ||
+            !extract_arm_positions(latest, actual))
+          {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
+          const auto & initial = plan.trajectory.points.front().positions;
+          if (!std::equal(initial.begin(), initial.end(), actual.begin(),
+              [this](double a, double b) {return std::abs(a - b) <= trajectory_goal_tolerance_rad_;}))
+          {
+            detail = "teaching_blend_start_changed";
+            return Code::TASK_RESULT_INVALID_GOAL;
+          }
+        }
         record("", Code::TASK_RESULT_SUCCESS);
         auto limits = taught_joint_limits_;
         for (auto & limit : limits) {
@@ -251,7 +318,9 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         return wait_for_joint_target_result();
       };
     const auto result = run_trajectory_motion(waypoint.motion, operations);
-    record(result.failure_stage, result.code, true);
+    if (!waypoint.blend || result.code != Code::TASK_RESULT_SUCCESS) {
+      record(result.failure_stage, result.code, true);
+    }
     if (result.code != Code::TASK_RESULT_SUCCESS) {
       RCLCPP_WARN(
         node_->get_logger(),
@@ -260,7 +329,8 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         motion_result_code_name(result.code), detail.c_str());
       return result.code;
     }
+    if (!waypoint.blend) {blend_segments.clear();}
   }
-  return Code::TASK_RESULT_SUCCESS;
+  return blend_segments.empty() ? Code::TASK_RESULT_SUCCESS : Code::TASK_RESULT_INVALID_GOAL;
 }
 }  // namespace arm_cell_motion

@@ -79,3 +79,19 @@ def test_motion_names_select_bt_compositions_independently_of_point_geometry():
         assert waypoint['motion'] == name
         assert 'mode' not in waypoint
         assert waypoint['pose'] == pytest.approx(resolve_point(p, 'pick', {}))
+
+
+def test_blend_is_opt_in_at_the_junction_with_the_next_point():
+    p = program()
+    p['points']['extract'] = dict(p['points']['pick'], blend=True)
+    p['sequences']['tape_transfer'] = ['extract', 'pick']
+    waypoints = resolve_program(p, {})['tape_transfer']['cartesian_waypoints']
+    assert waypoints[0].get('blend') is True
+    assert not waypoints[1].get('blend', False)
+
+
+def test_blend_cannot_cross_the_end_of_a_motion():
+    p = program()
+    p['points']['pick']['blend'] = True
+    with pytest.raises(ValueError, match='blend'):
+        resolve_program(p, {})
