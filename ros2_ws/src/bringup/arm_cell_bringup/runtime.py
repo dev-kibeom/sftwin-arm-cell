@@ -8,6 +8,7 @@ import tempfile
 
 import yaml
 
+from .component_parameters import FIELDS, apply_component_parameters, available_fields
 from .material_catalog import load_material_catalog
 from .model_validation import validate_model_configuration
 from .tool_parameters import apply_tool_parameters
@@ -236,12 +237,47 @@ def write_recipes(recipes, output_root=None):
     return str(output)
 
 
-def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=None, tool_grasp=None, tool_parameters=None):
+def component_experiment_settings(profile_path):
+    """Return each selected component's YAML source and editable defaults."""
+    path = Path(profile_path).resolve()
+    profile = read(path)
+    configured = profile.get('kind') == 'arm-cell-configured-supply-profile'
+    owned_motion = set(profile.get('motion', {}))
+    if configured:
+        for owner in ('robot', 'tool'):
+            owner_config = read(resolve(profile['profiles'][owner], path.parent))
+            owned_motion.update(owner_config['motion'])
+    settings = {}
+    for section, reference in profile['components'].items():
+        if section not in FIELDS:
+            continue
+        source = resolve(reference, path.parent)
+        component = read(source)
+        fields = available_fields(section, component, configured_supply=configured,
+                                  owned_motion_keys=owned_motion)
+        settings[section] = (source, {
+            key: (field, component[key])
+            for key, field in fields.items()
+        })
+    return settings
+
+
+def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=None, tool_grasp=None, tool_parameters=None,
+                 component_parameters=None):
     path = Path(path).expanduser().resolve()
     config = read(path)
+    if component_parameters is None:
+        component_parameters = {}
+    elif not isinstance(component_parameters, dict):
+        raise ValueError('Component experiment settings require a mapping')
+    if component_parameters and 'components' not in config:
+        raise ValueError('Component experiment settings require a source deployment profile')
     if config.get('kind') == 'arm-cell-configured-supply-profile':
         from .configured_supply import load_configured_profile
-        return load_configured_profile(config,path,tool_actuator=tool_actuator,tool_grasp=tool_grasp,tool_parameters=tool_parameters)
+        return load_configured_profile(
+            config, path, tool_actuator=tool_actuator, tool_grasp=tool_grasp,
+            tool_parameters=tool_parameters, component_parameters=component_parameters,
+        )
     if config.get('kind') in ('arm-cell-physical-fixture','arm-cell-model-experiment'):
         raise ValueError('Experiment operator profiles were removed; select a registered deployment and Grasp Mode')
     if config.get('kind') == 'arm-cell-runtime-configuration':
@@ -271,6 +307,7 @@ def load_profile(path, *, material_id=None, pick_offset_z_m=None, tool_actuator=
         if section in config:
             raise ValueError(f'Duplicate configuration owner: {section}')
         config[section] = read(resolve(reference, path.parent))
+    apply_component_parameters(config, component_parameters)
     owners = compose_owner_profiles(config, path, tool_actuator=tool_actuator, tool_grasp=tool_grasp, tool_parameters=tool_parameters)
     if 'calibration_file' in config['vision']:
         raise ValueError('Duplicate configuration owner: vision.calibration_file')

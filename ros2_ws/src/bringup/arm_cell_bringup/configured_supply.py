@@ -3,6 +3,7 @@ import copy
 import importlib
 import json
 import sys
+from .component_parameters import apply_component_parameters
 from .runtime import read, resolve, selected_profiles, write_recipes, configure_grip_force, project_root
 from .model_validation import validate_assembly_configuration, finite_number, names
 
@@ -58,7 +59,8 @@ def radial_tool_model(config):
     return config
 
 
-def load_configured_profile(source, path, *, tool_actuator=None, tool_grasp=None, tool_parameters=None, **unused):
+def load_configured_profile(source, path, *, tool_actuator=None, tool_grasp=None, tool_parameters=None,
+                            component_parameters=None, **unused):
     from .tool_parameters import apply_tool_parameters
     config = {key:read(resolve(reference,path.parent)) for key,reference in source['components'].items()}
     config.update(use_sim_time=source.get('use_sim_time',True),readiness=source['readiness'],execution_scope='operational')
@@ -87,6 +89,9 @@ def load_configured_profile(source, path, *, tool_actuator=None, tool_grasp=None
     config['_mission_recipes']={mission['target_id']:copy.deepcopy(mission)}
     config['orchestration']=dict(material_source='configured_slots',mission_target_id=mission['target_id'],
         supply_id=supply['supply_id'],recipe_directory=write_recipes(config['_mission_recipes']))
+    owned_motion = set(source.get('motion', {})) | config['robot']['motion'].keys() | config['tool']['motion'].keys()
+    apply_component_parameters(config, component_parameters or {}, configured_supply=True,
+                               owned_motion_keys=owned_motion)
     motion=config['motion']
     motion.update(source.get('motion',{}))
     motion.update(config['robot']['motion'])

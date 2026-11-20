@@ -10,7 +10,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from PySide6.QtCore import QLockFile
-from PySide6.QtWidgets import QApplication, QFormLayout
+from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QFormLayout
 import launcher
 
 
@@ -94,6 +94,9 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
         assert '라이브 검증 전' in window.status.text()
     if robot == 'hcr14':
         assert '실험적 모델' in window.status.text()
+    settings = window.component_settings
+    field = settings.findChild(QDoubleSpinBox, 'motion.planning_velocity_scaling_factor')
+    field.setValue(0.05)
     calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
     exports = []
     original_export = launcher.export_selection
@@ -106,6 +109,7 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
     window.start_isaac()
     assert not window.isaac.isEnabled()
     assert all(not combo.isEnabled() for combo in window.selectors.values())
+    assert not settings.isEnabled()
     window.start_isaac()
     window.start_ros()
     window.start_ros()
@@ -137,6 +141,7 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
     ros = json.loads(window.runtime.read_text())
     assert isaac['configuration_sha256'] == ros['configuration_sha256']
     assert isaac['configuration']['robot']['robot_id'] == robot
+    assert isaac['configuration']['motion']['planning_velocity_scaling_factor'] == 0.05
     if robot == 'rb5_850':
         assert '라이브 검증 전' in window.status.text()
     if robot == 'hcr14':
@@ -497,3 +502,38 @@ def test_configured_preparation_failure_is_visible_and_does_not_start_isaac(app,
     until(app,window,lambda:window.run is None)
     assert 'unreachable teaching' in window.status.text()
     assert not calls
+
+
+
+def test_experiment_tabs_keep_edits_after_stop_and_restore_yaml_defaults(app, window, monkeypatch):
+    settings = window.component_settings
+    key = 'motion.planning_velocity_scaling_factor'
+    assert [settings.tabText(i) for i in range(settings.count())] == ['시뮬레이션', '모션', '비전']
+    field = settings.findChild(QDoubleSpinBox, key)
+    assert field.value() == 0.1
+    field.setValue(0.05)
+    assert field.styleSheet()
+    fake_spawn(window, monkeypatch, {'isaac': WAIT})
+    window.start_isaac()
+    until(app, window, lambda: 'started' in terminal_text(window, 'isaac'))
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)
+    assert settings.isEnabled()
+    assert field.value() == 0.05
+
+    window.reset_parameters.click()
+    assert settings.findChild(QDoubleSpinBox, key).value() == 0.1
+    assert window.selection()['component_parameters'] == {}
+
+    settings.findChild(QDoubleSpinBox, key).setValue(0.05)
+    robot = window.selectors['robot']
+    rb5 = str(launcher.ROOT / 'ros2_ws/src/motion/config/robots/rb5_850.yaml')
+    robot.setCurrentIndex(robot.findData(rb5))
+    assert settings.findChild(QDoubleSpinBox, key).value() == 0.1
+    settings.findChild(QDoubleSpinBox, key).setValue(0.05)
+
+    reopened = launcher.Launcher()
+    try:
+        assert reopened.selection()['component_parameters'] == {}
+    finally:
+        reopened.close()

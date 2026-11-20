@@ -12,7 +12,7 @@ import time
 
 from PySide6.QtCore import QLockFile, QSignalBlocker, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
-                              QLabel, QMainWindow, QPushButton, QDoubleSpinBox, QGroupBox, QScrollArea,
+                              QLabel, QMainWindow, QPushButton, QDoubleSpinBox, QGroupBox,
                               QVBoxLayout, QWidget)
 
 
@@ -20,6 +20,10 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
 from arm_cell_bringup.tool_parameters import available_fields, parameter_value, apply_tool_parameters
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
+if __package__:
+    from .component_settings import ComponentSettings
+else:
+    from component_settings import ComponentSettings
 
 
 PROFILE_OWNERS = ('cell', 'robot', 'tool')
@@ -80,7 +84,7 @@ def validation_note(entry):
         message += ' — 실험적 모델 · 단순화 형상 · 실물 일치 미검증'
     if status == 'live-verified':
         message += ' — 기본 설정 Isaac 라이브 확인'
-        if entry.get('tool_parameters'):
+        if entry.get('tool_parameters') or entry.get('component_parameters'):
             message += ' · 변경 설정 미검증'
     elif entry['tool_actuator'] == 'physics' or status == 'live-pending':
         message += ' — Isaac 라이브 검증 전 · 사용자 테스트용'
@@ -89,14 +93,18 @@ def validation_note(entry):
 
 def export_selection(entry, destination):
     # No parallel configuration engine or edited copies of source profiles.
-    return export_runtime_configuration(entry['profile'], destination,
-        tool_actuator=entry.get('tool_actuator'), tool_grasp=entry.get('tool_grasp'), tool_parameters=entry.get('tool_parameters'))
+    return export_runtime_configuration(
+        entry['profile'], destination, tool_actuator=entry.get('tool_actuator'),
+        tool_grasp=entry.get('tool_grasp'), tool_parameters=entry.get('tool_parameters'),
+        component_parameters=entry.get('component_parameters'),
+    )
 
 
 def preparation_command(entry, destination):
     command = [sys.executable, str(ROOT/'ros2_ws/src/bringup/scripts/export_runtime_configuration'),
                '--profile', str(entry['profile']), '--output', str(destination),
-               '--tool-parameters-json', json.dumps(entry.get('tool_parameters', {}))]
+               '--tool-parameters-json', json.dumps(entry.get('tool_parameters', {})),
+               '--component-parameters-json', json.dumps(entry.get('component_parameters', {}))]
     for option, key in [('--tool-actuator','tool_actuator'),('--tool-grasp','tool_grasp')]:
         if entry.get(key) is not None:command.extend([option,entry[key]])
     return command
@@ -171,12 +179,11 @@ class Launcher(QMainWindow):
         self.parameter_edits = {}
         self.parameter_panel = QWidget()
         self.parameter_layout = QVBoxLayout(self.parameter_panel)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self.parameter_panel)
-        layout.addWidget(scroll)
+        self.component_settings = ComponentSettings(self.parameter_panel)
+        layout.addWidget(self.component_settings)
+        layout.addWidget(QLabel('탭의 변경값은 이번 실행에 적용되며 YAML에 저장되지 않습니다.'))
         self.reset_parameters = QPushButton('기본값 복원')
-        self.reset_parameters.clicked.connect(self.refresh_parameters)
+        self.reset_parameters.clicked.connect(self.restore_parameters)
         layout.addWidget(self.reset_parameters)
         self.resize(760, 650)
         self.debug = QCheckBox('ROS 2 디버그 모드')
@@ -290,8 +297,20 @@ class Launcher(QMainWindow):
         show_advanced(False)
         self.validate()
 
+    def restore_parameters(self):
+        self.component_settings.load_profile(self.component_settings.profile)
+        self.refresh_parameters()
+
     def selection(self):
-        entry = selected_deployment(self.entries, {key: combo.currentData() for key, combo in self.selectors.items()})
+        choices = {key: combo.currentData() for key, combo in self.selectors.items()}
+        try:
+            entry = selected_deployment(self.entries, choices)
+        except ValueError:
+            if self.component_settings.profile is not None:
+                self.component_settings.load_profile(None)
+            raise
+        if entry['profile'] != self.component_settings.profile:
+            self.component_settings.load_profile(entry['profile'])
         pair = self.tool_mode.currentData()
         if pair not in self.mode_pairs:
             raise ValueError('Unsupported Tool actuator/grasp combination')
@@ -300,7 +319,8 @@ class Launcher(QMainWindow):
                       if edit.value() != parameter_value(runtime, path)}
         runtime.update(actuator=pair[0], grasp=pair[1])
         apply_tool_parameters(runtime, parameters)
-        return dict(entry, tool_actuator=pair[0], tool_grasp=pair[1], tool_parameters=parameters)
+        return dict(entry, tool_actuator=pair[0], tool_grasp=pair[1], tool_parameters=parameters,
+                    component_parameters=self.component_settings.overrides())
 
     def validate(self):
         self.tool_mode.setToolTip(self.tool_mode.currentData(Qt.ToolTipRole) or '')
@@ -314,7 +334,7 @@ class Launcher(QMainWindow):
         active = bool(self.processes or self.terminals) or self.stopping
         for combo in (*self.selectors.values(), self.tool_mode):
             combo.setEnabled(not active)
-        self.parameter_panel.setEnabled(not active)
+        self.component_settings.setEnabled(not active)
         self.reset_parameters.setEnabled(not active)
         self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
         self.isaac.setEnabled(valid and not active)
