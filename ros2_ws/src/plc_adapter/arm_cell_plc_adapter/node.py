@@ -7,6 +7,7 @@ from arm_cell_interfaces.action import ExecuteCycle
 from pymodbus.exceptions import ModbusException
 import rclpy
 from rclpy.action import ActionClient
+from rclpy.action.client import ClientGoalHandle
 from rclpy.node import Node
 from unique_identifier_msgs.msg import UUID
 
@@ -19,6 +20,23 @@ RESULT_STATES = {
     GoalStatus.STATUS_CANCELED: State.CANCELED,
     GoalStatus.STATUS_ABORTED: State.ABORTED,
 }
+
+
+def completed_response(future, response_type):
+    """Return None while pending; surface unconfirmed ROS responses to the receipt owner."""
+    if future is None:
+        return None
+    if future.cancelled():
+        raise RuntimeError('ROS response future was cancelled')
+    if not future.done():
+        return None
+    error = future.exception()
+    if error is not None:
+        raise RuntimeError(f'ROS response future failed: {error}') from error
+    response = future.result()
+    if not isinstance(response, response_type):
+        raise RuntimeError(f'Expected {response_type.__name__}, got {type(response).__name__}')
+    return response
 
 
 class PlcTaskAdapter(Node):
@@ -68,9 +86,10 @@ class PlcTaskAdapter(Node):
         last = self.receipts.latest()
         if last is None:
             return
-        if self.acceptance is not None and self.acceptance.done():
-            future, self.acceptance = self.acceptance, None
-            self.goal_handle = future.result()
+        handle = completed_response(self.acceptance, ClientGoalHandle)
+        if handle is not None:
+            self.acceptance = None
+            self.goal_handle = handle
             if not self.goal_handle.accepted:
                 self.receipts.update(last.command_id, State.REJECTED)
                 self.goal_handle = None
@@ -78,9 +97,9 @@ class PlcTaskAdapter(Node):
             if last.state == State.SUBMITTED:
                 self.receipts.update(last.command_id, State.ACCEPTED)
             self.result = self.goal_handle.get_result_async()
-        if self.result is not None and self.result.done():
-            future, self.result = self.result, None
-            wrapped = future.result()
+        wrapped = completed_response(self.result, ExecuteCycle.Impl.GetResultService.Response)
+        if wrapped is not None:
+            self.result = None
             self.goal_handle = None
             state = RESULT_STATES.get(wrapped.status)
             if state is None:

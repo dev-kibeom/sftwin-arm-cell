@@ -7,18 +7,23 @@ import subprocess
 import threading
 import time
 
+from action_msgs.msg import GoalStatus, GoalStatusArray
 from ament_index_python.packages import get_package_prefix
-from arm_cell_interfaces.action import ExecuteConfiguredGrasp
+from arm_cell_interfaces.action import ExecuteConfiguredGrasp, ExecuteCycle
 from arm_cell_interfaces.msg import ConfiguredSupplyState, SafetyState
 from arm_cell_interfaces.srv import ConfiguredSupply
 from domain_coordinator import domain_id
 from pymodbus.datastore import ModbusSequentialDataBlock, ModbusServerContext, ModbusSlaveContext
 from pymodbus.server.sync import ModbusTcpServer
+import pytest
 import rclpy
 from rclpy.action import ActionServer
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import qos_profile_action_status_default
+from rclpy.time import Time
+from rosgraph_msgs.msg import Clock
 
 from arm_cell_plc_adapter.receipts import State
 
@@ -126,7 +131,42 @@ class RobotFixture(Node):
         return result
 
 
-def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch):
+class MissionClock:
+    """Advance only the isolated Mission server's ROS clock; probe its real result service."""
+    def __init__(self, node):
+        self.offset = 0
+        self.active_uuid = None
+        node.create_subscription(GoalStatusArray, '/orchestration/execute_cycle/_action/status',
+                                 self.on_status, qos_profile_action_status_default)
+        self.publisher = node.create_publisher(Clock, '/clock', 10)
+        node.create_timer(.04, self.publish)
+        self.client = node.create_client(ExecuteCycle.Impl.GetResultService,
+                                         '/orchestration/execute_cycle/_action/get_result')
+
+    def on_status(self, message):
+        for goal in message.status_list:
+            if goal.status == GoalStatus.STATUS_EXECUTING:
+                self.active_uuid = bytes(goal.goal_info.goal_id.uuid)
+
+    def expire_result(self, goal_uuid, expected_status):
+        assert self.status(goal_uuid) == expected_status
+        self.offset += 901
+        wait_for(lambda: self.status(goal_uuid) == GoalStatus.STATUS_UNKNOWN)
+
+    def publish(self):
+        stamp = Time(nanoseconds=time.monotonic_ns() + self.offset * 10**9)
+        self.publisher.publish(Clock(clock=stamp.to_msg()))
+
+    def status(self, goal_uuid):
+        request = ExecuteCycle.Impl.GetResultService.Request()
+        request.goal_id.uuid = list(goal_uuid)
+        future = self.client.call_async(request)
+        wait_for(future.done)
+        return future.result().status
+
+
+@pytest.mark.parametrize('expire', [False, True], ids=['retained', 'expired'])
+def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, expire):
     bank = ModbusSlaveContext(ir=ModbusSequentialDataBlock(0, [0] * 32),
                               hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
     def reply():
@@ -141,6 +181,7 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch):
         stack.callback(rclpy.try_shutdown)
         robot = RobotFixture()
         stack.callback(robot.destroy_node)
+        clock = MissionClock(robot) if expire else None
         executor = MultiThreadedExecutor(num_threads=3)
         executor.add_node(robot)
         thread = threading.Thread(target=executor.spin)
@@ -150,7 +191,8 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch):
         stack.callback(robot.finish.set)
         stack.enter_context(process('arm_cell_orchestration', 'configured_supply_mission.py',
                                     '--ros-args', '-p', 'supply_id:=test_supply',
-                                    '-p', 'mission_target_id:=test_part'))
+                                    '-p', 'mission_target_id:=test_part',
+                                    '-p', f'use_sim_time:={str(expire).lower()}'))
         plc = stack.enter_context(ExitStack())
         port = plc.enter_context(plc_server(bank))
         adapter = stack.enter_context(ExitStack())
@@ -174,8 +216,13 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch):
         wait_for(lambda: reply()[5] > heartbeat + 2)
         assert robot.goals == ['first']
         plc.close()
+        if expire:
+            wait_for(lambda: clock.active_uuid is not None)
+            first_uuid = clock.active_uuid
         robot.finish.set()
         wait_for(lambda: not robot.inventory.occupied[0])
+        if expire:
+            clock.expire_result(first_uuid, GoalStatus.STATUS_SUCCEEDED)
         plc.enter_context(plc_server(bank, port))
         wait_for(lambda: reply()[1:5] == [1, State.SUCCEEDED, 7, 2])
         robot.finish.clear()
@@ -185,14 +232,25 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch):
         adapter.close()
         robot.finish.set()
         wait_for(lambda: not robot.inventory.reservation_id)
+        if expire:
+            plc.close()
+            wait_for(lambda: clock.active_uuid != first_uuid)
+            clock.expire_result(clock.active_uuid, GoalStatus.STATUS_ABORTED)
+            plc.enter_context(plc_server(bank, port))
         start_adapter()
-        wait_for(lambda: reply()[1:5] == [2, State.ABORTED, 3, 2])
+        expected = [2, State.UNCERTAIN, 0, 0] if expire else [2, State.ABORTED, 3, 2]
+        wait_for(lambda: reply()[1:5] == expected)
         assert robot.inventory.occupied[1]
         bank.setValues(4, 7, [1, 0])
         wait_for(lambda: reply()[1:5] == [1, State.SUCCEEDED, 7, 2])
-        # A new request rejected by Mission admission is also a durable receipt.
-        robot.safety.valid = False
-        time.sleep(.6)  # exceeds the configured Mission safety freshness window
+        if not expire:
+            robot.safety.valid = False
+            time.sleep(.6)  # exceeds the configured Mission safety freshness window
         bank.setValues(4, 7, [3, 0])
-        wait_for(lambda: reply()[1:5] == [3, State.REJECTED, 0, 0])
+        if expire:
+            heartbeat = reply()[5]
+            wait_for(lambda: reply()[5] > heartbeat + 4)
+            assert reply()[1:5] == expected
+        else:
+            wait_for(lambda: reply()[1:5] == [3, State.REJECTED, 0, 0])
         assert robot.goals == ['first', 'second']
