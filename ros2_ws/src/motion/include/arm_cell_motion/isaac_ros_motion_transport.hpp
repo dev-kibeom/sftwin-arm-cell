@@ -2,6 +2,7 @@
 
 #include "arm_cell_motion/taught_motion.hpp"
 #include "arm_cell_motion/taught_motion_trajectory.hpp"
+#include "arm_cell_motion/prepared_teaching.hpp"
 
 #include "arm_cell_motion/grasp_collision_validator.hpp"
 
@@ -125,9 +126,8 @@ public:
     const std::string & motion, const std::string & execution_id,
     const std::function<uint8_t()> & interruption) override;
   void configure_taught_motions(
-    TaughtMotions motions, std::vector<JointMotionLimit> limits = {})
-  {std::lock_guard<std::mutex> lock(teaching_mutex_);
-    taught_motions_ = std::move(motions); taught_joint_limits_ = std::move(limits);}
+    TaughtMotions motions, std::vector<JointMotionLimit> limits = {},
+    std::vector<std::string> cycle = {});
   void set_teaching_submission_check(std::function<uint8_t()> check)
   {teaching_submission_check_ = std::move(check);}
   bool replace_teaching(const std::string & json, std::string & detail);
@@ -196,7 +196,11 @@ private:
     const std::vector<JointMotionLimit> * limits = nullptr);
   uint8_t execute_teaching_motion(
     const TaughtMotion &, const std::string &, const std::string &,
-    const std::function<uint8_t()> &);
+    const std::function<uint8_t()> &, const std::vector<PreparedTeachingEntry> * = nullptr);
+  // Caller holds the MoveGroup mutex while constructing or using its IK solver.
+  moveit::core::RobotModelConstPtr teaching_model_locked();
+  void start_teaching_preparation();
+  void run_teaching_preparation();
   bool execute_taught_entry(
     const NormalizedTrajectoryPlan & entry, const std::function<bool()> & discard_if_interrupted,
     const std::vector<JointMotionLimit> & effective_limits);
@@ -313,6 +317,13 @@ private:
   mutable std::mutex teaching_mutex_;
   TaughtMotions taught_motions_;
   std::vector<JointMotionLimit> taught_joint_limits_;
+  std::vector<std::string> taught_cycle_motion_names_;
+  std::shared_ptr<const PreparedTeaching> prepared_teaching_;
+  std::condition_variable teaching_prepare_condition_;
+  std::thread teaching_prepare_worker_;
+  std::uint64_t teaching_generation_{0};
+  bool teaching_shutdown_{false};
+  std::atomic<bool> teaching_startup_pending_{false};
   std::vector<double> home_joint_positions_;
   std::vector<double> retract_joint_positions_;
   std::vector<double> place_tray_return_joint_positions_;

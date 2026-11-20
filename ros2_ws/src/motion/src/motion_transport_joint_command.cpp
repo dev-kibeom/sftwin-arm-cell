@@ -360,6 +360,7 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
     pending_motion_planning_evidence_.clear();
   }
   TaughtMotion taught;
+  std::shared_ptr<const PreparedTeaching> prepared;
   {
     std::lock_guard<std::mutex> registry_lock(teaching_mutex_);
     if (!motion.empty() && motion.front() == '{') {
@@ -374,10 +375,16 @@ uint8_t IsaacRosMotionTransport::execute_taught_motion(
       const auto found = taught_motions_.find(motion);
       if (found == taught_motions_.end()) {return Code::TASK_RESULT_INVALID_GOAL;}
       taught = found->second;
+      prepared = prepared_teaching_;
     }
   }
   if (!taught.cartesian_waypoints.empty() || taught.joint_path.empty()) {
-    return execute_teaching_motion(taught, motion, execution_id, interruption);
+    const std::vector<PreparedTeachingEntry> * entries = nullptr;
+    if (prepared) {
+      const auto found = prepared->find(motion);
+      if (found != prepared->end()) {entries = &found->second;}
+    }
+    return execute_teaching_motion(taught, motion, execution_id, interruption, entries);
   }
   const auto interrupted = [&]() {
       return interruption ? interruption() : Code::TASK_RESULT_SUCCESS;
@@ -513,8 +520,13 @@ bool IsaacRosMotionTransport::replace_teaching(const std::string & json, std::st
   try {
     auto replacement = parse_taught_motions(
       json, home_joint_positions_, place_tray_return_joint_positions_, arm_joint_names_.size());
-    std::lock_guard<std::mutex> lock(teaching_mutex_);
-    taught_motions_.swap(replacement);
+    {
+      std::lock_guard<std::mutex> lock(teaching_mutex_);
+      taught_motions_.swap(replacement);
+      prepared_teaching_.reset();
+      ++teaching_generation_;
+    }
+    teaching_prepare_condition_.notify_one();
     return true;
   } catch (const std::exception & error) {
     detail = error.what();

@@ -13,6 +13,7 @@
 #include "arm_cell_motion/taught_motion.hpp"
 #include "arm_cell_motion/taught_motion_trajectory.hpp"
 #include "arm_cell_motion/trajectory_generation.hpp"
+#include "arm_cell_motion/prepared_teaching.hpp"
 
 
 TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
@@ -151,6 +152,28 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
   moveit::core::RobotState state(model); state.setToDefaultValues();
   state.setJointGroupPositions(group, config.at("home_joint_positions").get<std::vector<double>>());
   state.update();
+  const auto cycle = motion.at("taught_cycle_motion_names").get<std::vector<std::string>>();
+  std::mutex solver_mutex;
+  const auto prepared = prepare_teaching_cycle(registry, cycle, state, group_name, limits, solver_mutex);
+  ASSERT_EQ(prepared.size(), cycle.size());
+  for (const auto & name : cycle) {
+    ASSERT_FALSE(prepared.at(name).empty()) << name;
+  }
+  const auto & approach_entries = prepared.at("tape_approach");
+  const auto & transfer_entries = prepared.at("tape_transfer");
+  ASSERT_EQ(approach_entries.size(), 2U);
+  EXPECT_NE(approach_entries[0].trajectory.points.front().positions,
+    approach_entries[1].trajectory.points.front().positions);
+  EXPECT_EQ(approach_entries[0].trajectory.points.back().positions,
+    approach_entries[1].trajectory.points.back().positions);
+  ASSERT_FALSE(transfer_entries.empty());
+  EXPECT_EQ(transfer_entries.front().first_waypoint, 0U);
+  EXPECT_GT(transfer_entries.front().last_waypoint, 0U);
+  auto mismatched = transfer_entries.front().trajectory.points.front().positions;
+  mismatched[0] += .01;
+  EXPECT_EQ(find_prepared_teaching(transfer_entries, 0, mismatched, .003), nullptr);
+  ASSERT_NE(find_prepared_teaching(transfer_entries, 0,
+    transfer_entries.front().trajectory.points.front().positions, .003), nullptr);
   planning_scene::PlanningScene static_scene(model);
   for (const auto & box : config.at("cell").at("tape_roll").at("static_boxes")) {
     const auto size = box.at("geometry").at("dimensions_m").get<std::array<double, 3>>();
@@ -168,106 +191,75 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
     }
   }
   std::size_t blended_groups = 0;
-  for (const auto * sequence : {"tape_approach", "tape_insert", "tape_transfer", "tape_retreat"}) {
+  const auto base = state.getGlobalLinkTransform("base_link");
+  for (const auto & sequence : cycle) {
     const auto & taught = registry.at(sequence);
-    std::vector<trajectory_msgs::msg::JointTrajectory> blend_segments;
-    moveit::core::RobotState blend_start(state);
-    for (const auto & point : taught.cartesian_waypoints) {
-      const bool blended = point.blend || !blend_segments.empty();
-      if (blended && blend_segments.empty()) {blend_start = state;}
-      SCOPED_TRACE(std::string(sequence) + ":" + point.motion);
-      Eigen::Isometry3d target = Eigen::Isometry3d::Identity();
-      target.linear() = Eigen::Quaterniond(point.pose[6], point.pose[3], point.pose[4], point.pose[5]).toRotationMatrix();
-      target.translation() = Eigen::Vector3d(point.pose[0], point.pose[1], point.pose[2]);
-      target = state.getGlobalLinkTransform("base_link") * target;
-      trajectory_msgs::msg::JointTrajectory trajectory;
-      if (point.motion == "MoveJ") {
-        ASSERT_EQ(point.joint_positions.size(), names.size())
-          << "Default Tape Cell MoveJ points must select a taught joint target";
-        std::vector<double> start;
-        state.copyJointGroupPositions(group, start);
-        const auto generated = make_taught_joint_trajectory(names, start, point.joint_positions, limits,
-          taught.velocity_scale, taught.acceleration_scale);
-        ASSERT_TRUE(generated.valid) << generated.reason;
-        trajectory = generated.trajectory;
-      } else {
-        ASSERT_EQ(point.motion, "MoveL");
-        moveit_msgs::msg::RobotTrajectory generated;
-        ASSERT_EQ(generate_linear_joint_trajectory(state, group_name, "sf_grasp_tcp", target, generated), Code::TASK_RESULT_SUCCESS);
-        if (!blended) {
-          ASSERT_TRUE(retime_joint_trajectory(model, group_name, state, generated,
-            taught.velocity_scale, taught.acceleration_scale, &limits));
-        }
-        trajectory = generated.joint_trajectory;
-      }
+    const auto & entries = prepared.at(sequence);
+    for (std::size_t first = 0; first < taught.cartesian_waypoints.size(); ) {
+      SCOPED_TRACE(sequence);
+      std::vector<double> current;
+      state.copyJointGroupPositions(group, current);
+      const auto * entry = find_prepared_teaching(entries, first, current, 1e-9);
+      ASSERT_NE(entry, nullptr);
+      const auto & trajectory = entry->trajectory;
       ASSERT_GE(trajectory.points.size(), 2U);
-      if (blended) {
-        blend_segments.push_back(trajectory);
-        if (point.blend) {
-          state.setJointGroupPositions(group, trajectory.points.back().positions);
-          state.update();
-          continue;
-        }
-        moveit_msgs::msg::RobotTrajectory combined;
-        ASSERT_TRUE(blend_taught_joint_paths(blend_segments, combined));
-        EXPECT_EQ(combined.joint_trajectory.points.back().positions, trajectory.points.back().positions);
-        ASSERT_TRUE(retime_joint_trajectory(model, group_name, blend_start, combined,
-          taught.velocity_scale, taught.acceleration_scale, &limits));
-
-        const auto & junction = blend_segments.front().points.back().positions;
-        const auto closest = std::min_element(
-          combined.joint_trajectory.points.begin(), combined.joint_trajectory.points.end(),
-          [&](const auto & first, const auto & second) {
-            const Eigen::Map<const Eigen::VectorXd> q(junction.data(), junction.size());
-            return (Eigen::Map<const Eigen::VectorXd>(first.positions.data(), q.size()) - q).squaredNorm() <
-                   (Eigen::Map<const Eigen::VectorXd>(second.positions.data(), q.size()) - q).squaredNorm();
-          });
-        ASSERT_NE(closest, combined.joint_trajectory.points.end());
-        const Eigen::Map<const Eigen::VectorXd> velocity(closest->velocities.data(), names.size());
-        EXPECT_GT(velocity.norm(), 1e-3) << "The generated path stops at the blend junction";
-        moveit::core::RobotState collision_state(blend_start);
-        for (const auto & sample : combined.joint_trajectory.points) {
-          collision_state.setJointGroupPositions(group, sample.positions);
-          collision_state.update();
-          collision_detection::CollisionRequest request;
-          request.contacts = true;
-          collision_detection::CollisionResult collision;
-          static_scene.checkCollision(request, collision, collision_state);
-          if (collision.collision) {
-            ASSERT_FALSE(collision.contacts.empty());
-            FAIL() << collision.contacts.begin()->first.first << " contacts "
-                   << collision.contacts.begin()->first.second;
-          }
-        }
-        trajectory = std::move(combined.joint_trajectory);
-        blend_segments.clear();
-        ++blended_groups;
-      }
-      std::cout << sequence << " " << point.motion << " target_joints="
-                << nlohmann::json(trajectory.points.back().positions).dump() << '\n';
-      state.setJointGroupPositions(group, trajectory.points.back().positions); state.update();
-      EXPECT_TRUE(state.satisfiesBounds(group));
-      const auto actual = state.getGlobalLinkTransform("sf_grasp_tcp");
-      EXPECT_LT((actual.translation() - target.translation()).norm(), 1e-4);
-      EXPECT_LT(Eigen::AngleAxisd(actual.linear().transpose() * target.linear()).angle(), 1e-3);
+      EXPECT_EQ(trajectory.points.front().positions, current);
+      ASSERT_LT(entry->last_waypoint, taught.cartesian_waypoints.size());
+      const bool blended = entry->last_waypoint > first;
+      blended_groups += blended;
+      std::vector<double> closest_distance(entry->last_waypoint - first, 1e9);
+      std::vector<double> junction_speed(closest_distance.size(), 0.);
       for (const auto & sample : trajectory.points) {
+        state.setJointGroupPositions(group, sample.positions);
+        state.update();
+        EXPECT_TRUE(state.satisfiesBounds(group));
         for (std::size_t j = 0; j < limits.size(); ++j) {
           EXPECT_LE(std::abs(sample.velocities[j]), limits[j].max_velocity * taught.velocity_scale + 1e-6);
           EXPECT_LE(std::abs(sample.accelerations[j]), limits[j].max_acceleration * taught.acceleration_scale + 1e-6);
         }
+        if (!blended) {continue;}
+        const Eigen::Vector3d tcp = state.getGlobalLinkTransform("sf_grasp_tcp").translation();
+        for (std::size_t j = 0; j < closest_distance.size(); ++j) {
+          const auto & pose = taught.cartesian_waypoints[first + j].pose;
+          const Eigen::Vector3d junction = base * Eigen::Vector3d(pose[0], pose[1], pose[2]);
+          const double distance = (tcp - junction).squaredNorm();
+          if (distance >= closest_distance[j]) {continue;}
+          closest_distance[j] = distance;
+          junction_speed[j] = Eigen::Map<const Eigen::VectorXd>(
+            sample.velocities.data(), names.size()).norm();
+        }
+        collision_detection::CollisionRequest request;
+        request.contacts = true;
+        collision_detection::CollisionResult collision;
+        static_scene.checkCollision(request, collision, state);
+        if (collision.collision) {
+          ASSERT_FALSE(collision.contacts.empty());
+          FAIL() << collision.contacts.begin()->first.first << " contacts "
+                 << collision.contacts.begin()->first.second;
+        }
       }
+      for (const double speed : junction_speed) {
+        EXPECT_GT(speed, 1e-3) << "The prepared path stops at a blend junction";
+      }
+      const auto & point = taught.cartesian_waypoints[entry->last_waypoint];
+      if (point.motion == "MoveJ") {
+        EXPECT_EQ(trajectory.points.back().positions, point.joint_positions);
+      }
+      const auto actual = state.getGlobalLinkTransform("sf_grasp_tcp");
+      const Eigen::Vector3d target = base * Eigen::Vector3d(point.pose[0], point.pose[1], point.pose[2]);
+      const Eigen::Matrix3d orientation = base.linear() *
+        Eigen::Quaterniond(point.pose[6], point.pose[3], point.pose[4], point.pose[5]).toRotationMatrix();
+      EXPECT_LT((actual.translation() - target).norm(), 1e-4);
+      EXPECT_LT(Eigen::AngleAxisd(actual.linear().transpose() * orientation).angle(), 1e-3);
+      first = entry->last_waypoint + 1;
     }
   }
   EXPECT_EQ(blended_groups, 1U);
-  // The next cycle starts from the retreat posture.
-  const auto & approach = registry.at("tape_approach");
   std::vector<double> retreat;
   state.copyJointGroupPositions(group, retreat);
-  const auto & joints = approach.cartesian_waypoints.front().joint_positions;
-  const auto repeat = make_taught_joint_trajectory(
-    names, retreat, joints, limits, approach.velocity_scale, approach.acceleration_scale);
-  ASSERT_TRUE(repeat.valid) << repeat.reason;
-  EXPECT_EQ(repeat.trajectory.points.front().positions, retreat);
-  EXPECT_EQ(repeat.trajectory.points.back().positions, joints);
+  const auto * repeat = find_prepared_teaching(approach_entries, 0, retreat, 1e-9);
+  ASSERT_NE(repeat, nullptr);
+  EXPECT_EQ(repeat->trajectory.points.back().positions,
+    registry.at("tape_approach").cartesian_waypoints.front().joint_positions);
   rclcpp::shutdown();
 }

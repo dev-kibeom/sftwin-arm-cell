@@ -9,7 +9,7 @@ from arm_cell_bringup.runtime import read, resolve, project_root
 from arm_cell_bringup.model_validation import validate_assembly_configuration
 from tape_roll_cell.material import TapeRoll
 from tape_roll_cell.supply import TapeSupply
-from tape_roll_cell.teaching_program import default_program, validate_program, resolve_program, apply_layout
+from tape_roll_cell.teaching_program import MOTIONS, default_program, validate_program, resolve_program, apply_layout
 from gripper_runtime.radial_geometry import ToolGeometry
 
 
@@ -36,7 +36,7 @@ def compile_cell(*, configuration):
     program=validate_program(json.loads(teaching_file.read_text())) if teaching_file.exists() else default_program(config)
     apply_layout(config,program)
     motions=resolve_program(program,cell['world_to_base'])
-    motions['home']=dict(target='home',velocity_scale=.1,acceleration_scale=.1)
+    motions['home']=dict(target='home',velocity_scale=.2,acceleration_scale=.2)
     registry={slot['slot_id']:dict(supply_id=cell['configured_supply']['supply_id'],material_id=cell['configured_supply']['material_id'],
         grasp=dict(strategy='internal_radial',insertion_depth_m=layout['insertion_depth_m'],thickness_m=roll.width_m,
                    inner_radius_m=roll.inner_radius_m,release_position_m=solution['release_position_m'],grasp_position_m=solution['grasp_position_m']),
@@ -44,6 +44,7 @@ def compile_cell(*, configuration):
     cell['motion_preparation']=dict(ready=True,detail='Teaching loaded; MoveJ/MoveL follow taught movements without Scene collision checks.')
     config['motion']['configured_grasp_cycles_json']=json.dumps(registry,allow_nan=False)
     config['motion']['taught_motions_json']=json.dumps(motions,allow_nan=False)
+    config['motion']['taught_cycle_motion_names']=list(MOTIONS)
     static=dict(schema_version=1,frame_id='world',objects=layout['static_boxes'])
     encoded=json.dumps(static,sort_keys=True)
     directory=project_root()/'.run_records/configuration';directory.mkdir(parents=True,exist_ok=True)

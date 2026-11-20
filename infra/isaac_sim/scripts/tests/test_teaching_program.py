@@ -95,3 +95,25 @@ def test_blend_cannot_cross_the_end_of_a_motion():
     p['points']['pick']['blend'] = True
     with pytest.raises(ValueError, match='blend'):
         resolve_program(p, {})
+
+
+@pytest.mark.parametrize('model_id, blends_into_place', [
+    ('m0609_hand_e_c10_long', True), ('m0609_hand_e_c10', False),
+])
+def test_default_program_blends_transfer_and_speeds_up_empty_tool(model_id, blends_into_place):
+    cell = dict(tape_roll=dict(
+        supply_center_m=[.53, .35, .415], insertion_depth_m=.014,
+        extract_lift_m=.1, release_clearance_m=.004,
+        material=dict(width_m=.017, outer_radius_m=.075),
+        place=dict(first_center_xy_m=[.3, -.35], surface_z_m=.3,
+                   turn_position_m=[.3, -.35, .38], transport_height_m=.72,
+                   approach_clearance_m=.08)))
+    config = dict(cell=cell, model_configuration=dict(model_id=model_id))
+    motions = resolve_program(default_program(config), {})
+    transfer = motions['tape_transfer']
+    assert [point.get('blend', False) for point in transfer['cartesian_waypoints']] == [
+        True, True, True, True, blends_into_place, False]
+    for name, motion in motions.items():
+        expected = .2 if name == 'tape_transfer' else .25
+        assert motion['velocity_scale'] == expected
+        assert motion['acceleration_scale'] == expected

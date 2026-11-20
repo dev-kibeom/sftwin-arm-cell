@@ -587,7 +587,8 @@ MotionNode::MotionNode(
         parse_taught_motions(
           taught_motions_json, home_joint_positions,
           place_tray_return_joint_positions, arm_joint_names.size()),
-        std::move(named_joint_limits));
+        std::move(named_joint_limits), declare_parameter<std::vector<std::string>>(
+          "taught_cycle_motion_names", std::vector<std::string>{}));
       backend = std::make_shared<IsaacMotionBackend>(isaac_transport_);
     } else if (backend_mode == "unavailable") {
       test_backend = std::make_shared<UnavailableMotionBackend>(

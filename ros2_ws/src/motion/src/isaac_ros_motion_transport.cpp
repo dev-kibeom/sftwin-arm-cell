@@ -1916,8 +1916,16 @@ IsaacRosMotionTransport::IsaacRosMotionTransport(
 
 IsaacRosMotionTransport::~IsaacRosMotionTransport()
 {
+  {
+    std::lock_guard<std::mutex> lock(teaching_mutex_);
+    teaching_shutdown_ = true;
+  }
+  teaching_prepare_condition_.notify_all();
   if (move_group_worker_.joinable()) {
     move_group_worker_.join();
+  }
+  if (teaching_prepare_worker_.joinable()) {
+    teaching_prepare_worker_.join();
   }
   if (profile_write_.valid()) {profile_write_.wait();}
   if (profile_trace_) {
@@ -2155,7 +2163,7 @@ void IsaacRosMotionTransport::initialize_move_group()
   const auto pick_ik_solve_type = pick_ik_solve_type_;
   const auto pick_ik_timeout_s = pick_ik_timeout_s_;
   move_group_worker_ = std::thread(
-    [state, node, planning_group, velocity_scaling_factor, acceleration_scaling_factor,
+    [this, state, node, planning_group, velocity_scaling_factor, acceleration_scaling_factor,
     planning_time_s,
     planning_planner_id, pick_ik_solver_name, pick_ik_solve_type,
     pick_ik_timeout_s]() {
@@ -2222,16 +2230,19 @@ void IsaacRosMotionTransport::initialize_move_group()
           pick_ik_solve_type.c_str());
 
 
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->in_progress) {
-          state->move_group = std::move(move_group);
-          state->pick_ik_loader = std::move(pick_loader);
-          state->pick_ik_solver = std::move(pick_solver);
-          state->pick_ik_node = std::move(pick_node);
-          state->ready = true;
-          state->in_progress = false;
-          state->failure_reason.clear();
+        {
+          std::lock_guard<std::mutex> lock(state->mutex);
+          if (state->in_progress) {
+            state->move_group = std::move(move_group);
+            state->pick_ik_loader = std::move(pick_loader);
+            state->pick_ik_solver = std::move(pick_solver);
+            state->pick_ik_node = std::move(pick_node);
+            state->ready = true;
+            state->in_progress = false;
+            state->failure_reason.clear();
+          }
         }
+        start_teaching_preparation();
       } catch (const std::exception & exception) {
         std::lock_guard<std::mutex> lock(state->mutex);
         if (state->in_progress) {
@@ -2278,6 +2289,7 @@ bool IsaacRosMotionTransport::measured_tcp_pose(geometry_msgs::msg::PoseStamped 
 
 bool IsaacRosMotionTransport::available() const
 {
+  if (teaching_startup_pending_) {return false;}
   std::unique_lock<std::mutex> lock(move_group_state_->mutex, std::try_to_lock);
   if (!lock.owns_lock()) {
     return false;
@@ -2789,8 +2801,9 @@ std::string IsaacRosMotionTransport::availability_diagnostic() const
   if (node_) {
     ros_time_valid = node_->now().nanoseconds() > 0;
   }
+  const bool teaching_pending = teaching_startup_pending_;
   const bool transport_ready = move_group_ready && joint_state_received &&
-    joint_state_fresh && required_arm_joints_present;
+    joint_state_fresh && required_arm_joints_present && !teaching_pending;
   std::ostringstream stream;
   stream << "move_group_ready=" << (move_group_ready ? "true" : "false")
          << " backend_node_initialized=" << (backend_node_initialized ? "true" : "false")
@@ -2803,6 +2816,7 @@ std::string IsaacRosMotionTransport::availability_diagnostic() const
          << " gripper_ready=" << (gripper_ready ? "true" : "false")
          << " ros_time_valid=" << (ros_time_valid ? "true" : "false")
          << " init_in_progress=" << initialization_in_progress
+         << " teaching_preparation_pending=" << (teaching_pending ? "true" : "false")
          << " move_group_mutex_busy=" << (move_group_mutex_busy ? "true" : "false")
          << " state_mutex_busy=" << (state_mutex_busy ? "true" : "false")
          << " init_failure_reason=" << initialization_failure
