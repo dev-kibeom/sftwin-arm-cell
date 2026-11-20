@@ -12,7 +12,8 @@ namespace arm_cell_motion
 {
 uint8_t IsaacRosMotionTransport::execute_teaching_motion(
   const TaughtMotion & taught, const std::string & motion_name, const std::string & execution_id,
-  const std::function<uint8_t()> & interruption)
+  const std::function<uint8_t()> & interruption,
+  const std::vector<PreparedTeachingEntry> * prepared)
 {
   using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
   {
@@ -29,13 +30,11 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     waypoint.motion = taught.movement;
     waypoints.push_back(waypoint);
   }
-  std::size_t waypoint_number = 0;
   std::vector<trajectory_msgs::msg::JointTrajectory> blend_segments;
   sensor_msgs::msg::JointState blend_start;
   bool blend_check_requested = false;
-  for (const auto & waypoint : waypoints) {
-    ++waypoint_number;
-    const bool blended = waypoint.blend || !blend_segments.empty();
+  for (std::size_t index = 0; index < waypoints.size(); ++index) {
+    const auto first_waypoint_number = index + 1 - blend_segments.size();
     const auto permission = [&]() -> uint8_t {
         if (interruption) {
           const auto cause = interruption();
@@ -57,6 +56,30 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
     if (taught_joint_limits_.size() != arm_joint_names_.size())
     {return Code::TASK_RESULT_INVALID_GOAL;}
+    auto limits = taught_joint_limits_;
+    for (auto & limit : limits) {
+      limit.max_velocity *= scales.max_velocity;
+      limit.max_acceleration *= scales.max_acceleration;
+    }
+    const PreparedTeachingEntry * cached = prepared && blend_segments.empty() ?
+      find_prepared_teaching(*prepared, index, start_positions, trajectory_goal_tolerance_rad_) :
+      nullptr;
+    trajectory_msgs::msg::JointTrajectory cached_trajectory;
+    if (cached) {
+      cached_trajectory = cached->trajectory;
+      std::vector<double> velocities, accelerations;
+      for (const auto & limit : limits) {
+        velocities.push_back(limit.max_velocity);
+        accelerations.push_back(limit.max_acceleration);
+      }
+      if (!stretch_taught_trajectory_to_limits(cached_trajectory, velocities, accelerations)) {
+        cached = nullptr;
+      }
+    }
+    if (cached) {index = cached->last_waypoint;}
+    const auto & waypoint = waypoints[index];
+    const auto waypoint_number = index + 1;
+    const bool blended = !cached && (waypoint.blend || !blend_segments.empty());
     if (blended && blend_segments.empty()) {
       blend_start = measured;
       blend_check_requested = false;
@@ -67,17 +90,10 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     moveit::core::RobotModelConstPtr model;
     std::unique_ptr<moveit::core::RobotState> start;
     const auto & joint_goal = joint_target ? taught.joint_positions : waypoint.joint_positions;
-    if (blended || joint_goal.empty() || waypoint.motion != "MoveJ") {
+    if (!cached && (blended || joint_goal.empty() || waypoint.motion != "MoveJ")) {
       std::lock_guard<std::mutex> lock(move_group_state_->mutex);
-      if (!move_group_state_->move_group) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
-      if (!move_group_state_->teaching_model) {
-        const auto source = move_group_state_->move_group->getRobotModel();
-        auto solver = move_group_state_->pick_ik_solver;
-        if (!solver) {solver = std::const_pointer_cast<kinematics::KinematicsBase>(
-            source->getJointModelGroup(planning_group_)->getSolverInstance());}
-        move_group_state_->teaching_model = make_kinematic_model(source, planning_group_, solver);
-      }
-      model = move_group_state_->teaching_model;
+      model = teaching_model_locked();
+      if (!model) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
       start = std::make_unique<moveit::core::RobotState>(model);
       start->setToDefaultValues();
       if (!moveit::core::jointStateToRobotState(measured, *start))
@@ -110,8 +126,12 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     std::vector<double> target_joints;
     std::string detail;
     bool scene_collision_checked = false;
-    const auto first_waypoint_number = waypoint_number - blend_segments.size();
     LinearJointChangeDiagnostics linear_joint_change;
+    if (cached) {
+      plan.trajectory = std::move(cached_trajectory);
+      target_joints = cached->target_joints;
+      linear_joint_change = cached->linear_joint_change;
+    }
     const auto record = [&](const std::string & stage, uint8_t code, bool terminal = false) {
         if (!diagnostics_capture_enabled_) {return;}
         const auto duration = plan.trajectory.points.empty() ? 0.0 :
@@ -131,6 +151,10 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
           {"scene_collision_check_requested", waypoint.motion == "MoveJChecked" ||
             waypoint.motion == "MoveLChecked" || waypoint.motion == "MovePlanned"}};
         evidence["movement_phase"] = terminal ? "waypoint_terminal" : "waypoint_prepared";
+        evidence["trajectory_source"] = cached ? "prepared_memory" : "live_planning";
+        if (cached && first_waypoint_number != waypoint_number) {
+          evidence["blend_first_waypoint_number"] = first_waypoint_number;
+        }
         if (blended) {
           evidence["blend_first_waypoint_number"] = first_waypoint_number;
           evidence["start_joint_positions"] = nlohmann::json::array();
@@ -298,12 +322,8 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
             return Code::TASK_RESULT_INVALID_GOAL;
           }
         }
+        if (const auto cause = permission(); cause != Code::TASK_RESULT_SUCCESS) {return cause;}
         record("", Code::TASK_RESULT_SUCCESS);
-        auto limits = taught_joint_limits_;
-        for (auto & limit : limits) {
-          limit.max_velocity *= scales.max_velocity;
-          limit.max_acceleration *= scales.max_acceleration;
-        }
         const auto discard = [&] {
             const auto cause = permission();
             if (cause == Code::TASK_RESULT_SUCCESS) {return false;}
@@ -317,7 +337,13 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
         }
         return wait_for_joint_target_result();
       };
-    const auto result = run_trajectory_motion(waypoint.motion, operations);
+    auto result = TrajectoryMotionResult{Code::TASK_RESULT_SUCCESS, {}};
+    if (cached) {
+      result.code = operations.execute_trajectory();
+      if (result.code != Code::TASK_RESULT_SUCCESS) {result.failure_stage = "ExecuteTrajectory";}
+    } else {
+      result = run_trajectory_motion(waypoint.motion, operations);
+    }
     if (!waypoint.blend || result.code != Code::TASK_RESULT_SUCCESS) {
       record(result.failure_stage, result.code, true);
     }

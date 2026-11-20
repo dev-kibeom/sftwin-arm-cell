@@ -17,7 +17,8 @@
 | `/motion/configure_teaching` | Cell → Motion | 전체 Named Motion Registry의 유휴 교체 요청·응답 |
 | `/motion/execute_teaching` | Cell 수동 조작 → Motion | 단일 수동 이동 요청·Action 취소·종료 결과 |
 
-Registry 교체 성공은 정의가 적용됐다는 뜻이며 IK·경로·물리 실행 성공이 아니다.
+Registry 교체 성공은 정의가 적용됐다는 뜻이다. 비동기로 준비하는 반복 티칭 궤적의 완료와
+IK·경로·물리 실행 결과는 별도로 판단한다.
 유휴가 아니거나 Backend 정지가 확인되지 않으면 교체하지 않는다. 교체와 Motion 예약은
 원자적으로 직렬화되어 이전·새 정의가 하나의 movement에 혼합되지 않는다.
 

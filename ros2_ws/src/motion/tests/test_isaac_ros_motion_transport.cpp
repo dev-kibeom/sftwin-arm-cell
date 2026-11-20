@@ -3332,5 +3332,108 @@ TEST_F(IsaacRosMotionTransportTest, CartesianTeachingExecutesWithoutSceneOrPlann
   EXPECT_EQ(checked_blend.at("blend_first_waypoint_number"), 1);
   EXPECT_TRUE(checked_blend.at("scene_collision_check_requested"));
   EXPECT_FALSE(checked_blend.at("scene_collision_checked"));
+
+  // Warm a complete named trajectory with a known starting posture, then
+  // remove MoveGroup so a hidden online IK call cannot satisfy this test.
+  taught.cartesian_waypoints.front().motion = "MoveJ";
+  const std::vector<double> zero(6, 0.);
+  TaughtMotion retreat;
+  retreat.velocity_scale = .3;
+  retreat.acceleration_scale = .2;
+  retreat.cartesian_waypoints = {
+    {{-.02, 0., 0., 0., 0., 0., 1.}, "MoveJ", {-.02, 0., 0., 0., 0., 0.}}};
+  transport_->configure_taught_motions(
+    {{"home", {zero, .1, .1}}, {"tape", taught}, {"retreat", retreat}},
+    std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}), {"tape", "retreat"});
+  transport_->start_teaching_preparation();
+  pump_until([&] {return !transport_->teaching_startup_pending_;});
+  std::shared_ptr<const PreparedTeaching> cached;
+  {
+    std::lock_guard<std::mutex> lock(transport_->teaching_mutex_);
+    cached = transport_->prepared_teaching_;
+  }
+  ASSERT_TRUE(cached);
+  ASSERT_EQ(cached->at("tape").size(), 2U);
+  const auto & nominal = cached->at("tape").front().trajectory;
+  std::unique_ptr<moveit::planning_interface::MoveGroupInterface> available_group;
+  {
+    std::lock_guard<std::mutex> lock(transport_->move_group_state_->mutex);
+    available_group = std::move(transport_->move_group_state_->move_group);
+  }
+
+  ASSERT_TRUE(transport_->set_motion_envelope({.5F, .25F, true}));
+  publish_feedback(zero);
+  transport_->on_simulation_clock(clock_message(clock += .02));
+  auto replay = std::async(std::launch::async, [&] {
+    return transport_->execute_taught_motion("tape", "cached-goal", {});
+  });
+  pump_until([&] {
+    return transport_->trajectory_worker_->active() ||
+           replay.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+  });
+  ASSERT_TRUE(transport_->trajectory_worker_->active());
+  const auto replayed = transport_->trajectory_worker_->trajectory_;
+  ASSERT_EQ(replayed.points.size(), nominal.points.size());
+  EXPECT_GT(rclcpp::Duration(replayed.points.back().time_from_start),
+    rclcpp::Duration(nominal.points.back().time_from_start));
+  for (std::size_t i = 0; i < replayed.points.size(); ++i) {
+    EXPECT_EQ(replayed.points[i].positions, nominal.points[i].positions);
+    for (const double velocity : replayed.points[i].velocities) {
+      EXPECT_LE(std::abs(velocity), .15 + 1e-6);
+    }
+    for (const double acceleration : replayed.points[i].accelerations) {
+      EXPECT_LE(std::abs(acceleration), .1 + 1e-6);
+    }
+  }
+  clock += rclcpp::Duration(replayed.points.back().time_from_start).seconds() + .02;
+  transport_->on_simulation_clock(clock_message(clock));
+  pump_until([&] {
+    std::lock_guard<std::mutex> lock(transport_->mutex_);
+    return !transport_->timed_trajectory_active_;
+  });
+  publish_feedback(replayed.points.back().positions);
+  publish_feedback(replayed.points.back().positions);
+  if (replay.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+    transport_->cancel();
+    ADD_FAILURE() << "Cached teaching did not finish after measured arrival";
+  }
+  EXPECT_EQ(replay.get(), Code::TASK_RESULT_SUCCESS);
+  const auto replay_evidence = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
+  EXPECT_EQ(replay_evidence.at("trajectory_source"), "prepared_memory");
+  EXPECT_EQ(replay_evidence.at("blend_first_waypoint_number"), 1);
+
+  publish_feedback(std::vector<double>(6, .3));
+  const auto before_miss = command_count();
+  EXPECT_EQ(
+    transport_->execute_taught_motion("tape", "cache-miss", {}),
+    Code::TASK_RESULT_BACKEND_UNAVAILABLE);
+  EXPECT_EQ(command_count(), before_miss);
+
+  std::string detail;
+  ASSERT_TRUE(transport_->replace_teaching(
+    R"({"home":{"joint_positions":[0,0,0,0,0,0],"velocity_scale":0.1,"acceleration_scale":0.1},
+    "tape":{"cartesian_waypoints":[{"pose":[0,0,1,0,0,0,1],"motion":"MoveL"}],
+      "velocity_scale":0.1,"acceleration_scale":0.1}})", detail)) << detail;
+  {
+    std::lock_guard<std::mutex> lock(transport_->teaching_mutex_);
+    EXPECT_FALSE(transport_->prepared_teaching_);
+  }
+  {
+    std::lock_guard<std::mutex> lock(transport_->move_group_state_->mutex);
+    transport_->move_group_state_->move_group = std::move(available_group);
+  }
+  ASSERT_TRUE(transport_->replace_teaching(
+    R"({"home":{"joint_positions":[0,0,0,0,0,0],"velocity_scale":0.1,"acceleration_scale":0.1},
+    "tape":{"cartesian_waypoints":[{"pose":[0.03,0,0,0,0,0,1],"motion":"MoveL"}],
+      "velocity_scale":0.1,"acceleration_scale":0.1}})", detail)) << detail;
+  pump_until([&] {
+    std::lock_guard<std::mutex> lock(transport_->teaching_mutex_);
+    return transport_->prepared_teaching_ && transport_->prepared_teaching_->count("tape") == 1;
+  });
+  std::lock_guard<std::mutex> lock(transport_->teaching_mutex_);
+  ASSERT_TRUE(transport_->prepared_teaching_);
+  const auto & updated = transport_->prepared_teaching_->at("tape").front();
+  EXPECT_NEAR(updated.trajectory.points.back().positions[0], .03, 1e-6);
+  EXPECT_EQ(updated.last_waypoint, 0U);
 }
 }  // namespace arm_cell_motion

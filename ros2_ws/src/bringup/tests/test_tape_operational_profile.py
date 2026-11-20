@@ -41,6 +41,8 @@ def test_operational_task_description_keeps_collision_meshes_loadable():
     task = next(node for node in actions if isinstance(node, Node) and node.node_package == 'arm_cell_task_execution')
     context = LaunchContext()
     (parameters,) = evaluate_parameters(context,task._Node__parameters)
+    assert list(parameters['taught_cycle_motion_names']) == [
+        'tape_approach', 'tape_insert', 'tape_transfer', 'tape_retreat']
     description = parameters['robot_description']
     meshes = parseString(description).getElementsByTagName('mesh')
     assert meshes

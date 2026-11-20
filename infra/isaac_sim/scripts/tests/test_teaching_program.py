@@ -114,6 +114,6 @@ def test_default_program_blends_transfer_and_speeds_up_empty_tool(model_id, blen
     assert [point.get('blend', False) for point in transfer['cartesian_waypoints']] == [
         True, True, True, True, blends_into_place, False]
     for name, motion in motions.items():
-        expected = .1 if name == 'tape_transfer' else .15
+        expected = .2 if name == 'tape_transfer' else .25
         assert motion['velocity_scale'] == expected
         assert motion['acceleration_scale'] == expected
