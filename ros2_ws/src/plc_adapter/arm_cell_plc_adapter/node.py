@@ -9,6 +9,7 @@ import rclpy
 from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
 from rclpy.node import Node
+from std_msgs.msg import Bool
 from unique_identifier_msgs.msg import UUID
 
 from .modbus import ModbusRegisters, REPLY_FIELDS, REQUEST_FIELDS
@@ -58,7 +59,13 @@ class PlcTaskAdapter(Node):
             param('host', ''), param('port', 502), param('unit_id', 1),
             param('timeout_seconds', 0.25), param('request_input_offset', 0),
             param('reply_holding_offset', 0), param('request_fields', REQUEST_FIELDS),
-            param('reply_fields', REPLY_FIELDS))
+            param('reply_fields', REPLY_FIELDS), param('ready_holding_offset', -1))
+        self.ready = False
+        self.ready_at = 0.
+        self.ready_sequence = 0
+        if self.plc.ready_offset >= 0:
+            self.create_subscription(Bool, param('robot_ready_topic', '/orchestration/robot_ready'),
+                                     self.on_ready, 1)
         self.mission = ActionClient(self, ExecuteCycle, action)
         self.lookup = self.create_client(ExecuteCycle.Impl.GetResultService,
                                          action + '/_action/get_result')
@@ -69,6 +76,10 @@ class PlcTaskAdapter(Node):
         self.next_lookup = 0.
         self.connected = None
         self.create_timer(period, self.poll)
+
+    def on_ready(self, message):
+        self.ready, self.ready_at = message.data, time.monotonic()
+        self.ready_sequence = (self.ready_sequence + 1) & 0xffff
 
     def submit(self, receipt):
         goal = ExecuteCycle.Goal(target_id=self.target, quantity=1)
@@ -132,6 +143,8 @@ class PlcTaskAdapter(Node):
                 except RuntimeError as error:
                     self.mark_uncertain(claimed.command_id, error)
         self.plc.write_receipt(self.receipts.reply(command_id))
+        if self.plc.ready_offset >= 0:
+            self.plc.write_ready(self.ready_sequence, self.ready and time.monotonic() - self.ready_at <= .5)
 
     def mark_uncertain(self, command_id, error):
         # Drop local waits only. The robot can still complete this Goal UUID.

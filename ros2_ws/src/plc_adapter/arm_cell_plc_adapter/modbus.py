@@ -10,7 +10,7 @@ REPLY_FIELDS = ['id_high', 'id_low', 'state', 'reason', 'placement', 'heartbeat'
 
 class ModbusRegisters:
     def __init__(self, host, port, unit, timeout, request_offset, reply_offset,
-                 request_fields, reply_fields):
+                 request_fields, reply_fields, ready_offset=-1):
         if not host or not (0 < port <= 65535 and 0 <= unit <= 255):
             raise ValueError('invalid Modbus endpoint')
         if not math.isfinite(timeout) or timeout <= 0:
@@ -22,6 +22,10 @@ class ModbusRegisters:
                 0 <= reply_offset <= 65536 - len(reply_fields)):
             raise ValueError('Modbus block exceeds register range')
 
+        if ready_offset != -1 and (not 0 <= ready_offset <= 65534 or
+                not (ready_offset + 2 <= reply_offset or reply_offset + len(reply_fields) <= ready_offset)):
+            raise ValueError('Robot Ready requires a separate two-word holding block')
+        self.ready_offset = ready_offset
         self.client = ModbusTcpClient(host, port=port, timeout=timeout)
         self.unit = unit
         self.request_offset = request_offset
@@ -47,7 +51,13 @@ class ModbusRegisters:
                       state=receipt.state, reason=receipt.reason, placement=receipt.placement,
                       heartbeat=self.heartbeat)
         words = [fields[name] for name in self.reply_fields]
-        ack = self.client.write_registers(self.reply_offset, words, unit=self.unit)
+        self.write_words(self.reply_offset, words)
+
+    def write_ready(self, sequence, ready):
+        self.write_words(self.ready_offset, [sequence, int(ready)])
+
+    def write_words(self, offset, words):
+        ack = self.client.write_registers(offset, words, unit=self.unit)
         if (ack.isError() or ack.function_code != 16 or
-                ack.address != self.reply_offset or ack.count != len(words)):
+                ack.address != offset or ack.count != len(words)):
             raise OSError(f'invalid Modbus reply acknowledgement: {ack}')

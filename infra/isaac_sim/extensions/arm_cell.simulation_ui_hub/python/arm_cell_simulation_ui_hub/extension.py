@@ -441,12 +441,16 @@ class SimulationUIHubExtension(_ExtensionBase):
                     self._handoff_default_quantity
                 )
                 ui.Button(
-                    "Supply",
+                    "Set available stock" if (self._supply_descriptor or {}).get("automatic_control") else "Supply",
                     clicked_fn=self._publish_handoff_trigger,
                 )
                 self._handoff_trigger_status = ui.Label(
                     "No supply request published.", word_wrap=True
                 )
+                if (self._supply_descriptor or {}).get("automatic_control"):
+                    with ui.HStack():
+                        ui.Button("Start automatic", clicked_fn=lambda: self._set_automatic(True))
+                        ui.Button("Pause automatic", clicked_fn=lambda: self._set_automatic(False))
                 self._supply_owner_status=ui.Label("",word_wrap=True)
 
         panel = getattr(self, '_teaching_panel', None)
@@ -920,6 +924,10 @@ class SimulationUIHubExtension(_ExtensionBase):
             label = self._operator_request_status_labels.get(action)
             if label is not None:
                 label.text = f"Request failed: {error}"
+
+    def _set_automatic(self, enabled):
+        from isaac_runtime.cell_supply import set_automatic
+        self._handoff_trigger_status.text = set_automatic(enabled)['detail']
 
     def _publish_handoff_trigger(self) -> None:
         label = self._handoff_trigger_status

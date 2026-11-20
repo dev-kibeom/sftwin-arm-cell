@@ -17,7 +17,7 @@ PLC는 작업 요청을 유지하고 Adapter는 같은 `command_id`의 마지막
 | 배치 사실 | 0은 정보 없음, 1은 관측된 Task 결과의 `material_placed=false`, 2는 `true`다. Mission 실패와 배치 사실이 동시에 성립할 수 있다. |
 | heartbeat | 응답 블록마다 순환 증가하는 16비트 값. PLC는 변화와 수신 경과시간으로 링크 신선도를 판단한다. |
 
-현재 응답에는 새 작업을 요청하기 전의 Robot Ready 신호가 없다. heartbeat는 통신 신선도만 나타내며, 수락은 해당 요청에만 적용된다. 작업 준비 판단은 [Orchestration CDS](../components/orchestration/cds.md), 로봇 모션 허가는 Safety가 소유한다. [Cell Control P3·P5](../cells/conveyor-pnp-poc/cell-control.md)의 PLC 프로그램 통합 시 기존 준비 상태의 출처·신선도·전달 매핑을 확정해야 한다.
+Conveyor 프로필은 작업 응답과 별도 블록으로 Robot Ready를 전달한다. Configured Mission이 유휴, 활성 예약 없음, 해당 자재의 유효한 공급 상태, Task·Cell service 준비 및 fresh Safety 모션 허가를 함께 평가한다. 빈 Pick 위치에서도 공급자 자체가 유효할 수 있다. 실제 슬롯 연결은 별도 P3 Gate다. Adapter는 새 준비 표본의 순번과 값을 전달하며 오래된 표본은 거짓으로 전달한다. PLC는 표본 갱신과 링크 신선도를 함께 요구한다. 이 표본은 새 Goal 수락을 예약하지 않으며 Mission이 수락 시 조건을 다시 평가한다. [Cell Control](../cells/conveyor-pnp-poc/cell-control.md)
 
 PLC는 같은 ID를 유지해 수락·진행·terminal을 조회한다. 결과를 소비한 후 다음 자재에 새 ID를 부여한다. 요청·응답 블록은 각각 일관된 한 프로세스 이미지로 교환한다. 이전 ID의 재조회는 해당 기록만 반환한다. 한 스트림에서 ID를 순환·재사용하지 않는다.
 

@@ -131,6 +131,10 @@ def main(args=None):
     from arm_cell_interfaces.srv import ConfiguredSupply
     from arm_cell_interfaces.msg import ConfiguredSupplyState, SafetyState, MissionExitReason, MissionPhase
 
+    from std_msgs.msg import Bool
+    from rclpy.qos import QoSProfile
+    from rclpy.duration import Duration
+
     class Mission(Node):
         def __init__(self):
             super().__init__('orchestration_node')
@@ -147,6 +151,11 @@ def main(args=None):
             self.capture=ConfiguredMissionDiagnostics(
                 self.declare_parameter('diagnostics.output_directory','').value,
                 self.declare_parameter('diagnostics.capture_enabled',False).value,logger=self.get_logger())
+            ready_topic = self.declare_parameter('robot_ready_topic', '').value
+            if ready_topic:
+                self.robot_ready = self.create_publisher(
+                    Bool, ready_topic, QoSProfile(depth=1, lifespan=Duration(seconds=.5)))
+                self.create_timer(.1, self.publish_robot_ready)
             self.startup_timer=self.create_timer(.1,self.advertise_when_ready)
 
         def advertise_when_ready(self):
@@ -190,10 +199,19 @@ def main(args=None):
             return (safety_permits(self.safety,self.safety_at,now) and
                 supply_permits(self.supply,self.supply_at,now,self.supply_id,self.target))
 
+        def available_for_job(self):
+            return (not self.busy and self.ready() and not self.supply.reservation_id
+                    and self.task.server_is_ready() and self.cell.service_is_ready())
+
+        def publish_robot_ready(self):
+            with self.lock:
+                ready = self.server is not None and self.available_for_job()
+                self.robot_ready.publish(Bool(data=ready))
+
         def accept(self,goal):
             with self.lock:
-                if (self.busy or not self.ready() or self.supply.reservation_id or goal.target_id != self.target or
-                        goal.quantity != 1 or any(goal.delivery_id.uuid) or not self.task.server_is_ready() or not self.cell.service_is_ready()):
+                if (not self.available_for_job() or goal.target_id != self.target or
+                        goal.quantity != 1 or any(goal.delivery_id.uuid)):
                     return GoalResponse.REJECT
                 self.busy=True
             return GoalResponse.ACCEPT

@@ -9,6 +9,7 @@
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <exec_depend>arm_cell_interfaces</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <exec_depend>action_msgs</exec_depend>
   <exec_depend>unique_identifier_msgs</exec_depend>
   <exec_depend>python3-pymodbus</exec_depend>

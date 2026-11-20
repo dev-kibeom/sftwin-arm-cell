@@ -91,7 +91,7 @@ PLC 상태 대기와 오류는 공정상 영향받는 단계에 국한한다. Sa
 
 | 대상 | 논리 계약과 구현 구성 연결 | 설정 원본 |
 |---|---|---|
-| SoftPLC ↔ 설비 I/O | P1·P2 공급/이송/스토퍼 명령과 설비 피드백, P4·P5 슬롯 점유 및 배출 명령 | PLC I/O Mapping Configuration |
+| SoftPLC ↔ 설비 I/O | P1·P2 공급/이송/스토퍼 명령과 설비 피드백, P4·P5 슬롯 점유 및 배출 명령 | [Conveyor I/O 매핑](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램) |
 | SoftPLC ↔ Robot Task | 요청 ID, 수락·실행·terminal 결과, `material_placed`, 복구 상태·Robot Ready | PLC Adapter Mapping Configuration |
 | Isaac 설비 | Asset/Joint, 센서 Prim과 I/O Binding | Cell / Equipment Configuration |
 | Robot Task | 정적 Pick/Place 목표, Logical Attach, Task Profile | Robot/Tool/Cell Profiles + Calibration |
@@ -101,6 +101,15 @@ Modbus 레지스터 번호, PLC 타이머, 실제 티칭 좌표와 속도는 이
 ## Robot Task 연결과 후속 Cell 통합
 
 1. PLC 요청은 [PLC 단일 작업 ICD](../../interfaces/icd-plc-task.md)를 통해 [Configured-source Mission](../../interfaces/icd-configured-supply.md)에 연결한다. Mission이 예약한 슬롯의 티칭을 사용한다. 기존 Vision PnP에는 실제 Acquisition 후보가 필요하다.
-2. 같은 Pick 위치에 도착하는 자재는 도착 건마다 현재 epoch의 서로 다른 미완료 논리 슬롯에 대응하고 같은 Pick 티칭을 사용한다. 슬롯 제공과 도착 관측은 후속 Cell 공급자 통합에서 구현한다. Adapter는 요청 ID로 슬롯을 생성하거나 Stop/epoch 변경을 유도하지 않는다.
+2. 같은 Pick 위치에 도착하는 자재는 도착 건마다 현재 epoch의 서로 다른 미완료 논리 슬롯에 대응하고 같은 Pick 티칭을 사용한다. 설비 공급자는 이번 자재의 도착 관측과 PLC 위치 확정을 대조해 현재 epoch의 슬롯을 공개하고 같은 자재 ID를 응답한다. PLC는 슬롯 연결까지 확인한 뒤 P3 요청을 발행한다. Adapter는 요청 ID로 슬롯을 생성하거나 Stop/epoch 변경을 유도하지 않는다.
 3. Task 실패는 기존 Mission을 종료한다. 배치 사실은 같은 Mission의 terminal 결과로 전달하며 PLC가 P4에서 별도 인수를 판단한다. PoC의 Modbus TCP 장치 주소와 I/O 매핑은 Adapter 구성에서 관리한다.
 4. 고장 주입은 실제 I/O 관측 경계에서 수행한다. `Fault Injector`가 PLC 내부 상태나 Cell Commit을 직접 수정하는 것은 금지한다.
+
+
+## 공급 설정과 Isaac 설비 연결
+
+Conveyor의 UI Supply Port는 자동운전을 멈춘 상태에서 종류와 공급 가능 수량을 설정하고 자동운전을 시작·일시 정지한다. 설비는 PLC 공급 명령과 자재 ID로 생성 동작을 한 번 수행하고 실제 생성 확인 후 수량을 차감한다. 투입 도착은 별도 센서가 확인한다. 생성 결과가 불명확하면 해당 ID를 보류하고 자재와 생성 이력을 대조한다. Tape·CNC의 공급 요청은 각 Cell의 기존 공급자가 처리한다.
+
+후속 Isaac Cell의 `material_supply_factory`는 [ConveyorFeeder](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/supply.py)를 기존 UI 포트에 등록하고 종료 시 해제한다. 설비 측 [ConveyorIO](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/equipment_io.py)는 같은 Modbus 서버의 설비 블록을 교환한다. 설비가 유효한 공급 명령을 읽으면 `feed(cycle, spawn_one)`에 기존 자재 생성 함수를 연결한다. 복원 시 마지막 생성 ID와 미확정 생성 건을 실제 자재에 대조한다.
+
+Pick 센서의 실제 자재 ID와 `pick_position_confirmed`가 일치할 때 `bind_confirmed_pick`은 공급자에게 `slot_<자재 ID>` 공개를 요청한다. 공급자는 해당 슬롯이 배포된 고정 Pick 티칭에 연결되고 현재 epoch에서 그 자재만 예약 가능한지 확인한 뒤 ID를 응답한다. 관측을 잃거나 epoch가 달라지면 새 근거가 확보될 때까지 연결 확인을 내린다. 재관측은 같은 슬롯을 가리키고 퇴역 슬롯을 재사용하지 않는다. 위치·센서·허가·트레이 상태는 물리 설비 모델의 연결 지점이다.
