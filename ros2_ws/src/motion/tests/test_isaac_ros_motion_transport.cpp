@@ -2977,6 +2977,49 @@ TEST_F(IsaacRosMotionTransportTest, NamedJointMotionExecutesWithoutMoveGroupOrGr
   EXPECT_TRUE(close_ids_.empty());
 }
 
+TEST_F(IsaacRosMotionTransportTest, TaughtMoveJWithJointTargetExecutesWithoutMoveGroup)
+{
+  using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
+  const std::vector<double> target{.1, -.2, .3, -.4, .5, -.6};
+  const std::string request =
+    R"({"velocity_scale":0.1,"acceleration_scale":0.1,
+    "cartesian_waypoints":[{"pose":[0,0,0,0,0,0,1],"motion":"MoveJ",
+      "joint_positions":[0.1,-0.2,0.3,-0.4,0.5,-0.6]}]})";
+  transport_->configure_taught_motions({}, std::vector<JointMotionLimit>(6, {-2, 2, 2, 4}));
+  transport_->set_teaching_submission_check([] {return Code::TASK_RESULT_SUCCESS;});
+  ASSERT_TRUE(transport_->set_motion_envelope({1.F, 1.F, true}));
+  ASSERT_FALSE(transport_->move_group_state_->move_group);
+  publish_feedback(std::vector<double>(6, 0.));
+  transport_->on_simulation_clock(clock_message(10.));
+  auto completion = std::async(
+    std::launch::async, [&] {
+      return transport_->execute_taught_motion(request, "captured-movej", {});
+    });
+  pump_until(
+    [&] {
+      return transport_->trajectory_worker_->active() ||
+      completion.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready;
+    });
+  ASSERT_TRUE(transport_->trajectory_worker_->active());
+  const auto final = transport_->trajectory_worker_->trajectory_.points.back();
+  EXPECT_EQ(final.positions, target);
+  transport_->on_simulation_clock(
+    clock_message(
+      10. + final.time_from_start.sec + final.time_from_start.nanosec * 1e-9));
+  pump_until(
+    [&] {
+      std::lock_guard<std::mutex> lock(transport_->mutex_);
+      return !transport_->timed_trajectory_active_;
+    });
+  publish_feedback(target);
+  publish_feedback(target);
+  if (completion.wait_for(std::chrono::seconds(1)) != std::future_status::ready) {
+    transport_->cancel();
+    ADD_FAILURE() << "Taught waypoint did not finish after measured arrival";
+  }
+  EXPECT_EQ(completion.get(), Code::TASK_RESULT_SUCCESS);
+}
+
 TEST_F(IsaacRosMotionTransportTest, NamedJointMotionHonorsLatchedInterruptionBeforeCommand)
 {
   using Code = arm_cell_interfaces::msg::MotionTaskResultCode;

@@ -54,7 +54,8 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     {return Code::TASK_RESULT_INVALID_GOAL;}
     moveit::core::RobotModelConstPtr model;
     std::unique_ptr<moveit::core::RobotState> start;
-    if (!joint_target || waypoint.motion != "MoveJ") {
+    const auto & joint_goal = joint_target ? taught.joint_positions : waypoint.joint_positions;
+    if (joint_goal.empty() || waypoint.motion != "MoveJ") {
       std::lock_guard<std::mutex> lock(move_group_state_->mutex);
       if (!move_group_state_->move_group) {return Code::TASK_RESULT_BACKEND_UNAVAILABLE;}
       if (!move_group_state_->teaching_model) {
@@ -149,7 +150,10 @@ uint8_t IsaacRosMotionTransport::execute_teaching_motion(
     TrajectoryMotionOperations operations;
     operations.interruption = permission;
     operations.resolve_joint_target = [&]() -> uint8_t {
-        if (joint_target) {target_joints = taught.joint_positions; return Code::TASK_RESULT_SUCCESS;}
+        if (!joint_goal.empty()) {
+          target_joints = joint_goal;
+          return Code::TASK_RESULT_SUCCESS;
+        }
         std::lock_guard<std::mutex> lock(move_group_state_->mutex);
         return resolve_pose_joint_target(*start, planning_group_, "sf_grasp_tcp", target, target_joints);
       };

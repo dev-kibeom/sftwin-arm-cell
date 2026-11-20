@@ -159,10 +159,11 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
       target = state.getGlobalLinkTransform("base_link") * target;
       trajectory_msgs::msg::JointTrajectory trajectory;
       if (point.motion == "MoveJ") {
-        std::vector<double> joints, start;
-        ASSERT_EQ(resolve_pose_joint_target(state, group_name, "sf_grasp_tcp", target, joints), Code::TASK_RESULT_SUCCESS);
+        ASSERT_EQ(point.joint_positions.size(), names.size())
+          << "Default Tape Cell MoveJ points must select a taught joint target";
+        std::vector<double> start;
         state.copyJointGroupPositions(group, start);
-        const auto generated = make_taught_joint_trajectory(names, start, joints, limits,
+        const auto generated = make_taught_joint_trajectory(names, start, point.joint_positions, limits,
           taught.velocity_scale, taught.acceleration_scale);
         ASSERT_TRUE(generated.valid) << generated.reason;
         trajectory = generated.trajectory;
@@ -190,5 +191,15 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
       }
     }
   }
+  // The next cycle starts from the retreat posture.
+  const auto & approach = registry.at("tape_approach");
+  std::vector<double> retreat;
+  state.copyJointGroupPositions(group, retreat);
+  const auto & joints = approach.cartesian_waypoints.front().joint_positions;
+  const auto repeat = make_taught_joint_trajectory(
+    names, retreat, joints, limits, approach.velocity_scale, approach.acceleration_scale);
+  ASSERT_TRUE(repeat.valid) << repeat.reason;
+  EXPECT_EQ(repeat.trajectory.points.front().positions, retreat);
+  EXPECT_EQ(repeat.trajectory.points.back().positions, joints);
   rclcpp::shutdown();
 }
