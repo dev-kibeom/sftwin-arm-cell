@@ -471,7 +471,8 @@ def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
         assert 'max_velocity_fraction' in window.parameter_edits
 
     cells.setCurrentIndex(options(cells).index('conveyor_pnp_cell'))
-    assert options(tool) == ['hand_e_c10']
+    assert Path(robot.currentData()).stem == 'm0609'
+    assert options(tool) == ['suction']
     assert window.selection()['profile'].stem == 'conveyor_pnp_profile'
     assert window.isaac.isEnabled()
 
