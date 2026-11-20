@@ -35,6 +35,9 @@ Task는 공통 GraspCycle BT와 동일 운영 MotionCore/GripperPort를 사용�
 
 Result는 result_code, material_placed, failure_stage, diagnostic_detail이다. 장치 해제 사실은
 이후 Retreat 실패로 소거하지 않지만 실패한 시퀀스의 예약을 완료 처리하지 않는다.
+단일 configured Mission은 관측한 Task terminal의 `material_placed`를 ExecuteCycle Result에
+`has_material_placed=true`와 함께 그대로 전달한다. 해당 Task terminal이 없으면 유효성은 false다.
+이 값은 슬롯 퇴역·Mission 성공·PLC 인수 여부와 독립적이다.
 런타임 종료는 작업 완료 검증이 아니다. 충돌 없는 1사이클의 작업 완료는
 [Tape Cell FDS](../components/simulation/fds-tape-cell-supply.md)의 독립 진단으로 평가한다.
 이 source의 batch_processed_count와 completed_count는 항상 0이며 물리 자재 수량을 뜻하지 않는다.

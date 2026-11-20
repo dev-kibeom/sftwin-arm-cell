@@ -98,9 +98,9 @@ PLC 상태 대기와 오류는 공정상 영향받는 단계에 국한한다. Sa
 
 Modbus 레지스터 번호, PLC 타이머, 실제 티칭 좌표와 속도는 이 설계서가 아닌 해당 구성의 정식 원본에서 관리한다.
 
-## 구현 선행 확인 사항
+## Robot Task 연결과 후속 Cell 통합
 
-1. [Configured Supply ICD](../../interfaces/icd-configured-supply.md)의 `ExecuteConfiguredGrasp`는 등록된 공급 슬롯과 티칭을 사용할 수 있다. 공급 슬롯의 `COMPLETE`는 성공한 시퀀스와 장치 해제로 해당 공급 슬롯을 퇴역시킨다. 같은 Pick 위치로 들어오는 다음 자재를 어느 공급 슬롯에 대응시킬지는 구현 전 정한다. 배출 트레이 인수는 PLC가 P4에서 별도로 판단한다. Configured Mission은 Task 실패 시 종료하므로 해당 terminal을 자동 재시도하지 않는다.
-2. [기존 PnP](../../interfaces/icd-orchestration-task-execution.md)의 `ExecutePnp`는 Vision 후보와 Place 목표를 소비한다. 고정 Pick 위치를 공급 슬롯으로 표현할지, 실제 Vision 후보를 사용할지에 따라 PLC 요청을 연결할 Mission과 결과 매핑을 정한다.
-3. Modbus TCP는 PoC의 프로토콜 선택이다. 다른 PLC 제조사로 변경할 때 공정 계약을 바꾸지 않는 것을 목표로 한다.
+1. PLC 요청은 [PLC 단일 작업 ICD](../../interfaces/icd-plc-task.md)를 통해 [Configured-source Mission](../../interfaces/icd-configured-supply.md)에 연결한다. Mission이 예약한 슬롯의 티칭을 사용한다. 기존 Vision PnP에는 실제 Acquisition 후보가 필요하다.
+2. 같은 Pick 위치에 도착하는 자재는 도착 건마다 현재 epoch의 서로 다른 미완료 논리 슬롯에 대응하고 같은 Pick 티칭을 사용한다. 슬롯 제공과 도착 관측은 후속 Cell 공급자 통합에서 구현한다. Adapter는 요청 ID로 슬롯을 생성하거나 Stop/epoch 변경을 유도하지 않는다.
+3. Task 실패는 기존 Mission을 종료한다. 배치 사실은 같은 Mission의 terminal 결과로 전달하며 PLC가 P4에서 별도 인수를 판단한다. PoC의 Modbus TCP 장치 주소와 I/O 매핑은 Adapter 구성에서 관리한다.
 4. 고장 주입은 실제 I/O 관측 경계에서 수행한다. `Fault Injector`가 PLC 내부 상태나 Cell Commit을 직접 수정하는 것은 금지한다.

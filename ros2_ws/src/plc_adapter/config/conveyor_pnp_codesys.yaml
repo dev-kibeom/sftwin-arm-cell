@@ -1,0 +1,14 @@
+plc_task_adapter:
+  ros__parameters:
+    host: "127.0.0.1"
+    port: 1502
+    unit_id: 1
+    request_input_offset: 0
+    reply_holding_offset: 0
+    request_fields: ["id_high", "id_low"]
+    reply_fields: ["id_high", "id_low", "state", "reason", "placement", "heartbeat"]
+    poll_seconds: 0.1
+    timeout_seconds: 0.9
+    mission_action: "/orchestration/execute_cycle"
+    target_id: "ConveyorPart"
+    receipt_file: "~/.local/state/arm_cell/conveyor-pnp-poc/plc.sqlite"

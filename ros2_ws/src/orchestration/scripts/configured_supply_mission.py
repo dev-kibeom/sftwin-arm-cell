@@ -126,7 +126,7 @@ def main(args=None):
     from rclpy.node import Node
     from rclpy.action import ActionServer, ActionClient, GoalResponse, CancelResponse
     from rclpy.callback_groups import ReentrantCallbackGroup
-    from rclpy.executors import MultiThreadedExecutor
+    from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
     from arm_cell_interfaces.action import ExecuteCycle, ExecuteConfiguredGrasp
     from arm_cell_interfaces.srv import ConfiguredSupply
     from arm_cell_interfaces.msg import ConfiguredSupplyState, SafetyState, MissionExitReason, MissionPhase
@@ -273,8 +273,14 @@ def main(args=None):
                         if cancel_deadline and time.monotonic()>cancel_deadline:
                             raise PendingTaskUncertain('Task terminal uncertain after interruption; reservation retained until Stop')
                         time.sleep(.01)
-                    task_result=pending.result();terminal_known=True;child=None
-                    outcome=task_result.result
+                    task_result = pending.result()
+                    if task_result is None or task_result.status not in (4, 5, 6):
+                        raise PendingTaskUncertain('Task terminal unavailable; reservation retained until Stop')
+                    terminal_known = True
+                    child = None
+                    outcome = task_result.result
+                    result.has_material_placed = True
+                    result.material_placed = outcome.material_placed
                     self.capture_event(handle,'task_outcome',task_status=task_result.status,
                         task_result_code=outcome.result_code,material_placed=outcome.material_placed,
                         failure_stage=outcome.failure_stage,diagnostic_detail=outcome.diagnostic_detail,
@@ -313,8 +319,15 @@ def main(args=None):
             return result
 
     rclpy.init(args=args);node=Mission();executor=MultiThreadedExecutor(num_threads=4);executor.add_node(node)
-    try:executor.spin()
-    finally:executor.shutdown();node.capture.close();node.destroy_node();rclpy.shutdown()
+    try:
+        executor.spin()
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        executor.shutdown()
+        node.capture.close()
+        node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__=='__main__':main()

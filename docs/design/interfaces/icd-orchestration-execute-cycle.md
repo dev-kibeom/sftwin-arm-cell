@@ -64,6 +64,10 @@ Result에는 `MissionExitReason exit_reason`과 비규범적 `diagnostic_detail`
 
 ROS Action Terminal 상태는 정식 `MissionExitReason`과 구분된다. `MISSION_EXIT_QUANTITY_REACHED`는 SUCCEEDED, Caller 취소(`MISSION_EXIT_CANCELED`)는 CANCELED에 매핑해야 한다(SHALL). 수량 부족·Vision·Motion·Safety·설정 중단은 ABORTED에 매핑해야 한다(SHALL). Result Payload는 정식 사유를 보존한다. 비Safety 결과를 확정하기 전 기존 Terminal Safety 재검증 및 우선순위를 적용한다.
 
+단일 Configured-source Mission의 선택적 Result 필드 `has_material_placed`와
+`material_placed`는 [Configured Supply ICD](icd-configured-supply.md)를 따른다.
+수량 기반 Vision Mission은 이 단일 Task 사실을 제공하지 않으며 유효성 필드는 false다.
+
 ## 4. 검증 요구사항
 
 ### VR-ICD-ORCH-CYCLE-06 — 수량 기반 완료

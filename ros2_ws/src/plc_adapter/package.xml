@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>arm_cell_plc_adapter</name>
+  <version>0.0.1</version>
+  <description>PLC request and result transport for configured single-slot Missions.</description>
+  <maintainer email="neopkrrl@gmail.com">kibeom</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>arm_cell_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>unique_identifier_msgs</exec_depend>
+  <exec_depend>python3-pymodbus</exec_depend>
+  <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>arm_cell_orchestration</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>rosgraph_msgs</test_depend>
+  <test_depend>domain_coordinator</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
