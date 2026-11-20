@@ -45,7 +45,8 @@ TaughtMotions parse_taught_motions(
         throw std::invalid_argument("Invalid Cartesian waypoint count");
       }
       for (const auto & waypoint : waypoints) {
-        if (!waypoint.is_object() || waypoint.size() != 2U ||
+        const bool has_joint_positions = waypoint.contains("joint_positions");
+        if (!waypoint.is_object() || waypoint.size() != 2U + has_joint_positions ||
           !waypoint.contains("pose") ||
           (waypoint.contains("mode") == waypoint.contains("motion")))
         {throw std::invalid_argument("Invalid Cartesian waypoint fields");}
@@ -65,7 +66,20 @@ TaughtMotions parse_taught_motions(
         CartesianTeachingWaypoint point;
         std::copy(pose.begin(), pose.end(), point.pose.begin());
         point.motion = composition;
-        motion.cartesian_waypoints.push_back(point);
+        if (has_joint_positions) {
+          const auto & positions = waypoint.at("joint_positions");
+          if ((composition != "MoveJ" && composition != "MoveJChecked") ||
+            !positions.is_array() || positions.size() != joint_count ||
+            !std::all_of(
+              positions.begin(), positions.end(), [](const nlohmann::json & position) {
+                return position.is_number() && std::isfinite(position.get<double>());
+              }))
+          {
+            throw std::invalid_argument("Invalid waypoint joint target");
+          }
+          point.joint_positions = positions.get<std::vector<double>>();
+        }
+        motion.cartesian_waypoints.push_back(std::move(point));
       }
     } else if (value.contains("joint_path")) {
       motion.plan_to_start = value.value("plan_to_start", false);

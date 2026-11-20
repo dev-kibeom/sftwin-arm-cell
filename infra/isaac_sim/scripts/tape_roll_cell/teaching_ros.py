@@ -22,7 +22,7 @@ class TeachingRosBridge:
         self.arm_joint_names = ()
         self.joints_at = self.motion_at = self.pose_at = 0.
         self.motion = None
-        self.pose = None
+        self.pose = self.pose_joint_positions = None
         self.query = None
         self.query_at = 0.
         self.goal = None
@@ -218,6 +218,7 @@ class TeachingRosBridge:
                     self.pose = [value.position.x, value.position.y, value.position.z,
                                  value.orientation.x, value.orientation.y,
                                  value.orientation.z, value.orientation.w]
+                    self.pose_joint_positions = self.query_joint_positions
                     self.pose_at = self.query_observation_at
                 else:
                     self.pose_at = float('-inf')
@@ -236,6 +237,8 @@ class TeachingRosBridge:
             request.robot_state.joint_state = self.joints
             request.robot_state.is_diff = True
             self.query_observation_at = self.joints_at
+            positions = dict(zip(self.joints.name, self.joints.position))
+            self.query_joint_positions = [positions[name] for name in self.arm_joint_names]
             try:
                 self.query = self.fk.call_async(request)
             except Exception:
@@ -246,8 +249,9 @@ class TeachingRosBridge:
         idle = bool(self.motion is not None and now-self.motion_at <= .5 and
                     not self.motion.has_active_execution and not self.motion.execution_active and
                     self.motion.backend_inactivity_confirmed and self.motion.execution_state in (1, 4))
+        pose_valid = self.pose is not None and now-self.pose_at <= .5
         self.send(dict(op='teaching_state', current_pose=self.pose,
-                       pose_valid=self.pose is not None and now-self.pose_at <= .5,
+                       pose_valid=pose_valid, joint_positions=self.pose_joint_positions if pose_valid else None,
                        motion_idle=idle, motion_ready=self.action.server_is_ready(),
                        motion_instance=self.motion_instance,
                        busy=self.pending or self.goal is not None))

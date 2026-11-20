@@ -8,6 +8,7 @@ import math
 import numpy as np
 
 MOTIONS = ('tape_approach', 'tape_insert', 'tape_transfer', 'tape_retreat')
+JOINT_MOVEMENTS = ('MoveJ', 'MoveJChecked')
 MOVEMENTS = ('MoveJ', 'MoveL', 'MoveJChecked', 'MoveLChecked', 'MovePlanned')
 
 
@@ -83,6 +84,13 @@ def validate_program(program):
         if point.get('frame') not in ('infeed','outfeed','base'):raise ValueError(f'Unknown point frame: {name}')
         point['pose']=_vector(point.get('pose'),6,name)
         if motion_name(point.get('mode')) not in MOVEMENTS:raise ValueError(f'Invalid interpolation mode: {name}')
+        if 'joint_target' in point:
+            target = point['joint_target']
+            if (motion_name(point['mode']) not in JOINT_MOVEMENTS or not isinstance(target, dict)
+                    or set(target) != {'pose', 'positions'}):
+                raise ValueError(f'Invalid taught joint target: {name}')
+            pose7_matrix(target['pose'])
+            target['positions'] = _vector(target['positions'], 6, name + ' joint positions')
         for field in ('velocity_scale','acceleration_scale'):
             value=point.get(field)
             if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not 0<value<=1:
@@ -105,18 +113,31 @@ def resolve_point(program,name,world_to_base):
     return matrix_pose7(np.linalg.inv(base_matrix(world_to_base)) @ _point_world(program,name,world_to_base))
 
 
-def capture_point(program,name,base_pose7,world_to_base):
+def capture_point(program,name,base_pose7,world_to_base,joint_positions=None):
     program=validate_program(program);point=program['points'][name]
     world=base_matrix(world_to_base) @ pose7_matrix(base_pose7)
     frame=base_matrix(world_to_base) if point['frame']=='base' else pose_matrix(program['frames'][point['frame']]['pose'])
     point['pose']=matrix_pose(np.linalg.inv(frame) @ world)
+    if motion_name(point['mode']) in JOINT_MOVEMENTS:
+        point['joint_target'] = dict(pose=list(base_pose7), positions=joint_positions)
     return validate_program(program)
+
+
+def resolve_waypoint(program, name, world_to_base):
+    point = program['points'][name]
+    pose = resolve_point(program, name, world_to_base)
+    waypoint = dict(pose=pose, motion=motion_name(point['mode']))
+    target = point.get('joint_target')
+    if target is not None and np.allclose(
+            pose7_matrix(pose), pose7_matrix(target['pose']), atol=1e-9, rtol=0.):
+        waypoint['joint_positions'] = target['positions'].copy()
+    return waypoint
 
 
 def resolve_program(program,world_to_base):
     program=validate_program(program);result={}
     for name,sequence in program['sequences'].items():
-        result[name]=dict(cartesian_waypoints=[dict(pose=resolve_point(program,p,world_to_base),motion=motion_name(program['points'][p]['mode'])) for p in sequence],
+        result[name]=dict(cartesian_waypoints=[resolve_waypoint(program, p, world_to_base) for p in sequence],
             velocity_scale=min(program['points'][p]['velocity_scale'] for p in sequence),
             acceleration_scale=min(program['points'][p]['acceleration_scale'] for p in sequence))
     return result
@@ -145,6 +166,9 @@ def default_program(configuration):
     point('place_approach','outfeed',[0.,0.,place_z+place['approach_clearance_m']],down)
     point('place','outfeed',[0.,0.,place_z],down)
     point('retreat','outfeed',[0.,0.,place_z+place['approach_clearance_m']],down)
+    model_id = configuration.get('model_configuration', {}).get('model_id')
+    for name, target in layout.get('default_movej_targets', {}).get(model_id, {}).items():
+        points[name]['joint_target'] = deepcopy(target)
     return validate_program(dict(schema_version=1,frames=frames,points=points,sequences=dict(
         tape_approach=['approach'],tape_insert=['insert'],tape_transfer=['lift','extract','carry','turn','place_approach','place'],tape_retreat=['retreat'])))
 

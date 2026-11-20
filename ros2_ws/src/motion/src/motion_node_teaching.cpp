@@ -20,11 +20,11 @@ std::string uuid_text(const UUID & uuid)
   return text.str();
 }
 
-bool valid_manual_motion(const std::string & json)
+bool valid_manual_motion(const std::string & json, std::size_t joint_count)
 {
   try {
-    const auto motion = parse_taught_motions("{\"manual\":" + json + "}", {}, {}, 1U).at("manual");
-    return !motion.cartesian_waypoints.empty();
+    const auto motions = parse_taught_motions("{\"manual\":" + json + "}", {}, {}, joint_count);
+    return !motions.at("manual").cartesian_waypoints.empty();
   } catch (const std::exception &) {return false;}
 }
 }  // namespace
@@ -71,7 +71,8 @@ void MotionNode::initialize_teaching()
       std::shared_ptr<const ExecuteTeaching::Goal> goal) {
       UUID id;
       id.uuid = uuid;
-      if (!isaac_transport_ || !valid_manual_motion(goal->motion_json) ||
+      if (!isaac_transport_ || !valid_manual_motion(goal->motion_json,
+          get_parameter("arm_joint_names").as_string_array().size()) ||
         !core_->reserveTeaching(id)) {return rclcpp_action::GoalResponse::REJECT;}
       return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     },

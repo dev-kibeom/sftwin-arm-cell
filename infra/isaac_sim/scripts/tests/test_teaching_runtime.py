@@ -206,3 +206,46 @@ def test_uncertain_apply_blocks_manual_moves_until_successful_reapply(pendant, m
     assert pendant.command('apply')['accepted']
     pendant.consume(dict(op='teaching_result', request_id=pendant.pending['id'], success=True))
     assert pendant.command(operation, **values)['accepted']
+
+
+def test_captured_movej_reuses_joint_target_after_save_and_load(pendant):
+    point = deepcopy(pendant.draft['points']['approach'])
+    point['mode'] = 'MoveJ'
+    assert pendant.command('edit_point', name='approach', point=point)['accepted']
+    joints = [0.1, -0.2, 0.3, -0.4, 0.5, -0.6]
+    pendant.consume(dict(op='teaching_state', motion_idle=True, motion_ready=True,
+                        pose_valid=True, current_pose=[1., 2.1, 3., 0., 0., 0., 1.],
+                        joint_positions=joints))
+    assert pendant.command('capture', name='approach')['accepted']
+    assert pendant.command('point_frame', name='approach', frame='outfeed')['accepted']
+    assert pendant.command('save')['accepted']
+    assert pendant.command('revert')['accepted']
+    assert pendant.command('load')['accepted']
+    assert pendant.command('manual_mode', enabled=True)['accepted']
+    assert pendant.command('move', name='approach')['accepted']
+    waypoint = pendant._test_packets[-1]['motion']['cartesian_waypoints'][0]
+    assert waypoint.get('joint_positions') == joints
+
+
+def test_movej_capture_requires_joint_feedback_from_pose_sample(pendant):
+    point = deepcopy(pendant.draft['points']['approach'])
+    point['mode'] = 'MoveJ'
+    assert pendant.command('edit_point', name='approach', point=point)['accepted']
+    assert not pendant.command('capture', name='approach')['accepted']
+
+
+
+def test_moved_frame_does_not_replay_joint_target_at_old_location(pendant):
+    point = deepcopy(pendant.draft['points']['approach'])
+    point['mode'] = 'MoveJ'
+    assert pendant.command('edit_point', name='approach', point=point)['accepted']
+    pendant.consume(dict(op='teaching_state', motion_idle=True, motion_ready=True,
+                        pose_valid=True, current_pose=[1., 2.1, 3., 0., 0., 0., 1.],
+                        joint_positions=[0.1] * 6))
+    assert pendant.command('capture', name='approach')['accepted']
+    assert pendant.command('edit_frame', name='infeed', pose=[2., 2., 3., 0., 0., math.pi/2])['accepted']
+    assert pendant.command('manual_mode', enabled=True)['accepted']
+    assert pendant.command('move', name='approach')['accepted']
+    waypoint = pendant._test_packets[-1]['motion']['cartesian_waypoints'][0]
+    assert waypoint['pose'][:3] == pytest.approx([2., 2.1, 3.])
+    assert 'joint_positions' not in waypoint

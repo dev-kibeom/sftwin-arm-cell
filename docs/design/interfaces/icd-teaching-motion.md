@@ -26,12 +26,13 @@ Registry 교체 성공은 정의가 적용됐다는 뜻이며 IK·경로·물리
 | 데이터 | 의미·단위·유효성 |
 |---|---|
 | `cartesian_waypoints` | 순서가 있는 희소 TCP 목표. 위치는 base_link 기준 m, 자세는 정규 quaternion xyzw |
-| `mode` | `MoveJ`는 TCP 목표의 IK 후 관절 이동, `MoveL`은 TCP 직선 구간. 기본 환경 충돌 검사·자동 우회 없음. 명시적 Checked/Planned 이동과 구별하며 실패 fallback 금지 |
+| `motion` | `MoveJ`와 `MoveJChecked`는 관절 이동, `MoveL`과 `MoveLChecked`는 TCP 직선 구간. 검사와 우회 여부는 선택한 동작 방식이 결정한다. 실패 시 다른 동작으로 대체하지 않는다. 기존 `mode`의 `joint`와 `linear`는 각각 `MoveJ`와 `MoveL`을 뜻한다. |
+| waypoint `joint_positions` | 선택 필드. `MoveJ`와 `MoveJChecked`에만 허용하며 구성된 arm joint 순서의 유한한 관절각(rad)을 전달한다. 값이 있으면 해당 관절 목표로 보간하고, TCP 자세만 있는 포인트는 IK로 관절 목표를 구한다. |
 | 속도·가속도 비율 | Robot 한계 대비 `(0,1]`. 수동 Action에서는 각각 최대 0.1로 제한하며 Safety envelope를 추가 소비 |
 | 수동 Action identity | ROS Goal UUID가 이동·취소의 상관관계. UI의 로컬 요청 수락과 Motion 수락은 구별 |
 | 수동 결과 | 기존 MotionTaskResultCode와 설명. Action 종료 상태와 함께 해석하며 그리퍼·자재 처리 완료를 뜻하지 않음 |
 
-빈 정의, 비유한 값, 잘못된 quaternion, mode, 비율은 무효다. 수동 요청은 TCP 이동만 수행하며
+빈 정의, 비유한 값, 잘못된 quaternion, 동작 방식, 비율은 무효다. 수동 요청은 로봇 이동만 수행하며
 그리퍼를 열거나 닫지 않는다. 기존 Safety·MotionStatus·StopMotion 의미를 재정의하지 않는다.
 
 ## 검증 조건과 의존성

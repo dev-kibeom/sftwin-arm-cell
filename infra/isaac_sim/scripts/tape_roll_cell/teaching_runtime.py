@@ -12,10 +12,10 @@ import uuid
 import numpy as np
 
 from .teaching_program import (
-    motion_name,
+    JOINT_MOVEMENTS, motion_name,
     apply_layout, author_equipment_frames, base_matrix, base_pose_to_frame,
     capture_point, frame_pose_to_base, matrix_pose7, pose7_matrix, pose_matrix,
-    matrix_pose, resolve_point, resolve_program, validate_program,
+    matrix_pose, resolve_point, resolve_program, resolve_waypoint, validate_program,
 )
 
 
@@ -31,7 +31,7 @@ class TeachingSession:
         self.revision = 0
         self.detail = 'Select Manual Teaching to jog or test a point.'
         self.pending = None
-        self.pose = None
+        self.pose = self.joint_positions = None
         self.pose_at = self.state_at = float('-inf')
         self.motion_idle = self.motion_ready = False
         self.preview_path = '/World/TapeTeachingPreview'
@@ -73,6 +73,7 @@ class TeachingSession:
                 # Validate FK output before permitting capture or jog.
                 try:
                     self.pose = matrix_pose7(pose7_matrix(packet['current_pose']))
+                    self.joint_positions = packet.get('joint_positions')
                     self.pose_at = self.clock()
                 except (ValueError, TypeError, KeyError):
                     self.pose_at = float('-inf')
@@ -214,7 +215,13 @@ class TeachingSession:
             candidate = deepcopy(self.draft)
             if values['name'] not in candidate['points']:
                 raise ValueError('Select an existing point.')
-            candidate['points'][values['name']] = deepcopy(values['point'])
+            old_point = candidate['points'][values['name']]
+            point = deepcopy(values['point'])
+            if 'joint_target' in old_point and motion_name(point['mode']) in JOINT_MOVEMENTS:
+                point['joint_target'] = old_point['joint_target']
+            else:
+                point.pop('joint_target', None)
+            candidate['points'][values['name']] = point
             self._changed(candidate)
         elif operation == 'point_frame':
             candidate = deepcopy(self.draft)
@@ -247,7 +254,12 @@ class TeachingSession:
             candidate['sequences'][values['name']] = values['points']
             self._changed(candidate)
         elif operation == 'capture':
-            self._changed(capture_point(self.draft, values['name'], self._measured_pose(), self.world_to_base))
+            name = values['name']
+            pose = self._measured_pose()
+            if (motion_name(self.draft['points'][name]['mode']) in JOINT_MOVEMENTS
+                    and self.joint_positions is None):
+                raise ValueError('Measured arm joint positions for this TCP sample are unavailable.')
+            self._changed(capture_point(self.draft, name, pose, self.world_to_base, self.joint_positions))
         elif operation == 'read_scene':
             self._changed(self._scene_program())
         elif operation == 'preview':
@@ -265,7 +277,7 @@ class TeachingSession:
             return
         elif operation == 'move':
             point = self.draft['points'][values['name']]
-            motion = dict(cartesian_waypoints=[dict(pose=resolve_point(self.draft, values['name'], self.world_to_base), motion=motion_name(point['mode']))],
+            motion = dict(cartesian_waypoints=[resolve_waypoint(self.draft, values['name'], self.world_to_base)],
                           velocity_scale=min(.1, point['velocity_scale']), acceleration_scale=min(.1, point['acceleration_scale']))
             self._request('move', motion=motion)
             return

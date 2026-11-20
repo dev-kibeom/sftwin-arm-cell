@@ -35,7 +35,9 @@ def test_failed_fk_future_invalidates_pose_without_breaking_bridge(monkeypatch):
     bridge.operation = None
     bridge.motion_instance = ''
     bridge.query_at = 0.
+    bridge.arm_joint_names = ('j1', 'j2')
     bridge.joints = JointState(name=['j1', 'j2'], position=[0., 0.])
+    bridge.pose_joint_positions = [0., 0.]
     bridge.joints_at = bridge.pose_at = 10.
     bridge.pose = [0., 0., 0., 0., 0., 0., 1.]
     bridge.motion = None
@@ -179,3 +181,37 @@ def test_motion_state_topic_supplies_idle_and_process_identity():
         bridge.close()
         node.destroy_node()
         rclpy.shutdown()
+
+
+
+def test_fk_result_keeps_original_arm_sample_in_configured_order(monkeypatch):
+    from geometry_msgs.msg import PoseStamped
+    from moveit_msgs.srv import GetPositionFK
+    from sensor_msgs.msg import JointState
+
+    bridge = TeachingRosBridge.__new__(TeachingRosBridge)
+    bridge.arm_joint_names = ('j1', 'j2')
+    bridge.query = bridge.operation = bridge.motion = bridge.goal = None
+    bridge.pose = bridge.pose_joint_positions = None
+    bridge.pose_at = float('-inf')
+    bridge.pending = False
+    bridge.motion_instance = ''
+    future = Future()
+    bridge.fk = NS(service_is_ready=lambda: True, call_async=lambda _: future)
+    bridge.action = NS(server_is_ready=lambda: False)
+    packets = []
+    bridge.send = packets.append
+    monkeypatch.setattr('tape_roll_cell.teaching_ros.time.monotonic', lambda: 10.)
+    bridge._joints(JointState(name=['tool', 'j2', 'j1'], position=[.7, .2, .1]))
+    bridge.publish()
+    bridge._joints(JointState(name=['j1', 'j2'], position=[.3, .4]))
+    response = GetPositionFK.Response()
+    response.error_code.val = 1
+    pose = PoseStamped()
+    pose.pose.orientation.w = 1.
+    response.pose_stamped = [pose]
+    future.set_result(response)
+    bridge.fk.service_is_ready = lambda: False
+    bridge.publish()
+    assert packets[-1]['pose_valid']
+    assert packets[-1]['joint_positions'] == [.1, .2]
