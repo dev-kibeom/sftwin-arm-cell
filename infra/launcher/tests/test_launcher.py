@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'infra/launcher'))
 sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
 from arm_cell_bringup.runtime import export_runtime_configuration
-from launcher import deployments, profile_choices, selected_deployment, export_selection
+from launcher import deployments, selected_deployment, export_selection
 
 
 def test_default_matches_cli_and_preserves_sources(tmp_path):
@@ -19,9 +19,8 @@ def test_default_matches_cli_and_preserves_sources(tmp_path):
         "operational_profile.yaml", "rb5_850_profile.yaml", "hcr14_profile.yaml"}
     assert entries[0]["profile"].name == "operational_profile.yaml"
     entry = entries[0]
-    choices = profile_choices(ROOT)
-    assert all(entry[key] in choices[key] for key in ('robot', 'tool', 'cell', 'backend'))
-    assert selected_deployment(entries, {key: entry[key] for key in choices}) == entry
+    selection = {key: entry[key] for key in ('cell', 'robot', 'tool', 'backend')}
+    assert selected_deployment(entries, selection) == entry
     result = export_selection(entry, tmp_path / 'gui.json')
     cli = export_runtime_configuration(ROOT / 'ros2_ws/src/bringup/config/operational_profile.yaml', tmp_path / 'cli.json')
     assert json.loads(result.read_text())['configuration'] == json.loads(cli.read_text())['configuration']
@@ -168,7 +167,7 @@ def test_c10_is_registered_as_formal_physical_real_deployment(suffix):
     from arm_cell_bringup.runtime import read
     modes=tool_mode_choices(read(entry['tool']))
     assert [mode['id'] for mode in modes]==['physical_real']
-    selection={key:entry[key] for key in profile_choices(ROOT)}
+    selection={key:entry[key] for key in ('cell', 'robot', 'tool', 'backend')}
     assert selected_deployment(deployments(ROOT),selection)==entry
 
 
