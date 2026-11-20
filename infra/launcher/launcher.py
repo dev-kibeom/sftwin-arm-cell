@@ -159,7 +159,7 @@ class Launcher(QMainWindow):
             combo = QComboBox()
             self.selectors[key] = combo
             form.addRow(key.title(), combo)
-            if key == 'backend':
+            if key in ('robot', 'backend'):
                 combo.currentIndexChanged.connect(self.validate)
             else:
                 combo.currentIndexChanged.connect(
@@ -206,9 +206,10 @@ class Launcher(QMainWindow):
         previous_tool = self.selectors['tool'].currentData()
         refresh_choices = changed is None
         for key, combo in self.selectors.items():
-            if refresh_choices:
+            if refresh_choices and (key != 'robot' or changed is None):
                 current = combo.currentData()
-                paths = dict.fromkeys(entry[key] for entry in candidates)
+                entries = self.entries if key == 'robot' else candidates
+                paths = dict.fromkeys(entry[key] for entry in entries)
                 with QSignalBlocker(combo):
                     combo.clear()
                     for path in paths:
@@ -217,7 +218,8 @@ class Launcher(QMainWindow):
                     index = combo.findData(current)
                     if index >= 0:
                         combo.setCurrentIndex(index)
-            candidates = [entry for entry in candidates if entry[key] == combo.currentData()]
+            if key in ('cell', 'tool'):
+                candidates = [entry for entry in candidates if entry[key] == combo.currentData()]
             refresh_choices = refresh_choices or key == changed
 
         if changed == 'tool' or previous_tool != self.selectors['tool'].currentData():

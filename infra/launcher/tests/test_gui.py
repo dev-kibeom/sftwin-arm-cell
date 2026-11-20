@@ -448,12 +448,15 @@ def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
     assert window.tool_mode.currentText() == 'Physical Attach'
 
     cells.setCurrentIndex(options(cells).index('tape_roll_cell'))
-    assert options(robot) == ['m0609']
+    assert set(options(robot)) == {'m0609', 'rb5_850', 'hcr14'}
+    assert Path(robot.currentData()).stem == 'rb5_850'
     assert set(options(tool)) == {'hand_e_c10', 'hand_e_c10_long'}
     assert window.tool_mode.count() == 1
     assert window.tool_mode.currentText() == 'Physical Real'
-    assert window.isaac.isEnabled()
+    assert not window.isaac.isEnabled()
 
+    robot.setCurrentIndex(options(robot).index('m0609'))
+    assert window.isaac.isEnabled()
     for suffix in ('_long', ''):
         tool.setCurrentIndex(options(tool).index(f'hand_e_c10{suffix}'))
         entry = window.selection()

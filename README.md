@@ -183,8 +183,9 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 **4. 셀을 시작합니다.**
 
 1. Cell을 먼저 선택한 뒤 Robot, Tool, Grasp Mode, Backend를 고릅니다.
-   등록된 조합만 표시합니다. PnP_CNC에서는 Robotiq 2F-85를,
-   Tape Handling Cell에서는 M0609와 Hand-E C10 기본형 또는 100 mm 핑거형을 선택할 수 있습니다.
+   로봇 목록은 Cell을 바꿔도 유지됩니다. PnP_CNC에서는 Robotiq 2F-85를,
+   Tape Handling Cell에서는 Hand-E C10 기본형 또는 100 mm 핑거형을 선택할 수 있습니다.
+   Isaac 시작은 선택한 조합의 배포 프로필이 등록된 경우에만 활성화됩니다.
    기본 조합은 M0609 + Robotiq 2F-85 +
    `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
