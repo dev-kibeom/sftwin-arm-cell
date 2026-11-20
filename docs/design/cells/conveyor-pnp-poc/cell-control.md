@@ -19,6 +19,8 @@
 
 **기존 시스템과의 연결 시 주의:** 현재 공개 ARM Cell의 Gateway는 Delivery/Handoff와 VDA 문맥을, Orchestration은 Mission·PnP 결과와 수량을 별도로 소유한다. 이번 PoC는 이 의미를 임의 변경하거나 가상의 VDA/AMR 상태를 꾸며내지 않는다. PLC의 위치 확정·작업 요청을 기존 계약과 접속할 방법을 구현 전에 검토한다. 기존 범용 기능이 충분하지 않다면 공통 인터페이스 확장을 별도 시스템 설계로 다룬다. Cell Commit과 기존 로봇 PnP 완료 회계는 서로 다른 개념이며 중복 카운팅하지 않는다.
 
+상위 설비나 HMI에서 PackML을 사용할 경우 PLC가 Cell 전체의 운전 상태를 표현한다. 예를 들어 연속 생산은 `Execute` 안에서 P1~P5를 반복하며, 개별 Cell Commit은 운전 상태 전이를 일으키지 않는다. [기존 `/packml/state`](../../interfaces/icd-external-safety.md)는 외부 CNC/공정 상태를 나타낸다. 로봇 실행·인수 판정과 Safety 허가는 각각의 기존 계약을 따른다.
+
 ## 단계별 명령·상태와 시퀀스
 
 | 공정 단계 | 명령 주체 → 수행 주체 | 명령 효과 | 상태 출처 → 소비 주체 | 적용 계약 |
@@ -26,8 +28,8 @@
 | P1 | PLC → Feeder | 빈 배출 슬롯 확인 후 `feed_part_command` | `infeed_part_detected` → PLC | Cell Process P1 |
 | P2 | PLC → Conveyor/Stopper | `conveyor_run_command`로 운전·정지, `stopper_extend_command`로 고정 | `pick_station_part_detected`, `conveyor_stopped_feedback`, `stopper_extended_feedback` → PLC | Cell Process P2의 PLC 판정 `pick_position_confirmed` |
 | P3 | PLC → Adapter → Robot Task | `pick_position_confirmed` 및 Robot Ready이면 해당 `command_id`의 PnP 요청 | 수락·실행·terminal 결과 및 `material_placed` → PLC | Cell Process P3 및 [PnP 결과 계약](../../interfaces/icd-orchestration-task-execution.md) |
-| P4 | PLC | 해당 Cycle의 슬롯 인수 확인 및 Cell Commit | 같은 ID의 로봇 결과와 `tray_slot_occupied_feedback` → PLC | Cell Process P4 및 배치 후 실패 복구 |
-| P5 | PLC → 배출 설비 | `discharge_tray_command`로 인수된 자재 배출 | `tray_slot_occupied_feedback=FALSE` → PLC | Cell Process P5 |
+| P4 | PLC | 해당 Cycle의 인수 기록을 한 번 확정 | 같은 요청의 `material_placed=true` 및 유효한 `tray_slot_occupied_feedback=TRUE` → PLC | Cell Process P4 |
+| P5 | PLC → 배출 설비 | Commit 후 로봇의 배출 영역 이탈과 설비 동작 허가를 확인해 `discharge_tray_command` 발행 | 배출 후 슬롯 비움과 Robot Ready → PLC | Cell Process P5 |
 
 ```mermaid
 sequenceDiagram
@@ -52,10 +54,12 @@ sequenceDiagram
         B-->>A: terminal 결과와 material_placed
         A-->>P: 동일 command_id 결과 및 배치 사실
     end
-    Note over P: 정상 경로는 두 근거가 모이면 P4 진행
+    Note over P: 같은 Cycle의 배치 사실과 유효한 점유 확인
     P->>P: P4 조건에 따라 Cell Commit 1회
+    Note over P: 배출 영역 이탈 및 안전 제어계의 배출 동작 허가 확인
     P->>E: discharge_tray_command
     E-->>P: 슬롯 비어 있음
+    Note over P: Robot Ready 등 P5 완료 조건 확인 후 다음 공급
 ```
 
 ## 공정 인터록과 안전 인터록
@@ -65,7 +69,8 @@ sequenceDiagram
 | 공정 · P1 | 활성 자재·영역 및 트레이 슬롯 점유 → PLC | 슬롯 점유·상태 불명 시 새 공급 보류 | P1 시작 조건 재평가 |
 | 공정 · P2 | Robot Pick 구역 사용 중 → PLC | 컨베이어 이동·스토퍼 해제 보류 | Robot 영역 작업 종료 후 재평가 |
 | 공정 · P3 | `pick_position_confirmed`, Robot Ready → PLC | 조건 미확정 시 Robot Task 요청 보류 | P3 시작 조건 재평가 |
-| 공정 · P4 | 요청 ID별 결과·배치 사실 및 현재 슬롯 점유, 실패 시 복구 상태 → PLC | 근거 누락 또는 복구 미확정 시 Commit·배출 보류 | Cell Process P4 및 복구 조건 확인 |
+| 공정 · P4 | 요청 ID별 배치 사실과 유효한 슬롯 점유 → PLC | 인수 근거 미확정 시 Commit 보류 | 두 근거가 갖춰지면 로봇의 실패 결과를 보존하고 인수 기록 |
+| 공정 · P5 | 로봇의 배출 영역 이탈 및 배출 설비 동작 허가 → PLC | 영역 점유·상태 불명 또는 동작 미허가 시 배출 명령 보류 | 영역 이탈·동작 허가 확인 후 배출. 다음 Cycle은 P5 완료 조건 적용 |
 | 안전 | 실제 안전 제어계 상태 → 권한 있는 제어기 | 허용되지 않는 기구 동작 정지/금지 | 안전 권한자의 허가 후 공정 상태 재확인 |
 
 PLC 상태 대기와 오류는 공정상 영향받는 단계에 국한한다. Safety 정지 해제만으로 업무 Cycle이 자동 완료·재개된다고 추정하지 않는다.
@@ -77,7 +82,7 @@ PLC 상태 대기와 오류는 공정상 영향받는 단계에 국한한다. Sa
 | 요청이 전달됐으나 ACK 없음 | `command_id`, 마지막 요청/로봇 실행 상태 | 먼저 실행 여부 조회. 미확정 상태에서 새 ID로 중복 요청 금지 |
 | 같은 ID 재수신 | ID의 범위, 기존 실행 또는 terminal 기록 | Adapter/Robot는 같은 작업을 재실행하지 않고 기존 결과를 반환하도록 계약 |
 | 로봇 완료 후 응답 소실 | 같은 ID의 terminal 결과·배치 사실, 실제 슬롯 점유와 Commit 여부 | Cell Process P4에 따라 미확정 Cycle만 한 번 확정 |
-| PLC/Adapter 재시작 | 마지막 ID와 결과, Commit 기록, 실제 자재·로봇·슬롯 상태 | 미확정 작업 재실행 금지. 이미 Commit했으면 P5에서 실제 배출 여부 확인. 상관을 복원할 수 없으면 보류 |
+| PLC/Adapter 재시작 | 마지막 ID와 결과, Commit 기록, 실제 자재·로봇·슬롯 상태 | 미확정 작업 재실행 금지. 이미 Commit했으면 P5에서 실제 배출 여부와 현재 동작 조건 확인. 상관을 복원할 수 없으면 보류 |
 | 실제 설비 상태 불일치 | 관측의 유효성 및 해당 Cycle과의 연관성 | Cell Process의 재확인 경로 사용, 독립적 재검출이 불가능하면 작업자 확인 |
 
 실행 코드의 영속화 수단·레지스터 표현은 구현 계약에서 결정하되, 재시작·통신 단절 시험이 주장하는 범위에 맞게 해당 단계에 필요한 결과와 관측 증거를 보존하거나 재조회할 수 있어야 한다.
