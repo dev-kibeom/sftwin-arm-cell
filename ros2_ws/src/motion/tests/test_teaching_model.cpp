@@ -8,6 +8,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/robot_model_loader/robot_model_loader.h>
 #include <moveit/robot_trajectory/robot_trajectory.h>
+#include <moveit/planning_scene/planning_scene.h>
+#include <geometric_shapes/shapes.h>
 #include "arm_cell_motion/taught_motion.hpp"
 #include "arm_cell_motion/taught_motion_trajectory.hpp"
 #include "arm_cell_motion/trajectory_generation.hpp"
@@ -149,9 +151,30 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
   moveit::core::RobotState state(model); state.setToDefaultValues();
   state.setJointGroupPositions(group, config.at("home_joint_positions").get<std::vector<double>>());
   state.update();
+  planning_scene::PlanningScene static_scene(model);
+  for (const auto & box : config.at("cell").at("tape_roll").at("static_boxes")) {
+    const auto size = box.at("geometry").at("dimensions_m").get<std::array<double, 3>>();
+    const auto position = box.at("pose").at("position_m").get<std::array<double, 3>>();
+    const auto rotation = box.at("pose").at("quaternion_xyzw").get<std::array<double, 4>>();
+    const auto id = box.at("id").get<std::string>();
+    Eigen::Isometry3d pose = Eigen::Isometry3d::Identity();
+    pose.translation() = Eigen::Vector3d(position.data());
+    pose.linear() = Eigen::Quaterniond(rotation[3], rotation[0], rotation[1], rotation[2])
+      .toRotationMatrix();
+    static_scene.getWorldNonConst()->addToObject(
+      id, std::make_shared<shapes::Box>(size[0], size[1], size[2]), pose);
+    if (id == "/World/TapeRollCell/RobotPedestal") {
+      static_scene.getAllowedCollisionMatrixNonConst().setEntry("base_link", id, true);
+    }
+  }
+  std::size_t blended_groups = 0;
   for (const auto * sequence : {"tape_approach", "tape_insert", "tape_transfer", "tape_retreat"}) {
     const auto & taught = registry.at(sequence);
+    std::vector<trajectory_msgs::msg::JointTrajectory> blend_segments;
+    moveit::core::RobotState blend_start(state);
     for (const auto & point : taught.cartesian_waypoints) {
+      const bool blended = point.blend || !blend_segments.empty();
+      if (blended && blend_segments.empty()) {blend_start = state;}
       SCOPED_TRACE(std::string(sequence) + ":" + point.motion);
       Eigen::Isometry3d target = Eigen::Isometry3d::Identity();
       target.linear() = Eigen::Quaterniond(point.pose[6], point.pose[3], point.pose[4], point.pose[5]).toRotationMatrix();
@@ -171,11 +194,55 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
         ASSERT_EQ(point.motion, "MoveL");
         moveit_msgs::msg::RobotTrajectory generated;
         ASSERT_EQ(generate_linear_joint_trajectory(state, group_name, "sf_grasp_tcp", target, generated), Code::TASK_RESULT_SUCCESS);
-        ASSERT_TRUE(retime_joint_trajectory(model, group_name, state, generated,
-          taught.velocity_scale, taught.acceleration_scale, &limits));
+        if (!blended) {
+          ASSERT_TRUE(retime_joint_trajectory(model, group_name, state, generated,
+            taught.velocity_scale, taught.acceleration_scale, &limits));
+        }
         trajectory = generated.joint_trajectory;
       }
       ASSERT_GE(trajectory.points.size(), 2U);
+      if (blended) {
+        blend_segments.push_back(trajectory);
+        if (point.blend) {
+          state.setJointGroupPositions(group, trajectory.points.back().positions);
+          state.update();
+          continue;
+        }
+        moveit_msgs::msg::RobotTrajectory combined;
+        ASSERT_TRUE(blend_taught_joint_paths(blend_segments, combined));
+        EXPECT_EQ(combined.joint_trajectory.points.back().positions, trajectory.points.back().positions);
+        ASSERT_TRUE(retime_joint_trajectory(model, group_name, blend_start, combined,
+          taught.velocity_scale, taught.acceleration_scale, &limits));
+
+        const auto & junction = blend_segments.front().points.back().positions;
+        const auto closest = std::min_element(
+          combined.joint_trajectory.points.begin(), combined.joint_trajectory.points.end(),
+          [&](const auto & first, const auto & second) {
+            const Eigen::Map<const Eigen::VectorXd> q(junction.data(), junction.size());
+            return (Eigen::Map<const Eigen::VectorXd>(first.positions.data(), q.size()) - q).squaredNorm() <
+                   (Eigen::Map<const Eigen::VectorXd>(second.positions.data(), q.size()) - q).squaredNorm();
+          });
+        ASSERT_NE(closest, combined.joint_trajectory.points.end());
+        const Eigen::Map<const Eigen::VectorXd> velocity(closest->velocities.data(), names.size());
+        EXPECT_GT(velocity.norm(), 1e-3) << "The generated path stops at the blend junction";
+        moveit::core::RobotState collision_state(blend_start);
+        for (const auto & sample : combined.joint_trajectory.points) {
+          collision_state.setJointGroupPositions(group, sample.positions);
+          collision_state.update();
+          collision_detection::CollisionRequest request;
+          request.contacts = true;
+          collision_detection::CollisionResult collision;
+          static_scene.checkCollision(request, collision, collision_state);
+          if (collision.collision) {
+            ASSERT_FALSE(collision.contacts.empty());
+            FAIL() << collision.contacts.begin()->first.first << " contacts "
+                   << collision.contacts.begin()->first.second;
+          }
+        }
+        trajectory = std::move(combined.joint_trajectory);
+        blend_segments.clear();
+        ++blended_groups;
+      }
       std::cout << sequence << " " << point.motion << " target_joints="
                 << nlohmann::json(trajectory.points.back().positions).dump() << '\n';
       state.setJointGroupPositions(group, trajectory.points.back().positions); state.update();
@@ -191,6 +258,7 @@ TEST(TeachingModel, GeneratesCompleteConfiguredTapeMotionsWithoutSceneOrPlanner)
       }
     }
   }
+  EXPECT_EQ(blended_groups, 1U);
   // The next cycle starts from the retreat posture.
   const auto & approach = registry.at("tape_approach");
   std::vector<double> retreat;

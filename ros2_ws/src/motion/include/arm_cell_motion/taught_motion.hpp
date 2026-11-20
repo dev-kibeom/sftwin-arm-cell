@@ -12,6 +12,7 @@ struct CartesianTeachingWaypoint
   std::array<double, 7> pose{0., 0., 0., 0., 0., 0., 1.};
   std::string motion{"MoveJ"};
   std::vector<double> joint_positions{};
+  bool blend{false};
 };
 
 struct TaughtMotion

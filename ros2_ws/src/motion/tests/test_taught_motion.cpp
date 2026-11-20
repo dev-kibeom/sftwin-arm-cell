@@ -147,3 +147,22 @@ TEST(TaughtMotion, ValidatesJointTargetsOnMoveJWaypoints)
   waypoint["joint_positions"] = {true, -0.1};
   EXPECT_THROW(parse_taught_motions(registry.dump(), {}, {}, 2U), std::invalid_argument);
 }
+
+TEST(TaughtMotion, BlendRequiresAFollowingJointOrLinearSegment)
+{
+  auto registry = nlohmann::json::parse(R"({"transfer":{
+    "velocity_scale":0.1,"acceleration_scale":0.1,"cartesian_waypoints":[
+      {"pose":[0,0,0,0,0,0,1],"motion":"MoveJ","blend":true},
+      {"pose":[0,0,1,0,0,0,1],"motion":"MoveL"}]}})");
+  const auto motion = parse_taught_motions(registry.dump(), {}, {}, 6U).at("transfer");
+  EXPECT_TRUE(motion.cartesian_waypoints.front().blend);
+  EXPECT_FALSE(motion.cartesian_waypoints.back().blend);
+  auto & points = registry["transfer"]["cartesian_waypoints"];
+  points[1]["motion"] = "MovePlanned";
+  EXPECT_THROW(parse_taught_motions(registry.dump(), {}, {}, 6U), std::invalid_argument);
+  points[1]["motion"] = "MoveL";
+  points[1]["blend"] = true;
+  EXPECT_THROW(parse_taught_motions(registry.dump(), {}, {}, 6U), std::invalid_argument);
+  points[1]["blend"] = 1;
+  EXPECT_THROW(parse_taught_motions(registry.dump(), {}, {}, 6U), std::invalid_argument);
+}

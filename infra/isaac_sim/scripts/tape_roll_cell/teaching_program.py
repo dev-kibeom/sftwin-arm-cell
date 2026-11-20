@@ -91,6 +91,8 @@ def validate_program(program):
                 raise ValueError(f'Invalid taught joint target: {name}')
             pose7_matrix(target['pose'])
             target['positions'] = _vector(target['positions'], 6, name + ' joint positions')
+        if 'blend' in point and type(point['blend']) is not bool:
+            raise ValueError(f'Invalid blend option: {name}')
         for field in ('velocity_scale','acceleration_scale'):
             value=point.get(field)
             if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not 0<value<=1:
@@ -99,6 +101,12 @@ def validate_program(program):
     for name,sequence in result['sequences'].items():
         if not isinstance(name,str) or not isinstance(sequence,list) or not sequence or any(not isinstance(p,str) or p not in result['points'] for p in sequence):
             raise ValueError(f'Invalid point sequence: {name}')
+        points = [result['points'][p] for p in sequence]
+        for index, point in enumerate(points):
+            if point.get('blend', False) and (
+                    index + 1 == len(points) or
+                    any(motion_name(p['mode']) == 'MovePlanned' for p in points[index:index+2])):
+                raise ValueError(f'Invalid blend junction in {name}: {sequence[index]}')
     return result
 
 
@@ -123,10 +131,12 @@ def capture_point(program,name,base_pose7,world_to_base,joint_positions=None):
     return validate_program(program)
 
 
-def resolve_waypoint(program, name, world_to_base):
+def resolve_waypoint(program, name, world_to_base, *, include_blend=False):
     point = program['points'][name]
     pose = resolve_point(program, name, world_to_base)
     waypoint = dict(pose=pose, motion=motion_name(point['mode']))
+    if include_blend and point.get('blend', False):
+        waypoint['blend'] = True
     target = point.get('joint_target')
     if target is not None and np.allclose(
             pose7_matrix(pose), pose7_matrix(target['pose']), atol=1e-9, rtol=0.):
@@ -137,7 +147,7 @@ def resolve_waypoint(program, name, world_to_base):
 def resolve_program(program,world_to_base):
     program=validate_program(program);result={}
     for name,sequence in program['sequences'].items():
-        result[name]=dict(cartesian_waypoints=[resolve_waypoint(program, p, world_to_base) for p in sequence],
+        result[name]=dict(cartesian_waypoints=[resolve_waypoint(program, p, world_to_base, include_blend=True) for p in sequence],
             velocity_scale=min(program['points'][p]['velocity_scale'] for p in sequence),
             acceleration_scale=min(program['points'][p]['acceleration_scale'] for p in sequence))
     return result
@@ -159,6 +169,7 @@ def default_program(configuration):
     point('insert','infeed',[depth,0.,0.],horizontal)
     point('lift','infeed',[depth,0.,lift],horizontal)
     point('extract','infeed',[depth-clearance,0.,lift],horizontal)
+    points['extract']['blend'] = True
     point('carry','infeed',[depth-clearance,0.,height-sz],horizontal)
     tx,ty,tz=place['turn_position_m']
     point('turn','outfeed',[tx-px,ty-py,tz-pz],down,'MoveJ')

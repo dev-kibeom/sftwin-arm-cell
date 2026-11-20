@@ -46,7 +46,8 @@ TaughtMotions parse_taught_motions(
       }
       for (const auto & waypoint : waypoints) {
         const bool has_joint_positions = waypoint.contains("joint_positions");
-        if (!waypoint.is_object() || waypoint.size() != 2U + has_joint_positions ||
+        const bool has_blend = waypoint.contains("blend");
+        if (!waypoint.is_object() || waypoint.size() != 2U + has_joint_positions + has_blend ||
           !waypoint.contains("pose") ||
           (waypoint.contains("mode") == waypoint.contains("motion")))
         {throw std::invalid_argument("Invalid Cartesian waypoint fields");}
@@ -66,6 +67,17 @@ TaughtMotions parse_taught_motions(
         CartesianTeachingWaypoint point;
         std::copy(pose.begin(), pose.end(), point.pose.begin());
         point.motion = composition;
+        if (has_blend) {
+          if (!waypoint.at("blend").is_boolean()) {
+            throw std::invalid_argument("Invalid blend option");
+          }
+          point.blend = waypoint.at("blend").get<bool>();
+        }
+        if (!motion.cartesian_waypoints.empty() && motion.cartesian_waypoints.back().blend &&
+          (composition == "MovePlanned" || motion.cartesian_waypoints.back().motion == "MovePlanned"))
+        {
+          throw std::invalid_argument("MovePlanned does not support a blended junction");
+        }
         if (has_joint_positions) {
           const auto & positions = waypoint.at("joint_positions");
           if ((composition != "MoveJ" && composition != "MoveJChecked") ||
@@ -80,6 +92,9 @@ TaughtMotions parse_taught_motions(
           point.joint_positions = positions.get<std::vector<double>>();
         }
         motion.cartesian_waypoints.push_back(std::move(point));
+      }
+      if (motion.cartesian_waypoints.back().blend) {
+        throw std::invalid_argument("Final waypoint must stop");
       }
     } else if (value.contains("joint_path")) {
       motion.plan_to_start = value.value("plan_to_start", false);

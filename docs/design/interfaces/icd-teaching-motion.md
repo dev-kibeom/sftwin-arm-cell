@@ -28,6 +28,7 @@ Registry 교체 성공은 정의가 적용됐다는 뜻이며 IK·경로·물리
 | `cartesian_waypoints` | 순서가 있는 희소 TCP 목표. 위치는 base_link 기준 m, 자세는 정규 quaternion xyzw |
 | `motion` | `MoveJ`와 `MoveJChecked`는 관절 이동, `MoveL`과 `MoveLChecked`는 TCP 직선 구간. 검사와 우회 여부는 선택한 동작 방식이 결정한다. 실패 시 다른 동작으로 대체하지 않는다. 기존 `mode`의 `joint`와 `linear`는 각각 `MoveJ`와 `MoveL`을 뜻한다. |
 | waypoint `joint_positions` | 선택 필드. `MoveJ`와 `MoveJChecked`에만 허용하며 구성된 arm joint 순서의 유한한 관절각(rad)을 전달한다. 값이 있으면 해당 관절 목표로 보간하고, TCP 자세만 있는 포인트는 IK로 관절 목표를 구한다. |
+| waypoint `blend` | 선택 boolean. 기본값은 `false`이며 이 점에서 정지한다. `true`는 같은 이동 정의의 다음 waypoint와 접속한다. 마지막 waypoint와 `MovePlanned`에 인접한 연결점은 정지한다. |
 | 속도·가속도 비율 | Robot 한계 대비 `(0,1]`. 수동 Action에서는 각각 최대 0.1로 제한하며 Safety envelope를 추가 소비 |
 | 수동 Action identity | ROS Goal UUID가 이동·취소의 상관관계. UI의 로컬 요청 수락과 Motion 수락은 구별 |
 | 수동 결과 | 기존 MotionTaskResultCode와 설명. Action 종료 상태와 함께 해석하며 그리퍼·자재 처리 완료를 뜻하지 않음 |

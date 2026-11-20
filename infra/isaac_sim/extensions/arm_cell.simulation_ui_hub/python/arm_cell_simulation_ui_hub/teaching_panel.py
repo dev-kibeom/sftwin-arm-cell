@@ -73,6 +73,7 @@ class TeachingPanel:
                                        list(_POINT_FRAMES))
                         self._point_pose = self._pose_fields()
                         self._selector('mode', 'Motion', None, _MOVEMENTS)
+                        self._selector('junction', 'At point', None, ('Stop', 'Blend'))
                         with ui.HStack(height=26):
                             ui.Label('Speed (%)', width=100)
                             self._speed = ui.FloatField()
@@ -133,6 +134,7 @@ class TeachingPanel:
         return dict(point=self._selected('point'), equipment=self._selected('equipment'),
                     point_pose=self._get_pose(self._point_pose), frame_pose=self._get_pose(self._frame_pose),
                     point_frame=self._selected('point_frame'), mode=self._selected('mode'),
+                    junction=self._selected('junction'),
                     speed=self._speed.model.as_float, acceleration=self._acceleration.model.as_float,
                     jog_frame=self._selected('jog_frame'), linear_step=self._linear_step.model.as_float,
                     angular_step=self._angular_step.model.as_float, new_name=self._new_name.model.as_string)
@@ -140,7 +142,7 @@ class TeachingPanel:
     def _restore_editor(self, editor):
         self._syncing = True
         try:
-            for key in ('point', 'equipment', 'point_frame', 'mode', 'jog_frame'):
+            for key in ('point', 'equipment', 'point_frame', 'mode', 'junction', 'jog_frame'):
                 if editor[key] in self._choices[key]:
                     self._combos[key].model.get_item_value_model().set_value(self._choices[key].index(editor[key]))
             self._set_pose(self._point_pose, editor['point_pose'])
@@ -230,6 +232,7 @@ class TeachingPanel:
         self._set_choices('point_frame', list(_POINT_FRAMES), point['frame'], self._point_frame_changed)
         self._set_choices('mode', _MOVEMENTS,
                           {'joint': 'MoveJ', 'linear': 'MoveL'}.get(point['mode'], point['mode']))
+        self._set_choices('junction', ['Stop', 'Blend'], 'Blend' if point.get('blend') else 'Stop')
         self._speed.model.set_value(point['velocity_scale'] * 100)
         self._acceleration.model.set_value(point['acceleration_scale'] * 100)
 
@@ -268,6 +271,7 @@ class TeachingPanel:
             'frame': self._selected('point_frame'), 'pose': self._get_pose(self._point_pose),
             'mode': self._selected('mode'), 'velocity_scale': self._speed.model.as_float / 100,
             'acceleration_scale': self._acceleration.model.as_float / 100,
+            'blend': self._selected('junction') == 'Blend',
         })
 
     def _edit_frame(self):

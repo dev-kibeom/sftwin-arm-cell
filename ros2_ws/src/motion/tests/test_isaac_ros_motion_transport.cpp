@@ -3285,6 +3285,30 @@ TEST_F(IsaacRosMotionTransportTest, CartesianTeachingExecutesWithoutSceneOrPlann
   const auto evidence = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
   EXPECT_EQ(evidence.at("motion"), "MoveL");
   EXPECT_FALSE(evidence.at("scene_collision_checked"));
+  // The same entry point must execute an opted-in junction as one trajectory.
+  taught.cartesian_waypoints.front().blend = true;
+  transport_->configure_taught_motions({{"tape", taught}}, std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  publish_feedback(std::vector<double>(6, 0.));
+  const auto previous_commands = command_count();
+  auto blended = std::async(std::launch::async, [&] {
+    return transport_->execute_taught_motion("tape", "blend-goal", {});
+  });
+  pump_until([&] {
+    transport_->on_simulation_clock(clock_message(clock += .02));
+    if (command_count() > previous_commands) {
+      publish_feedback(last_command());
+    } else {
+      publish_feedback(std::vector<double>(6, 0.));
+    }
+    return blended.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+  });
+  EXPECT_EQ(blended.get(), Code::TASK_RESULT_SUCCESS);
+  const auto blended_evidence = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
+  EXPECT_EQ(blended_evidence.at("blend_first_waypoint_number"), 1);
+  EXPECT_EQ(blended_evidence.at("waypoint_number"), 2);
+  EXPECT_NEAR(last_command()[0], .025, 1e-6);
+  EXPECT_NEAR(last_command()[1], .04, 1e-6);
+  taught.cartesian_waypoints.front().blend = false;
   // A checked motion must fail on unavailable Scene, and must not claim it
   // checked collisions merely because its requested composition is checked.
   taught.cartesian_waypoints.front().motion = "MoveJChecked";
@@ -3295,5 +3319,18 @@ TEST_F(IsaacRosMotionTransportTest, CartesianTeachingExecutesWithoutSceneOrPlann
   EXPECT_EQ(failed.at("failure_stage"), "CheckTrajectoryCollision");
   EXPECT_TRUE(failed.at("scene_collision_check_requested"));
   EXPECT_FALSE(failed.at("scene_collision_checked"));
+
+  taught.cartesian_waypoints.front().blend = true;
+  transport_->configure_taught_motions({{"tape", taught}}, std::vector<JointMotionLimit>(6, {-2, 2, 1, 2}));
+  publish_feedback(std::vector<double>(6, 0.));
+  const auto before_check = command_count();
+  EXPECT_EQ(
+    transport_->execute_taught_motion("tape", "checked-blend-goal", {}),
+    Code::TASK_RESULT_BACKEND_UNAVAILABLE);
+  EXPECT_EQ(command_count(), before_check);
+  const auto checked_blend = nlohmann::json::parse(transport_->pending_motion_planning_evidence_);
+  EXPECT_EQ(checked_blend.at("blend_first_waypoint_number"), 1);
+  EXPECT_TRUE(checked_blend.at("scene_collision_check_requested"));
+  EXPECT_FALSE(checked_blend.at("scene_collision_checked"));
 }
 }  // namespace arm_cell_motion
