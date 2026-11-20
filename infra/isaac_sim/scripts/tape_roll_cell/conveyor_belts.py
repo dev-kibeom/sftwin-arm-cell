@@ -2,7 +2,7 @@
 
 
 class ConveyorBelts:
-    def __init__(self, stage, static_boxes):
+    def __init__(self, stage, static_boxes, *, graph_path='/World/TapeRollCell/ConveyorGraph'):
         import omni.graph.core as og
         from isaacsim.core.utils.extensions import enable_extension
         from pxr import PhysxSchema, UsdPhysics
@@ -10,7 +10,7 @@ class ConveyorBelts:
         if not enable_extension('isaacsim.asset.gen.conveyor'):
             raise RuntimeError('Tape Cell requires the isaacsim.asset.gen.conveyor extension')
         self._og = og
-        self._path = '/World/TapeRollCell/ConveyorGraph'
+        self._path = graph_path
         if stage.GetPrimAtPath(self._path):
             stage.RemovePrim(self._path)
         nodes = [('Command', 'omni.graph.action.OnImpulseEvent')]

@@ -102,7 +102,6 @@ def load_configured_profile(source, path, *, tool_actuator=None, tool_grasp=None
     motion['pick_ik_timeout_s']=motion.pop('general_ik_timeout_s')
     motion['place_total_planning_time_s']=motion.pop('qualification_total_planning_time_s',60.)
     motion['object_to_grasp_tcp_quaternion']=motion.pop('tool_axis_quaternion_xyzw')
-    motion['object_to_grasp_tcp_translation']=[0.,0.,config['cell']['tape_roll']['insertion_depth_m']]
     configure_grip_force(config,path)
     module,name=config['cell']['isaac']['configuration_compiler'].split(':')
     scripts=project_root()/'infra/isaac_sim/scripts'

@@ -15,6 +15,7 @@ from gripper_runtime.radial_geometry import ToolGeometry
 
 def compile_cell(*, configuration):
     config=configuration;cell=config['cell'];layout=cell['tape_roll']
+    config['motion']['object_to_grasp_tcp_translation'] = [0., 0., layout['insertion_depth_m']]
     layout['place'].update(layout['place'].get('tool_overrides',{}).get(config['tool']['tool_id'],{}))
     if isinstance(layout['material'],str):
         layout['material']=read(resolve(layout['material'],project_root()))
