@@ -172,3 +172,81 @@ def test_unknown_task_terminal_keeps_reservation_and_has_no_release_fact(configu
     assert terminal == ['aborted'] and not result.has_material_placed
     assert [req.command for req in requests] == [ConfiguredSupply.Request.RESERVE]
     assert len(tasks) == 1
+
+
+def test_motion_admission_uses_owner_state_without_requiring_stop_evidence_for_idle():
+    from arm_cell_interfaces.msg import MotionStatus
+    status = MotionStatus(execution_state=MotionStatus.MOTION_STATE_IDLE)
+    assert module.motion_allows_admission(status, 5., 5.1)
+    assert not module.motion_allows_admission(status, 5., 6.1)
+    for name in ('EXECUTING', 'STOPPING', 'EMERGENCY_STOPPED', 'FAULTED', 'UNKNOWN'):
+        status.execution_state = getattr(MotionStatus, 'MOTION_STATE_' + name)
+        assert not module.motion_allows_admission(status, 5., 5.1)
+    status.execution_state = MotionStatus.MOTION_STATE_STOPPED
+    assert not module.motion_allows_admission(status, 5., 5.1)
+    status.backend_inactivity_confirmed = True
+    assert module.motion_allows_admission(status, 5., 5.1)
+    status.has_active_execution = True
+    assert not module.motion_allows_admission(status, 5., 5.1)
+
+
+def test_reservation_rejection_never_releases_another_lease(configured_mission):
+    from arm_cell_interfaces.action import ExecuteCycle
+    from arm_cell_interfaces.srv import ConfiguredSupply
+    mission, _, tasks = configured_mission
+    commands = []
+
+    def reject(command, *args, **kwargs):
+        commands.append(command)
+        return State(success=False, supply_epoch='epoch', exhausted=False,
+                     diagnostic_detail='already reserved', reservation_id='other', slot_id='slot_0')
+
+    mission.command = reject
+    goal = ExecuteCycle.Goal(target_id=mission.target, quantity=1)
+    mission.accept(goal)
+    terminal = []
+    handle = State(request=goal, goal_id=State(uuid=[2]*16), is_cancel_requested=False,
+                   publish_feedback=lambda _: None, abort=lambda: terminal.append('aborted'))
+    result = mission.execute(handle)
+    assert terminal == ['aborted'] and not result.has_material_placed
+    assert commands == [ConfiguredSupply.Request.RESERVE] and not tasks
+
+
+@pytest.mark.parametrize('placed,expected_terminal', [(True, 'aborted'), (False, 'canceled')])
+def test_interruption_preserves_observed_task_outcome(configured_mission, placed, expected_terminal):
+    from concurrent.futures import Future
+    from arm_cell_interfaces.action import ExecuteCycle, ExecuteConfiguredGrasp
+    from arm_cell_interfaces.msg import MissionExitReason, MotionTaskResultCode
+    from arm_cell_interfaces.srv import ConfiguredSupply
+    mission, requests, _ = configured_mission
+    goal = ExecuteCycle.Goal(target_id=mission.target, quantity=1)
+    mission.accept(goal)
+    terminal = []
+    handle = State(request=goal, goal_id=State(uuid=[2]*16), is_cancel_requested=False,
+                   publish_feedback=lambda _: None, abort=lambda: terminal.append('aborted'),
+                   canceled=lambda: terminal.append('canceled'))
+    result_future = Future()
+    outcome = ExecuteConfiguredGrasp.Result(
+        result_code=(MotionTaskResultCode.TASK_RESULT_PATH_OBSTRUCTED if placed
+                     else MotionTaskResultCode.TASK_RESULT_CANCELED),
+        material_placed=placed, failure_stage='RETREAT' if placed else 'TRANSFER')
+
+    def send_task(_):
+        handle.is_cancel_requested = True
+        sent = Future()
+        sent.set_result(State(accepted=True, goal_id=State(uuid=[1]*16),
+                              get_result_async=lambda: result_future,
+                              cancel_goal_async=lambda: result_future.set_result(
+                                  State(status=6 if placed else 5, result=outcome))))
+        return sent
+
+    mission.task.send_goal_async = send_task
+    result = mission.execute(handle)
+    assert terminal == [expected_terminal]
+    assert result.has_material_placed and result.material_placed == placed
+    assert result.exit_reason.value == (MissionExitReason.MISSION_EXIT_MOTION_ERROR if placed
+                                        else MissionExitReason.MISSION_EXIT_CANCELED)
+    assert [req.command for req in requests] == [ConfiguredSupply.Request.RESERVE, ConfiguredSupply.Request.ABANDON]
+    assert requests[-1].material_placed == placed
+    if placed:
+        assert 'RETREAT' in result.diagnostic_detail

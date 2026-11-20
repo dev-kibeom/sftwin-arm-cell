@@ -163,7 +163,8 @@ int main()
     msg::MissionExitReason::MISSION_EXIT_DEPLETED == 1 &&
     msg::MissionExitReason::MISSION_EXIT_CONFIGURATION_ERROR == 6 &&
     msg::MissionExitReason::MISSION_EXIT_QUANTITY_REACHED == 7 &&
-    msg::MissionExitReason::MISSION_EXIT_QUANTITY_SHORTFALL == 8;
+    msg::MissionExitReason::MISSION_EXIT_QUANTITY_SHORTFALL == 8 &&
+    msg::MissionExitReason::MISSION_EXIT_TASK_ADMISSION_BUSY == 9;
 
   msg::SafetyState safety;
   safety.motion_envelope_valid = true;

@@ -18,6 +18,7 @@ struct TaskExecutionReport
   std::string motion_execution_id;
   std::string failure_stage;
   std::string gripper_observation_detail;
+  bool released_at_configured_destination{false};
   bool retry_after_unconfirmed_release{false};
   std::uint8_t result_code{MotionTaskResultCode::TASK_RESULT_INVALID_GOAL};
   std::uint8_t object_disposition{ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN};

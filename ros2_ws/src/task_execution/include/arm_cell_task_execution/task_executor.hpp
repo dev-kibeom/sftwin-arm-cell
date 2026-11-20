@@ -70,6 +70,8 @@ public:
   bool pick_grasp_insertion_started() const;
   void fence_configured_grasp(const unique_identifier_msgs::msg::UUID & execution_id);
   MotionCancelResult cancel_active_motion(const unique_identifier_msgs::msg::UUID & execution_id);
+  bool released_at_configured_destination() const
+  {return last_report_.released_at_configured_destination;}
   std::uint8_t object_disposition() const {return last_report_.object_disposition;}
   std::string last_failure_stage() const {return last_report_.failure_stage;}
   const std::vector<std::string> & attempted_material_candidate_ids() const

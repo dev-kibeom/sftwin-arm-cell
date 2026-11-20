@@ -10,7 +10,7 @@ RESERVE는 현재 epoch의 미완료 슬롯 하나와 예약 ID를 반환한다.
 COMPLETE·ABANDON은 supply_id, supply_epoch, slot_id, reservation_id가 정확히 일치해야 한다.
 COMPLETE는 성공한 Task 시퀀스와 같은 예약의 장치 Release 확인으로 슬롯을 퇴역한다.
 material_placed는 기존 필드명이며 실제 수령·안착의 GT 증거가 아니다. 실제 자재 완료 수량은 집계하지 않는다.
-중복·만료·이전 epoch 요청은 슬롯 진행을 바꾸지 않는다. ABANDON은 명목 슬롯 상태를 보존한다.
+중복·만료·이전 epoch 요청은 슬롯 진행을 바꾸지 않는다. ABANDON은 예약을 해제하며 확인된 목적지 Release를 기존 `material_placed` 필드로 함께 전달한다. Tape의 명목 슬롯은 기존 실패 정책을 따른다. Conveyor 공급자는 같은 예약의 Release가 확인됐으면 해당 도착 자재를 선택 대상에서 제외한다. 실패한 Mission을 성공으로 집계하지 않는다. Task 결과가 불명확하면 예약을 유지한다.
 
 `/cell/configured_supply/state`는 ID·epoch·슬롯 점유·예약·호환용 completed_count(항상 0)·valid·소진 상태를 발행한다.
 수신 신선도와 valid를 함께 평가하며, Topic 수신이나 슬롯 생성 자체를 파지 성공으로 취급하지 않는다.
@@ -33,8 +33,8 @@ Task Execution이 배포된 registry에서 기하·티칭을 찾는다. 호출�
 Task는 공통 GraspCycle BT와 동일 운영 MotionCore/GripperPort를 사용하고 ROS Goal UUID를 움직임·Tool 의도와 연결한다.
 새 Task→Motion ROS 경계는 만들지 않는다.
 
-Result는 result_code, material_placed, failure_stage, diagnostic_detail이다. 장치 해제 사실은
-이후 Retreat 실패로 소거하지 않지만 실패한 시퀀스의 예약을 완료 처리하지 않는다.
+Result는 result_code, material_placed, failure_stage, diagnostic_detail이다. 목적지에서 확인한 장치 해제 사실은 이후 Retreat 실패로 소거하지 않는다. Pick 실패 복구 중 원위치 Release는 배치 증거가 아니다.
+실패한 시퀀스의 예약을 완료 처리하지 않는다.
 단일 configured Mission은 관측한 Task terminal의 `material_placed`를 ExecuteCycle Result에
 `has_material_placed=true`와 함께 그대로 전달한다. 해당 Task terminal이 없으면 유효성은 false다.
 이 값은 슬롯 퇴역·Mission 성공·PLC 인수 여부와 독립적이다.
@@ -43,6 +43,12 @@ Result는 result_code, material_placed, failure_stage, diagnostic_detail이다. 
 이 source의 batch_processed_count와 completed_count는 항상 0이며 물리 자재 수량을 뜻하지 않는다.
 Task 실패 또는 Safety·취소는 Mission을 종료하며 자동 재시도하지 않는다. Task 수락/terminal이 불확실하면
 예약을 유지하고 늦은 수락도 취소해 중복 처리를 막는다. Stop 이후 새 세션에서만 초기화된 공급을 사용한다.
+
+## Conveyor Mission 수락 표본
+
+PLC 프로필의 `mission_admission_available`은 Configured Mission이 새 단일 작업을 받을 수 있는지 나타낸다. Mission 유휴, 예약 없음, 신선한 공급·정상 Safety 허가, Task·공급 서비스 발견 및 신선한 Motion 실행 상태를 사용한다. Goal 수락 시 대상·수량·Delivery ID도 확인한다. 수락한 작업의 실행 중에는 Motion이 EXECUTING으로 바뀌는 것이 정상이다. 실행 중단은 기존 Safety·공급·예약·취소 계약을 따른다.
+
+Motion은 `/motion/state`의 Owner다. 활성 실행이 없는 정상 IDLE에는 이전 Stop 증거가 필요하지 않다. STOPPED는 Motion이 확인한 정지 완료와 정상 Safety 허가가 갖춰져야 새 생산 작업에 사용할 수 있다. STOPPING·EXECUTING·FAULTED·EMERGENCY_STOPPED·UNKNOWN 또는 오래된 표본에서는 새 작업을 보류한다. Task Execution은 공유 실행 mutex·예약 fence와 실행 결과를 소유한다. 실행 mutex 충돌로 BT 진입 전에 종료하면 `TASK_RESULT_BUSY`와 단계 `configured_supply:execution_admission`을 전달한다. PLC 프로필의 Mission만 이 조합을 별도 종료 사유로 전달한다. [Motion 상태](icd-safety-motion.md) · [Safety 및 Controlled Recovery](../components/orchestration/fds-controlled-recovery.md)
 
 ## 검증 조건
 

@@ -10,10 +10,10 @@ VAR
     server : MB.ModbusServer;
     ir : ARRAY[0..31] OF WORD;
     hr : ARRAY[0..25] OF WORD;
-    lastEquipment, lastReply, lastReady : WORD;
-    seenEquipment, seenReply, seenReady : BOOL;
-    equipmentAge, replyAge, readyAge : TON;
-    valid, link, robotReady, automatic, permitted, motion : BOOL;
+    lastEquipment, lastReply, lastAdmission, rejectedSample : WORD;
+    seenEquipment, seenReply, seenAdmission : BOOL;
+    equipmentAge, replyAge, admissionAge : TON;
+    valid, link, admissionAvailable, automatic, permitted, equipmentEnabled, reusable, feedAllowed : BOOL;
     infeed, pick, stopped, extended, occupied, pathClear : BOOL;
     driveAvailable, pickZoneClear, dischargeZoneClear, onBelt : BOOL;
     feed, runBelt, extend, discharge, confirmed : BOOL;
@@ -22,16 +22,16 @@ END_VAR
 
 IF hr[16] <> lastEquipment THEN seenEquipment := TRUE; END_IF;
 IF hr[5] <> lastReply THEN seenReply := TRUE; END_IF;
-IF hr[6] <> lastReady THEN seenReady := TRUE; END_IF;
+IF hr[6] <> lastAdmission THEN seenAdmission := TRUE; END_IF;
 equipmentAge(IN := hr[16] = lastEquipment, PT := T#1s);
 replyAge(IN := hr[5] = lastReply, PT := T#1s);
-readyAge(IN := hr[6] = lastReady, PT := T#1s);
+admissionAge(IN := hr[6] = lastAdmission, PT := T#1s);
 lastEquipment := hr[16];
 lastReply := hr[5];
-lastReady := hr[6];
+lastAdmission := hr[6];
 valid := seenEquipment AND NOT equipmentAge.Q AND hr[17] = 1;
 link := seenReply AND NOT replyAge.Q;
-robotReady := link AND seenReady AND NOT readyAge.Q AND hr[7] = 1;
+admissionAvailable := link AND seenAdmission AND NOT admissionAge.Q AND hr[7] = 1;
 automatic := hr[18] = 1;
 infeed := hr[21].0;
 pick := hr[21].1;
@@ -47,7 +47,12 @@ onBelt := hr[21].10;
 generated := SHL(WORD_TO_DWORD(hr[22]), 16) OR hr[23];
 boundSlot := SHL(WORD_TO_DWORD(hr[24]), 16) OR hr[25];
 replyId := SHL(WORD_TO_DWORD(hr[0]), 16) OR hr[1];
-motion := valid AND automatic AND permitted;
+equipmentEnabled := valid AND automatic AND permitted;
+reusable := NOT infeed AND NOT pick AND NOT occupied AND pathClear AND NOT onBelt
+            AND stopped AND pickZoneClear;
+// On initial startup P1 only needs equipment and stream synchronization.
+feedAllowed := equipmentEnabled AND reusable AND hr[19] = 1 AND hr[20] > 0
+               AND (committed = 0 OR admissionAvailable);
 feed := FALSE;
 runBelt := FALSE;
 extend := FALSE;
@@ -56,24 +61,22 @@ confirmed := FALSE;
 
 CASE phase OF
 0:  // P1: reconcile both owners before allocating a new material identity.
-    IF motion AND robotReady AND hr[19] = 1 AND hr[20] > 0 AND
-       generated = cycle AND committed = cycle AND requested = cycle AND
-       replyId = requested AND (hr[2] = 0 OR (hr[2] >= 4 AND hr[2] <= 6)) AND
-       NOT infeed AND NOT pick AND NOT occupied AND pathClear AND NOT onBelt AND
-       stopped AND pickZoneClear AND cycle < 16#FFFFFFFF THEN
+    IF feedAllowed AND link AND
+       generated = cycle AND committed = cycle AND
+       replyId = requested AND (requested <> 0 OR hr[2] = 0) AND
+       cycle < 16#FFFFFFFF AND requested < 16#FFFFFFFF THEN
         cycle := cycle + 1;
+        feed := TRUE;
         phase := 10;
     END_IF;
 10: // Hold the same feed ID until actual creation and infeed detection.
     IF valid AND generated = cycle AND infeed THEN
         phase := 20;
-    ELSIF motion AND robotReady AND generated = cycle - 1 AND NOT infeed AND NOT pick AND
-          NOT occupied AND pathClear AND NOT onBelt AND stopped AND pickZoneClear AND
-          hr[19] = 1 AND hr[20] > 0 THEN
+    ELSIF feedAllowed AND generated = cycle - 1 THEN
         feed := TRUE;
     END_IF;
 20: // Arm arrival detection only when this transfer starts with the sensor clear.
-    IF motion AND driveAvailable AND pickZoneClear AND NOT pick AND infeed AND
+    IF equipmentEnabled AND driveAvailable AND pickZoneClear AND NOT pick AND infeed AND
        NOT occupied AND generated = cycle THEN
         runBelt := TRUE;
         phase := 21;
@@ -81,42 +84,49 @@ CASE phase OF
 21: // Drive Busy pauses this transfer. Never restart an unlocated part.
     IF valid AND pick AND generated = cycle THEN
         phase := 22;
-    ELSIF motion AND driveAvailable AND pickZoneClear AND NOT occupied AND
+    ELSIF equipmentEnabled AND driveAvailable AND pickZoneClear AND NOT occupied AND
           generated = cycle AND (infeed OR onBelt) THEN
         runBelt := TRUE;
     END_IF;
-22: // Stop, fix, then expose the pick confirmation until the provider binds its slot.
-    extend := motion AND pick AND stopped AND pickZoneClear AND generated = cycle;
+22, 23: // Stop, fix, then expose the pick confirmation until the provider binds its slot.
+    extend := equipmentEnabled AND pick AND stopped AND pickZoneClear AND generated = cycle;
     confirmed := extend AND extended AND NOT occupied;
-    IF confirmed AND boundSlot = cycle AND robotReady THEN
-        requested := cycle;
+    IF confirmed AND boundSlot = cycle AND admissionAvailable AND requested < 16#FFFFFFFF AND
+       (phase = 22 OR hr[6] <> rejectedSample) THEN
+        requested := requested + 1;
         resultState := 0;
         resultReason := 0;
         placement := 0;
         phase := 30;
     END_IF;
 30: // Keep the request ID visible while the existing Adapter resolves this job.
-    extend := motion AND stopped AND extended;
+    extend := equipmentEnabled AND stopped AND extended;
     IF link AND replyId = requested AND hr[2] >= 4 AND hr[2] <= 7 THEN
         resultState := hr[2];
         resultReason := hr[3];
         placement := hr[4];
         phase := 40;
     END_IF;
-40: // P4 is bookkeeping, including when the robot failed after Place.
-    IF valid AND occupied AND placement = 2 AND resultState <= 6 AND committed <> cycle THEN
+40: // Interpret the retained terminal (including phase 40 from earlier applications).
+    IF resultState = 7 OR (resultState = 6 AND resultReason = 9 AND placement = 1) THEN
+        // Mission rejected, or the Task could not claim the executor. No BT ran. Recheck the same physical slot on a new admission sample.
+        rejectedSample := hr[6];
+        phase := 23;
+    ELSIF placement <> 2 OR resultState < 4 OR resultState > 6 THEN
+        // Executed or possibly executed, without proof of placement: reconcile on site.
+        phase := 39;
+    ELSIF valid AND occupied THEN
         committed := cycle;
         phase := 50;
     END_IF;
 50: // Do not credit an empty slot until a permitted discharge was commanded.
-    IF motion AND occupied AND dischargeZoneClear THEN
+    IF equipmentEnabled AND occupied AND dischargeZoneClear THEN
         discharge := TRUE;
         phase := 51;
     END_IF;
 51:
-    discharge := motion AND occupied AND dischargeZoneClear;
-    IF motion AND NOT occupied AND NOT infeed AND NOT pick AND pathClear AND
-       NOT onBelt AND stopped AND pickZoneClear AND robotReady THEN
+    discharge := equipmentEnabled AND occupied AND dischargeZoneClear;
+    IF equipmentEnabled AND reusable AND admissionAvailable THEN
         phase := 0;
     END_IF;
 END_CASE;

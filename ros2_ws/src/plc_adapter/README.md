@@ -49,17 +49,17 @@ ConveyorPart는 예시 자재 키다. 같은 Pick 위치에 연속 도착하는 
 | 영역 | 생산자 → 소비자 | 순서와 의미 |
 |---|---|---|
 | IR0–1 / HR0–5 | PLC → Adapter / Adapter → PLC | 기존 단일 작업 요청 / 결과 블록 |
-| HR6–7 | Adapter → PLC | 새 Mission 준비 표본의 순번, Robot Ready |
+| HR6–7 | Adapter → PLC | 새 Mission 수락 표본의 순번, 수락 가능 여부 |
 | HR16–20 | 설비 → PLC | 표본 순번, 전체 관측 유효, UI 자동운전, 자재 코드(1 = ConveyorPart), 남은 공급 가능 수량 |
 | HR21 | 설비 → PLC | bit 0부터 투입 감지, Pick 감지, 벨트 실제 정지, 스토퍼 실제 고정, 트레이 점유, 이송로 비움, 드라이브 가동 가능, 로봇 Pick 영역 이탈, 로봇 배출 영역 이탈, 설비 동작 허가, 이번 자재 이송로 위 확인 |
 | HR22–23 / 24–25 | 설비 → PLC | 마지막으로 실제 생성한 자재 ID / 현재 Pick 자재의 Configured Supply 슬롯 연결 확인 ID(근거 없으면 0) |
-| IR16–18 | PLC → 설비·관측기 | 자재 ID, 단계(0·10 공급, 20·21·22 이송·고정, 30 로봇 응답 대기, 40 인수 대기, 50·51 배출·재사용 대기) |
+| IR16–18 | PLC → 설비·관측기 | 자재 ID, 단계(0·10 공급, 20·21·22 이송·고정, 23 미실행 재수락 대기, 30 로봇 응답 대기, 39 배치 미확정 현장 대조, 40 terminal 판정·인수 대기, 50·51 배출·재사용 대기) |
 | IR19–23 | PLC → 설비 | `feed_part_command`, `conveyor_run_command`, `stopper_extend_command`, `pick_position_confirmed`, `discharge_tray_command` |
 | IR24–29 | PLC → 관측기 | 마지막 Commit ID 상·하위, 최근 요청에 저장한 terminal 상태·사유·배치, 앱 식별값 0xC051 |
 
 설비와 로봇 링크의 갱신 감시 시간은 각각 1초다. 설비는 현재성이 확인된 관측을 써야 하며 입력 일부가 불명이면 전체 관측 유효를 내린다. 통신 중단 시 설비 측에서도 명령 적용을 중지한다. 로봇 영역 및 설비 동작 허가는 설비·안전 제어계가 관측한 값이다. P4는 정지 중에도 인수를 기록할 수 있다.
 
-**실행.** Configured Mission에는 [공정 파라미터](config/conveyor_process.yaml)를, Adapter에는 기존 [Modbus 프로필](config/conveyor_pnp_codesys.yaml)과 공정 파라미터를 차례로 전달한다. 같은 ROS 도메인에 해당 공급 service 및 Robot Task가 필요하다. Mission은 유휴·예약·하위 서비스 준비와 기존 공급·Safety 신선도를 평가해 100 ms마다 준비 상태를 발행한다. Adapter는 500 ms 넘게 새 표본이 없으면 거짓을 전달한다. PLC는 준비 표본과 별도로 결과 블록의 heartbeat를 감시한다.
+**실행.** Configured Mission에는 [공정 파라미터](config/conveyor_process.yaml)를, Adapter에는 기존 [Modbus 프로필](config/conveyor_pnp_codesys.yaml)과 공정 파라미터를 차례로 전달한다. 같은 ROS 도메인에 해당 공급 service 및 Robot Task가 필요하다. Conveyor 프로필은 `plc_admission_enabled`를 켠다. Mission은 유휴·예약·하위 서비스·공급·Safety와 1초 이내의 Motion 상태를 평가해 100 ms마다 `/orchestration/mission_admission_available`을 발행한다. 기존 PR의 `robot_ready_topic`·`ready_holding_offset` 설정은 `mission_admission_topic`·`admission_holding_offset`으로 갱신한다. HR6–7 주소와 로봇 작업 블록은 동일하다. Adapter는 500 ms 넘게 새 표본이 없으면 거짓을 전달한다. PLC는 준비 표본과 별도로 결과 블록의 heartbeat를 감시한다.
 
 **실제 런타임에서 Mock 시운전.** 다른 I/O 생산자가 없는 전용 loopback Linux SL을 새 공정 스트림(ID 0)으로 기동한다. 위 ROS 패키지를 빌드하고 overlay를 source한 뒤 저장소 루트에서 실행한다.
 
@@ -67,4 +67,4 @@ ConveyorPart는 예시 자재 키다. 같은 Pick 위치에 연속 도착하는 
 python3 ros2_ws/src/plc_adapter/tests/codesys/commission_conveyor.py --port 1502
 ```
 
-시험은 실제 Adapter와 Mission을 별도 프로세스로 시작하고 설비·Safety 입력·Configured Supply·Robot Task를 모의한다. PLC 단계·Commit은 FC04로 읽는다. 기동 시 공급 가능 수량을 3으로 설정한다. 입력 지연·구동 불가·로봇 대기, Adapter 재시작과 terminal 재전달, 인수·배출 보류, 자재 소진을 관측한다. 구 통신 시험용 앱(0xC04E)은 공정 시험 전에 교체해야 한다.
+시험은 실제 Adapter와 Mission을 별도 프로세스로 시작하고 Conveyor 공급자에 Mock 도착을 연결하고 설비·Motion·Safety 입력과 Robot Task를 모의한다. PLC 단계·Commit은 FC04로 읽는다. 기동 시 공급 가능 수량을 5로 설정한다. 수락 거부와 Task 실행권 Busy를 주입하고 동일 자재의 새 요청을 확인한다. 입력 지연·구동 불가·로봇 대기, Adapter 재시작과 terminal 재전달, 인수·배출 보류, 5회 Commit과 재고 소진을 확인한다. 재보충 후 여섯 번째 자재의 배치 전 실행 실패에서 Commit과 재공급이 보류되는지 확인한다. 구 통신 시험용 앱(0xC04E)은 공정 시험 전에 교체해야 한다.

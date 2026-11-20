@@ -106,6 +106,20 @@ TEST(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActiveMo
   EXPECT_EQ(motion->moves.load(), 0);
   motion->canceled = false;
   goal.reservation_id = "token"; publisher->publish(supply); pump(5);
+  {
+    std::unique_lock<std::mutex> existing_owner(*task->execution_mutex());
+    auto busy_goal = client->async_send_goal(goal);
+    ASSERT_EQ(executor.spin_until_future_complete(busy_goal, std::chrono::seconds(1)),
+      rclcpp::FutureReturnCode::SUCCESS);
+    ASSERT_TRUE(busy_goal.get());
+    auto busy = client->async_get_result(busy_goal.get());
+    ASSERT_EQ(executor.spin_until_future_complete(busy, std::chrono::seconds(1)),
+      rclcpp::FutureReturnCode::SUCCESS);
+    EXPECT_EQ(busy.get().result->result_code, Code::TASK_RESULT_BUSY);
+    EXPECT_EQ(busy.get().result->failure_stage, "configured_supply:execution_admission");
+    EXPECT_FALSE(busy.get().result->material_placed);
+    EXPECT_EQ(motion->moves.load(), 0);
+  }
   auto accepted = client->async_send_goal(goal);
   ASSERT_EQ(
     executor.spin_until_future_complete(

@@ -4,7 +4,7 @@
 - **Owner:** PLC Adapter (요청 상관 및 결과 전달)
 - **참여자:** PLC, PLC Adapter, Configured-source Orchestration
 
-PLC는 작업 요청을 유지하고 Adapter는 같은 `command_id`의 마지막 관측을 반환한다. Adapter는 [Configured Supply Mission](icd-configured-supply.md)에 설정된 자재, 수량 1, zero Delivery UUID를 제출한다. Goal 수락·실행·terminal은 Orchestration, 슬롯 예약·퇴역은 Configured Supply, 장치 해제 사실은 Task Execution에서 온다. 설비 Gate·Cell Commit·실제 슬롯 점유·Robot Ready의 판단은 이 인터페이스 밖에 있다.
+PLC는 작업 요청을 유지하고 Adapter는 같은 `command_id`의 마지막 관측을 반환한다. Adapter는 [Configured Supply Mission](icd-configured-supply.md)에 설정된 자재, 수량 1, zero Delivery UUID를 제출한다. Goal 수락·실행·terminal은 Orchestration, 슬롯 예약·퇴역은 Configured Supply, 장치 해제 사실은 Task Execution에서 온다. 설비 Gate·Cell Commit·실제 슬롯 점유의 판단은 이 인터페이스 밖에 있다.
 
 ## 요청과 결과
 
@@ -17,7 +17,9 @@ PLC는 작업 요청을 유지하고 Adapter는 같은 `command_id`의 마지막
 | 배치 사실 | 0은 정보 없음, 1은 관측된 Task 결과의 `material_placed=false`, 2는 `true`다. Mission 실패와 배치 사실이 동시에 성립할 수 있다. |
 | heartbeat | 응답 블록마다 순환 증가하는 16비트 값. PLC는 변화와 수신 경과시간으로 링크 신선도를 판단한다. |
 
-Conveyor 프로필은 작업 응답과 별도 블록으로 Robot Ready를 전달한다. Configured Mission이 유휴, 활성 예약 없음, 해당 자재의 유효한 공급 상태, Task·Cell service 준비 및 fresh Safety 모션 허가를 함께 평가한다. 빈 Pick 위치에서도 공급자 자체가 유효할 수 있다. 실제 슬롯 연결은 별도 P3 Gate다. Adapter는 새 준비 표본의 순번과 값을 전달하며 오래된 표본은 거짓으로 전달한다. PLC는 표본 갱신과 링크 신선도를 함께 요구한다. 이 표본은 새 Goal 수락을 예약하지 않으며 Mission이 수락 시 조건을 다시 평가한다. [Cell Control](../cells/conveyor-pnp-poc/cell-control.md)
+Conveyor 프로필의 별도 HR6–7은 Configured Mission이 발행하는 `/orchestration/mission_admission_available`의 새 표본 순번과 값을 전달한다. Adapter는 표본 만료 시 거짓을 전달한다. PLC는 링크와 수락 표본의 신선도를 확인한다. 발행과 Goal 수락은 같은 [Mission 수락 조건](icd-configured-supply.md)을 사용하며 특정 Goal의 실제 수락은 Action 응답으로 확정한다. 로봇 포즈, 복구 성공, 배출 영역 이탈은 이 WORD에서 알 수 없다.
+
+상태 7은 Mission이 시작되지 않은 명시적 거부다. 상태 6·사유 `MISSION_EXIT_TASK_ADMISSION_BUSY`(9)·배치 1은 Mission은 수락됐지만 Configured Task가 실행 mutex를 얻기 전에 종료된 경우다. 이 두 경우에만 PLC는 같은 자재의 Pick 위치·슬롯과 새 수락 가능 표본을 확인한 뒤 다음 연속 요청 ID를 사용한다. 자재 ID와 요청 ID는 별도 증가한다. 실행 도중의 Busy나 일반 실패에 이 사유를 사용하지 않는다. 상태 8·오래된 응답·다른 ID는 기존 요청 조회를 유지한다.
 
 PLC는 같은 ID를 유지해 수락·진행·terminal을 조회한다. 결과를 소비한 후 다음 자재에 새 ID를 부여한다. 요청·응답 블록은 각각 일관된 한 프로세스 이미지로 교환한다. 이전 ID의 재조회는 해당 기록만 반환한다. 한 스트림에서 ID를 순환·재사용하지 않는다.
 
