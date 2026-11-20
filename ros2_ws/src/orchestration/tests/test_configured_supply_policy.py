@@ -72,7 +72,7 @@ def test_selected_diagnostics_preserves_mission_causality_and_survives_bad_stora
 
 
 @pytest.fixture
-def configured_mission(monkeypatch):
+def configured_mission(monkeypatch, request):
     """Run Mission policy with in-process ROS transport substitutes; no DDS or motion."""
     import rclpy
     import rclpy.node
@@ -105,7 +105,7 @@ def configured_mission(monkeypatch):
         return completed(lease)
     def send_task(goal):
         tasks.append(goal)
-        result=State(status=4,result=State(result_code=0,material_placed=True,failure_stage='',diagnostic_detail=''))
+        result=State(status=getattr(request, 'param', 4),result=State(result_code=0,material_placed=True,failure_stage='',diagnostic_detail=''))
         return completed(State(accepted=True,goal_id=State(uuid=[1]*16),get_result_async=lambda:completed(result)))
     monkeypatch.setattr(rclpy,'init',lambda **kwargs:None)
     monkeypatch.setattr(rclpy,'shutdown',lambda:None)
@@ -149,9 +149,26 @@ def test_unit_request_runs_one_sequence_without_material_count(configured_missio
         abort=lambda:terminal.append('aborted'),canceled=lambda:terminal.append('canceled'))
     result=mission.execute(handle)
     assert result.exit_reason.value==MissionExitReason.MISSION_EXIT_QUANTITY_REACHED
+    assert result.has_material_placed and result.material_placed
     assert terminal==['succeeded']
     assert [request.command for request in requests]==[ConfiguredSupply.Request.RESERVE,ConfiguredSupply.Request.COMPLETE]
     assert requests[-1].material_placed
     assert len(tasks)==1 and tasks[0].slot_id=='slot_0'
     assert feedback[-1].batch_processed_count==0
     assert not mission.busy
+
+
+@pytest.mark.parametrize('configured_mission', [0], indirect=True)
+def test_unknown_task_terminal_keeps_reservation_and_has_no_release_fact(configured_mission):
+    from arm_cell_interfaces.action import ExecuteCycle
+    from arm_cell_interfaces.srv import ConfiguredSupply
+    mission, requests, tasks = configured_mission
+    goal = ExecuteCycle.Goal(target_id=mission.target, quantity=1)
+    mission.accept(goal)
+    terminal = []
+    handle = State(request=goal, goal_id=State(uuid=[2]*16), is_cancel_requested=False,
+                   publish_feedback=lambda _: None, abort=lambda: terminal.append('aborted'))
+    result = mission.execute(handle)
+    assert terminal == ['aborted'] and not result.has_material_placed
+    assert [req.command for req in requests] == [ConfiguredSupply.Request.RESERVE]
+    assert len(tasks) == 1

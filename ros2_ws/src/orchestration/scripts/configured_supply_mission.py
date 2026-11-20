@@ -273,8 +273,14 @@ def main(args=None):
                         if cancel_deadline and time.monotonic()>cancel_deadline:
                             raise PendingTaskUncertain('Task terminal uncertain after interruption; reservation retained until Stop')
                         time.sleep(.01)
-                    task_result=pending.result();terminal_known=True;child=None
-                    outcome=task_result.result
+                    task_result = pending.result()
+                    if task_result is None or task_result.status not in (4, 5, 6):
+                        raise PendingTaskUncertain('Task terminal unavailable; reservation retained until Stop')
+                    terminal_known = True
+                    child = None
+                    outcome = task_result.result
+                    result.has_material_placed = True
+                    result.material_placed = outcome.material_placed
                     self.capture_event(handle,'task_outcome',task_status=task_result.status,
                         task_result_code=outcome.result_code,material_placed=outcome.material_placed,
                         failure_stage=outcome.failure_stage,diagnostic_detail=outcome.diagnostic_detail,

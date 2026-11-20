@@ -6,6 +6,10 @@ uint32 quantity
 ---
 # Recovery never rewrites the original exit_reason.
 MissionExitReason exit_reason
+# Configured, single-slot Missions forward a known child terminal release fact.
+# Other Missions and missing child results leave has_material_placed false.
+bool has_material_placed
+bool material_placed
 string diagnostic_detail
 ---
 # Feedback is a public mission phase, not a BehaviorTree implementation state.
