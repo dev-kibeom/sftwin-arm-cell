@@ -470,6 +470,11 @@ def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
         assert 'move_duration_s' not in window.parameter_edits
         assert 'max_velocity_fraction' in window.parameter_edits
 
+    cells.setCurrentIndex(options(cells).index('conveyor_pnp_cell'))
+    assert options(tool) == ['hand_e_c10']
+    assert window.selection()['profile'].stem == 'conveyor_pnp_profile'
+    assert window.isaac.isEnabled()
+
     cells.setCurrentIndex(arm_index)
     assert options(tool) == ['robotiq_2f85']
     assert window.tool_mode.count() == 3

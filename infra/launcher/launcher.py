@@ -56,7 +56,10 @@ def deployments(root=ROOT):
             continue
         status = data.get('launcher', {}).get('validation_status', 'baseline')
         entries.append(dict(profile=path, backend=str(backend), validation_status=status, **owners))
-    return sorted(entries, key=lambda entry: entry['validation_status'] == 'experimental')
+    return sorted(entries, key=lambda entry: (
+        entry['profile'].name != 'operational_profile.yaml',
+        entry['validation_status'] == 'experimental',
+    ))
 
 
 def selected_deployment(entries, selection):
