@@ -10,7 +10,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from PySide6.QtCore import QLockFile
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFormLayout
 import launcher
 
 
@@ -422,19 +422,52 @@ def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch)
     until(app,window,lambda:not window.stopping)
 
 
-def test_switching_between_radial_and_parallel_tools_has_no_signal_exceptions(window, monkeypatch):
+def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
     errors = []
     monkeypatch.setattr(sys, 'excepthook', lambda kind, error, tb: errors.append(error))
-    selector = window.selectors['tool']
-    parallel = selector.currentData()
-    for name in ('hand_e_c10_long.yaml', 'hand_e_c10.yaml'):
-        target = next(selector.itemData(i) for i in range(selector.count())
-                      if Path(selector.itemData(i)).name == name)
-        selector.setCurrentIndex(selector.findData(target))
+
+    def options(combo):
+        return [Path(combo.itemData(index)).stem for index in range(combo.count())]
+
+    cells = window.selectors['cell']
+    robot = window.selectors['robot']
+    tool = window.selectors['tool']
+    form = window.centralWidget().layout().itemAt(0).layout()
+    for row, widget in enumerate((cells, robot, tool, window.tool_mode, window.selectors['backend'])):
+        assert form.itemAt(row, QFormLayout.FieldRole).widget() is widget
+
+    arm_index = cells.currentIndex()
+    assert set(options(robot)) == {'m0609', 'rb5_850', 'hcr14'}
+    assert options(tool) == ['robotiq_2f85']
+    assert window.tool_mode.count() == 3
+    assert window.selection()['profile'].stem == 'operational_profile'
+
+    window.tool_mode.setCurrentText('Physical Attach')
+    robot.setCurrentIndex(options(robot).index('rb5_850'))
+    assert window.selection()['profile'].stem == 'rb5_850_profile'
+    assert window.tool_mode.currentText() == 'Physical Attach'
+
+    cells.setCurrentIndex(options(cells).index('tape_roll_cell'))
+    assert options(robot) == ['m0609']
+    assert set(options(tool)) == {'hand_e_c10', 'hand_e_c10_long'}
+    assert window.tool_mode.count() == 1
+    assert window.tool_mode.currentText() == 'Physical Real'
+    assert window.isaac.isEnabled()
+
+    for suffix in ('_long', ''):
+        tool.setCurrentIndex(options(tool).index(f'hand_e_c10{suffix}'))
+        entry = window.selection()
+        assert entry['profile'].stem == f'tape_m0609_c10{suffix}_profile'
+        assert (entry['tool_actuator'], entry['tool_grasp']) == ('physics', 'physical')
         assert 'move_duration_s' not in window.parameter_edits
         assert 'max_velocity_fraction' in window.parameter_edits
-        selector.setCurrentIndex(selector.findData(parallel))
-        assert 'move_duration_s' in window.parameter_edits
+
+    cells.setCurrentIndex(arm_index)
+    assert options(tool) == ['robotiq_2f85']
+    assert window.tool_mode.count() == 3
+    assert window.selection()['profile'].stem == 'operational_profile'
+    assert 'move_duration_s' in window.parameter_edits
+    assert window.isaac.isEnabled()
     assert errors == []
 
 

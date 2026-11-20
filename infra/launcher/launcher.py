@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 
-from PySide6.QtCore import QLockFile, QTimer, Qt
+from PySide6.QtCore import QLockFile, QSignalBlocker, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
                               QLabel, QMainWindow, QPushButton, QDoubleSpinBox, QGroupBox, QScrollArea,
                               QVBoxLayout, QWidget)
@@ -22,11 +22,7 @@ from arm_cell_bringup.tool_parameters import available_fields, parameter_value, 
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 
 
-OWNERS = {
-    'robot': 'ros2_ws/src/motion/config/robots',
-    'tool': 'ros2_ws/src/motion/config/tools',
-    'cell': 'ros2_ws/src/bringup/config/cells',
-}
+PROFILE_OWNERS = ('cell', 'robot', 'tool')
 
 
 def deployments(root=ROOT):
@@ -44,7 +40,7 @@ def deployments(root=ROOT):
         simulation = read(backend)
         if simulation.get('planning_profile') != 'isaac_planning.yaml':
             continue
-        owners = {key: str(resolve(data['profiles'][key], path.parent)) for key in OWNERS}
+        owners = {key: str(resolve(data['profiles'][key], path.parent)) for key in PROFILE_OWNERS}
         # A deployment registers one concrete Assembly and its owner profiles.
         # Discovery checks identity; export performs full model validation.
         model = read(resolve(data['model_configuration'], path.parent))
@@ -57,17 +53,6 @@ def deployments(root=ROOT):
         status = data.get('launcher', {}).get('validation_status', 'baseline')
         entries.append(dict(profile=path, backend=str(backend), validation_status=status, **owners))
     return sorted(entries, key=lambda entry: entry['validation_status'] == 'experimental')
-
-
-def profile_choices(root=ROOT):
-    result = {key: [str(path.resolve()) for path in sorted((root / directory).glob('*.yaml'))]
-              for key, directory in OWNERS.items()}
-    entries = deployments(root)
-    result['backend'] = sorted({entry['backend'] for entry in entries})
-    if entries:
-        for key, paths in result.items():
-            paths.sort(key=lambda path: path != entries[0][key])
-    return result
 
 
 def selected_deployment(entries, selection):
@@ -170,19 +155,19 @@ class Launcher(QMainWindow):
         form = QFormLayout()
         layout.addLayout(form)
         self.selectors = {}
-        for key, paths in profile_choices().items():
+        for key in (*PROFILE_OWNERS, 'backend'):
             combo = QComboBox()
-            for path in paths:
-                label = read(path).get('display_name', Path(path).stem)
-                combo.addItem(('Isaac / ' if key == 'backend' else '') + label, path)
             self.selectors[key] = combo
-            if key != 'tool':
-                combo.currentIndexChanged.connect(self.validate)
             form.addRow(key.title(), combo)
+            if key == 'backend':
+                combo.currentIndexChanged.connect(self.validate)
+            else:
+                combo.currentIndexChanged.connect(
+                    lambda _index, changed=key: self.refresh_deployment_choices(changed))
         self.tool_mode = QComboBox()
-        form.insertRow(2, 'Grasp Mode', self.tool_mode)
-        self.selectors['tool'].currentIndexChanged.connect(self.refresh_tool_modes)
+        form.insertRow(form.rowCount() - 1, 'Grasp Mode', self.tool_mode)
         self.tool_mode.currentIndexChanged.connect(self.refresh_parameters)
+        self.mode_pairs = []
         self.parameter_edits = {}
         self.parameter_panel = QWidget()
         self.parameter_layout = QVBoxLayout(self.parameter_panel)
@@ -194,7 +179,6 @@ class Launcher(QMainWindow):
         self.reset_parameters.clicked.connect(self.refresh_parameters)
         layout.addWidget(self.reset_parameters)
         self.resize(760, 650)
-        self.refresh_tool_modes()
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
         buttons = QHBoxLayout()
@@ -214,13 +198,38 @@ class Launcher(QMainWindow):
         layout.addWidget(hint)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
+        self.refresh_deployment_choices()
         self.timer.start(100)
-        self.validate()
+
+    def refresh_deployment_choices(self, changed=None):
+        candidates = self.entries
+        previous_tool = self.selectors['tool'].currentData()
+        refresh_choices = changed is None
+        for key, combo in self.selectors.items():
+            if refresh_choices:
+                current = combo.currentData()
+                paths = dict.fromkeys(entry[key] for entry in candidates)
+                with QSignalBlocker(combo):
+                    combo.clear()
+                    for path in paths:
+                        label = read(path).get('display_name', Path(path).stem)
+                        combo.addItem(('Isaac / ' if key == 'backend' else '') + label, path)
+                    index = combo.findData(current)
+                    if index >= 0:
+                        combo.setCurrentIndex(index)
+            candidates = [entry for entry in candidates if entry[key] == combo.currentData()]
+            refresh_choices = refresh_choices or key == changed
+
+        if changed == 'tool' or previous_tool != self.selectors['tool'].currentData():
+            self.refresh_tool_modes()
+        else:
+            self.validate()
 
     def refresh_tool_modes(self):
-        profile = read(self.selectors['tool'].currentData())
-        runtime = profile['runtime']
-        choices = tool_mode_choices(profile)
+        tool = self.selectors['tool'].currentData()
+        profile = read(tool) if tool is not None else None
+        runtime = profile['runtime'] if profile is not None else {}
+        choices = tool_mode_choices(profile) if profile is not None else []
         self.mode_pairs = [choice['combination'] for choice in choices]
         self.tool_mode.blockSignals(True)
         self.tool_mode.clear()
@@ -233,13 +242,15 @@ class Launcher(QMainWindow):
         self.refresh_parameters()
 
     def refresh_parameters(self):
-        if not hasattr(self, 'parameter_layout'):
-            return
         while self.parameter_layout.count():
             item = self.parameter_layout.takeAt(0)
             item.widget().deleteLater()
         self.parameter_edits = {}
-        runtime = read(self.selectors['tool'].currentData())['runtime']
+        tool = self.selectors['tool'].currentData()
+        if tool is None:
+            self.validate()
+            return
+        runtime = read(tool)['runtime']
         pair = self.tool_mode.currentData()
         if pair:
             runtime = dict(runtime, actuator=pair[0], grasp=pair[1])
@@ -275,8 +286,7 @@ class Launcher(QMainWindow):
                 forms[1].setRowVisible(row, checked)
         advanced.toggled.connect(show_advanced)
         show_advanced(False)
-        if hasattr(self, 'status'):
-            self.validate()
+        self.validate()
 
     def selection(self):
         entry = selected_deployment(self.entries, {key: combo.currentData() for key, combo in self.selectors.items()})

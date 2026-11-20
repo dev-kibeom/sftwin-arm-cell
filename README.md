@@ -182,10 +182,13 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 
 **4. 셀을 시작합니다.**
 
-1. Robot·Tool·Cell·Backend를 선택합니다. 기본 조합은 기존 M0609 + Robotiq 2F-85 +
+1. Cell을 먼저 선택한 뒤 Robot, Tool, Grasp Mode, Backend를 고릅니다.
+   등록된 조합만 표시합니다. PnP_CNC에서는 Robotiq 2F-85를,
+   Tape Handling Cell에서는 M0609와 Hand-E C10 기본형 또는 100 mm 핑거형을 선택할 수 있습니다.
+   기본 조합은 M0609 + Robotiq 2F-85 +
    `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
-   Tool에 연동된 `Grasp Mode`를 선택합니다. 병렬 그리퍼의 기본은 `Logical Attach`이며,
+   병렬 그리퍼의 기본 모드는 `Logical Attach`이며,
    물리 구동과 논리 고정은 `Physical Attach`, 접촉·마찰 기반 시뮬레이션 파지는 `Physics`입니다.
    Tool Profile이 지원하는 모드만 표시하고 실행 중에는 선택을 잠급니다.
    `Physics`는 실물 장비 연결이나 실제 파지의 라이브 검증 완료를 뜻하지 않습니다.
