@@ -78,6 +78,7 @@ private:
     bool approach_submitted{false};
     bool released_confirmed{false};
     bool holding_confirmation_failed{false};
+    bool grasp_unconfirmed{false};
   };
 
   std::uint8_t prepare_candidate(bool candidate_inputs_validated);

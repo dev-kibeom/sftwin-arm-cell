@@ -42,8 +42,13 @@ public:
   void set_execution_identity(std::string execution_id) {execution_id_ = std::move(execution_id);}
   const std::string & execution_identity() const {return execution_id_;}
 
-  void set_prepared_grasp(std::optional<PreparedGraspCycle> prepared)
-  {prepared_grasp_ = std::move(prepared);}
+  void set_prepared_grasp(
+    std::optional<PreparedGraspCycle> prepared, std::function<bool()> observed_at_pick = {})
+  {
+    prepared_grasp_ = std::move(prepared);
+    observed_at_pick_ = std::move(observed_at_pick);
+  }
+  const std::function<bool()> & reserved_material_at_pick() const {return observed_at_pick_;}
   const std::optional<PreparedGraspCycle> & prepared_grasp() const {return prepared_grasp_;}
   void mark_prepared_insertion_started() {prepared_insertion_started_ = true;}
   void reset_prepared_insertion_started() {prepared_insertion_started_ = false;}
@@ -86,6 +91,7 @@ private:
   std::shared_ptr<GripperPort> gripper_port_;
   MotionGeometry geometry_;
   std::optional<PreparedGraspCycle> prepared_grasp_;
+  std::function<bool()> observed_at_pick_;
   bool prepared_insertion_started_{false};
   std::chrono::milliseconds holding_confirmation_timeout_;
   InterruptionChecker interruption_checker_;

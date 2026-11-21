@@ -30,7 +30,7 @@ def service_command(verb):
 
 
 def runtime_command(stage, runtime):
-    if stage == 'probe':
+    if stage in ('probe', 'initialize'):
         return ['/usr/bin/python3', str(HERE / 'conveyor_plc.py'), stage, str(runtime)]
     return ['bash', str(HERE / 'start_plc_adapter.bash'), str(runtime)]
 
@@ -51,6 +51,7 @@ class ConveyorPLC(QObject):
         self.probe_result = ''
         self.owned_invocation = ''
         self.closing = False
+        self.hold_service = False
         self.editors = {}
         self.editor_error = ''
         self.runtime = None
@@ -219,5 +220,5 @@ class ConveyorPLC(QObject):
             self.release()
 
     def release(self):
-        if self.owned_invocation:
+        if self.owned_invocation and not self.hold_service:
             self.inspect('release')

@@ -57,7 +57,9 @@ def test_timeout_and_busy_requests_do_not_report_completion():
     c=controller()
     assert not c.enqueue_cartridges(True)['accepted']
     assert c.enqueue_cartridges(2)['accepted']
-    assert not c.enqueue_cartridges(1)['accepted']
+    assert c.enqueue_cartridges(1)['accepted']
+    assert c.queued == 3 and c.accepted == 3
+    assert not c.enqueue_cartridges(6)['accepted']
     c.state='infeed';c.on_physics_step(91.)
     assert c.state=='failed' and c.finished==0
     assert not c.enqueue_cartridges(1)['accepted']

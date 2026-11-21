@@ -475,6 +475,11 @@ class IsaacRosSidecar:
         self.request_detail[request_id] = response.get("diagnostic_detail", "")
         return request_id, None
 
+    def request_automatic_mode(self, enabled: bool) -> None:
+        if self._fault_rpc_in_flight or self._rpc_broken:
+            raise RuntimeError("Hub ROS sidecar is busy or unavailable")
+        self._rpc({"op": "request_automatic_mode", "enabled": enabled})
+
     def publish_handoff_trigger(
         self,
         material_type: str,
@@ -647,6 +652,9 @@ def _serve(fd: int) -> None:
                     "state": runtime.request_state[request_id],
                     "diagnostic_detail": runtime.request_detail.get(request_id, ""),
                 }
+            elif operation == "request_automatic_mode":
+                runtime.request_automatic_mode(request["enabled"])
+                result = {}
             elif operation == "publish_handoff_trigger":
                 delivery_id = runtime.publish_handoff_trigger(
                     request["material_type"],

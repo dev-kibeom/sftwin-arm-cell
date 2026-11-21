@@ -59,6 +59,7 @@ def read_material_attempts(path, instance_id):
 class Receipts:
     def __init__(self, path):
         path = Path(path).expanduser()
+        self.path = path.resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
         # Only the stream owner may recover or submit. WAL readers need no owner lock.
         with ExitStack() as pending:
@@ -132,6 +133,33 @@ class Receipts:
                   AND configured_task.reservation_id=excluded.reservation_id""",
                 (command_id, trace.material_instance_id, trace.reservation_id,
                  goal_id.hex() if any(goal_id) else None, outcome))
+
+    def discharged_command(self, receipt, history_path):
+        """Prove that the last robot receipt belongs to a closed physical cycle."""
+        if not history_path or receipt.state not in TERMINAL or receipt.placement != 2:
+            return False
+        trace = self.db.execute(
+            'SELECT material_instance_id, reservation_id FROM configured_task WHERE command_id=?',
+            (receipt.command_id,)).fetchone()
+        if not trace:
+            return False
+        uri = Path(history_path).expanduser().resolve().as_uri() + '?mode=ro'
+        with closing(sqlite3.connect(uri, uri=True, timeout=0)) as history:
+            return history.execute("""
+                SELECT 1 FROM materials m
+                JOIN receipt_sources src USING (stream_id)
+                JOIN plc_cycles p USING (stream_id, plc_number)
+                JOIN reservations r USING (instance_id)
+                JOIN history_events e ON e.instance_id=m.instance_id AND e.stream_id=m.stream_id
+                WHERE m.instance_id=? AND r.reservation_id=? AND r.status='RELEASED'
+                  AND src.receipt_file=? AND p.phase=0 AND p.committed=1
+                  AND p.result_state=? AND p.reason=? AND p.placement=2
+                  AND e.source='equipment' AND e.event_type='DISCHARGED'
+                  AND NOT EXISTS (SELECT 1 FROM materials later
+                                  WHERE later.stream_id=m.stream_id AND later.plc_number>m.plc_number)
+                  AND NOT EXISTS (SELECT 1 FROM plc_cycles later
+                                  WHERE later.stream_id=m.stream_id AND later.plc_number>m.plc_number)
+                LIMIT 1""", (*trace, str(self.path), receipt.state, receipt.reason)).fetchone() is not None
 
     def reply(self, requested_id):
         if requested_id:

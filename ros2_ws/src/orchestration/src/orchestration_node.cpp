@@ -42,6 +42,7 @@
 #include <arm_cell_interfaces/msg/material_readiness.hpp>
 #include <arm_cell_interfaces/msg/vision_diagnostic.hpp>
 #include <arm_cell_interfaces/msg/vision_calibration.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
 namespace arm_cell_orchestration
@@ -365,6 +366,18 @@ public:
         }
         attempt_material_admission();
       });
+    automatic_mode_ = !declare_parameter<bool>("start_paused", false);
+    if (declare_parameter<bool>("operator_run_control", false)) {
+      automatic_mode_subscription_ = create_subscription<std_msgs::msg::Bool>(
+        "/orchestration/automatic_mode_request", rclcpp::QoS(1).reliable().transient_local(),
+        [this](const std_msgs::msg::Bool::SharedPtr message) {
+          {
+            std::lock_guard<std::mutex> lock(recovery_mutex_);
+            automatic_mode_ = message->data;
+          }
+          attempt_material_admission();
+        });
+    }
     material_readiness_subscription_ = create_subscription<MaterialReadiness>(
       "/integration/material_readiness",
       rclcpp::QoS(64).reliable().transient_local(),
@@ -706,7 +719,7 @@ private:
     std::string admission_wait_end_reason = "admitted";
     {
       std::lock_guard<std::mutex> lock(recovery_mutex_);
-      if (cycle_in_progress_) {
+      if (cycle_in_progress_ || !automatic_mode_) {
         return;
       }
       unique_identifier_msgs::msg::UUID current_delivery_id;
@@ -2368,6 +2381,8 @@ private:
   SafetyState latest_safety_;
   MaterialAdmissionGate::Clock::time_point latest_safety_receipt_{};
   bool safety_state_received_{false};
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr automatic_mode_subscription_;
+  bool automatic_mode_{true};
   bool cycle_in_progress_{false};
   bool calibration_in_progress_{false};
   MotionStatus latest_motion_;

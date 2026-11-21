@@ -51,6 +51,10 @@ public:
   HoldingState state{HoldingState::UNKNOWN};
   std::uint64_t sequence{0};
   bool confirm_grasp{true};
+  int missed_grasps{0};
+  int releases{0};
+  int unconfirmed_release{0};
+  std::vector<std::string> prepared_executions;
   GraspExecutionIdentity configured_identity;
   explicit FixtureTool(FixtureMotion & m, GraspStrategy s) : motion(m), strategy(s) {}
   bool supportsGraspStrategy(GraspStrategy requested) const override
@@ -65,20 +69,22 @@ public:
   std::uint8_t prepareConfiguredGrasp(
     const GraspSpecification & spec, const GraspExecutionIdentity & identity) override
   {
+    prepared_executions.push_back(identity.execution_id);
     configured_identity = identity;
     return prepareGrasp(spec);
   }
   std::uint8_t grasp() override
   {
     motion.events.push_back(strategy == GraspStrategy::INTERNAL_RADIAL ? "expand" : "close");
-    state = confirm_grasp ? HoldingState::HELD : HoldingState::UNKNOWN;
+    state = confirm_grasp && missed_grasps == 0 ? HoldingState::HELD : HoldingState::UNKNOWN;
+    if (missed_grasps > 0) {--missed_grasps;}
     ++sequence;
     return Code::TASK_RESULT_SUCCESS;
   }
   std::uint8_t release() override
   {
     motion.events.push_back(strategy == GraspStrategy::INTERNAL_RADIAL ? "contract" : "open");
-    state = HoldingState::RELEASED;
+    state = ++releases == unconfirmed_release ? HoldingState::UNKNOWN : HoldingState::RELEASED;
     ++sequence;
     return Code::TASK_RESULT_SUCCESS;
   }
@@ -172,6 +178,73 @@ TEST(GraspCycle, UnconfirmedExpansionUsesExistingReleaseRecoveryWithoutTransfer)
   EXPECT_EQ(motion->committed, 0);
   EXPECT_FALSE(executor.released_at_configured_destination());
   EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_RETURNED);
+}
+TEST(GraspCycle, RegraspsOnceUnderTheOriginalIdentityAndRequiresEvidenceBeforeEveryCommand)
+{
+  for (const int misses : {1, 2}) {
+    for (const int lost_at_check : {0, 1, 2, 3}) {
+      SCOPED_TRACE(::testing::Message() << misses << " missed grasps, loss at " << lost_at_check);
+      auto motion = std::make_shared<FixtureMotion>();
+      auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::SURFACE_SUCTION);
+      tool->missed_grasps = misses;
+      TaskExecutor executor(motion, tool, {}, {}, std::chrono::milliseconds(1));
+      auto request = cycle(tool->strategy);
+      request.identity = {execution_id, "part", "belt", "pick", "epoch", "lease", "A", "line/1"};
+      int checks = 0;
+      const auto result = executor.execute_grasp_cycle(
+        request, execution_id, [&]() {return ++checks != lost_at_check;});
+      std::vector<std::string> expected{"open", "fixture_approach", "fixture_insert", "close", "open"};
+      if (lost_at_check != 1) {expected.push_back("fixture_approach");}
+      if (lost_at_check == 0 || lost_at_check == 3) {expected.push_back("fixture_insert");}
+      if (lost_at_check == 0) {
+        expected.push_back("close");
+        if (misses == 1) {expected.push_back("fixture_transfer");}
+        expected.push_back("open");
+        if (misses == 1) {expected.push_back("fixture_retreat");}
+      }
+      EXPECT_EQ(motion->events, expected);
+      EXPECT_EQ(tool->prepared_executions, std::vector<std::string>(
+        lost_at_check == 0 ? 2 : 1, execution_id));
+      EXPECT_EQ(tool->configured_identity.reservation_id, request.identity.reservation_id);
+      EXPECT_EQ(result, misses == 1 && lost_at_check == 0 ?
+        Code::TASK_RESULT_SUCCESS : Code::TASK_RESULT_GRASP_FAILURE);
+      EXPECT_EQ(executor.released_at_configured_destination(), misses == 1 && lost_at_check == 0);
+    }
+  }
+}
+TEST(GraspCycle, UnconfirmedRecoveryReleasePreventsRegraspDespiteMaterialAtPick)
+{
+  auto motion = std::make_shared<FixtureMotion>();
+  auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::SURFACE_SUCTION);
+  tool->missed_grasps = 1;
+  tool->unconfirmed_release = 2;
+  TaskExecutor executor(motion, tool, {}, {}, std::chrono::milliseconds(1));
+  auto request = cycle(tool->strategy);
+  request.identity = {execution_id, "part", "belt", "pick", "epoch", "lease", "A", "line/1"};
+  EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id, []() {return true;}),
+    Code::TASK_RESULT_GRASP_FAILURE);
+  EXPECT_FALSE(executor.configured_regrasp_started());
+  EXPECT_EQ(executor.object_disposition(), ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN);
+  EXPECT_EQ(motion->events,
+    (std::vector<std::string>{"open", "fixture_approach", "fixture_insert", "close", "open"}));
+}
+
+TEST(GraspCycle, InterruptionAfterRetryRetreatPreventsInsertionAndGrasp)
+{
+  for (const auto cause : {Code::TASK_RESULT_CANCELED, Code::TASK_RESULT_SAFETY_PREEMPTED}) {
+    auto motion = std::make_shared<FixtureMotion>();
+    auto tool = std::make_shared<FixtureTool>(*motion, GraspStrategy::SURFACE_SUCTION);
+    tool->missed_grasps = 1;
+    TaskExecutor executor(motion, tool, {}, [&]() {
+        return motion->events.size() >= 6 ? cause : Code::TASK_RESULT_SUCCESS;
+      }, std::chrono::milliseconds(1));
+    auto request = cycle(tool->strategy);
+    request.identity = {execution_id, "part", "belt", "pick", "epoch", "lease", "A", "line/1"};
+    EXPECT_EQ(executor.execute_grasp_cycle(request, execution_id, []() {return true;}), cause);
+    EXPECT_TRUE(executor.configured_regrasp_started());
+    EXPECT_EQ(motion->events, (std::vector<std::string>{
+      "open", "fixture_approach", "fixture_insert", "close", "open", "fixture_approach"}));
+  }
 }
 TEST(GraspCycle, SafetyAtInsertionDoesNotExpandOrReleaseAgain)
 {

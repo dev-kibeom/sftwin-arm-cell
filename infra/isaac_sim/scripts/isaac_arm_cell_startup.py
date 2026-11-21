@@ -1,6 +1,7 @@
 """Run the ARM Cell Kit startup sequence after the Isaac app is ready."""
 
 import asyncio
+import atexit
 import os
 import sys
 from pathlib import Path
@@ -71,6 +72,44 @@ def _report_startup_failure(task):
     except Exception as error:
         carb.log_error(f"ARM Cell startup failed: {error!r}")
 
+
+async def _clear_session(app):
+    omni.timeline.get_timeline_interface().stop()
+    await app.next_update_async()
+    close = _RUNTIME_NAMESPACE.get("close_runtime")
+    if close is not None:
+        close()
+        atexit.unregister(close)
+    world = _RUNTIME_NAMESPACE.get("World")
+    if world is not None and world.instance() is not None:
+        world.clear_instance()
+    _RUNTIME_NAMESPACE.clear()
+    _RUNTIME_NAMESPACE["__name__"] = "__main__"
+
+
+async def _initialize_scene(attempt):
+    """Retry transient Kit/scene failures in the same open Kit and PLC transition."""
+    from isaacsim.core.utils.stage import create_new_stage_async
+
+    app = omni.kit.app.get_app()
+    while attempt.exists() and not (attempt / "error").exists():
+        try:
+            await _clear_session(app)
+            (attempt / "stopped").touch()
+            while not (attempt / "rebuild").exists():
+                if (attempt / "error").exists() or not attempt.exists():
+                    return
+                await app.next_update_async()
+            await create_new_stage_async()
+            await _start_arm_cell()
+            (attempt / "ready").touch()
+            return
+        except (OSError, RuntimeError) as error:
+            carb.log_warn(f"ARM Cell Initialize: retrying scene setup: {error}")
+            await asyncio.sleep(1)
+
+
+runtime_workflow.initialize_scene = _initialize_scene
 
 # The synchronous importer may pump Kit updates while enabling extensions.
 # Run it before entering an asyncio task to avoid reentrant Task execution.

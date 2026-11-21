@@ -49,6 +49,7 @@ def test_expired_admission_is_distinct_from_observed_false_even_at_rollover(monk
     from arm_cell_plc_adapter import mission_admission
 
     adapter = PlcTaskAdapter.__new__(PlcTaskAdapter)
+    adapter.conveyor_test_stream = False
     adapter.plc = Mock(admission_offset=6)
     adapter.plc.read_command.return_value = 0
     adapter.receipts = Mock()
@@ -66,3 +67,60 @@ def test_expired_admission_is_distinct_from_observed_false_even_at_rollover(monk
     adapter.admission.observe(Bool(data=True))
     adapter.exchange()
     adapter.plc.write_admission.assert_called_with(2, True)
+
+
+def test_new_conveyor_test_can_claim_command_one_without_replaying_old_goal(tmp_path):
+    path = tmp_path / 'plc.sqlite'
+
+    def open_adapter(epoch):
+        adapter = PlcTaskAdapter.__new__(PlcTaskAdapter)
+        adapter.plc = Mock()
+        adapter.plc.read_conveyor_command.return_value = (0, epoch)
+        adapter.mission = Mock()
+        adapter.admission = None
+        adapter.submit = Mock()
+        adapter.conveyor_test_stream = True
+        adapter.receipts = adapter.receipt_epoch = None
+        adapter.initialize_attempt = None
+        adapter.receipt_base = path
+        adapter.exchange()
+        return adapter
+
+    old = open_adapter(0)
+    try:
+        old.plc.read_conveyor_command.return_value = (1, 0)
+        old.exchange()
+        old_goal = old.receipts.latest().goal_uuid
+        old.receipts.update(1, State.SUCCEEDED, placement=2)
+        old.plc.read_conveyor_command.return_value = (1, 1)
+        with pytest.raises(OSError, match='new robot session'):
+            old.exchange()
+        old.submit.assert_called_once()
+        from arm_cell_plc_adapter.conveyor_stream import reserve_test_stream
+        attempt = tmp_path / 'initialize'
+        attempt.mkdir()
+        assert reserve_test_stream(path, 0, attempt / 'stream') == 1
+        assert reserve_test_stream(path, 1, attempt / 'stream') == 1
+        new = open_adapter(1)
+        try:
+            new.initialize_attempt = attempt
+            new.plc.read_conveyor_command.return_value = (0, 0)
+            with pytest.raises(OSError, match='selected PLC stream'):
+                new.exchange()
+            new.plc.read_conveyor_command.return_value = (0, 1)
+            new.plc.write_receipt.side_effect = OSError('lost acknowledgment')
+            with pytest.raises(OSError, match='lost acknowledgment'):
+                new.exchange()
+            assert not (attempt / 'adapter-ready').exists()
+            new.plc.write_receipt.side_effect = None
+            new.exchange()
+            assert (attempt / 'adapter-ready').read_text() == '1'
+            new.plc.read_conveyor_command.return_value = (1, 1)
+            new.exchange()
+            new.submit.assert_called_once()
+            assert new.receipts.latest().goal_uuid != old_goal
+            assert old.receipts.latest().state == State.SUCCEEDED
+        finally:
+            new.receipts.close()
+    finally:
+        old.receipts.close()

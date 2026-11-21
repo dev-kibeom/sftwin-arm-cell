@@ -37,10 +37,23 @@
         </Sequence>
         <AdvancePickPlanningCandidate/>
       </RetryWhileAllowed>
-      <RecoverOnFailure name="PickGraspConfirmationRecovery">
+      <Fallback name="ConfirmPickOrRegraspOnce">
         <CloseAndConfirmPickGrasp/>
-        <RecoverUnconfirmedPickGrasp/>
-      </RecoverOnFailure>
+        <Sequence name="RecoverAndRetrySameMaterial">
+          <RecoverUnconfirmedPickGrasp/>
+          <CanRetryUnconfirmedPick/>
+          <RequireReservedMaterialAtPick/>
+          <MoveTaught motion="{grasp_approach_motion}"/>
+          <RequireReservedMaterialAtPick/>
+          <MoveTaught motion="{grasp_insertion_motion}"/>
+          <RequireReservedMaterialAtPick/>
+          <RestoreConfiguredGraspReference/>
+          <RecoverOnFailure name="FinalPickGraspConfirmation">
+            <CloseAndConfirmPickGrasp/>
+            <RecoverUnconfirmedPickGrasp/>
+          </RecoverOnFailure>
+        </Sequence>
+      </Fallback>
       <RunAndFinalize name="PickRetractAndRecord">
         <RecoverOnFailure name="PickRetractFailureHandling">
           <Fallback name="ExecutePickRetract">

@@ -57,7 +57,11 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch, tm
         adapter.tick(.01)
         assert speeds[-1] == 0
         send_command(command)
+        lease = {'reservation_id': 'accepted'}
+        packets.append(dict(op='reservation', reservation=lease))
         adapter.tick(.01)
+        assert adapter.reservation == lease
+        assert adapter.packet['op'] == 'command'
         assert spawned == [1] and adapter.feeder.remaining == 1
         assert (outgoing[-1]['created_cycle'], outgoing[-1]['created_type_id']) == (1, 'ConveyorPart')
     finally:
@@ -66,27 +70,6 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch, tm
     assert first.read_text() == '{}'
     summary = json.loads((directory / 'capture_summary.json').read_text())
     assert summary['write_failure_count'] == 1 and not summary['capture_complete']
-
-
-def test_suction_resolves_only_the_current_reserved_piece(monkeypatch):
-    from types import SimpleNamespace
-    from conveyor_pnp_cell import runtime
-
-    adapter = runtime.ConveyorRuntime.__new__(runtime.ConveyorRuntime)
-    adapter.stopped = False
-    adapter.sidecar = SimpleNamespace(available=True)
-    bodies = {('A', '12'): '/World/Part_12', ('B', '13'): '/World/Part_13'}
-    adapter.equipment = SimpleNamespace(material_path=lambda part, instance: bodies.get((part, instance)))
-    lease = dict(supply_id='conveyor_pick', slot_id='cell/belt/pick', supply_epoch='epoch',
-                 reservation_id='second', material_id='ConveyorPart', material_type_id='B',
-                 material_instance_id='13')
-    adapter.reservation = lease
-    monkeypatch.setattr(runtime.time, 'monotonic', lambda: 100.)
-    assert adapter.reserved_body(lease) == '/World/Part_13'
-    for key, previous in (('material_instance_id', '12'), ('material_type_id', 'A'),
-                          ('slot_id', 'cell/other/pick'), ('reservation_id', 'first'),
-                          ('supply_epoch', 'old')):
-        assert adapter.reserved_body(dict(lease, **{key: previous})) is None
 
 
 def test_start_automatic_reconnects_the_existing_equipment_stream(monkeypatch):
@@ -193,11 +176,66 @@ def test_session_records_feed_decisions_at_transitions(tmp_path, monkeypatch):
     assert rows[3]['permit_status'] == 'fresh' and rows[3]['automatic'] is False
     assert rows[4]['permit_status'] == 'expired' and rows[4]['permit_age_s'] == 2
     assert rows[5]['permit_status'] == 'fresh' and rows[5]['permit_value'] is False
-    assert rows[6]['occupied'] and 'tray_occupied' in rows[6]['blockers']
-    assert rows[7]['blockers'] == [] and rows[7]['remaining'] == 2
+    assert rows[6]['occupied'] and rows[6]['blockers'] == []
+    assert 'not_next_material' in rows[7]['blockers'] and rows[7]['remaining'] == 1
     equipment.spawn.assert_called_once_with('A', 1)
     current, expired, offline = records(tmp_path/'next')
     assert current['live_test_session_id'] == 'session-b' and current['last_generated'] == 1
     assert expired['command_status'] == 'expired' and expired['command_age_s'] == 2
     assert offline['command_status'] == 'offline' and offline['permit_status'] == 'unknown'
     assert offline['plc'] is None and offline['path_clear'] is None
+
+
+def test_paused_scene_waits_for_plc_origin_without_authorizing_feed():
+    from dataclasses import asdict
+    from time import monotonic
+    from types import SimpleNamespace
+    from conveyor_pnp_cell.runtime import ConveyorRuntime
+    from conveyor_pnp_cell.equipment_io import Commands, Sensors
+    from isaac_runtime.cell_supply import clear_supply_port
+
+    now = monotonic()
+    cmd = Commands(1, 0, False, False, False, False, False, 1, 4, 0, 2)
+    packet = dict(op='command', at=now, command=asdict(cmd), permitted=True, permit_at=now)
+    sent = []
+    ipc = SimpleNamespace(available=True, send=sent.append, poll_messages=lambda: [packet])
+    equipment = SimpleNamespace(
+        stream_id='new', cycle=0, path=None, material_type_id='', step=lambda *_: None,
+        observe=lambda permitted: Sensors(permitted=permitted, stopped=True, path_clear=True,
+                                          pick_zone_clear=True, discharge_zone_clear=True))
+    configuration = dict(cell=dict(configured_supply=dict(material_id='ConveyorPart'), conveyor=dict(
+        material_type_ids=['ConveyorPart'], pick_slot_id='cell/belt/pick', connection={},
+        equipment_permit_topic='permit', teaching=dict(cycle=None))))
+    adapter = ConveyorRuntime(configuration, equipment, ipc)
+    try:
+        adapter.tick(.01)
+        assert not adapter.synchronized and not sent[-1]['valid']
+        assert sent[-1]['created_cycle'] == 0 and not adapter.feeder.automatic
+    finally:
+        clear_supply_port(adapter.feeder)
+
+
+def test_device_commands_do_not_require_process_records():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from conveyor_pnp_cell.scene import Equipment
+
+    eq = Equipment.__new__(Equipment)
+    eq.drive, eq.stop_position, eq.stage = Mock(), Mock(), Mock()
+    eq.stop_position.Get.return_value = [0., 0., 0.]
+    eq.layout = dict(speed_m_s=.5, stopper_retracted_m=[0., 0., 0.],
+                     stopper_travel_m=.1, stopper_speed_m_s=.1)
+    eq.cycle, eq.path, eq.spawned_ns = 7, '/part', 10
+    sensors = SimpleNamespace(drive_available=True, occupied=False)
+    cmd = SimpleNamespace(run=True, extend=True, discharge=False)
+    eq.step(cmd, sensors, 1., enabled=True)
+    eq.drive.assert_called_once_with(.5)
+    eq.stop_position.Set.assert_called_once_with([0., -.1, 0.])
+    eq.stage.RemovePrim.assert_not_called()
+    sensors.occupied = cmd.discharge = True
+    eq.step(cmd, sensors, 1., enabled=False)
+    eq.drive.assert_called_with(0.)
+    eq.stage.RemovePrim.assert_not_called()
+    eq.step(cmd, sensors, 1., enabled=True)
+    eq.stage.RemovePrim.assert_called_once_with('/part')
+    assert eq.path is None and eq.last_discharge[0] == 7

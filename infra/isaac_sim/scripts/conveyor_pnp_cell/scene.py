@@ -2,16 +2,13 @@
 from uuid import uuid4
 import time
 
-from pxr import Gf, PhysxSchema, Sdf, UsdGeom, UsdPhysics
-from isaac_runtime.cuboid import author_cuboid_body
-from isaac_runtime.robot_scene import build_robot_world
-from tape_roll_cell.conveyor_belts import ConveyorBelts
 from .supply import material_instance_id
 
 ROOT = '/World/ConveyorPnP'
 
 
 def box(stage, path, center, size, color, *, collision=True):
+    from pxr import Gf, UsdGeom, UsdPhysics
     cube = UsdGeom.Cube.Define(stage, path)
     cube.CreateSizeAttr(1.)
     cube.AddTranslateOp().Set(Gf.Vec3d(*center))
@@ -24,6 +21,9 @@ def box(stage, path, center, size, color, *, collision=True):
 
 def build_scene(*, configuration, world_cls=None, add_reference_to_stage=None, **unused):
     import omni.usd
+    from pxr import Gf, UsdGeom, UsdPhysics
+    from isaac_runtime.robot_scene import build_robot_world
+    from tape_roll_cell.conveyor_belts import ConveyorBelts
     stage = omni.usd.get_context().get_stage()
     if stage and stage.GetPrimAtPath(ROOT):
         # Rebuilding an active stream would destroy its physical reconciliation evidence.
@@ -56,6 +56,7 @@ def build_scene(*, configuration, world_cls=None, add_reference_to_stage=None, *
 
 class Equipment:
     def __init__(self, stage, layout, belts, robot_path):
+        from pxr import PhysxSchema
         from omni.isaac.dynamic_control import _dynamic_control
         from omni.physx import get_physx_scene_query_interface
         self.stage, self.layout, self.belts = stage, layout, belts
@@ -75,6 +76,8 @@ class Equipment:
         self.fixtures = {item['id'] for item in layout['boxes']} | {ROOT+'/Stopper'}
 
     def spawn(self, material, cycle):
+        from pxr import Gf, Sdf, UsdGeom
+        from isaac_runtime.cuboid import author_cuboid_body
         if self.path is not None:
             return False
         path = f'{ROOT}/Part_{cycle}'
@@ -166,21 +169,17 @@ class Equipment:
             self.speed = speed
 
     def step(self, command, sensors, dt, enabled):
-        run = (enabled and command.run and command.cycle == self.cycle and sensors.on_belt
-               and sensors.pick_zone_clear and sensors.drive_available and not sensors.occupied)
+        run = enabled and command.run and sensors.drive_available
         self.drive(self.layout['speed_m_s'] if run else 0.)
         if not enabled:
             return
-        # Hold the stop during robot occupancy or loss of the motion permit.
-        if sensors.pick_zone_clear:
-            base = self.layout['stopper_retracted_m']
-            target = base[1] - (self.layout['stopper_travel_m'] if command.extend else 0.)
-            pos = self.stop_position.Get()
-            stroke = self.layout['stopper_speed_m_s'] * dt
-            pos[1] += max(-stroke, min(stroke, target-pos[1]))
-            self.stop_position.Set(pos)
-        if (command.discharge and command.committed == command.cycle == self.cycle
-                and sensors.occupied and sensors.discharge_zone_clear):
+        base = self.layout['stopper_retracted_m']
+        target = base[1] - (self.layout['stopper_travel_m'] if command.extend else 0.)
+        pos = self.stop_position.Get()
+        stroke = self.layout['stopper_speed_m_s'] * dt
+        pos[1] += max(-stroke, min(stroke, target-pos[1]))
+        self.stop_position.Set(pos)
+        if command.discharge and sensors.occupied:
             if not self.stage.RemovePrim(self.path):
                 raise RuntimeError('Discharge could not remove the observed part')
             self.last_discharge = (self.cycle, self.spawned_ns, time.monotonic_ns())

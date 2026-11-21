@@ -2685,7 +2685,7 @@ def test_hub_marks_missing_owner_services_unavailable_without_faking_outcomes(
     runtime.close()
 
 
-def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
+def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch, tmp_path):
     _install_ros_types(monkeypatch)
     monkeypatch.setenv("SFTWIN_PROJECT_ROOT", str(Path(__file__).resolve().parents[6]))
     collapsible_sections = []
@@ -2795,7 +2795,12 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
         SCROLLBAR_AS_NEEDED="as_needed", SCROLLBAR_ALWAYS_OFF="always_off"
     )
     ui.Label = lambda text, **_kwargs: _Widget(text)
-    ui.Button = lambda text, **kwargs: _Widget(text, **kwargs)
+    buttons = []
+    def make_button(text, **kwargs):
+        button = _Widget(text, **kwargs)
+        buttons.append(button)
+        return button
+    ui.Button = make_button
     ui.StringField = lambda **kwargs: _Widget(**kwargs)
     ui.IntField = lambda **kwargs: _Widget(**kwargs)
     def _combo(index, *_items, **kwargs):
@@ -2878,6 +2883,10 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
             self.request_state = {}
             self.fault_active = {}
             self.fault_request_count = 0
+            self.mode_requests = []
+
+        def request_automatic_mode(self, enabled):
+            self.mode_requests.append(enabled)
 
         def spin_once(self):
             pass
@@ -2946,9 +2955,14 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
     assert extension._window is not first_window
     assert extension._window.visible is True
     collapsible_sections.clear()
+    buttons.clear()
     extension._retry_detection_enabled = True
     extension._build()
-    assert collapsible_sections[0] == "Supply"
+    assert collapsible_sections[:2] == ["Supply", "E-stop"]
+    assert [button.text for button in buttons[:4]] == ["Initialize", "Start", "Pause", "Supply"]
+    for button in buttons[1:3]:
+        button.clicked_fn()
+    assert extension.runtime.mode_requests[-2:] == [True, False]
     assert "System Observations" not in collapsible_sections
     assert "Vision Detector Snapshot" in collapsible_sections
     assert "Cuboid Demonstration" in collapsible_sections
@@ -2979,6 +2993,33 @@ def test_isaac_extension_builds_focused_surface_and_cleans_up(monkeypatch):
     assert (
         "trigger stimulus published" in extension._handoff_trigger_status.text.lower()
     )
+    from conveyor_pnp_cell.supply import ConveyorFeeder
+    from isaac_runtime.cell_supply import clear_supply_port
+    feeder = ConveyorFeeder("TestCube", last_generated=0)
+    feeder.bind_ui()
+    try:
+        extension._uses_cell_supply = True
+        extension._handoff_material_type_field.model.set_value(extension._handoff_material_types.index("TestCube"))
+        controls = {button.text: button for button in buttons}
+        controls["Start"].clicked_fn()
+        controls["Supply"].clicked_fn()
+        controls["Supply"].clicked_fn()
+        assert feeder.automatic and feeder.remaining == 4
+        controls["Pause"].clicked_fn()
+        assert not feeder.automatic and feeder.remaining == 4
+        request = tmp_path / "initialize.request"
+        monkeypatch.setenv("ARM_CELL_INITIALIZE_REQUEST", str(request))
+        monkeypatch.setattr(extension.runtime, "initialize_blocker",
+                            lambda: pytest.fail("UI must submit reset even with an active task"), raising=False)
+        controls["Initialize"].clicked_fn()
+        assert request.exists()
+        controls["Initialize"].clicked_fn()
+        controls["Start"].clicked_fn()
+        controls["Supply"].clicked_fn()
+        assert request.exists() and not feeder.automatic and feeder.remaining == 4
+    finally:
+        clear_supply_port(feeder)
+        extension._uses_cell_supply = False
     assert not observation_calls
     assert set(scenario for _owner, scenario in extension._fault_status_labels) == {
         "e_stop",
@@ -3409,6 +3450,8 @@ def test_sidecar_publishes_handoff_trigger_through_ros_process():
         "delivery_id": "delivery-123"
     }
 
+    proxy.request_automatic_mode(False)
+    assert calls.pop() == {"op": "request_automatic_mode", "enabled": False}
     delivery_id = proxy.publish_handoff_trigger("TestCube", 2, random_seed=7)
 
     assert delivery_id == "delivery-123"
@@ -3543,6 +3586,9 @@ def test_timeline_stop_clears_isaac_faults_without_ros_mock_requests():
             self.safety_reset_calls = 0
             self.tf_buffer_clear_calls = 0
 
+        def request_automatic_mode(self, enabled):
+            assert enabled is False
+
         def clear_tf_buffer(self):
             self.tf_buffer_clear_calls += 1
 
@@ -3556,6 +3602,9 @@ def test_timeline_stop_clears_isaac_faults_without_ros_mock_requests():
 
     extension = SimulationUIHubExtension.__new__(SimulationUIHubExtension)
     extension.runtime = _Runtime()
+    extension._uses_cell_supply = False
+    extension._supply_descriptor = None
+    extension._handoff_trigger_status = None
     extension._fault_request_ids = {}
     extension._fault_local_status = {}
     extension._fault_status_labels = {}

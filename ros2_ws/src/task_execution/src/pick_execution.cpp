@@ -177,6 +177,7 @@ uint8_t PickExecution::execute_grasp_insertion(std::uint8_t result)
 
 uint8_t PickExecution::close_and_confirm_grasp()
 {
+  state_.grasp_unconfirmed = false;
   // A GRASP may physically retain material even when its observation is uncertain.
   report_->object_disposition = ExecuteTask::Result::OBJECT_DISPOSITION_UNKNOWN;
   auto result = support_.execute_gripper_close(state_.holding_baseline);
@@ -199,6 +200,7 @@ uint8_t PickExecution::close_and_confirm_grasp()
       result = MotionTaskResultCode::TASK_RESULT_BACKEND_UNAVAILABLE;
     } else {
       result = MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE;
+      state_.grasp_unconfirmed = true;
     }
     support_.motion_port()->discardPendingGraspRelation();
     return record_stage(result, "held_confirmation", false, false);
@@ -377,6 +379,33 @@ void PickExecution::register_nodes(
       }
       support_.motion_port()->beginPickGraspRelation();
       return BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
+    factory, "CanRetryUnconfirmedPick", [this]() {
+      return state_.grasp_unconfirmed && support_.reserved_material_at_pick() ?
+        BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    });
+  register_callback_action(
+    factory, "RequireReservedMaterialAtPick", [this]() {
+      const auto & interrupted = support_.interruption_checker();
+      const auto cause = interrupted ? interrupted() : MotionTaskResultCode::TASK_RESULT_SUCCESS;
+      if (cause != MotionTaskResultCode::TASK_RESULT_SUCCESS) {
+        return domain_status(record_stage(cause, "regrasp_interrupted", false, false));
+      }
+      const auto & observed_at_pick = support_.reserved_material_at_pick();
+      if (!observed_at_pick || !observed_at_pick()) {
+        return domain_status(record_stage(
+          MotionTaskResultCode::TASK_RESULT_GRASP_FAILURE, "regrasp_material_at_pick", false, false));
+      }
+      report_->configured_regrasp_started = true;
+      return BT::NodeStatus::SUCCESS;
+    });
+  register_callback_action(
+    factory, "RestoreConfiguredGraspReference", [this]() {
+      // Confirmed recovery release cleared the tool's selection for this execution.
+      const auto & prepared = support_.prepared_grasp().value();
+      const auto result = support_.gripper()->prepareConfiguredGrasp(prepared.grasp, prepared.identity);
+      return domain_status(record_stage(result, "regrasp_tool_preparation", false, false));
     });
   register_callback_action(
     factory, "CloseAndConfirmPickGrasp", [this, set_result]() {

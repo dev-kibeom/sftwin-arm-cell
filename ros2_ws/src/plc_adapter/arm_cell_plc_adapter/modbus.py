@@ -3,6 +3,8 @@ import math
 
 from pymodbus.client.sync import ModbusTcpClient
 
+from .conveyor_stream import decode_epoch
+
 
 REQUEST_FIELDS = ['id_high', 'id_low']
 REPLY_FIELDS = ['id_high', 'id_low', 'state', 'reason', 'placement', 'heartbeat']
@@ -45,13 +47,25 @@ class ModbusRegisters:
         words = dict(zip(self.request_fields, request.registers))
         return (words['id_high'] << 16) | words['id_low']
 
-    def write_receipt(self, receipt):
+    def read_conveyor_command(self):
+        # One FC04 image binds the robot request to the PLC test that issued it.
+        reply = self.client.read_input_registers(0, 32, unit=self.unit)
+        if (reply.isError() or reply.function_code != 4 or len(reply.registers) != 32
+                or reply.registers[29] != 0xC051):
+            raise OSError('Invalid Conveyor PLC command image')
+        try:
+            epoch = decode_epoch(reply.registers[30:32]) or 0
+        except ValueError as error:
+            raise OSError(str(error)) from error
+        return reply.registers[0] << 16 | reply.registers[1], epoch
+
+    def write_receipt(self, receipt, *, conveyor_feedback=()):
         self.heartbeat = (self.heartbeat + 1) & 0xffff
         fields = dict(id_high=receipt.command_id >> 16, id_low=receipt.command_id & 0xffff,
                       state=receipt.state, reason=receipt.reason, placement=receipt.placement,
                       heartbeat=self.heartbeat)
         words = [fields[name] for name in self.reply_fields]
-        self.write_words(self.reply_offset, words)
+        self.write_words(self.reply_offset, words + list(conveyor_feedback))
 
     def write_admission(self, sequence, available):
         self.write_words(self.admission_offset, [sequence, int(available)])

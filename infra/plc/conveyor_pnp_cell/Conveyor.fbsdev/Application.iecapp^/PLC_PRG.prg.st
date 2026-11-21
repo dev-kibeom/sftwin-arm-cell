@@ -5,11 +5,12 @@ VAR RETAIN
     requested : DWORD := 0;
     committed : DWORD := 0;
     resultState, resultReason, placement : WORD;
+    testEpoch : WORD := 0;
 END_VAR
 VAR
     server : MB.ModbusServer;
     ir : ARRAY[0..31] OF WORD;
-    hr : ARRAY[0..25] OF WORD;
+    hr : ARRAY[0..26] OF WORD;
     lastEquipment, lastReply, lastAdmission : WORD;
     seenEquipment, seenReply, seenAdmission : BOOL;
     equipmentAge, replyAge, admissionAge, busyRetry : TON;
@@ -18,7 +19,9 @@ VAR
     infeed, pick, stopped, extended, occupied, pathClear : BOOL;
     driveAvailable, pickZoneClear, dischargeZoneClear, onBelt : BOOL;
     feed, runBelt, extend, discharge, confirmed : BOOL;
-    generated, boundSlot, replyId : DWORD;
+    generated, boundSlot, replyId, dischargedReply : DWORD;
+    previousDischarged : BOOL;
+    inputIndex : INT;
 END_VAR
 
 IF hr[16] <> lastEquipment THEN seenEquipment := TRUE; END_IF;
@@ -31,7 +34,7 @@ lastEquipment := hr[16];
 lastReply := hr[5];
 lastAdmission := hr[6];
 valid := seenEquipment AND NOT equipmentAge.Q AND hr[17] = 1;
-link := seenReply AND NOT replyAge.Q;
+link := seenReply AND NOT replyAge.Q AND hr[10] = testEpoch;
 admissionAvailable := link AND seenAdmission AND NOT admissionAge.Q AND hr[6] <> 0 AND hr[7] = 1;
 automatic := hr[18] = 1;
 infeed := hr[21].0;
@@ -48,6 +51,13 @@ onBelt := hr[21].10;
 generated := SHL(WORD_TO_DWORD(hr[22]), 16) OR hr[23];
 boundSlot := SHL(WORD_TO_DWORD(hr[24]), 16) OR hr[25];
 replyId := SHL(WORD_TO_DWORD(hr[0]), 16) OR hr[1];
+dischargedReply := SHL(WORD_TO_DWORD(hr[8]), 16) OR hr[9];
+// A downloaded PLC can start at zero while the previous robot receipt is still on disk.
+// The adapter confirms release, commit and discharge for this exact terminal ID and test.
+previousDischarged := phase = 0 AND requested = 0 AND cycle = 0 AND committed = 0
+                      AND resultState = 0 AND resultReason = 0 AND placement = 0
+                      AND link AND hr[10] = testEpoch AND replyId <> 0 AND dischargedReply = replyId
+                      AND hr[2] >= 4 AND hr[2] <= 6 AND hr[4] = 2;
 equipmentEnabled := valid AND automatic AND permitted;
 reusable := NOT infeed AND NOT pick AND NOT occupied AND pathClear AND NOT onBelt
             AND stopped AND pickZoneClear;
@@ -69,12 +79,41 @@ IF phase = 30 OR phase = 40 OR phase = 23 THEN
 END_IF;
 busyRetry(IN := phase = 23 AND resultState = 6 AND resultReason = 9 AND placement = 1, PT := T#1s);
 
+// Local simulator session reset. Both previous writers must have stopped.
+IF hr[26] <> 0 THEN
+    IF hr[26] > testEpoch AND (NOT seenReply OR replyAge.Q) AND (NOT seenEquipment OR equipmentAge.Q) THEN
+        testEpoch := hr[26];
+        phase := 0;
+        cycle := 0;
+        requested := 0;
+        committed := 0;
+        resultState := 0;
+        resultReason := 0;
+        placement := 0;
+        retryArmed := FALSE;
+        // Retire the old input image before the next session publishes.
+        FOR inputIndex := 0 TO 25 DO
+            hr[inputIndex] := 0;
+        END_FOR;
+        lastEquipment := 0;
+        replyId := 0;
+        lastReply := 0;
+        lastAdmission := 0;
+        seenEquipment := FALSE;
+        seenReply := FALSE;
+        seenAdmission := FALSE;
+    END_IF;
+    hr[26] := 0;
+END_IF;
+
 CASE phase OF
 0:  // P1: reconcile both owners before allocating a new material identity.
     IF feedAllowed AND link AND
        generated = cycle AND committed = cycle AND
-       replyId = requested AND (requested <> 0 OR hr[2] = 0) AND
-       cycle < 16#FFFFFFFF AND requested < 16#FFFFFFFF THEN
+       ((replyId = requested AND (requested <> 0 OR hr[2] = 0)) OR previousDischarged) AND
+       cycle < 16#FFFFFFFF AND replyId < 16#FFFFFFFF THEN
+        // Start continues the robot sequence. Only explicit Initialize changes its namespace.
+        requested := replyId;
         cycle := cycle + 1;
         feed := TRUE;
         phase := 10;
@@ -143,6 +182,13 @@ END_CASE;
 
 ir[0] := DWORD_TO_WORD(SHR(requested, 16));
 ir[1] := DWORD_TO_WORD(requested);
+// Keep the request, robot reply and startup hold visible in the same PLC scan.
+ir[2] := 16#D105;
+ir[3] := BOOL_TO_WORD(link AND phase = 0 AND cycle = 0 AND requested = 0
+                      AND replyId <> 0 AND NOT previousDischarged);
+ir[4] := DWORD_TO_WORD(SHR(replyId, 16));
+ir[5] := DWORD_TO_WORD(replyId);
+ir[6] := hr[2];
 ir[16] := DWORD_TO_WORD(SHR(cycle, 16));
 ir[17] := DWORD_TO_WORD(cycle);
 ir[18] := phase;
@@ -157,9 +203,11 @@ ir[26] := resultState;
 ir[27] := resultReason;
 ir[28] := placement;
 ir[29] := 16#C051;
+ir[30] := 16#1A19;
+ir[31] := testEpoch;
 // Publish the retained request before opening the server on the first scan.
 // FC04: PLC-owned commands. FC16: one writer per input block (see README).
 server(wPort := 1502, InterfaceName := "lo", xEnable := TRUE,
        pInputData := ADR(ir), uiInputDataSize := 32,
-       pOutputData := ADR(hr), uiOutputDataSize := 26);
+       pOutputData := ADR(hr), uiOutputDataSize := 27);
 END_PROGRAM

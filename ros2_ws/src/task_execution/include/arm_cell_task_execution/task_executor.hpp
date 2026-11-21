@@ -56,7 +56,8 @@ public:
 
   std::uint8_t execute(const ExecuteTask::Goal & goal);
   std::uint8_t execute_grasp_cycle(
-    const PreparedGraspCycle & request, const std::string & motion_execution_id);
+    const PreparedGraspCycle & request, const std::string & motion_execution_id,
+    std::function<bool()> observed_at_pick = {});
   std::uint8_t execute(
     const ExecuteTask::Goal & goal, MotionObjectState object_state,
     const std::string & motion_execution_id = {});
@@ -73,6 +74,7 @@ public:
   bool released_at_configured_destination() const
   {return last_report_.released_at_configured_destination;}
   std::uint8_t object_disposition() const {return last_report_.object_disposition;}
+  bool configured_regrasp_started() const {return last_report_.configured_regrasp_started;}
   std::string last_failure_stage() const {return last_report_.failure_stage;}
   const std::vector<std::string> & attempted_material_candidate_ids() const
   {return attempted_material_candidate_ids_;}

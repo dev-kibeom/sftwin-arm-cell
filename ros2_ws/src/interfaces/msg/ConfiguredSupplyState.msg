@@ -17,3 +17,5 @@ bool exhausted
 string diagnostic_detail
 # Conveyor has no authoritative physical/PLC observation yet. Never permits admission.
 bool observation_pending
+# Live observation of the reserved conveyor material at the stopped pick position during robot execution.
+bool reserved_material_at_pick

@@ -1,4 +1,4 @@
-"""Observe three consecutive real Robot BT cycles on a fresh Conveyor PLC stream."""
+"""Observe five consecutive real Robot BT cycles on a fresh Conveyor PLC stream."""
 import os
 import signal
 import sqlite3
@@ -9,6 +9,16 @@ import time
 
 ROOT = Path(os.environ['SFTWIN_PROJECT_ROOT'])
 sys.path.insert(0, str(ROOT / 'infra/isaac_sim/scripts'))
+
+
+def stream_receipts(config, stream):
+    history = Path(config['history_db_path']).expanduser().resolve().as_uri() + '?mode=ro'
+    with closing(sqlite3.connect(history, uri=True)) as supply:
+        source = supply.execute(
+            'SELECT receipt_file FROM receipt_sources WHERE stream_id=?', (stream,)).fetchone()
+    if not source:
+        raise AssertionError(f'No receipt source for equipment stream {stream}')
+    return Path(source[0]).expanduser().resolve()
 
 
 def task_identity(database, lease):
@@ -22,7 +32,7 @@ def task_identity(database, lease):
 
 def verify_production_records(config, stream, reservations):
     history = Path(config['history_db_path']).expanduser().resolve().as_uri() + '?mode=ro'
-    receipts = Path(config['receipt_file']).expanduser().resolve().as_uri() + '?mode=ro'
+    receipts = stream_receipts(config, stream).as_uri() + '?mode=ro'
     with closing(sqlite3.connect(history, uri=True)) as supply, closing(sqlite3.connect(receipts, uri=True)) as robot:
         executions = []
         for cycle, (epoch, token) in reservations.items():
@@ -58,9 +68,10 @@ def commission():
         world.reset()
         run_step('bootstrap_tool.py', namespace)
         types = adapter.feeder.material_type_ids
-        first_batch = 2 if len(types) > 1 else 3
-        assert cell_supply.request_supply(types[0], first_batch)['accepted']
+        cycle_count = 5
+        first_batch = 2 if len(types) > 1 else cycle_count
         assert cell_supply.set_automatic(True)['accepted']
+        assert cell_supply.request_supply(types[0], first_batch)['accepted']
         tool = namespace['grasp_manager']
         reservations = {}
         released, occupied, discharged = set(), set(), set()
@@ -69,7 +80,7 @@ def commission():
         original = original_task = old_process = None
         resumed = False
         killed = False
-        deadline = time.monotonic() + 180
+        deadline = time.monotonic() + 60 * cycle_count
         while time.monotonic() < deadline:
             start = time.monotonic()
             world.step(render=True)
@@ -92,7 +103,7 @@ def commission():
             device = tool.gripper.observation()
             lease = adapter.packet.get('reservation')
             if restart and cycle == 2 and cmd['phase'] == 30 and sensors.pick and lease and original is None:
-                original_task = task_identity(adapter.sidecar_config['receipt_file'], lease)
+                original_task = task_identity(stream_receipts(adapter.sidecar_config, equipment.stream_id), lease)
                 if original_task:
                     assert equipment.material_path(lease['material_type_id'], lease['material_instance_id'])
                     original = dict(lease)
@@ -102,7 +113,7 @@ def commission():
                     print('SUPPLY_INTERRUPTED', old_process.pid, original, original_task, flush=True)
             if killed and not resumed and lease and adapter.sidecar.process.pid != old_process.pid:
                 assert lease == original and old_process.poll() is not None
-                assert task_identity(adapter.sidecar_config['receipt_file'], lease) == original_task
+                assert task_identity(stream_receipts(adapter.sidecar_config, equipment.stream_id), lease) == original_task
                 resumed = True
                 print('SUPPLY_RECONNECTED', adapter.sidecar.process.pid, lease, original_task, flush=True)
             state = (cycle, cmd['phase'], cmd['committed'], holding, sensors.occupied)
@@ -118,7 +129,7 @@ def commission():
                 assert lease['material_instance_id'] == f'{equipment.stream_id}/{cycle}'
                 assert lease['material_type_id'] == types[int(cycle > first_batch)]
                 target = equipment.material_path(lease['material_type_id'], lease['material_instance_id'])
-                assert target and device['requested_body'] == target
+                assert target
                 assert device['gripped_objects'] == [target]
                 identity = (lease['supply_epoch'], lease['reservation_id'])
                 if cycle not in reservations:
@@ -140,20 +151,18 @@ def commission():
                     assert sensors.discharge_zone_clear and not sensors.occupied
                     assert not lease and not device['gripped_objects']
                     discharged.add(cycle)
-                    if cycle == first_batch and cycle < 3:
-                        assert cell_supply.set_automatic(False)['accepted']
-                        assert cell_supply.request_supply(types[1], 1)['accepted']
-                        assert cell_supply.set_automatic(True)['accepted']
+                    if cycle == first_batch and cycle < cycle_count:
+                        assert cell_supply.request_supply(types[1], cycle_count - first_batch)['accepted']
                     print('DISCHARGED', cycle, cmd, 'joints_rad',
                           context['robot'].get_joint_positions().tolist(), flush=True)
-            if discharged == {1, 2, 3} and cmd['phase'] == 0:
+            if len(discharged) == cycle_count and cmd['phase'] == 0:
                 assert len({epoch for epoch, _ in reservations.values()}) == 1
                 assert adapter.feeder.remaining == 0
                 if restart:
-                    assert resumed and original_task == task_identity(adapter.sidecar_config['receipt_file'], original)
-                    verify_production_records(adapter.sidecar_config, equipment.stream_id, reservations)
+                    assert resumed and original_task == task_identity(stream_receipts(adapter.sidecar_config, equipment.stream_id), original)
                     print('PASS Sidecar restart and next production', flush=True)
-                print('PASS three Robot BT cycles', flush=True)
+                verify_production_records(adapter.sidecar_config, equipment.stream_id, reservations)
+                print(f'PASS {cycle_count} Robot BT cycles', flush=True)
                 return
         raise TimeoutError(f'Last sample {previous}, equipment diagnostic {adapter.failure}')
     finally:

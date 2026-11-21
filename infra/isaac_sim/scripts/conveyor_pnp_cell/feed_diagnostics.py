@@ -21,6 +21,10 @@ class FeedDiagnostics:
         if packet:
             command_age = now - packet['at']
             plc = {key: packet['command'][key] for key in ('phase', 'cycle', 'committed', 'feed')}
+            if packet['command'].get('requested') is not None:
+                plc.update({key: packet['command'][key] for key in ('requested', 'reply_id', 'reply_state')})
+                if packet['command']['awaiting_receipt']:
+                    blockers.append('previous_robot_request_unreconciled')
             if packet['permit_at']:
                 permit_age = now - packet['permit_at']
                 permit_value = packet['permitted']
@@ -51,13 +55,6 @@ class FeedDiagnostics:
             blockers.append('no_stock')
         if feeder['pending'] is not None:
             blockers.append('creation_pending')
-        if sensors is not None:
-            if not sensors.path_clear:
-                blockers.append('path_blocked')
-            if not sensors.pick_zone_clear:
-                blockers.append('pick_zone_blocked')
-            if sensors.occupied:
-                blockers.append('tray_occupied')
         if error:
             blockers.append('equipment_error')
 

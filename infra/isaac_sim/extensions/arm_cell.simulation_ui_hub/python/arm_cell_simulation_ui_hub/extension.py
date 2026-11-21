@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import tempfile
+import os
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -15,27 +19,20 @@ _CAMERA_ASPECT_RATIO = _CAMERA_DISPLAY_WIDTH / _CAMERA_DISPLAY_HEIGHT
 _TARGET_MARKER_RADIUS = 20
 _TARGET_MARKER_COLOR = np.array((32, 255, 96, 255), dtype=np.uint8)
 _LOGGER = logging.getLogger(__name__)
-_FAULT_GROUPS = (
+_E_STOP = (
+    "E-stop",
+    "external_mock",
+    (("e_stop", "Emergency Stop",
+      "Inject or clear the E-Stop input; clearing does not reset the Safety latch."),),
+)
+_OTHER_FAULTS = (
+    "Final Demo Fault Injection",
+    "external_mock",
     (
-        "Final Demo Fault Injection",
-        "external_mock",
-        (
-            (
-                "e_stop",
-                "Emergency Stop",
-                "Inject or clear the E-Stop input; clearing does not reset the Safety latch.",
-            ),
-            (
-                "safety_signal_loss",
-                "Safety Signal Loss",
-                "Suppress Safety-HW signals for five seconds, then request fresh publication.",
-            ),
-            (
-                "mislocalize_next",
-                "Vision Mislocalization",
-                "Offset the next successful detection upward by 100 mm.",
-            ),
-        ),
+        ("safety_signal_loss", "Safety Signal Loss",
+         "Suppress Safety-HW signals for five seconds, then request fresh publication."),
+        ("mislocalize_next", "Vision Mislocalization",
+         "Offset the next successful detection upward by 100 mm."),
     ),
 )
 
@@ -104,6 +101,7 @@ class SimulationUIHubExtension(_ExtensionBase):
             )
 
         from isaac_runtime.cell_supply import supply_descriptor
+        self._uses_cell_supply = bool(profile.get('cell', {}).get('configured_supply'))
         self._supply_descriptor = supply_descriptor()
         if self._supply_descriptor:
             handoff_material_types=[row['id'] for row in self._supply_descriptor['materials']]
@@ -132,7 +130,7 @@ class SimulationUIHubExtension(_ExtensionBase):
             freshness_default = DEFAULT_OBSERVATION_FRESHNESS_SECONDS
             annotation_tolerance = DEFAULT_ANNOTATION_SOURCE_TOLERANCE_SECONDS
             self._retry_detection_enabled = False
-        self.runtime = HubRuntime(
+        self._make_runtime = lambda: HubRuntime(
             default_observation_freshness_seconds=float(freshness_default),
             default_annotation_source_tolerance_seconds=float(
                 annotation_tolerance
@@ -140,6 +138,7 @@ class SimulationUIHubExtension(_ExtensionBase):
                 else DEFAULT_ANNOTATION_SOURCE_TOLERANCE_SECONDS
             ),
         )
+        self.runtime = self._make_runtime()
         self._handoff_material_types = handoff_material_types
         self._handoff_default_material_type = handoff_material_type
         self._handoff_default_quantity = handoff_default_quantity
@@ -261,11 +260,23 @@ class SimulationUIHubExtension(_ExtensionBase):
                 self._window.frame.rebuild()
 
     def _on_update(self, _event: Any) -> None:
+        if getattr(self, "_initialize_pending", False):
+            self._poll_initialize()
         self.runtime.spin_once()
         panel = getattr(self, '_teaching_panel', None)
         if panel is not None:
             panel.refresh()
         self._refresh_demonstration_state()
+        if self._uses_cell_supply and self._supply_descriptor is None:
+            from isaac_runtime.cell_supply import supply_descriptor
+            descriptor = supply_descriptor()
+            if descriptor:
+                self._supply_descriptor = descriptor
+                self._handoff_material_types = [row['id'] for row in descriptor['materials']]
+                self._handoff_default_material_type = self._handoff_material_types[0]
+                self._handoff_default_quantity = descriptor.get('default_count', 1)
+                if self._window is not None:
+                    self._window.frame.rebuild()
         if self._supply_owner_status is not None and self._supply_descriptor is not None:
             from isaac_runtime.cell_supply import supply_status
             status=supply_status()
@@ -422,6 +433,11 @@ class SimulationUIHubExtension(_ExtensionBase):
 
     def _build_contents(self, ui: Any) -> None:
         ui.Label("ARM Cell · Simulation Hub")
+        with ui.HStack():
+            ui.Button("Initialize", clicked_fn=self._initialize)
+            ui.Button("Start", clicked_fn=lambda: self._set_automatic(True))
+            ui.Button("Pause", clicked_fn=lambda: self._set_automatic(False))
+        self._initialize_status = ui.Label(getattr(self, "_initialize_message", ""), word_wrap=True)
         with ui.CollapsableFrame("Supply", collapsed=False):
             with ui.VStack(spacing=4):
                 ui.Label(
@@ -441,17 +457,15 @@ class SimulationUIHubExtension(_ExtensionBase):
                     self._handoff_default_quantity
                 )
                 ui.Button(
-                    "Set available stock" if (self._supply_descriptor or {}).get("automatic_control") else "Supply",
+                    "Supply",
                     clicked_fn=self._publish_handoff_trigger,
                 )
                 self._handoff_trigger_status = ui.Label(
                     "No supply request published.", word_wrap=True
                 )
-                if (self._supply_descriptor or {}).get("automatic_control"):
-                    with ui.HStack():
-                        ui.Button("Start automatic", clicked_fn=lambda: self._set_automatic(True))
-                        ui.Button("Pause automatic", clicked_fn=lambda: self._set_automatic(False))
                 self._supply_owner_status=ui.Label("",word_wrap=True)
+
+        self._build_fault_group(ui, *_E_STOP)
 
         panel = getattr(self, '_teaching_panel', None)
         if panel is not None:
@@ -502,8 +516,7 @@ class SimulationUIHubExtension(_ExtensionBase):
                 )
                 self._refresh_retry_detection()
 
-        for title, owner, scenarios in _FAULT_GROUPS:
-            self._build_fault_group(ui, title, owner, scenarios)
+        self._build_fault_group(ui, *_OTHER_FAULTS)
 
         ui.Label("Safety Recovery")
         ui.Label(
@@ -925,11 +938,83 @@ class SimulationUIHubExtension(_ExtensionBase):
             if label is not None:
                 label.text = f"Request failed: {error}"
 
+    def _initialize(self):
+        if getattr(self, "_initialize_pending", False):
+            return
+        try:
+            request = os.environ.get("ARM_CELL_INITIALIZE_REQUEST")
+            if not request:
+                raise ValueError("Open this simulation from ARM Cell Launcher to initialize the session")
+            request = Path(request)
+            attempt = Path(tempfile.mkdtemp(prefix="initialize-", dir=request.parent))
+            token = attempt / "request"
+            token.write_text(attempt.name)
+            token.replace(request)
+            self._initialize_attempt = attempt
+            self._initialize_task = None
+            self._initialize_failed = False
+            self._initialize_pending = True
+            self._initialize_message = "Initializing · waiting for the launcher"
+            self._initialize_status.text = self._initialize_message
+            _LOGGER.info("Initialize submitted to launcher")
+            self._set_automatic(False)
+        except (AttributeError, KeyError, OSError, ValueError, RuntimeError) as error:
+            self._initialize_status.text = str(error)
+            _LOGGER.warning("Initialize could not be submitted: %s", error)
+
+    def _poll_initialize(self):
+        attempt = self._initialize_attempt
+        task = self._initialize_task
+        error = attempt / "error"
+        if task is not None and task.done():
+            try:
+                task.result()
+            except Exception as exc:
+                if not error.exists():
+                    error.write_text(f"Isaac initialization failed: {exc}")
+                _LOGGER.exception("Isaac initialization failed")
+        if error.exists() and (task is None or task.done()):
+            self._initialize_failed = True
+            self._initialize_message = error.read_text()
+        elif (attempt / "complete").exists() and task is not None and task.done():
+            self.runtime.close()
+            self.runtime = self._make_runtime()
+            self._fault_request_ids.clear()
+            self._operator_request_ids.clear()
+            self._fault_local_status.clear()
+            self._scenario_active.clear()
+            self._initialize_message = "Initialized · ready for Start"
+        elif task is None and (attempt / "stop").exists():
+            from isaac_runtime import runtime_workflow
+            self._initialize_task = asyncio.ensure_future(runtime_workflow.initialize_scene(attempt))
+            return
+        else:
+            return
+        self._initialize_status.text = self._initialize_message
+        self._initialize_pending = False
+
     def _set_automatic(self, enabled):
+        if enabled and (getattr(self, "_initialize_pending", False) or getattr(self, "_initialize_failed", False)):
+            return
         from isaac_runtime.cell_supply import set_automatic
-        self._handoff_trigger_status.text = set_automatic(enabled)['detail']
+        try:
+            if self._uses_cell_supply or self._supply_descriptor:
+                result = set_automatic(enabled)
+                accepted, detail = result['accepted'], result['detail']
+            else:
+                self.runtime.request_automatic_mode(enabled)
+                accepted = True
+                detail = 'Automatic start requested' if enabled else 'Automatic pause requested'
+        except (OSError, RuntimeError, ValueError) as error:
+            accepted = False
+            detail = f'Automatic mode request failed: {error}'
+        if self._handoff_trigger_status is not None:
+            self._handoff_trigger_status.text = detail
+        return accepted
 
     def _publish_handoff_trigger(self) -> None:
+        if getattr(self, "_initialize_pending", False) or getattr(self, "_initialize_failed", False):
+            return
         label = self._handoff_trigger_status
         try:
             material_type = (
@@ -939,7 +1024,7 @@ class SimulationUIHubExtension(_ExtensionBase):
             )
             quantity = self._handoff_quantity_field.model.get_value_as_int()
             from isaac_runtime.cell_supply import supply_descriptor,request_supply
-            if supply_descriptor() is not None:
+            if self._uses_cell_supply or supply_descriptor() is not None:
                 result=request_supply(material_type,quantity)
                 label.text=('Supply accepted: ' if result['accepted'] else 'Supply rejected: ')+result['detail']
                 return
@@ -1030,6 +1115,8 @@ class SimulationUIHubExtension(_ExtensionBase):
             is_stop = getattr(event, "type", None) == "STOP"
         if not is_stop:
             return
+        if not self._uses_cell_supply:
+            self._set_automatic(False)
         self._demonstration_loaded_this_session = False
         self._refresh_demonstration_state(force=True)
         self.runtime.clear_tf_buffer()

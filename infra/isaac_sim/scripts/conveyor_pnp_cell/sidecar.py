@@ -21,6 +21,7 @@ from std_msgs.msg import Bool
 from tape_roll_cell.configured_supply_sidecar import ConfiguredSupplyClient
 from conveyor_pnp_cell.configured_supply import ConveyorPickSupply
 from conveyor_pnp_cell.equipment_io import ConveyorIO, Sensors
+from arm_cell_plc_adapter.conveyor_stream import receipt_path
 from conveyor_pnp_cell.runtime import MAX_AGE
 from conveyor_pnp_cell.supply import bind_confirmed_pick, material_instance_id
 from conveyor_pnp_cell.production_ledger import ProductionLedger
@@ -35,7 +36,10 @@ class Exchange:
         self.pick_configured = config['pick_configured']
         self.supply = ConveyorPickSupply(uuid4().hex, **config['supply'])
         self.history_path = config['history_db_path']
-        self.receipt_file = config.get('receipt_file')
+        self.receipt_base = config.get('receipt_file')
+        self.use_plc_test_epoch = config.get('use_plc_test_epoch', False)
+        self.receipt_file = None if self.use_plc_test_epoch else self.receipt_base
+        self.receipt_epoch = None
         self.resume_stream = config.get('resume_stream', False)
         self.ledger = None
         self.restored_unverified = True
@@ -46,6 +50,7 @@ class Exchange:
         self.permit_at = self.valid_at = 0.
         self.published_observation = None
         self.at_pick = self.permitted = False
+        self.observed_pick_reservation = ''
         self.sent = {}
         self.publisher = node.create_publisher(ConfiguredSupplyState, '/cell/configured_supply/state', 10)
         node.create_service(ConfiguredSupply, '/cell/configured_supply', self.reserve)
@@ -97,8 +102,9 @@ class Exchange:
     def run(self):
         try:
             while self.ipc.available and not self.shutdown.is_set():
+                next_poll = time.monotonic() + self.interval
                 self.poll()
-                self.shutdown.wait(self.interval)
+                self.shutdown.wait(max(0., next_poll - time.monotonic()))
         finally:
             self.ipc.available = False
             self.client.close()
@@ -116,6 +122,8 @@ class Exchange:
             state = self.supply.state(valid=not pending and not self.identity_conflict
                                       and (not reservable or self.at_pick))
             state.observation_pending = pending and not self.identity_conflict and self.ledger is not None
+            state.reserved_material_at_pick = bool(state.valid and state.reservation_id
+                                                   and state.reservation_id == self.observed_pick_reservation)
             # Repeating an old acquisition must not refresh DDS consumer admission.
             observation = (self.valid_at, state.reservation_id, state.valid, state.observation_pending)
             if state.valid and observation == self.published_observation:
@@ -237,9 +245,14 @@ class Exchange:
                         bound = 0
                         self.node.get_logger().warning(f'Pick assignment not persisted: {error}',
                                                        throttle_duration_sec=5.)
-            self.at_pick = (at_pick and command.confirmed and self.pick_configured
-                            and self.supply.available and observed == self.supply.cycle
-                            and material_type_id == self.supply.material_type_id)
+            same_material_at_pick = (at_pick and self.pick_configured
+                                     and self.supply.available and observed == self.supply.cycle
+                                     and material_type_id == self.supply.material_type_id)
+            # Phase 30 is the request for the slot already assigned on PLC
+            # confirmation. Recheck its physical occupant through ROS admission.
+            self.at_pick = same_material_at_pick and (command.confirmed or command.phase == 30)
+            self.observed_pick_reservation = (
+                self.supply.reservation if same_material_at_pick and command.phase == 30 else '')
             if self.at_pick:
                 self.restored_unverified = False
             if self.supply.reservation and packet.get('identity_observed', valid):
@@ -265,6 +278,18 @@ class Exchange:
                     reconciled = saved, resolution
                     self._restored_lease = None
             self.valid_at = packet['acquired'] if valid else 0.
+            # Publish the verified lease at acquisition, before synchronous PLC
+            # I/O can age this observation out of the admission freshness window.
+            supply = self.supply
+            if self.identity_conflict or (self.valid() and not self.restored_unverified):
+                reservation = None
+                if supply.reservation and not self.identity_conflict:
+                    reservation = dict(supply_id=supply.supply_id, material_id=supply.material_id,
+                                       slot_id=supply.slot, supply_epoch=supply.epoch,
+                                       material_type_id=supply.material_type_id,
+                                       material_instance_id=supply.material_instance_id,
+                                       reservation_id=supply.reservation)
+                self.ipc.send(dict(op='reservation', reservation=reservation))
         try:
             self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),
                             sensors=sensors, bound_cycle=bound)
@@ -305,32 +330,35 @@ class Exchange:
                                                throttle_duration_sec=5.)
 
     def poll(self):
-        now = time.monotonic()
-        self.sent = {at: cmd for at, cmd in self.sent.items() if now-at < MAX_AGE}
-        samples = self.ipc.poll_messages()
         try:
-            for packet in reversed(samples):
-                old = self.sent.pop(packet.get('at'), None)
-                if old is not None and now-packet['acquired'] < MAX_AGE and packet.get('op') == 'sample':
-                    # The acquisition belongs to one PLC command and one physical frame.
-                    self.sample(packet, old)
-                    break
-            cmd = self.io.commands()
+            if self.use_plc_test_epoch:
+                cmd, epoch = self.io.commands_with_epoch()
+                if self.receipt_epoch is not None and self.receipt_epoch != epoch:
+                    raise ValueError('PLC initialized; waiting for a new equipment session')
+                if self.receipt_epoch is None and self.ledger is not None and self.receipt_base:
+                    source = receipt_path(self.receipt_base, epoch)
+                    previous = self.ledger.receipt_source(self.supply.stream_id)
+                    if previous and Path(source).expanduser().resolve() != Path(previous):
+                        raise ValueError('Equipment stream belongs to another PLC test')
+                    self.ledger.bind_receipt_source(source)
+                    self.receipt_file = source
+                    self.receipt_epoch = epoch
+            else:
+                cmd = self.io.commands()
             at = time.monotonic()
+            self.sent = {t: previous for t, previous in self.sent.items() if at - t < MAX_AGE}
+            samples = self.ipc.poll_messages()
             self.sent[at] = cmd
             with self.lock:
                 permitted, permit_at = self.permitted, self.permit_at
-                supply = self.supply
-                reservation = dict(supply_id=supply.supply_id, material_id=supply.material_id,
-                                   slot_id=supply.slot, supply_epoch=supply.epoch,
-                                   material_type_id=supply.material_type_id,
-                                   material_instance_id=supply.material_instance_id,
-                                   reservation_id=supply.reservation) if (
-                    supply.reservation and self.valid() and not self.restored_unverified and not self.identity_conflict) else None
-                pending = (not self.valid() or self.restored_unverified) and not self.identity_conflict and self.ledger is not None
             self.ipc.send(dict(op='command', at=at, command=asdict(cmd), permitted=permitted,
-                               permit_at=permit_at, reservation=reservation, observation_pending=pending))
-        except (OSError, ValueError, ModbusException) as error:
+                               permit_at=permit_at))
+            for packet in reversed(samples):
+                old = self.sent.pop(packet.get('at'), None)
+                if old is not None and at-packet['acquired'] < MAX_AGE and packet.get('op') == 'sample':
+                    self.sample(packet, old)
+                    break
+        except (OSError, ValueError, sqlite3.Error, ModbusException) as error:
             if self.sent or self.valid_at:
                 self.node.get_logger().warning(f'Conveyor equipment unavailable: {error}', throttle_duration_sec=5.)
             self.client.close()

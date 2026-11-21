@@ -37,6 +37,11 @@ TEST(ConfiguredSupplyLease, ActiveConveyorSeparatesSilenceFromRevocation)
   state.reservation_id = "token"; state.material_instance_id = "stream/1";
   state.material_type_id = "A"; state.valid = true;
   lease.update(state, now);
+  EXPECT_FALSE(lease.observed_at_pick(identity, now));
+  state.reserved_material_at_pick = true;
+  lease.update(state, now);
+  EXPECT_TRUE(lease.observed_at_pick(identity, now));
+  EXPECT_FALSE(lease.observed_at_pick(identity, now + std::chrono::milliseconds(500)));
   EXPECT_FALSE(lease.matches(identity, now + std::chrono::seconds(6)));
   EXPECT_TRUE(lease.retains(identity, now + std::chrono::seconds(6), true));
   EXPECT_FALSE(lease.retains(identity, now + std::chrono::seconds(6), false));
@@ -46,8 +51,10 @@ TEST(ConfiguredSupplyLease, ActiveConveyorSeparatesSilenceFromRevocation)
   EXPECT_TRUE(lease.retains(identity, now, true));
   state.observation_pending = false;
   lease.update(state, now);
+  EXPECT_FALSE(lease.observed_at_pick(identity, now));
   EXPECT_FALSE(lease.retains(identity, now, true));
   state.valid = true; state.material_instance_id = "stream/2";
   lease.update(state, now);
+  EXPECT_FALSE(lease.observed_at_pick(identity, now));
   EXPECT_FALSE(lease.retains(identity, now, true));
 }

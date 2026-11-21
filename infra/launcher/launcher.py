@@ -145,12 +145,14 @@ class Launcher(QMainWindow):
         self.processes = {}
         self.terminals = {}
         self.terminal_stop = False
+        self.initialize_dir = None
+        self.initialize_phase = None
         self.stopping = False
         self.closing = False
         self.phase = 0
         self.run = None
         self.error = ''
-        self.preparing = False
+        self.pending_start = None
         self.preparation_output = b''
         self.preparation_started_at = 0.
         # One host simulation uses fixed ports even across repository checkouts.
@@ -206,7 +208,7 @@ class Launcher(QMainWindow):
         buttons = QHBoxLayout()
         layout.addLayout(buttons)
         self.isaac = QPushButton('Isaac 시작')
-        self.ros = QPushButton('ROS 2 시작 (Isaac 초기화 확인 후)')
+        self.ros = QPushButton('ROS 2 시작')
         self.plc_button = QPushButton('PLC 시작')
         self.stop = QPushButton('모두 종료')
         for button in (self.isaac, self.ros, self.plc_button, self.stop):
@@ -218,7 +220,7 @@ class Launcher(QMainWindow):
         self.status = QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        hint = QLabel('Isaac 초기화 완료 후 ROS 2를 시작하세요. 출력은 각 터미널에서 확인합니다.')
+        hint = QLabel('라이브 테스트 세션에 연결하려면 Isaac 초기화 후 ROS 2를 시작하세요.')
         layout.addWidget(hint)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll)
@@ -363,26 +365,29 @@ class Launcher(QMainWindow):
             message += validation_note(entry)
         except ValueError as exc:
             valid, message = False, str(exc)
-        active = bool(self.processes or self.terminals) or self.stopping
+        active = self.run is not None or self.stopping
         for combo in (*self.selectors.values(), self.tool_mode):
             combo.setEnabled(not active)
         self.component_settings.setEnabled(not active)
         self.reset_parameters.setEnabled(not active)
-        self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
-        self.isaac.setEnabled(valid and not active)
-        self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
+        self.isaac.setEnabled(valid and self.can_start('isaac'))
+        self.ros.setEnabled(valid and self.can_start('ros'))
         self.plc_gui.setVisible(self.conveyor)
-        self.plc_gui.setEnabled(not self.stopping and self.plc.phase is None)
+        self.plc_gui.setEnabled(self.can_start('plc'))
         self.plc_project_button.setVisible(self.conveyor)
         self.plc_project_button.setEnabled(self.plc_gui.isEnabled())
         self.plc_button.setVisible(self.conveyor)
-        self.plc_button.setEnabled(self.can_start_plc())
+        self.plc_button.setEnabled(valid and self.can_start('plc'))
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
-        if self.preparing:
+        if self.pending_start:
             elapsed = int(time.monotonic()-self.preparation_started_at)
             message = f'설정·슬롯 티칭 경로 준비 중… ({elapsed}초) 중지 버튼으로 취소할 수 있습니다.'
+        elif self.initialize_phase == "scene":
+            message = '초기화 중 · 새 Isaac 장면과 HOME 설정을 기다리는 중'
+        elif 'initialize' in self.processes:
+            message = '초기화 중 · PLC 응답 대기'
         elif states:
             message = states + ' | ' + message
         if self.plc.message and self.conveyor:
@@ -415,44 +420,83 @@ class Launcher(QMainWindow):
             os.close(master)
             os.close(slave)
 
+    def can_start(self, component):
+        if self.stopping or self.initialize_dir or self.pending_start or 'initialize' in self.processes:
+            return False
+        if component == 'plc':
+            return self.conveyor and self.plc.phase is None
+        return component not in self.processes
+
     def start_isaac(self):
-        if self.processes or self.terminals or self.stopping:
+        self._request_start('isaac')
+
+    def start_ros(self):
+        self._request_start('ros')
+
+    def start_plc(self):
+        self._request_start('plc')
+
+    def _request_start(self, component):
+        if not self.can_start(component):
             return
         self.error = ''
-        if not self.lock.tryLock(0):
-            self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
-            self.validate()
-            return
         try:
-            self.plc.closing = False
-            self.plc.message = ''
-            self.run = tempfile.TemporaryDirectory(prefix='arm-cell-launcher-')
-            entry = self.selection()
-            self.runtime = Path(self.run.name)/'runtime_configuration.json'
-            # Both consumers retain this one snapshot until all owned groups exit.
-            self.environment = dict(os.environ, SFTWIN_PROJECT_ROOT=str(ROOT),
-                ARM_CELL_PROFILE=str(self.runtime), ARM_CELL_RUNTIME_CONFIG=str(self.runtime), PYTHONUNBUFFERED='1')
-            if read(entry['profile']).get('kind') == 'arm-cell-configured-supply-profile':
-                producer_environment = dict(self.environment,
-                    PYTHONPATH=str(ROOT/'ros2_ws/src/bringup')+os.pathsep+os.environ.get('PYTHONPATH',''))
-                process = subprocess.Popen(preparation_command(entry,self.runtime),cwd=ROOT,
-                    env=producer_environment,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,start_new_session=True)
-                os.set_blocking(process.stdout.fileno(),False)
-                self.processes['prepare'] = process
-                self.preparation_output = b''
-                self.preparing = True
-                self.preparation_started_at = time.monotonic()
-            else:
-                export_selection(entry,self.runtime)
-                self._start_prepared_isaac()
+            if self.run is None:
+                if not self.lock.tryLock(0):
+                    self.error = '다른 ARM Cell Launcher가 실행 중입니다.'
+                    self.validate()
+                    return
+                self._prepare_run(component)
+            if not self.pending_start:
+                self._launch(component)
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
         self.validate()
 
-    def _start_prepared_isaac(self):
-        self.spawn('isaac', ['bash', str(ROOT/'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
-                            '--runtime-config', str(self.runtime)], self.environment)
+    def _prepare_run(self, component):
+        self.plc.closing = False
+        self.plc.message = ''
+        self.ros_preflight = None
+        self.run = tempfile.TemporaryDirectory(prefix='arm-cell-launcher-')
+        entry = self.selection()
+        self.runtime = Path(self.run.name) / 'runtime_configuration.json'
+        self.environment = dict(
+            os.environ, SFTWIN_PROJECT_ROOT=str(ROOT), ARM_CELL_PROFILE=str(self.runtime),
+            ARM_CELL_RUNTIME_CONFIG=str(self.runtime), PYTHONUNBUFFERED='1',
+            ARM_CELL_INITIALIZE_REQUEST=str(self.runtime.with_name('initialize.request')),
+        )
+        if read(entry['profile']).get('kind') != 'arm-cell-configured-supply-profile':
+            export_selection(entry, self.runtime)
+            return
+
+        producer_environment = dict(
+            self.environment, PYTHONPATH=str(ROOT / 'ros2_ws/src/bringup') + os.pathsep + os.environ.get('PYTHONPATH', ''),
+        )
+        process = subprocess.Popen(
+            preparation_command(entry, self.runtime), cwd=ROOT, env=producer_environment,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+        self.processes['prepare'] = process
+        os.set_blocking(process.stdout.fileno(), False)
+        self.preparation_output = b''
+        self.pending_start = component
+        self.preparation_started_at = time.monotonic()
+
+    def _launch(self, component):
+        if component == 'isaac':
+            self.spawn('isaac', ['bash', str(ROOT/'infra/isaac_sim/scripts/isaac_arm_cell.sh'),
+                                '--runtime-config', str(self.runtime)], self.environment)
+        elif component == 'ros':
+            args = [str(self.runtime), 'debug' if self.debug.isChecked() else 'info']
+            if self.conveyor:
+                self.ros_preflight = self.runtime.with_name('ros-preflight-complete')
+                args.append(str(self.ros_preflight))
+            self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), *args], self.environment)
+        elif component == 'plc':
+            if self.plc_gui.isChecked():
+                self.plc.open_editor(self.plc_project, self.environment)
+            self.plc.start(self.runtime, self.environment)
 
     def _poll_preparation(self):
         process = self.processes['prepare']
@@ -463,7 +507,8 @@ class Launcher(QMainWindow):
             self.preparation_output = (self.preparation_output+chunk)[-65536:]
         code = process.poll()
         if code is None or groups_alive([process]):return
-        self.preparing = False
+        component = self.pending_start
+        self.pending_start = None
         process.stdout.close()
         if code != 0 or not self.runtime.is_file():
             lines = self.preparation_output.decode(errors='replace').strip().splitlines()
@@ -471,29 +516,11 @@ class Launcher(QMainWindow):
             self.begin_stop()
             return
         del self.processes['prepare']
-        try:self._start_prepared_isaac()
-        except Exception as exc:
-            self.error = str(exc)
-            self.begin_stop()
-
-    def start_ros(self):
-        if ('isaac' not in self.processes
-                or 'ros' in self.processes or self.stopping):
-            return
         try:
-            args = [str(self.runtime), 'debug' if self.debug.isChecked() else 'info']
-            if self.conveyor:
-                self.ros_preflight = self.runtime.with_name('ros-preflight-complete')
-                args.append(str(self.ros_preflight))
-            self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), *args], self.environment)
+            self._launch(component)
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
-        self.validate()
-
-    def can_start_plc(self):
-        return (self.conveyor and 'isaac' in self.processes and not self.stopping
-                and self.plc.phase is None)
 
     def choose_plc_project(self):
         filename, _ = QFileDialog.getOpenFileName(
@@ -504,18 +531,15 @@ class Launcher(QMainWindow):
             self.plc_project_button.setToolTip(filename)
             self.plc_gui.setChecked(True)
 
-    def start_plc(self):
-        if self.can_start_plc():
-            if self.plc_gui.isChecked():
-                self.plc.open_editor(self.plc_project, self.environment)
-            self.plc.start(self.runtime, self.environment)
-            self.validate()
-
     def signal_groups(self, sig):
         signal_processes(self.processes.values(), sig)
 
     def begin_stop(self):
-        self.preparing = False
+        self.plc.hold_service = False
+        if self.initialize_dir:
+            (self.initialize_dir / 'error').write_text('런처에서 실행을 중지했습니다.')
+            self.initialize_dir = self.initialize_phase = None
+        self.pending_start = None
         if not self.stopping:
             self.stopping = True
             self.plc.close_session()
@@ -525,17 +549,140 @@ class Launcher(QMainWindow):
             self.deadline = time.monotonic() + 15
         self.validate()
 
+    def _initialize_failed(self, message):
+        self.error = message
+        (self.initialize_dir / 'error').write_text(message)
+        self.initialize_dir = self.initialize_phase = None
+        self.plc.hold_service = False
+
+    def _retry_initialize_plc(self, attempt):
+        now = time.monotonic()
+        if now >= self.initialize_retry_at:
+            self.initialize_retry_at = now + 2.
+            self.plc.start(self.runtime, dict(self.environment, ARM_CELL_INITIALIZE_ATTEMPT=str(attempt)))
+
+    def _poll_initialize(self):
+        if not self.run or self.stopping or self.pending_start:
+            return
+        attempt = self.initialize_dir
+        if attempt is None:
+            request = self.runtime.with_name('initialize.request')
+            if not request.is_file():
+                return
+            name = request.read_text().strip()
+            request.unlink()
+            if Path(name).name != name or not name.startswith('initialize-'):
+                raise ValueError('잘못된 초기화 요청')
+            attempt = self.runtime.with_name(name)
+            if not attempt.is_dir():
+                raise ValueError('초기화 요청 디렉터리가 없습니다.')
+            self.initialize_dir = attempt
+            self.initialize_phase = 'drain'
+            self.error = ''
+            self.plc.hold_service = True
+            self.plc.close_session()
+            self.ros_preflight = None
+            self.runtime.with_name('ros-preflight-complete').unlink(missing_ok=True)
+            if 'ros' in self.processes:
+                signal_processes([self.processes['ros']], signal.SIGINT)
+            (attempt / 'stop').touch()
+            self.drain_started = time.monotonic()
+            self.initialize_retry_at = self.drain_started
+        if self.initialize_phase in ('drain', 'restart_ros'):
+            elapsed = time.monotonic() - self.drain_started
+            for collection in (self.processes, self.terminals):
+                ros = collection.get('ros')
+                if ros is None:
+                    continue
+                if groups_alive([ros]):
+                    if collection is self.terminals or elapsed > 15:
+                        signal_processes([ros], signal.SIGKILL if elapsed > 20 else signal.SIGTERM)
+                    return
+                del collection['ros']
+            if self.initialize_phase == 'restart_ros':
+                if time.monotonic() < self.initialize_retry_at:
+                    return
+                self.initialize_phase = 'scene'
+        if (attempt / 'error').exists():
+            self._initialize_failed((attempt / 'error').read_text())
+            return
+        if self.initialize_phase == 'drain':
+            if self.plc.phase is not None or not (attempt / 'stopped').exists():
+                return
+            self.plc.closing = False
+            if self.conveyor:
+                self.initialize_phase = 'probe'
+                self.plc.start(self.runtime, dict(self.environment, ARM_CELL_INITIALIZE_ATTEMPT=str(attempt)))
+                return
+            self.initialize_phase = 'rebuild'
+        if self.initialize_phase == 'probe':
+            if self.plc.phase is None:
+                self._retry_initialize_plc(attempt)
+            elif self.plc.phase == 'awaiting_ros':
+                self.processes['initialize'] = subprocess.Popen(
+                    plc_control.runtime_command('initialize', self.runtime),
+                    env=dict(self.environment, ARM_CELL_INITIALIZE_ATTEMPT=str(attempt)),
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+                self.initialize_phase = 'epoch'
+            return
+        if self.initialize_phase == 'epoch':
+            helper = self.processes['initialize']
+            if helper.poll() is None:
+                return
+            output = helper.stdout.read().decode(errors='replace').strip()
+            helper.stdout.close()
+            del self.processes['initialize']
+            print('[Initialize]', output, flush=True)
+            if helper.returncode:
+                self._initialize_failed(output or 'PLC 초기화 실패')
+                return
+            self.initialize_phase = 'rebuild'
+        if self.initialize_phase == 'rebuild':
+            (attempt / 'rebuild').touch()
+            self.initialize_phase = 'scene'
+        if self.initialize_phase == 'scene' and (attempt / 'ready').exists():
+            self._launch('ros')
+            self.initialize_phase = 'ros'
+        if self.initialize_phase == 'ros':
+            if self.processes['ros'].poll() is not None:
+                self.initialize_phase = 'restart_ros'
+                self.drain_started = time.monotonic()
+                self.initialize_retry_at = self.drain_started + 2.
+                if self.ros_preflight is not None:
+                    self.ros_preflight.unlink(missing_ok=True)
+                signal_processes([self.processes['ros']], signal.SIGTERM)
+                return
+            if self.conveyor and self.plc.phase is None:
+                self._retry_initialize_plc(attempt)
+            elif not self.conveyor or (self.plc.phase == 'adapter'
+                    and (attempt / 'adapter-ready').is_file()
+                    and (attempt / 'adapter-ready').read_text() == (attempt / 'stream').read_text()):
+                (attempt / 'complete').touch()
+                self.initialize_dir = self.initialize_phase = None
+                self.plc.hold_service = False
+
     def poll(self):
-        if self.preparing and not self.stopping:
+        try:
+            self._poll_initialize()
+        except (OSError, RuntimeError, ValueError) as error:
+            if self.initialize_dir:
+                self._initialize_failed(str(error))
+            else:
+                self.error = str(error)
+        if self.pending_start and not self.stopping:
             self._poll_preparation()
         if not self.stopping:
             for name, process in self.processes.items():
+                if name in ('prepare', 'initialize') or (name == 'ros' and self.initialize_phase in ('drain', 'restart_ros')):
+                    continue  # _poll_preparation handles its exit and starts the requested component.
                 code = process.poll()
                 if code is not None:
                     self.error = f'{name} 프로세스 종료 (코드 {code}).'
                     self.begin_stop()
                     break
             for name, terminal in self.terminals.items():
+                if name == 'ros' and self.initialize_phase in ('drain', 'restart_ros'):
+                    continue
                 code = terminal.poll()
                 if code is not None and not self.stopping:
                     self.error = f'{name} 터미널 종료 (코드 {code}). 실행 환경을 정리합니다.'
@@ -566,6 +713,7 @@ class Launcher(QMainWindow):
                         if process.stdout is not None:process.stdout.close()
                     self.processes.clear()
                     self.terminals.clear()
+                    self.stopping = False
                     if self.run is not None:
                         self.run.cleanup()
                         self.run = None
@@ -576,7 +724,7 @@ class Launcher(QMainWindow):
         self.validate()
 
     def closeEvent(self, event):
-        if self.processes or self.terminals or self.stopping:
+        if self.run is not None or self.stopping:
             self.closing = True
             self.begin_stop()
             event.ignore()
