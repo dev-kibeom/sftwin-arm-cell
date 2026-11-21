@@ -108,9 +108,9 @@ class ProductionLedger:
         with self.lock:
             self.db.close()
 
-    def _event(self, instance_id, source, kind, details):
+    def _event(self, instance_id, source, kind, details, *, stream_id=None):
         self.db.execute('INSERT INTO history_events(stream_id,instance_id,source,event_type,details,recorded_at) VALUES (?,?,?,?,?,?)',
-                        (self.stream_id, instance_id, source, kind, json.dumps(details, sort_keys=True), timestamp()))
+                        (stream_id or self.stream_id, instance_id, source, kind, json.dumps(details, sort_keys=True), timestamp()))
 
     @staticmethod
     def _identifier(snapshot):
@@ -232,7 +232,9 @@ class ProductionLedger:
         if verdict not in ('PASS', 'FAIL', 'INCONCLUSIVE'):
             raise ValueError('Unsupported inspection verdict')
         with self.transaction():
-            if not self.db.execute('SELECT 1 FROM materials WHERE instance_id=?', (instance_id,)).fetchone():
+            material = self.db.execute('SELECT stream_id FROM materials WHERE instance_id=?',
+                                       (instance_id,)).fetchone()
+            if material is None:
                 raise ValueError('Unknown physical material')
             row = self.db.execute(
                 'SELECT station_id,verdict,evidence_ref FROM inspections WHERE instance_id=? AND inspection_id=?',
@@ -244,7 +246,8 @@ class ProductionLedger:
             self.db.execute('INSERT INTO inspections VALUES (?,?,?,?,?,?)',
                             (instance_id, inspection_id, station_id, verdict, evidence_ref, timestamp()))
             self._event(instance_id, station_id, 'INSPECTION_RECORDED',
-                        dict(inspection_id=inspection_id, verdict=verdict, evidence_ref=evidence_ref))
+                        dict(inspection_id=inspection_id, verdict=verdict, evidence_ref=evidence_ref),
+                        stream_id=material['stream_id'])
             return True
 
     def history(self, instance_id):

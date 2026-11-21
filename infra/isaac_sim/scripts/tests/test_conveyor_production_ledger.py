@@ -78,6 +78,10 @@ def test_multiple_streams_and_unresolved_reservation_survive_restart(tmp_path):
     assert fresh.summary()['unresolved_reservations'] == 1
     assert fresh.history('stream-a/1')['reservations'][0]['status'] == 'ACTIVE'
     assert fresh.history('stream-b/1')['material']['stream_id'] == 'stream-b'
+    fresh.inspect(instance_id='stream-a/1', inspection_id='after-restart',
+                  station_id='quality-gauge', verdict='INCONCLUSIVE',
+                  evidence_ref='review-1')
+    assert fresh.history('stream-a/1')['events'][-1]['stream_id'] == 'stream-a'
     fresh.close()
 
 def test_physical_birth_precedes_pick_and_plc_result_is_not_fabricated(tmp_path):
