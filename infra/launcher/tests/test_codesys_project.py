@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import os
+import socket
 import subprocess
 import sys
 
@@ -18,17 +19,55 @@ def test_prepare_login_and_restore_selected_application(tmp_path, monkeypatch):
     (project / 'Feeder.iecapp^').mkdir()
     lock = application.with_suffix('.iecapp^') / 'Libraries.lock.json'
     lock.write_text('{}')
+    monkeypatch.delenv('ARM_CELL_CODESYS_NODE_NAME', raising=False)
     calls = []
     monkeypatch.setattr(subprocess, 'run', lambda args, check: calls.append(args))
     assert codesys_project.prepare(application) == project
     settings = project / 'Communication.settings.json'
     initial = json.loads(settings.read_text())
+    assert initial['device']['nodeName'] == socket.gethostname()
     assert initial['gateway']['hostName'] == 'localhost' and initial['gateway']['port'] == 1217
     custom = '{"gateway":{"hostName":"operator-selected"},"device":{"nodeName":"Line A"}}'
     settings.write_text(custom)
     assert codesys_project.prepare(project) == project
     assert settings.read_text() == custom
     assert calls == [['c4-cli', 'library', 'restore', str(lock)]] * 2
+
+
+def test_repair_unconfigured_local_device_and_preserve_configured_target(tmp_path, monkeypatch):
+    project = tmp_path / 'Local.fbsdev'
+    application = project / 'Application.iecapp'
+    application.with_suffix('.iecapp^').mkdir(parents=True)
+    application.write_text('{}')
+    settings = project / 'Communication.settings.json'
+    gateway = {'type': 'CODESYS.GwV3', 'name': '', 'hostName': 'localhost', 'port': 1217}
+    previous = {'gateway': gateway, 'device': {'nodeName': None}}
+    settings.write_text(json.dumps(previous))
+    monkeypatch.setenv('ARM_CELL_CODESYS_NODE_NAME', 'Test PLC')
+    codesys_project.prepare(application)
+    assert json.loads(settings.read_text()) == dict(previous, device={'nodeName': 'Test PLC'})
+    monkeypatch.setenv('ARM_CELL_CODESYS_NODE_NAME', 'Another PLC')
+    codesys_project.prepare(application)
+    assert json.loads(settings.read_text())['device']['nodeName'] == 'Test PLC'
+
+
+@pytest.mark.parametrize('node', [None, 'Selected PLC'])
+def test_prepare_project_with_null_gateway(tmp_path, monkeypatch, node):
+    project = tmp_path / 'Conveyor.fbsdev'
+    application = project / 'Application.iecapp'
+    application.with_suffix('.iecapp^').mkdir(parents=True)
+    application.write_text('{}')
+    settings = project / 'Communication.settings.json'
+    settings.write_text(json.dumps({'device': {'nodeName': node, 'other': 1}, 'gateway': None}))
+    monkeypatch.setenv('ARM_CELL_CODESYS_NODE_NAME', 'Local PLC')
+    codesys_project.prepare(application)
+    value = json.loads(settings.read_text())
+    assert value['gateway']['type'] == 'CODESYS.GwV3'
+    assert (value['gateway']['hostName'], value['gateway']['port']) == ('localhost', 1217)
+    assert value['device'] == {'nodeName': node or 'Local PLC', 'other': 1}
+    before = settings.stat().st_ino
+    codesys_project.prepare(application)
+    assert settings.stat().st_ino == before
 
 
 def test_reject_stale_project_directory(tmp_path):

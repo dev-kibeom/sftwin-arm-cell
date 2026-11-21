@@ -1,4 +1,4 @@
-"""Exercise the same reservation, GRASP and RELEASE hooks used by the physics session."""
+"""Exercise the GRASP and RELEASE hooks used by the physics session."""
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -29,11 +29,10 @@ class Device:
 
 
 @pytest.mark.parametrize('objects', [(), ('/Part_2',), ('/Part_1', '/Part_2'), ('/Part_1',)])
-def test_only_reserved_single_body_can_be_held(objects):
+def test_attachment_feedback_is_independent_of_body_identity(objects):
     device = Device()
     capture = SurfaceCapture()
-    capture.resolve_reserved_body = lambda ref: '/Part_1' if ref == REFERENCE else None
-    actuator = SuctionActuator(device, capture)
+    actuator = SuctionActuator(device)
     manager = SurfaceManager(actuator, tool=SimpleNamespace(capture=capture), binding=device)
     assert manager.configure_selected_grasp_reference(REFERENCE)
     actuator.command(ToolIntent.GRASP)
@@ -45,7 +44,12 @@ def test_only_reserved_single_body_can_be_held(objects):
     actuator.update(.01)
     manager.update(.01)
     assert manager.attachment_owned() == bool(objects)
-    assert (manager.holding_observation().state is HoldingState.HELD) == (objects == ('/Part_1',))
+    assert (manager.holding_observation().state is HoldingState.HELD) == bool(objects)
+    # Metadata changes for the same execution cannot change the device command or feedback.
+    assert manager.configure_selected_grasp_reference(dict(REFERENCE, reservation_id='d'*32))
+    actuator.update(.01)
+    manager.update(.01)
+    assert (manager.holding_observation().state is HoldingState.HELD) == bool(objects)
     # Loss after HELD and before the release command cannot confirm placement.
     device.sample_value = ('Open', ())
     actuator.command(ToolIntent.RELEASE)
@@ -54,29 +58,36 @@ def test_only_reserved_single_body_can_be_held(objects):
     manager.update(.01)
     assert manager.release_receipt() is None
 
-def test_expired_or_replaced_reservation_cannot_reconfirm_a_dropped_object():
-    current = [REFERENCE]
+def test_grasp_without_supply_and_drop_before_release():
     device = Device()
+    commands = []
+    device.close = lambda: commands.append('vacuum_on')
     capture = SurfaceCapture()
-    capture.resolve_reserved_body = lambda ref: '/part' if ref == current[0] else None
-    actuator = SuctionActuator(device, capture)
-    actuator.strategy = REFERENCE
+    actuator = SuctionActuator(device)
+    manager = SurfaceManager(actuator, tool=SimpleNamespace(capture=capture), binding=device)
     actuator.command(ToolIntent.GRASP)
+    assert manager.arm_close_transaction()
+    assert commands == ['vacuum_on']
+    actuator.update(.01)
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.UNKNOWN
     device.sample_value = ('Closed', ('/part',))
     actuator.update(.01)
-    assert actuator.holding_observation().state is HoldingState.HELD
-    current[0] = {**REFERENCE, 'reservation_id': 'd'*32}
-    actuator.update(.01)
-    assert actuator.holding_observation().state is HoldingState.UNKNOWN
-    current[0] = REFERENCE
-    actuator.update(.01)
-    assert actuator.holding_observation().state is HoldingState.UNKNOWN
-    actuator.command(ToolIntent.RELEASE)
+    manager.update(.01)
+    assert manager.holding_observation().state is HoldingState.HELD
     device.sample_value = ('Open', ())
     actuator.update(.01)
-    assert actuator.holding_observation().state is HoldingState.UNKNOWN
-    actuator.strategy = {**REFERENCE, 'motion_goal_uuid': 'e'*32}
     actuator.command(ToolIntent.RELEASE)
     actuator.update(.01)
     assert actuator.holding_observation().state is HoldingState.RELEASED
-    assert not actuator.released_target
+    assert not actuator.released_held_object
+
+
+def test_shutdown_of_stopped_suction_tool_never_commands_grasp():
+    device = Device()
+    device.close = lambda: pytest.fail('shutdown commanded GRASP')
+    device.reset_stopped_tool = lambda actuator: True
+    capture = SurfaceCapture()
+    actuator = SuctionActuator(device)
+    manager = SurfaceManager(actuator, tool=SimpleNamespace(capture=capture), binding=device)
+    assert manager.shutdown()

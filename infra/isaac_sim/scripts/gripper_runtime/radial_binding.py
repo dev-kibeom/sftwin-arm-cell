@@ -197,5 +197,5 @@ class IsaacRadialBinding:
     def clear(self):
         pass
 
-    def close(self):
+    def shutdown(self):
         pass

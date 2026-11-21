@@ -1,6 +1,7 @@
 # Companion parameters for the full conveyor PLC_PRG. Load after conveyor_pnp_codesys.yaml.
 plc_task_adapter:
   ros__parameters:
+    conveyor_test_stream: true
     admission_holding_offset: 6
     mission_admission_topic: "/orchestration/mission_admission_available"
 orchestration_node:

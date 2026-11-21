@@ -1,6 +1,9 @@
 """Conveyor equipment callbacks, called serially by the Cell update loop."""
 
 
+from collections import deque
+
+
 def material_instance_id(stream_id, cycle):
     """PLC material numbers are unique within one reconciled production stream."""
     return f'{stream_id}/{cycle}'
@@ -11,25 +14,26 @@ class ConveyorFeeder:
         # Restore only after reconciling the last physical creation with the PLC.
         self.material_id = material_id
         self.material_type_ids = tuple(material_type_ids or (material_id,))
-        self.material_type_id = self.material_type_ids[0]
+        self._lots = deque()
         self.last_generated = last_generated
         self.pending = None
         self.remaining = 0
         self.automatic = False
 
-    def bind_ui(self, *, set_automatic=None):
+    def bind_ui(self, *, set_automatic=None, status=None):
         from isaac_runtime.cell_supply import register_supply_port
         register_supply_port(self, dict(materials=[dict(id=t) for t in self.material_type_ids],
                              count_label='Available parts', default_count=1),
-                             self.configure, self.status, set_automatic=set_automatic or self.set_automatic)
+                             self.configure, status or self.status, set_automatic=set_automatic or self.set_automatic)
 
     def configure(self, material, count):
-        if (self.automatic or self.pending is not None or material not in self.material_type_ids
-                or type(count) is not int or not 1 <= count <= 65535):
-            return dict(accepted=False, detail='Pause automatic feed and reconcile pending stock.')
-        self.material_type_id = material
-        self.remaining = count
-        return dict(accepted=True, detail=f'{count} parts available')
+        if material not in self.material_type_ids:
+            return dict(accepted=False, detail='Unsupported material')
+        if type(count) is not int or not 1 <= count <= 65535 - self.remaining:
+            return dict(accepted=False, detail='Available stock must fit 1–65535 parts.')
+        self._lots.append((material, count))
+        self.remaining += count
+        return dict(accepted=True, detail=f'Added {count} · {self.remaining} parts available')
 
     def set_automatic(self, enabled):
         self.automatic = enabled
@@ -48,7 +52,12 @@ class ConveyorFeeder:
                 or cycle != self.last_generated + 1):
             return
         self.pending = cycle
-        if spawn_one(self.material_type_id, cycle) is True:
+        material, count = self._lots[0]
+        if spawn_one(material, cycle) is True:
+            if count == 1:
+                self._lots.popleft()
+            else:
+                self._lots[0] = (material, count - 1)
             self.last_generated = cycle
             self.remaining -= 1
             self.pending = None

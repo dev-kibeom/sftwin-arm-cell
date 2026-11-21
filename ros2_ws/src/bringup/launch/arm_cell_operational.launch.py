@@ -878,6 +878,8 @@ def compose(context):
             parameters=[
                 {
                     **profile_parameters(config, "orchestration"),
+                    "operator_run_control": include_simulation,
+                    "start_paused": include_simulation and os.getenv("ARM_CELL_OPERATOR_START_PAUSED") == "1",
                     "diagnostics.capture_enabled": "orchestration"
                     in selected_diagnostics,
                     "diagnostics.output_directory": str(

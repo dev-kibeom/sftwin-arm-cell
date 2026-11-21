@@ -86,7 +86,8 @@ std::uint8_t TaskExecutor::execute(const ExecuteTask::Goal & goal)
 }
 
 std::uint8_t TaskExecutor::execute_grasp_cycle(
-  const PreparedGraspCycle & request, const std::string & motion_execution_id)
+  const PreparedGraspCycle & request, const std::string & motion_execution_id,
+  std::function<bool()> observed_at_pick)
 {
   last_report_ = TaskExecutionReport{};
   last_report_.motion_execution_id = motion_execution_id;
@@ -151,7 +152,7 @@ std::uint8_t TaskExecutor::execute_grasp_cycle(
   }
   // Scope the prepared work input to this synchronous operation, including
   // exceptional exits. Ordinary Vision PICK remains independent of this path.
-  support_->set_prepared_grasp(request);
+  support_->set_prepared_grasp(request, std::move(observed_at_pick));
   struct Reset
   {
     TaskExecutionSupport & support;

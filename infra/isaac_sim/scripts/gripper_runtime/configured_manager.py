@@ -115,11 +115,13 @@ class ConfiguredGraspManager:
     def arm_close_transaction(self, execution_id=None, command_generation=None):
         self.cancel_tool_transaction()
         self._failure = None
-        if not self.ready or not self._reference or execution_id != self.capture_reference_id:
+        requires_reference = getattr(self.tool.capture, 'requires_capture_reference', True)
+        if not self.ready or (requires_reference and
+                              (not self._reference or execution_id != self.capture_reference_id)):
             self._failure = f'{self.diagnostic_prefix}_reference_or_reserved_material_unavailable'
             self.gripper.cancel_motion()
             return False
-        self._close_id = execution_id
+        self._close_id = execution_id or ''
         self._diagnostic_samples = 0
         self._sample_floor = self.gripper.holding_observation().sequence
         return True
@@ -147,13 +149,13 @@ class ConfiguredGraspManager:
         state = HoldingState.UNKNOWN
         fresh_sample = observation.sequence > max(self._sample_floor, self._last_sample)
         self._last_sample = max(self._last_sample, observation.sequence)
-        valid = self._reference is not None
+        valid = self._reference is not None or not getattr(self.tool.capture, 'requires_capture_reference', True)
         if self.ready and fresh_sample and self._opening and observation.state is HoldingState.RELEASED:
             state = HoldingState.RELEASED
             if self._release_reference is not None:
                 self._confirmed_release = {**self._release_reference,
                     'execution_id': self._release_reference['motion_goal_uuid']}
-        elif self.ready and fresh_sample and self._close_id and valid and observation.state is HoldingState.HELD:
+        elif self.ready and fresh_sample and self._close_id is not None and valid and observation.state is HoldingState.HELD:
             state = HoldingState.HELD
         if state is not HoldingState.HELD:
             self.accepted_relation = self.accepted_execution_id = None
@@ -236,6 +238,7 @@ class ConfiguredGraspManager:
     def shutdown(self):
         self.reset_for_simulation_stop()
         self.ready = False
-        close = getattr(self.binding, 'close', None)
-        if callable(close): close()
+        shutdown = getattr(self.binding, 'shutdown', None)
+        if callable(shutdown):
+            shutdown()
         return True

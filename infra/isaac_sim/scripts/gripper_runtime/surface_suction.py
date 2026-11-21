@@ -1,17 +1,25 @@
-"""Isaac Sim 5.1 Surface Gripper with reservation-bound device observations."""
+"""Isaac Sim 5.1 Surface Gripper with device-local holding observations."""
 import time
+from uuid import UUID
 
-from gripper_runtime.configured_manager import ConfiguredGraspManager, configured_reference
+from gripper_runtime.configured_manager import ConfiguredGraspManager
 from gripper_runtime.grasp_attachment import HoldingObservation, HoldingState
 from gripper_runtime.tool_plugin import ToolIntent, ToolRuntime
 
 
 class SurfaceCapture:
-    resolve_reserved_body = staticmethod(lambda reference: None)
+    requires_capture_reference = False
 
     @staticmethod
     def decode_reference(packet):
-        return configured_reference(packet, 'surface_suction')
+        if not isinstance(packet, dict) or packet.get('strategy') != 'surface_suction':
+            return None
+        execution = packet.get('motion_goal_uuid')
+        try:
+            UUID(execution)
+        except (TypeError, ValueError, AttributeError):
+            return None
+        return dict(strategy='surface_suction', motion_goal_uuid=execution)
 
     @staticmethod
     def select(reference):
@@ -19,27 +27,13 @@ class SurfaceCapture:
 
 
 class SuctionActuator:
-    def __init__(self, device, capture):
-        self.device, self.capture = device, capture
-        self._reference = None
+    def __init__(self, device):
+        self.device = device
         self.intent = None
-        self.target = None
         self.objects = ()
         self.status = None
-        self.seen_held = self.lost_target = False
-        self.valid_release = self.released_target = False
+        self.seen_held = self.holding_lost = self.released_held_object = False
         self._sample = HoldingObservation(HoldingState.UNKNOWN, time.monotonic(), 0)
-
-    @property
-    def strategy(self):
-        return self._reference
-
-    @strategy.setter
-    def strategy(self, reference):
-        if reference != self._reference:
-            self.seen_held = self.lost_target = self.valid_release = self.released_target = False
-            self.target = None
-        self._reference = reference
 
     def read(self):
         try:
@@ -47,23 +41,17 @@ class SuctionActuator:
         except (ValueError, RuntimeError):
             self.status, self.objects = None, ()
 
-    def matches_target(self):
-        return bool(self.strategy and self.target and self.status == 'Closed' and self.objects == (self.target,)
-                    and self.capture.resolve_reserved_body(self.strategy) == self.target)
+    def holding(self):
+        # Model the cup's attachment feedback; object paths are diagnostic only.
+        return self.status == 'Closed' and bool(self.objects)
 
     def command(self, intent):
         if intent is ToolIntent.GRASP:
-            self.target = self.capture.resolve_reserved_body(self.strategy) if self.strategy else None
-            if not self.target:
-                raise ValueError('GRASP requires the currently reserved physical material')
-            self.seen_held = self.lost_target = self.valid_release = False
+            self.seen_held = self.holding_lost = self.released_held_object = False
             self.device.close()
         elif intent is ToolIntent.RELEASE:
             self.read()
-            # A broken attachment during transport cannot become a destination
-            # release when a later OPEN happens to observe an empty gripper.
-            self.released_target = self.seen_held and not self.lost_target and self.matches_target()
-            self.valid_release = not self.seen_held or self.released_target
+            self.released_held_object = self.seen_held and not self.holding_lost and self.holding()
             self.device.open()
         else:
             self.cancel_motion()
@@ -82,12 +70,12 @@ class SuctionActuator:
         self.read()
         state = HoldingState.UNKNOWN
         if self.intent is ToolIntent.GRASP:
-            if not self.lost_target and self.matches_target():
+            if self.holding():
                 state = HoldingState.HELD
                 self.seen_held = True
             elif self.seen_held:
-                self.lost_target = True
-        elif self.intent is ToolIntent.RELEASE and self.valid_release and self.status == 'Open' and not self.objects:
+                self.holding_lost = True
+        elif self.intent is ToolIntent.RELEASE and self.status == 'Open' and not self.objects:
             state = HoldingState.RELEASED
         self._sample = HoldingObservation(state, time.monotonic(), self._sample.sequence + 1)
 
@@ -95,7 +83,7 @@ class SuctionActuator:
         return self._sample
 
     def observation(self):
-        return dict(surface_status=self.status, gripped_objects=list(self.objects), requested_body=self.target)
+        return dict(surface_status=self.status, gripped_objects=list(self.objects))
 
 
 class SurfaceManager(ConfiguredGraspManager):
@@ -112,7 +100,7 @@ class SurfaceManager(ConfiguredGraspManager):
         return getattr(self, '_attached', False)
 
     def release_receipt(self):
-        if self.gripper.released_target:
+        if self.gripper.released_held_object:
             return super().release_receipt()
         return None
 
@@ -196,14 +184,14 @@ class IsaacSurfaceDevice:
                 tuple(self.api.get_gripped_objects(self.path)))
 
     def reset_stopped_tool(self, actuator):
-        actuator.intent = actuator.strategy = actuator.target = None
+        actuator.intent = None
         return True
 
 
 def suction_runtime(profile, binding):
     capture = SurfaceCapture()
     device = IsaacSurfaceDevice(binding.robot_path)
-    actuator = SuctionActuator(device, capture)
+    actuator = SuctionActuator(device)
     tool = ToolRuntime(actuator, frozenset(profile['runtime']['capabilities']),
                        lambda intent, duration: actuator.command(intent), capture)
     tool.grasp_factory = lambda **services: SurfaceManager(binding=device, **services)

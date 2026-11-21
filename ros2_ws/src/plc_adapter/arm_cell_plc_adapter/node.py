@@ -1,5 +1,7 @@
 """Modbus TCP client for a single configured Mission request stream."""
 import math
+from pathlib import Path
+import sqlite3
 import time
 
 from action_msgs.msg import GoalStatus
@@ -14,6 +16,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 from unique_identifier_msgs.msg import UUID
 
+from .conveyor_stream import receipt_path
 from .mission_admission import MissionAdmission
 from .modbus import ModbusRegisters, REPLY_FIELDS, REQUEST_FIELDS
 from .receipts import Receipts, State
@@ -72,7 +75,13 @@ class PlcTaskAdapter(Node):
         self.mission = ActionClient(self, ExecuteCycle, action)
         self.lookup = self.create_client(ExecuteCycle.Impl.GetResultService,
                                          action + '/_action/get_result')
-        self.receipts = Receipts(path)
+        self.conveyor_test_stream = param('conveyor_test_stream', False)
+        self.history_path = param('conveyor_history_file', '')
+        attempt = param('initialize_attempt', '')
+        self.initialize_attempt = Path(attempt) if attempt else None
+        self.receipt_base = path
+        self.receipt_epoch = None
+        self.receipts = None if self.conveyor_test_stream else Receipts(path)
         self.acceptance = None
         self.goal_handle = None
         self.result = None
@@ -135,7 +144,19 @@ class PlcTaskAdapter(Node):
             self.result = self.lookup.call_async(request)
 
     def exchange(self):
-        command_id = self.plc.read_command()
+        if self.conveyor_test_stream:
+            command_id, epoch = self.plc.read_conveyor_command()
+            if self.initialize_attempt is not None:
+                expected = int((self.initialize_attempt / 'stream').read_text())
+                if epoch != expected or command_id != 0:
+                    raise OSError('Waiting for the selected PLC stream origin')
+            if self.receipts is None:
+                self.receipts = Receipts(receipt_path(self.receipt_base, epoch))
+                self.receipt_epoch = epoch
+            elif epoch != self.receipt_epoch:
+                raise OSError('PLC initialized; waiting for a new robot session')
+        else:
+            command_id = self.plc.read_command()
         if command_id == 0:
             self.receipts.observe_idle()
         elif self.mission.server_is_ready():
@@ -145,7 +166,34 @@ class PlcTaskAdapter(Node):
                     self.submit(claimed)
                 except RuntimeError as error:
                     self.mark_uncertain(claimed.command_id, error)
-        self.plc.write_receipt(self.receipts.reply(command_id))
+        receipt = self.receipts.reply(command_id)
+        if self.conveyor_test_stream:
+            if self.initialize_attempt is not None and (receipt.command_id != 0 or receipt.state != State.IDLE):
+                raise ValueError('Selected PLC stream contains a previous receipt')
+            closed = 0
+            if command_id == 0 and receipt.command_id:
+                try:
+                    if self.receipts.discharged_command(receipt, self.history_path):
+                        closed = receipt.command_id
+                except sqlite3.Error as error:
+                    self.get_logger().warning(f'Cannot reconcile previous Conveyor cycle: {error}',
+                                              throttle_duration_sec=5.)
+                if not closed:
+                    self.get_logger().warning(
+                        f'PLC requests 0; cannot confirm discharge for previous robot request {receipt.command_id}',
+                        throttle_duration_sec=5.)
+            admission = self.admission.register_values() if self.admission is not None else (0, False)
+            # One scan sees the heartbeat, receipt, admission and completed ID from one FC16.
+            feedback = (admission[0], int(admission[1]), closed >> 16, closed & 0xffff, self.receipt_epoch)
+            self.plc.write_receipt(receipt, conveyor_feedback=feedback)
+            if self.initialize_attempt is not None:
+                ready = self.initialize_attempt / 'adapter-ready'
+                temporary = ready.with_suffix('.tmp')
+                temporary.write_text(str(self.receipt_epoch))
+                temporary.replace(ready)
+                self.initialize_attempt = None
+            return
+        self.plc.write_receipt(receipt)
         if self.admission is not None:
             self.plc.write_admission(*self.admission.register_values())
 
@@ -161,7 +209,8 @@ class PlcTaskAdapter(Node):
 
     def poll(self):
         try:
-            self.observe_action()
+            if self.receipts is not None:
+                self.observe_action()
         except RuntimeError as error:
             self.mark_uncertain(self.receipts.latest().command_id, error)
         try:
@@ -180,7 +229,8 @@ class PlcTaskAdapter(Node):
 
     def destroy_node(self):
         self.plc.close()
-        self.receipts.close()
+        if self.receipts is not None:
+            self.receipts.close()
         return super().destroy_node()
 
 

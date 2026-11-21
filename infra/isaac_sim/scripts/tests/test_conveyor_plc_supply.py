@@ -63,10 +63,15 @@ def test_only_the_observed_and_exposed_pick_slot_can_be_acknowledged():
 def test_successive_lots_keep_the_type_recorded_at_feed():
     feeder = ConveyorFeeder('ConveyorPart', last_generated=0, material_type_ids=['A', 'B'])
     receipts = []
-    for cycle, part in enumerate(('A', 'B'), start=1):
-        feeder.set_automatic(False)
-        assert not feeder.configure('unknown', 1)['accepted']
-        assert feeder.configure(part, 1)['accepted']
-        feeder.set_automatic(True)
+    feeder.set_automatic(True)
+    assert feeder.configure('A', 2)['accepted']
+    assert feeder.configure('B', 1)['accepted']
+    assert not feeder.configure('unknown', 1)['accepted']
+    assert not feeder.configure('B', 65535)['accepted']
+    assert feeder.remaining == 3
+    for cycle in (1, 2, 3):
         feeder.feed(cycle, lambda material, number: receipts.append((number, material)) or True)
-    assert receipts == [(1, 'A'), (2, 'B')]
+    assert receipts == [(1, 'A'), (2, 'A'), (3, 'B')]
+    assert feeder.configure('A', 1)['accepted']
+    feeder.feed(4, lambda material, number: receipts.append((number, material)) or True)
+    assert receipts[-1] == (4, 'A') and feeder.remaining == 0

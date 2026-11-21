@@ -51,6 +51,7 @@ with open(sys.argv[2], 'wb', buffering=0) as stream:
     widget.terminals.clear()
     if widget.run is not None:
         widget.run.cleanup()
+        widget.run = None
     widget.processes.clear()
     widget.stopping = False
     widget.lock.unlock()
@@ -82,7 +83,8 @@ def terminal_text(widget, name):
     return path.read_text(errors='replace') if path.exists() else ''
 
 
-WAIT = [sys.executable, '-c', 'import time; print("started", flush=True); time.sleep(100)']
+WAIT = [sys.executable, '-c', 'import signal,time; signal.signal(signal.SIGINT, signal.SIG_DFL); '
+        'print("started", flush=True); time.sleep(100)']
 
 
 @pytest.mark.parametrize('robot', ['m0609', 'rb5_850', 'hcr14'])
@@ -104,8 +106,10 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
         exports.append(destination)
         return original_export(entry, destination)
     monkeypatch.setattr(launcher, 'export_selection', export)
-    window.start_ros()
-    assert not calls
+    assert window.ros.isEnabled()
+    window.ros.click()
+    assert [call[0] for call in calls] == ['ros']
+    assert window.isaac.isEnabled()
     window.start_isaac()
     assert not window.isaac.isEnabled()
     assert all(not combo.isEnabled() for combo in window.selectors.values())
@@ -113,9 +117,9 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
     window.start_isaac()
     window.start_ros()
     window.start_ros()
-    assert [call[0] for call in calls] == ['isaac', 'ros']
+    assert [call[0] for call in calls] == ['ros', 'isaac']
     assert exports == [window.runtime]
-    assert calls[1][1][-2:] == [str(window.runtime), 'info']
+    assert calls[0][1][-2:] == [str(window.runtime), 'info']
     assert calls[0][2]['ARM_CELL_PROFILE'] == str(window.runtime)
     assert calls[0][2] == calls[1][2]
     # Exercise existing Isaac CLI using this snapshot and a stand-in simulator.
@@ -146,6 +150,7 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
         assert '라이브 검증 전' in window.status.text()
     if robot == 'hcr14':
         assert '실험적 모델' in window.status.text()
+    until(app, window, lambda: all('started' in terminal_text(window, name) for name in ('ros', 'isaac')))
     processes = list(window.processes.values())
     window.show()
     window.close()
@@ -426,7 +431,8 @@ def test_grasp_parameter_producer_rejects_invalid_overrides(window, tmp_path):
 
 
 
-def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch):
+@pytest.mark.parametrize(('first', 'second'), [('isaac', 'ros'), ('ros', 'isaac')])
+def test_launcher_has_only_normal_start_controls_for_c10(app, window, monkeypatch, first, second):
     entry=next(item for item in window.entries if item['profile'].stem=='tape_m0609_c10_long_profile')
     for key,combo in window.selectors.items():
         combo.setCurrentIndex(combo.findData(entry[key]))
@@ -437,14 +443,16 @@ def test_launcher_has_only_normal_start_controls_for_c10(app,window,monkeypatch)
     calls=fake_spawn(window,monkeypatch,{'isaac':WAIT,'ros':WAIT})
     monkeypatch.setattr(launcher,'preparation_command',lambda entry,destination:
         [sys.executable,'-c','from pathlib import Path; import sys; Path(sys.argv[1]).write_text("{}")',str(destination)])
-    window.start_isaac()
-    assert window.preparing and not calls
+    buttons = {'isaac': window.isaac, 'ros': window.ros}
+    buttons[first].click()
+    assert window.pending_start == first and not calls
     assert '준비 중' in window.status.text()
     until(app,window,lambda:bool(calls))
-    assert calls[0][1][1].endswith('isaac_arm_cell.sh')
-    assert window.ros.isEnabled()
-    window.start_ros()
-    assert len(calls)==2
+    assert [name for name, _, _ in calls] == [first]
+    assert buttons[second].isEnabled()
+    buttons[second].click()
+    assert [name for name, _, _ in calls] == [first, second]
+    assert calls[0][2]['ARM_CELL_RUNTIME_CONFIG'] == calls[1][2]['ARM_CELL_RUNTIME_CONFIG']
     window.begin_stop()
     until(app,window,lambda:not window.stopping)
 
@@ -513,11 +521,11 @@ def test_configured_preparation_can_be_canceled_before_isaac_starts(app, window,
     monkeypatch.setattr(launcher,'preparation_command',lambda *_:WAIT)
     calls=fake_spawn(window,monkeypatch,{'isaac':WAIT})
     window.start_isaac()
-    assert window.preparing and window.stop.isEnabled() and not window.ros.isEnabled()
+    assert window.pending_start and window.stop.isEnabled() and not window.ros.isEnabled()
     app.processEvents()
     window.begin_stop()
     until(app,window,lambda:not window.stopping)
-    assert not calls and window.run is None and not window.preparing
+    assert not calls and window.run is None and not window.pending_start
 
 
 def test_configured_preparation_failure_is_visible_and_does_not_start_isaac(app, window, monkeypatch):
@@ -577,11 +585,8 @@ def test_conveyor_can_prepare_plc_before_ros(app, window, monkeypatch, start_ros
     assert window.fixed_mode.text() == '물리 파지'
     assert window.tool_mode.isHidden()
     assert not window.plc_button.isHidden()
-    assert not window.plc_button.isEnabled()
-    fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
-    window.start_isaac()
-    until(app, window, lambda: 'isaac' in window.processes)
     assert window.plc_button.isEnabled()
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
     commands = []
     def fake_command(stage, runtime):
         assert runtime == window.runtime
@@ -594,6 +599,10 @@ def test_conveyor_can_prepare_plc_before_ros(app, window, monkeypatch, start_ros
     until(app, window, lambda: window.plc.phase == 'awaiting_ros')
     assert commands == ['probe']
     assert not window.plc_button.isEnabled()
+    assert not calls and window.stop.isEnabled()
+    assert window.isaac.isEnabled() and window.ros.isEnabled()
+    assert not window.selectors['cell'].isEnabled()
+    runtime = window.runtime
     if start_ros:
         window.start_ros()
         window.poll()
@@ -601,8 +610,15 @@ def test_conveyor_can_prepare_plc_before_ros(app, window, monkeypatch, start_ros
         window.ros_preflight.touch()
         until(app, window, lambda: window.plc.phase == 'adapter')
         assert commands == ['probe', 'adapter']
-    window.begin_stop()
+        window.isaac.click()
+        assert [name for name, _, _ in calls] == ['ros', 'isaac']
+        assert window.runtime == runtime
+        window.begin_stop()
+    else:
+        window.close()
+        assert window.stopping
     until(app, window, lambda: not window.stopping)
+    assert not runtime.exists() and not window.lock.isLocked()
 
 
 @pytest.mark.parametrize('service_active', [True, False])
@@ -683,14 +699,13 @@ def test_optional_codesys_gui_opens_selected_project_once(request, tmp_path, mon
         return Editor()
     monkeypatch.setattr(launcher.plc_control.subprocess, 'Popen', open_process)
     window.runtime = tmp_path / 'runtime.json'
-    monkeypatch.setattr(window, 'can_start_plc', lambda: True)
     starts = []
     monkeypatch.setattr(window.plc, 'start', lambda *args: starts.append(args))
-    window.start_plc()
+    window._launch('plc')
     assert not opened
     window.plc_gui.setChecked(True)
-    window.start_plc()
-    window.start_plc()
+    window._launch('plc')
+    window._launch('plc')
     assert len(starts) == 3
     assert opened == [[sys.executable, str(launcher.plc_control.HERE / 'codesys_project.py'), str(project)]]
 
@@ -700,10 +715,9 @@ def test_missing_editor_project_keeps_plc_start_available(window, tmp_path, monk
     window.plc_project = tmp_path / 'missing.fbsdev'
     window.runtime = tmp_path / 'runtime.json'
     window.plc_gui.setChecked(True)
-    monkeypatch.setattr(window, 'can_start_plc', lambda: True)
     starts = []
     monkeypatch.setattr(window.plc, 'start', lambda runtime, env: starts.append(runtime))
-    window.start_plc()
+    window._launch('plc')
     assert starts == [window.runtime]
     assert 'missing.fbsdev' in window.plc.editor_status()
 
@@ -721,9 +735,107 @@ def test_choose_codesys_application(window, monkeypatch, tmp_path):
     assert str(application) in window.plc_project_button.toolTip()
     window.environment = dict(os.environ, ARM_CELL_CODESYS_PROJECT='old.fbsdev')
     window.runtime = tmp_path / 'runtime.json'
-    monkeypatch.setattr(window, 'can_start_plc', lambda: True)
     monkeypatch.setattr(window.plc, 'start', lambda *args: None)
     calls = []
     monkeypatch.setattr(window.plc, 'open_editor', lambda selected, env: calls.append(selected))
-    window.start_plc()
+    window._launch('plc')
     assert calls == [application]
+
+
+def request_initialize(window):
+    request = Path(window.environment['ARM_CELL_INITIALIZE_REQUEST'])
+    attempt = request.parent / 'initialize-test'
+    attempt.mkdir()
+    request.write_text(attempt.name)
+    return attempt
+
+
+def test_initialize_keeps_isaac_and_terminal_and_replaces_ros(app, window, monkeypatch):
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    window.start_ros()
+    isaac = window.processes['isaac']
+    terminal = window.terminals['isaac']
+    old_ros = window.processes['ros']
+    snapshot = window.runtime.read_bytes()
+    attempt = request_initialize(window)
+    (attempt / 'stopped').touch()
+    until(app, window, lambda: (attempt / 'rebuild').exists())
+    assert old_ros.poll() is not None and not window.can_start('ros')
+    (attempt / 'ready').touch()
+    until(app, window, lambda: (attempt / 'complete').exists())
+    assert [name for name, *_ in calls] == ['isaac', 'ros', 'ros']
+    assert window.processes['isaac'] is isaac and isaac.poll() is None
+    assert window.terminals['isaac'] is terminal and terminal.poll() is None
+    assert window.runtime.read_bytes() == snapshot
+
+
+@pytest.mark.parametrize('acknowledged', [True, False])
+def test_conveyor_initialize_stops_writers_before_epoch_and_scene_restart(app, window, monkeypatch, acknowledged):
+    entry = next(item for item in window.entries if item['profile'].stem == 'conveyor_pnp_profile')
+    for key, combo in window.selectors.items():
+        combo.setCurrentIndex(combo.findData(entry[key]))
+    calls = fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    stages = []
+    old = []
+    def command(stage, runtime):
+        stages.append(stage)
+        if acknowledged and stage == 'probe' and stages.count('probe') == 2:
+            return [sys.executable, '-c', 'raise SystemExit(1)']
+        if stage == 'initialize':
+            assert old and not launcher.groups_alive(old)
+            assert window.plc.phase == 'awaiting_ros'
+            assert not window.can_start('ros')
+            return [sys.executable, '-c', f'raise SystemExit({int(not acknowledged)})']
+        return WAIT if stage == 'adapter' else [sys.executable, '-c', 'pass']
+    monkeypatch.setattr(launcher.plc_control, 'runtime_command', command)
+    monkeypatch.setattr(window.plc, 'inspect', lambda phase: window.plc.service_observed(
+        phase, 'ActiveState=active\nInvocationID=existing'))
+    window.start_isaac()
+    until(app, window, lambda: 'isaac' in window.processes)
+    window.start_ros()
+    window.start_plc()
+    window.ros_preflight.touch()
+    until(app, window, lambda: window.plc.phase == 'adapter')
+    old.append(window.processes["ros"])
+    isaac = window.processes["isaac"]
+    attempt = request_initialize(window)
+    (attempt / 'stopped').touch()
+    if acknowledged:
+        until(app, window, lambda: (attempt / 'rebuild').exists())
+        assert 'ros' not in window.processes
+        (attempt / 'ready').touch()
+        until(app, window, lambda: 'ros' in window.processes)
+        window.ros_preflight.touch()
+        until(app, window, lambda: window.plc.phase == 'adapter')
+        assert [name for name, *_ in calls] == ['isaac', 'ros', 'ros']
+        assert not (attempt / 'complete').exists()
+        (attempt / 'stream').write_text('2')
+        (attempt / 'adapter-ready').write_text('1')
+        window.poll()
+        assert not (attempt / 'complete').exists()
+        (attempt / 'adapter-ready').write_text('2')
+        until(app, window, lambda: (attempt / 'complete').exists())
+        assert window.processes['isaac'] is isaac
+        assert stages == ['probe', 'adapter', 'probe', 'probe', 'initialize', 'adapter']
+    else:
+        until(app, window, lambda: (attempt / 'error').exists())
+        assert isaac.poll() is None
+        assert window.error and [name for name, *_ in calls] == ['isaac', 'ros']
+        assert stages == ['probe', 'adapter', 'probe', 'initialize']
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)
+
+
+def test_initialize_scene_error_during_ros_shutdown_keeps_kit(app, window, monkeypatch):
+    fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    window.start_ros()
+    isaac = window.processes['isaac']
+    attempt = request_initialize(window)
+    window.poll()
+    (attempt / 'error').write_text('scene cleanup failed')
+    until(app, window, lambda: window.initialize_dir is None)
+    until(app, window, lambda: 'ros' not in window.processes)
+    assert isaac.poll() is None and not window.stopping
+    assert window.error == 'scene cleanup failed'

@@ -388,9 +388,10 @@ class SimGripperAdapter:
                 execution_id = str(packet.get('execution_id', ''))
             except (ValueError, TypeError, KeyError):
                 return False
-            if intent is ToolIntent.GRASP and execution_id != (self._applied_capture_reference_id or ''):
-                return False
             if self.tool is None:
+                return False
+            if (intent is ToolIntent.GRASP and getattr(getattr(self.tool, 'capture', None), 'requires_capture_reference', True)
+                    and execution_id != (self._applied_capture_reference_id or '')):
                 return False
             # An intent wins over legacy ingress already pending at this physics boundary.
             # In particular, STOP must not be followed by replay of an older CLOSE.

@@ -409,6 +409,7 @@ class HubRuntime:
 
         from arm_cell_interfaces.srv import ResetSafety
 
+        self._automatic_mode_publisher = None
         self._trigger_publisher = self.node.create_publisher(
             HandoffTrigger,
             "/external/handoff_trigger",
@@ -1643,6 +1644,17 @@ class HubRuntime:
             max_age_seconds=self.feed_max_age_seconds,
             source_age_seconds=source_age,
         )
+
+    def request_automatic_mode(self, enabled: bool) -> None:
+        from rclpy.qos import DurabilityPolicy, QoSProfile
+        from std_msgs.msg import Bool
+
+        if self._automatic_mode_publisher is None:
+            self._automatic_mode_publisher = self.node.create_publisher(
+                Bool, "/orchestration/automatic_mode_request",
+                QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+            )
+        self._automatic_mode_publisher.publish(Bool(data=enabled))
 
     def publish_handoff_trigger(
         self,

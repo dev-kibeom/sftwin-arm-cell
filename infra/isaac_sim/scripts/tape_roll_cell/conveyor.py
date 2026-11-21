@@ -45,8 +45,15 @@ class Conveyor:
     def enqueue_cartridges(self,count):
         if isinstance(count,bool) or not isinstance(count,int) or not 0<count<=self.settings['max_cartridges']:
             return dict(accepted=False,detail=f"Cartridge count must be between 1 and {self.settings['max_cartridges']}.")
-        if self.state!='idle':return dict(accepted=False,detail='Wait for the current supply to finish or press Stop before requesting again.')
-        self.queued=self.accepted=count;self.finished=0;self.state='waiting_spawn'
+        if self.state == 'failed':
+            return dict(accepted=False, detail=self.detail)
+        if self.queued + count > self.settings['max_cartridges']:
+            return dict(accepted=False, detail='Cartridge queue capacity exceeded.')
+        if self.state == 'idle':
+            self.accepted = self.finished = 0
+            self.state = 'waiting_spawn'
+        self.queued += count
+        self.accepted += count
         self.detail=f'Accepted {count} full cartridges ({self.layout["cartridge"]["slot_count"]} rolls each)'
         return dict(accepted=True,detail=self.detail)
 

@@ -21,6 +21,13 @@ public:
            same_reservation(identity);
   }
 
+  bool observed_at_pick(
+    const arm_cell_motion::GraspExecutionIdentity & identity, Clock::time_point now) const
+  {
+    return state_.reserved_material_at_pick && !identity.material_instance_id.empty() &&
+           matches(identity, now);
+  }
+
   bool retains(
     const arm_cell_motion::GraspExecutionIdentity & identity, Clock::time_point now,
     bool conveyor) const

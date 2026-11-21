@@ -20,7 +20,7 @@ def test_probe_requires_the_conveyor_command_block(monkeypatch, signature):
         def read_input_registers(self, address, count, unit):
             reads.append((address, count, unit))
             return SimpleNamespace(isError=lambda: False, function_code=4,
-                                   registers=[0] * 13 + [signature])
+                                   registers=[0] * 29 + [signature])
 
         def close(self):
             reads.append('closed')
@@ -33,7 +33,7 @@ def test_probe_requires_the_conveyor_command_block(monkeypatch, signature):
     else:
         with pytest.raises(ValueError, match='Conveyor PnP PLC'):
             conveyor_plc.probe(link)
-    assert reads == [(16, 14, 1), 'closed']
+    assert reads == [(0, 30, 1), 'closed']
 
 
 @pytest.mark.parametrize('isaac_conveyor', [True, False])
@@ -70,3 +70,57 @@ def test_only_service_start_and_stop_use_opted_in_host_rule(tmp_path, monkeypatc
             '/usr/bin/sudo', '-n', '-k', '--', '/usr/bin/systemctl', verb, '--no-ask-password', 'codesyscontrol.service']
     with pytest.raises(ValueError):
         plc_control.service_command('restart')
+
+
+@pytest.mark.parametrize('phase', [0, 10, 30, 39, 51])
+@pytest.mark.parametrize('case', ['reset', 'old_program', 'no_ack', 'lost_ack', 'bad_origin'])
+def test_initialize_after_simulation_shutdown(tmp_path, monkeypatch, case, phase):
+    base = tmp_path / 'plc.sqlite'
+    base.write_bytes(b'previous test')
+    (tmp_path / 'plc.test-1.sqlite').touch()
+    times = iter(n / 10 for n in range(1000))
+    monkeypatch.setattr(conveyor_plc.time, 'monotonic', lambda: next(times))
+    monkeypatch.setattr(conveyor_plc.time, 'sleep', lambda _: None)
+    writes = []
+
+    def reply(code, **kw):
+        return SimpleNamespace(isError=lambda: False, function_code=code, **kw)
+
+    class PLC:
+        epoch = 0
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def read_input_registers(self, address, count, unit):
+            capability = 0x1a18 if case == 'old_program' else 0x1a19
+            words = [0] * 29 + [0xc051, capability, self.epoch]
+            if not self.epoch:
+                words[1], words[17], words[18] = 2, 1, phase
+            elif case == 'bad_origin':
+                words[27] = 4
+            return reply(4, registers=words[address:address + count])
+
+        def write_registers(self, address, words, unit):
+            assert (address, words) == (26, [2])
+            writes.append(2)
+            if case != 'no_ack':
+                self.epoch = 2
+            if case == 'lost_ack':
+                raise OSError('reply lost after write')
+            return reply(16, address=address, count=1)
+
+        def close(self):
+            pass
+
+    monkeypatch.setitem(sys.modules, 'pymodbus.client.sync', SimpleNamespace(ModbusTcpClient=PLC))
+    monkeypatch.setitem(sys.modules, 'pymodbus.exceptions', SimpleNamespace(ModbusException=OSError))
+    layout = dict(receipt_file=str(base), connection=dict(
+        host='127.0.0.1', port=1502, timeout_seconds=.5, unit_id=1, poll_seconds=.1))
+    if case in ('reset', 'lost_ack'):
+        assert conveyor_plc.initialize_test(layout) == str(tmp_path / 'plc.test-2.sqlite')
+        assert writes == [2]
+    else:
+        with pytest.raises((ValueError, OSError)):
+            conveyor_plc.initialize_test(layout)
+        assert bool(writes) == (case != 'old_program')
+    assert base.read_bytes() == b'previous test'

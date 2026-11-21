@@ -30,14 +30,14 @@ class ConveyorRuntime:
         self.failure = ''
         self.last_sample = 0.
         self.sidecar_config = dict(
-            op='configure', connection=layout['connection'], permit_topic=layout['equipment_permit_topic'],
+            op='configure', use_plc_test_epoch=True, connection=layout['connection'], permit_topic=layout['equipment_permit_topic'],
             supply=dict(cell['configured_supply'], slot_id=layout['pick_slot_id'],
                         stream_id=equipment.stream_id, material_type_ids=layout['material_type_ids']),
             pick_configured=bool(layout['teaching']['cycle']),
             receipt_file=layout.get('receipt_file'),
             history_db_path=layout.get('history_db_path', '~/.local/state/arm_cell/conveyor-pnp-poc/production.sqlite'))
         self.sidecar.send(self.sidecar_config)
-        self.feeder.bind_ui(set_automatic=self.set_automatic)
+        self.feeder.bind_ui(set_automatic=self.set_automatic, status=self.supply_status)
 
     def reconnect(self, *, wait_ready):
         self.packet = None
@@ -48,6 +48,15 @@ class ConveyorRuntime:
         self.startup_deadline = None if wait_ready else time.monotonic() + 15.
         if not self.sidecar.available:
             raise RuntimeError('Equipment sidecar disconnected during configuration')
+
+    def supply_status(self):
+        status = self.feeder.status()
+        if self.packet and time.monotonic() - self.packet['at'] < MAX_AGE:
+            command = self.packet['command']
+            if command.get('awaiting_receipt'):
+                status['detail'] += (f" · PLC waiting for release, commit and discharge evidence "
+                                     f"for robot request {command['reply_id']}")
+        return status
 
     def set_automatic(self, enabled):
         if enabled and self.stopped:
@@ -61,29 +70,17 @@ class ConveyorRuntime:
                 return dict(accepted=False, detail=f'Equipment sidecar unavailable: {error}')
         return self.feeder.set_automatic(enabled)
 
-    def set_tool_session(self, session):
-        session.tool.capture.resolve_reserved_body = self.reserved_body
-
-    def reserved_body(self, reference):
-        if self.stopped:
-            return None
-        reservation = self.reservation
-        if not reservation or any(reference.get(key) != reservation.get(key) for key in (
-                'material_id', 'supply_id', 'slot_id', 'supply_epoch', 'reservation_id',
-                'material_type_id', 'material_instance_id')):
-            return None
-        return self.equipment.material_path(reference['material_type_id'], reference['material_instance_id'])
-
     def tick(self, dt):
         now = time.monotonic()
         for packet in self.sidecar.poll_messages():
             if packet.get('op') == 'ready':
                 self.startup_deadline = None
                 continue
+            if packet.get('op') == 'reservation':
+                self.reservation = packet['reservation']
+                continue
             self.packet = packet if packet.get('op') == 'command' else None
             self.plc_offline = packet.get('op') == 'offline'
-            if self.packet and not packet.get('observation_pending') and now - packet['at'] < MAX_AGE:
-                self.reservation = packet.get('reservation')
         if self.startup_deadline is not None and now >= self.startup_deadline:
             self.sidecar.close()
             self.startup_deadline = None
@@ -119,13 +116,12 @@ class ConveyorRuntime:
         identity_observed = False
         body_id = ''
         try:
-            sensors = self.equipment.observe(valid and packet['permitted'])
+            sensors = self.equipment.observe(permit_fresh and packet['permitted'])
             observed_sensors = sensors
             enabled = valid and sensors.permitted and self.feeder.automatic
-            if (enabled and command.feed and sensors.path_clear and sensors.pick_zone_clear
-                    and not sensors.occupied):
+            if enabled and command.feed:
                 self.feeder.feed(command.cycle, self.equipment.spawn)
-            self.equipment.step(command, sensors, dt, enabled)
+            self.equipment.step(command, sensors, dt, self.synchronized and sensors.permitted)
             if self.equipment.cycle:
                 instance = material_instance_id(self.equipment.stream_id, self.equipment.cycle)
                 if self.equipment.material_path(self.equipment.material_type_id, instance):

@@ -150,6 +150,8 @@ def send_sample(exchange, *, cycle=1, phase=22, occupied=False, confirmed=None, 
     exchange.sent[at] = command
     exchange.ipc.poll_messages.return_value = [packet]
     exchange.io.commands.return_value = command
+    if exchange.use_plc_test_epoch:
+        exchange.io.commands_with_epoch.return_value = (command, exchange.test_epoch)
     exchange.poll()
 
 
@@ -168,7 +170,7 @@ def test_history_write_failure_preserves_equipment_feedback(open_exchange, monke
         fault.setattr(exchange.ledger, 'record_plc', disk_full)
         send_sample(exchange, phase=40, occupied=True)
         assert exchange.io.publish.call_args.kwargs['sensors'].occupied
-        assert exchange.ipc.send.call_args.args[0]['op'] == 'command'
+        assert any(call.args[0]['op'] == 'command' for call in exchange.ipc.send.call_args_list)
     send_sample(exchange, phase=40, occupied=True)
     assert exchange.ledger.history('stream/1')['plc']['phase'] == 40
 
@@ -311,6 +313,19 @@ def test_receipt_source_index_failure_does_not_block_supply(open_exchange, monke
     assert exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response()).success
 
 
+def test_reserved_pick_observation_tracks_physical_location_during_robot_request(open_exchange):
+    exchange = open_exchange()
+    send_sample(exchange)
+    lease = exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response())
+    assert lease.success
+    for occupied in (False, True, False):
+        send_sample(exchange, phase=30, confirmed=False, occupied=occupied)
+        exchange.publish_supply()
+        state = exchange.publisher.publish.call_args.args[0]
+        assert state.valid and state.reservation_id == lease.reservation_id
+        assert state.reserved_material_at_pick == (not occupied)
+
+
 def test_restored_running_lease_requires_same_live_plc_and_body(open_exchange):
     first = open_exchange()
     send_sample(first)
@@ -358,3 +373,123 @@ def test_stale_sample_cannot_refresh_admission_or_allocate_a_new_lease(open_exch
     state = exchange.publisher.publish.call_args.args[0]
     assert state.observation_pending and not state.valid
     assert not exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response()).success
+
+
+def test_equipment_uses_acknowledged_plc_epoch_and_preserves_previous_index(open_exchange, tmp_path):
+    base = tmp_path / 'plc.sqlite'
+    exchange = open_exchange(use_plc_test_epoch=True, receipt_file=str(base))
+    exchange.test_epoch = 1
+    send_sample(exchange)
+    assert exchange.receipt_file == str(tmp_path / 'plc.test-1.sqlite')
+    assert exchange.ledger.receipt_source('stream') == exchange.receipt_file
+    exchange.test_epoch = 2
+    send_sample(exchange)
+    assert exchange.ipc.send.call_args.args[0] == dict(op='offline')
+    reopened = open_exchange(use_plc_test_epoch=True, receipt_file=str(base), resume_stream=True)
+    reopened.test_epoch = 2
+    send_sample(reopened)
+    assert reopened.ipc.send.call_args.args[0] == dict(op='offline')
+    assert reopened.ledger.receipt_source('stream') == str(tmp_path / 'plc.test-1.sqlite')
+
+
+def test_cold_plc_can_continue_only_after_the_last_robot_and_physical_cycle_closed(open_exchange, tmp_path):
+    from arm_cell_plc_adapter.receipts import Receipts, State
+    from arm_cell_interfaces.msg import ConfiguredTaskTrace
+    path = tmp_path / 'plc.sqlite'
+    exchange = open_exchange(receipt_file=str(path))
+    owner = Receipts(path)
+    try:
+        owner.observe_idle()
+        owner.claim(1)
+        send_sample(exchange)
+        lease = exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response())
+        trace = ConfiguredTaskTrace(material_instance_id=lease.material_instance_id,
+                                    reservation_id=lease.reservation_id)
+        owner.update(1, State.SUCCEEDED, 7, 2, trace=trace)
+        def closed():
+            return owner.discharged_command(owner.latest(), tmp_path / 'history.sqlite')
+        assert not closed()
+        request = reserve_request(exchange)
+        request.command = request.COMPLETE
+        request.material_type_id, request.material_instance_id = lease.material_type_id, lease.material_instance_id
+        request.reservation_id, request.slot_id, request.material_placed = lease.reservation_id, lease.slot_id, True
+        assert exchange.reserve(request, ConfiguredSupply.Response()).success
+        from conveyor_pnp_cell.equipment_io import Commands
+        exchange.ledger.record_plc(Commands(1, 0, False, False, False, False, False, 1, 4, 7, 2))
+        assert not closed()
+        exchange.ledger.record_discharge(1, 100, 200)
+        assert closed()
+        from unittest.mock import Mock
+        from arm_cell_plc_adapter.node import PlcTaskAdapter
+        adapter = PlcTaskAdapter.__new__(PlcTaskAdapter)
+        adapter.initialize_attempt = None
+        adapter.conveyor_test_stream = True
+        adapter.receipts, adapter.receipt_epoch = owner, 0
+        adapter.history_path = tmp_path / 'history.sqlite'
+        adapter.admission = None
+        adapter.plc = Mock()
+        adapter.plc.read_conveyor_command.return_value = (0, 0)
+        adapter.exchange()
+        assert adapter.plc.write_receipt.call_args.kwargs['conveyor_feedback'] == (0, 0, 0, 1, 0)
+        assert adapter.plc.write_receipt.call_args.args[0].command_id == 1
+        owner.update(1, State.UNCERTAIN)
+        assert not closed()
+        owner.update(1, State.SUCCEEDED, 7, 2)
+        exchange.ledger.record_created(2, 'A')
+        assert not closed()
+    finally:
+        owner.close()
+
+
+def test_acquired_reservation_reaches_kit_before_slow_plc_reply(open_exchange, monkeypatch):
+    from conveyor_pnp_cell import sidecar
+    clock = [100.]
+    monkeypatch.setattr(sidecar.time, 'monotonic', lambda: clock[0])
+    exchange = open_exchange()
+    send_sample(exchange)
+    lease = exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response())
+    assert lease.success
+    exchange.ipc.send.reset_mock()
+
+    def slow_reply(**_feedback):
+        packet = exchange.ipc.send.call_args.args[0]
+        assert packet['op'] == 'reservation'
+        assert packet['reservation']['reservation_id'] == lease.reservation_id
+        assert packet['reservation']['material_instance_id'] == lease.material_instance_id
+        clock[0] += .6
+
+    exchange.io.publish.side_effect = slow_reply
+    send_sample(exchange, phase=30)
+    assert not exchange.valid()
+    assert any(call.args[0]['op'] == 'command' for call in exchange.ipc.send.call_args_list)
+    command_packet = next(call.args[0] for call in exchange.ipc.send.call_args_list if call.args[0]['op'] == 'command')
+    assert 'reservation' not in command_packet
+
+
+def test_equipment_reads_command_and_epoch_from_one_plc_scan():
+    from unittest.mock import Mock
+    from conveyor_pnp_cell.equipment_io import ConveyorIO
+    words = [0] * 32
+    words[17:19] = [1, 30]
+    words[29:] = [0xC051, 0x1A18, 9]
+    client = Mock()
+    reply = client.read_input_registers.return_value
+    reply.isError.return_value = False
+    reply.function_code, reply.registers = 4, words
+    command, epoch = ConveyorIO(client).commands_with_epoch()
+    assert (command.cycle, command.phase, epoch) == (1, 30, 9)
+    client.read_input_registers.assert_called_once_with(0, 32, unit=1)
+
+
+def test_robot_request_keeps_verified_pick_slot_reservable_after_confirmation_pulse(open_exchange):
+    exchange = open_exchange()
+    send_sample(exchange, phase=30, confirmed=False)
+    assert not exchange.supply.available
+    send_sample(exchange, phase=22, confirmed=True)
+    send_sample(exchange, phase=30, confirmed=False, body='another/1')
+    assert not exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response()).success
+    send_sample(exchange, phase=30, confirmed=False)
+    exchange.publish_supply()
+    assert exchange.publisher.publish.call_args.args[0].valid
+    lease = exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response())
+    assert lease.success and lease.material_instance_id == 'stream/1'

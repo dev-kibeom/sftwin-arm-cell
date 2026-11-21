@@ -205,7 +205,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    `파지 모드`는 `물리 파지`입니다. 지원 모드가 하나이면 읽기 전용입니다.
    Robotiq에서는 `논리 판정 + 고정`, `물리 판정 + 고정`, `물리 파지` 중 하나를 선택합니다.
    실제 파지의 라이브 검증 여부는 런처 상태 표시에서 확인합니다.
-2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
+2. `Isaac 시작`을 누릅니다. 씬이 로드되는 동안에도 PLC와 ROS 2를 각각 시작할 수 있습니다. Isaac UI 조작은 Timeline과 After Playing 초기화가 끝난 뒤 진행합니다.
 3. Conveyor에서는 `PLC 시작`을 누릅니다. 로컬 CODESYS 서비스를 재사용하거나 시작한 뒤,
    Conveyor 공정 프로그램의 Modbus 응답을 확인합니다. 서비스 시작·종료에는
    해당 호스트의 systemd 권한이 필요합니다. 단계와 오류는 런처 터미널에, 마지막 결과는 창에 표시됩니다.
@@ -217,7 +217,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 4. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
    Conveyor PLC 어댑터는 PLC 응답 확인과 ROS 사전 점검이 모두 끝나면 자동으로 시작합니다. ROS 2를 먼저 시작해도 됩니다.
    런처는 PLC 통신과 신선한 정상 Safety 상태를 확인해 시뮬레이션 설비 허가를 주기적으로 발행합니다.
-   Isaac UI Hub의 `Supply`에서 수량을 입력하고 `Set available stock` → `Start automatic`을 누릅니다.
+   새 실험은 Isaac UI Hub에서 `Initialize`를 한 번 누릅니다. 현재 창에서 원점 복원이 끝나면 `Start`로 자동운전을 시작하고, 원하는 시점에 품종·수량을 선택해 `Supply`로 추가합니다. `Pause`는 잔량을 보존합니다.
 5. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.
    런처의 실행 표시는 프로세스가 실행 중이라는 뜻입니다. 시스템 준비나 PnP 성공을 보장하지 않습니다.
 

@@ -22,6 +22,7 @@ from arm_cell_interfaces.msg import (
     TransferCompletion,
     VisionCalibration,
 )
+from std_msgs.msg import Bool
 from rclpy.action import ActionClient
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
@@ -48,6 +49,8 @@ def generate_test_description():
                     parameters=[
                         {
                             "mission_target_id": MISSION_TARGET,
+                            "operator_run_control": True,
+                            "start_paused": True,
                             "recipe_directory": str(recipe_directory),
                         }
                     ],
@@ -121,6 +124,10 @@ class TestExternalMultiDeliveryOrchestration(unittest.TestCase):
                 reliability=ReliabilityPolicy.RELIABLE,
             ),
         )
+        self.mode_publisher = self.node.create_publisher(
+            Bool, "/orchestration/automatic_mode_request",
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
+        )
         self.execute_client = ActionClient(
             self.node, ExecuteCycle, "/orchestration/execute_cycle"
         )
@@ -193,6 +200,11 @@ class TestExternalMultiDeliveryOrchestration(unittest.TestCase):
         self.completion_publisher.publish(self.make_completion(second))
         second_id = tuple(second.delivery_id.uuid)
         self.spin_until(lambda: self.count_ready(second_id) == 1)
+        observe_until = time.monotonic() + 0.5
+        while time.monotonic() < observe_until:
+            rclpy.spin_once(self.node, timeout_sec=0.05)
+        self.assertEqual(self.count_cycle_goals(second_id), 0)
+        self.mode_publisher.publish(Bool(data=True))
         self.spin_until(lambda: self.count_cycle_goals(second_id) == 1)
 
         self.publish_phase(first, MaterialHandoffState.HANDOFF_UNLOADED)

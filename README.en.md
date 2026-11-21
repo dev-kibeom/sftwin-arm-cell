@@ -168,7 +168,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 
 1. Select the Cell, Robot, Tool, and Backend. The launcher shows the Tool’s grasp strategy
    and supported grasp modes. The Conveyor suction cup shows `표면 흡착` (surface suction) as its strategy and `물리 파지` (physical grasp) as its only mode.
-2. Click `Isaac 시작` (Start Isaac). Wait for the scene, Timeline, and After Playing initialization.
+2. Click `Isaac 시작` (Start Isaac). You can start PLC and ROS 2 independently while the scene loads. Use the Isaac UI once Timeline and After Playing initialization finish.
 3. For Conveyor, click `PLC 시작` (Start PLC). The launcher starts or reuses the local CODESYS service
    and checks the Conveyor Modbus response. Check the launcher terminal for
    the startup log and use the same button to retry. Select `PLC 시작 시 CODESYS GUI 열기` to open the
@@ -180,7 +180,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    The Conveyor PLC adapter starts automatically once the PLC probe and ROS preflight both complete.
    You can also start ROS 2 before the PLC. The launcher-managed adapter publishes the simulated equipment
    permit while PLC exchanges succeed and fresh Safety feedback permits normal motion. In the Isaac UI Hub,
-   enter the quantity under `Supply`, click `Set available stock`, then `Start automatic`.
+   click `Initialize` once for a new experiment. When initialization finishes in the current window, use `Start` for automatic operation and `Supply` to add stock at any time. `Pause` keeps the remaining stock.
 5. Check the camera/Vision views in Isaac Sim's UI Hub and errors in both run terminals.
    The launcher reports process execution; this does not establish system readiness or PnP success.
 

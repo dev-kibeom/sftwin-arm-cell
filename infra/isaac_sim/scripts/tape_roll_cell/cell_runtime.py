@@ -91,6 +91,7 @@ class ConfiguredSupplyAdapter:
         from tape_roll_cell.conveyor import Conveyor
         from isaac_runtime.cell_supply import register_supply_port
         self.conveyor=Conveyor(self.stage,configuration,context['roll'])
+        self.automatic = False
         self._cart_number=0;self._pending_cycle=None;self._mission_available=False;self._mission_available_at=0.
         self._cycle_slot=None;self.last_mission_status=''
         self._cycle_evidence=None;self._cycle_writer=None
@@ -98,7 +99,7 @@ class ConfiguredSupplyAdapter:
         register_material_source(self, self.diagnostic_materials)
         register_supply_port(self,dict(materials=[dict(id=self.supply.material_id,label='Tape Roll 17 mm')],
             count_label=f'Full cartridges ({self.supply._count} rolls each)',default_count=1),
-            self.request_supply,self.supply_status)
+            self.request_supply, self.supply_status, set_automatic=self.set_automatic)
         from tape_roll_cell.teaching_runtime import TeachingSession
         self.teaching = TeachingSession(self)
 
@@ -108,6 +109,10 @@ class ConfiguredSupplyAdapter:
                      reservation_id=self.supply.reservation_id if index == self.supply._selected else None,
                      selected=index == self.supply._selected,
                      association='configured_supply_slot') for index, path in enumerate(self.paths)]
+
+    def set_automatic(self, enabled):
+        self.automatic = enabled
+        return dict(accepted=True, detail='Automatic operation started' if enabled else 'Automatic operation paused')
 
     def request_supply(self,material_id,count):
         if not self.timeline.is_playing():return dict(accepted=False,detail='Press Play before requesting Supply.')
@@ -127,7 +132,8 @@ class ConfiguredSupplyAdapter:
             mission=self.last_mission_status)
 
     def _advance_supply(self):
-        self.conveyor.update()
+        if self.automatic or self.conveyor.state != 'waiting_spawn':
+            self.conveyor.update()
         paths=self.conveyor.active_roll_paths
         if paths and self.conveyor.number!=self._cart_number:
             self.paths=list(paths);self._cart_number=self.conveyor.number
@@ -135,7 +141,7 @@ class ConfiguredSupplyAdapter:
             update_identity_attributes(self.stage,self.paths,self.supply)
         elif not paths:self.paths=[]
         ready=self.configuration['cell'].get('motion_preparation',{'ready':True})
-        if (not getattr(getattr(self, 'teaching', None), 'manual_mode', False) and
+        if (self.automatic and not getattr(getattr(self, 'teaching', None), 'manual_mode', False) and
                 self.valid() and ready['ready'] and self._pending_cycle is None and
                 not self.supply.reservation_id and self._mission_available and
                 time.monotonic()-self._mission_available_at<.5):
@@ -302,6 +308,7 @@ class ConfiguredSupplyAdapter:
             return False
         if getattr(self, 'teaching', None) is not None:
             self.teaching.on_stop()
+        self.automatic = False
         self.conveyor.resetstopped()
         self.paths=[];self._pending_cycle=None;self._mission_available=False
         self.last_mission_status=''

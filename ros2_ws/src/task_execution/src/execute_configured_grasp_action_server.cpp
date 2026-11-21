@@ -199,13 +199,24 @@ void ExecuteConfiguredGraspActionServer::execute(
     if (fixed_teaching) {state->executed_arrivals.insert(arrival);}
   }
   try {
-    result->result_code = task->execute_grasp_cycle(cycle, id);
+    std::function<bool()> observed_at_pick;
+    if (fixed_teaching) {
+      observed_at_pick = [&]() {
+          std::lock_guard<std::mutex> lock(state->mutex);
+          return state->lease.observed_at_pick(cycle.identity, ConfiguredSupplyLease::Clock::now());
+        };
+    }
+    result->result_code = task->execute_grasp_cycle(cycle, id, std::move(observed_at_pick));
   } catch (const std::exception & error) {
     result->result_code = Code::TASK_RESULT_BACKEND_ERROR;
     result->diagnostic_detail = error.what();
   } catch (...) {
     result->result_code = Code::TASK_RESULT_BACKEND_ERROR;
     result->diagnostic_detail = "unknown configured grasp exception";
+  }
+  if (task->configured_regrasp_started()) {
+    if (!result->diagnostic_detail.empty()) {result->diagnostic_detail += ";";}
+    result->diagnostic_detail += "configured_pick_regrasp=1";
   }
   result->material_placed = task->released_at_configured_destination();
   result->failure_stage = task->last_failure_stage();
