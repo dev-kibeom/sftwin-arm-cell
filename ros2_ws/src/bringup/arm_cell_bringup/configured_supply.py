@@ -22,7 +22,13 @@ def configured_tool_model(config):
         _validate_radial_model(config, links, joints, arm)
     elif config['tool']['tool_type'] == 'suction_gripper':
         names(config['tool']['grasp_pose_collision_links'], 'Suction contact links', links)
-        names([runtime['cup_link'], runtime['carrier_link']], 'Suction D6 body links', links)
+        cup = runtime['cup_link']
+        mounts = [joint for joint in joints.values() if joint.find('child').get('link') == cup]
+        if len(mounts) != 1 or mounts[0].get('type') != 'fixed':
+            raise ValueError('Suction cup requires one fixed mounting joint')
+        carrier = mounts[0].find('parent').get('link')
+        names([cup, carrier], 'Suction D6 body links', links)
+        runtime['carrier_link'] = carrier
         for key in ('max_grip_distance_m', 'coaxial_force_limit_n', 'shear_force_limit_n', 'retry_interval_s'):
             if not finite_number(runtime[key]) or runtime[key] <= 0:
                 raise ValueError(f'Invalid suction Tool {key}')

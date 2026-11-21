@@ -13,7 +13,6 @@ runtime:
       combination: [physics, surface_gripper]
       description: D6 결합 대상과 예약 자재를 대조합니다.
   capabilities: [actuator_observation]
-  carrier_link: tool_mount
   retry_interval_s: 0.25
   cup_link: suction_cup
   max_grip_distance_m: 0.005

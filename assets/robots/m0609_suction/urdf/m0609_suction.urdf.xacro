@@ -3,20 +3,8 @@
   <xacro:arg name="mesh_root" default="${xacro.abs_filename('../../m0609_robotiq_2f85/meshes')}"/>
   <xacro:include filename="../../m0609_robotiq_2f85/urdf/m0609_macro.xacro"/>
   <xacro:include filename="../../m0609_robotiq_2f85/urdf/m0609_tool_adapter.xacro"/>
+  <xacro:include filename="../../../tools/suction/urdf/assembly.xacro"/>
   <xacro:m0609_robot mesh_dir="$(arg mesh_root)"/>
   <xacro:m0609_tool_adapter parent="tool0"/>
-  <link name="suction_cup">
-    <inertial>
-      <origin xyz="0 0 0.02"/>
-      <mass value="0.08"/>
-      <inertia ixx="0.000016" iyy="0.000016" izz="0.000009" ixy="0" ixz="0" iyz="0"/>
-    </inertial>
-    <visual><origin xyz="0 0 0.02"/><geometry><cylinder radius="0.015" length="0.04"/></geometry>
-      <material name="rubber"><color rgba="0.12 0.14 0.16 1"/></material></visual>
-    <collision><origin xyz="0 0 0.02"/><geometry><cylinder radius="0.015" length="0.04"/></geometry></collision>
-  </link>
-  <joint name="mount_to_cup" type="fixed"><parent link="tool_mount"/><child link="suction_cup"/></joint>
-  <link name="sf_grasp_tcp"/>
-  <joint name="cup_to_tcp" type="fixed"><parent link="suction_cup"/><child link="sf_grasp_tcp"/>
-    <origin xyz="0 0 0.04"/></joint>
+  <xacro:suction_assembly parent="tool_mount"/>
 </robot>
