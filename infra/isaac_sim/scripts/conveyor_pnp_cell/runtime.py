@@ -29,6 +29,20 @@ class ConveyorRuntime:
                                slots=list(json.loads(configuration['motion']['configured_grasp_cycles_json']))))
         self.feeder.bind_ui()
 
+    def set_tool_session(self, session):
+        session.tool.capture.resolve_reserved_body = self.reserved_body
+
+    def reserved_body(self, reference):
+        packet = self.packet
+        if (self.stopped or not self.sidecar.available or not packet
+                or time.monotonic() - packet['at'] >= MAX_AGE):
+            return None
+        reservation = packet.get('reservation')
+        if not reservation or any(reference.get(key) != reservation.get(key) for key in (
+                'material_id', 'supply_id', 'slot_id', 'supply_epoch', 'reservation_id')):
+            return None
+        return self.equipment.material_path(reference['material_id'], reference['slot_id'])
+
     def tick(self, dt):
         for packet in self.sidecar.poll_messages():
             self.packet = packet if packet.get('op') == 'command' else None

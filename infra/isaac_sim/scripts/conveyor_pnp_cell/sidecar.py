@@ -107,8 +107,12 @@ class Exchange:
             self.sent[at] = cmd
             with self.lock:
                 permitted, permit_at = self.permitted, self.permit_at
+                supply = self.supply
+                reservation = dict(supply_id=supply.supply_id, material_id=supply.material_id,
+                                   slot_id=supply.slot, supply_epoch=supply.epoch,
+                                   reservation_id=supply.reservation) if supply.reservation and self.valid() else None
             self.ipc.send(dict(op='command', at=at, command=asdict(cmd), permitted=permitted,
-                               permit_at=permit_at))
+                               permit_at=permit_at, reservation=reservation))
         except (OSError, ValueError, ModbusException) as error:
             if self.sent or self.valid_at:
                 self.node.get_logger().warning(f'Conveyor link unavailable: {error}')

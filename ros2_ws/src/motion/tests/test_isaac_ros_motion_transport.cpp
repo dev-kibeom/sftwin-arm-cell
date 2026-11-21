@@ -3143,6 +3143,26 @@ TEST_F(IsaacRosMotionTransportTest, ConfiguredRadialUsesDeviceHoldingWithoutGrou
   EXPECT_NO_THROW(transport_->clear_grasp_relation_after_release());
 }
 
+TEST_F(IsaacRosMotionTransportTest, SuctionRequiresCorrelatedPhysicalAttachment)
+{
+  transport_->tool_width_control_ = false;
+  transport_->tool_grasp_strategies_ = {"surface_suction"};
+  GraspSpecification spec;
+  spec.strategy = GraspStrategy::SURFACE_SUCTION;
+  GraspExecutionIdentity identity{
+    "1234567890abcdef1234567890abcdef", "Part", "belt", "slot_1", "epoch", "reservation"};
+  ASSERT_TRUE(transport_->prepare_configured_grasp(spec, identity));
+  auto status = std::make_shared<String>();
+  status->data = "ready=1;grasp=1;attached=0;released=0;seq=1;capture_reference_id=" +
+    identity.execution_id;
+  transport_->on_gripper_status(status);
+  EXPECT_FALSE(transport_->commit_pending_grasp_relation());
+  status->data = "ready=1;grasp=1;attached=1;released=0;seq=2;capture_reference_id=" +
+    identity.execution_id;
+  transport_->on_gripper_status(status);
+  EXPECT_TRUE(transport_->commit_pending_grasp_relation());
+}
+
 }  // namespace arm_cell_motion
 
 namespace arm_cell_motion

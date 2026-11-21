@@ -1948,29 +1948,41 @@ IsaacRosMotionTransport::~IsaacRosMotionTransport()
 
 bool IsaacRosMotionTransport::supports_grasp_strategy(GraspStrategy strategy) const
 {
-  const auto name = strategy == GraspStrategy::INTERNAL_RADIAL ? "internal_radial" : "box_exterior";
+  const char * name;
+  switch (strategy) {
+    case GraspStrategy::BOX_EXTERIOR: name = "box_exterior"; break;
+    case GraspStrategy::INTERNAL_RADIAL: name = "internal_radial"; break;
+    case GraspStrategy::SURFACE_SUCTION: name = "surface_suction"; break;
+    default: return false;
+  }
   return std::find(tool_grasp_strategies_.begin(), tool_grasp_strategies_.end(), name) !=
-    tool_grasp_strategies_.end() && (strategy != GraspStrategy::INTERNAL_RADIAL || !tool_width_control_);
+    tool_grasp_strategies_.end() && (strategy == GraspStrategy::BOX_EXTERIOR || !tool_width_control_);
 }
 
 bool IsaacRosMotionTransport::prepare_configured_grasp(
   const GraspSpecification & spec, const GraspExecutionIdentity & identity)
 {
-  if (!spec.valid() || !identity.valid() || spec.strategy != GraspStrategy::INTERNAL_RADIAL ||
+  if (!spec.valid() || !identity.valid() || spec.strategy == GraspStrategy::BOX_EXTERIOR ||
     !supports_grasp_strategy(spec.strategy) || !capture_reference_publisher_) {return false;}
   std_msgs::msg::String message;
-  message.data = nlohmann::json{
-    {"motion_goal_uuid", identity.execution_id}, {"strategy", "internal_radial"},
+  const bool suction = spec.strategy == GraspStrategy::SURFACE_SUCTION;
+  nlohmann::json reference{
+    {"motion_goal_uuid", identity.execution_id}, {"strategy", suction ? "surface_suction" : "internal_radial"},
     {"material_id", identity.material_id}, {"supply_id", identity.supply_id},
     {"slot_id", identity.slot_id}, {"supply_epoch", identity.supply_epoch},
-    {"reservation_id", identity.reservation_id}, {"insertion_depth_m", spec.insertion_depth_m},
-    {"thickness_m", spec.thickness_m}, {"inner_radius_m", spec.bore_radius_m}}.dump();
+    {"reservation_id", identity.reservation_id}};
+  if (!suction) {
+    reference["insertion_depth_m"] = spec.insertion_depth_m;
+    reference["thickness_m"] = spec.thickness_m;
+    reference["inner_radius_m"] = spec.bore_radius_m;
+  }
+  message.data = reference.dump();
   {
     std::lock_guard<std::mutex> lock(mutex_);
     capture_reference_id_ = identity.execution_id;
     applied_capture_reference_id_.clear();
-    radial_prepared_ = true;
-    radial_execution_id_ = identity.execution_id;
+    configured_strategy_ = spec.strategy;
+    configured_execution_id_ = identity.execution_id;
     pending_object_to_tcp_valid_ = false;
     accepted_object_to_tcp_valid_ = false;
   }
@@ -2079,9 +2091,10 @@ bool IsaacRosMotionTransport::commit_pending_grasp_relation()
   // Scene contract. Only fresh, correlated device possession is observable.
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (radial_prepared_) {
+    if (configured_strategy_) {
       return gripper_runtime_ready_ && grasp_confirmed_ && !release_confirmed_ &&
-             !object_attached_ && applied_capture_reference_id_ == radial_execution_id_ &&
+             (object_attached_ == (*configured_strategy_ == GraspStrategy::SURFACE_SUCTION)) &&
+             applied_capture_reference_id_ == configured_execution_id_ &&
              std::chrono::steady_clock::now() - latest_gripper_status_receipt_ <=
              kGripperStatusFreshness;
     }
@@ -2112,14 +2125,14 @@ bool IsaacRosMotionTransport::commit_pending_grasp_relation()
 void IsaacRosMotionTransport::clear_grasp_relation_after_release()
 {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (radial_prepared_ && (!gripper_runtime_ready_ || !release_confirmed_ || grasp_confirmed_ ||
+  if (configured_strategy_ && (!gripper_runtime_ready_ || !release_confirmed_ || grasp_confirmed_ ||
     std::chrono::steady_clock::now() - latest_gripper_status_receipt_ > kGripperStatusFreshness))
   {throw std::runtime_error("configured_release_observation_unavailable");}
   pending_object_to_tcp_valid_ = false;
   accepted_object_to_tcp_valid_ = false;
   accepted_payload_dimensions_.clear();
-  radial_prepared_ = false;
-  radial_execution_id_.clear();
+  configured_strategy_.reset();
+  configured_execution_id_.clear();
 }
 
 void IsaacRosMotionTransport::configure_waypoint_mode(
@@ -8317,7 +8330,7 @@ void IsaacRosMotionTransport::on_gripper_status(
       if (!rejection_reason) {
         const auto reference = fields.find("capture_reference_id");
         const std::string reference_id = reference == fields.end() ? "" : reference->second;
-        if (radial_prepared_) {applied_capture_reference_id_ = reference_id;}
+        if (configured_strategy_) {applied_capture_reference_id_ = reference_id;}
         if (!capture_reference_id_.empty() && reference_id == capture_reference_id_) {
           applied_capture_reference_id_ = reference_id;
           gripper_status_condition_.notify_all();

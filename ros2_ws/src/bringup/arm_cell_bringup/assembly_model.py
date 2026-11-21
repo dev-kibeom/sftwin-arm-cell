@@ -4,7 +4,7 @@ from .runtime import read, resolve
 
 def load_assembly_model(robot_id, tool_id):
     """Load static assembly owners; this does not register a deployment or execution."""
-    from .configured_supply import radial_tool_model
+    from .configured_supply import configured_tool_model
 
     config = {}
     references = {
@@ -25,4 +25,4 @@ def load_assembly_model(robot_id, tool_id):
     if any(model[f'{key}_id'] != config[key][f'{key}_id'] for key in ('robot', 'tool')):
         raise ValueError('Assembly owner identity mismatch')
     config['home_joint_positions'] = read(config['robot']['home'])['home_joint_positions']
-    return radial_tool_model(config)
+    return configured_tool_model(config)

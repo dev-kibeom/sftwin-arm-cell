@@ -1,6 +1,5 @@
 """Headless equipment acceptance against an isolated PLC and the companion Mock."""
 import argparse
-import json
 from pathlib import Path
 import sys
 import time
@@ -13,22 +12,19 @@ args = parser.parse_args()
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from isaacsim import SimulationApp
 app = SimulationApp({'headless': True, 'width': 480, 'height': 320, 'anti_aliasing': 0})
-from conveyor_pnp_cell.configuration import fixed_pick_slots
-from isaac_runtime.runtime_workflow import run_step
+from isaac_runtime.runtime_workflow import prepare_startup_model, run_step
 from isaac_runtime.runtime_configuration import load_runtime_configuration
 from isaac_runtime import cell_supply
 
 def commission():
     config = load_runtime_configuration(args.snapshot)
     config['cell']['conveyor']['connection']['port'] = args.equipment_port
-    # Only the mock backend owns this fixed teaching; the production catalog is empty.
-    center = config['cell']['conveyor']['regions']['pick']['center']
-    deployed_catalog = config['motion']['configured_grasp_cycles_json']
-    config['motion']['configured_grasp_cycles_json'] = json.dumps(fixed_pick_slots(center, first=1, count=2))
+    import os
+    os.environ['ARM_CELL_RUNTIME_CONFIG'] = str(args.snapshot)
+    prepare_startup_model({}, Path(os.environ['SFTWIN_PROJECT_ROOT']))
     namespace = dict(runtime_configuration=config)
     for step in ('setup_scene.py', 'snapshot_camera.py', 'build_actiongraph.py'):
         run_step(step, namespace)
-    config['motion']['configured_grasp_cycles_json'] = deployed_catalog
     ctx = namespace['context']
     adapter = namespace['_material_supply_adapter']
     world = ctx['world']

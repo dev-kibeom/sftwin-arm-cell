@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="suction_assembly" params="parent">
+    <link name="suction_cup">
+      <inertial>
+        <origin xyz="0 0 0.02"/>
+        <mass value="0.08"/>
+        <inertia ixx="0.000016" iyy="0.000016" izz="0.000009" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0.02"/>
+        <geometry><cylinder radius="0.015" length="0.04"/></geometry>
+        <material name="rubber"><color rgba="0.12 0.14 0.16 1"/></material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.02"/>
+        <geometry><cylinder radius="0.015" length="0.04"/></geometry>
+      </collision>
+    </link>
+    <joint name="mount_to_cup" type="fixed">
+      <parent link="${parent}"/>
+      <child link="suction_cup"/>
+    </joint>
+    <link name="sf_grasp_tcp"/>
+    <joint name="cup_to_tcp" type="fixed">
+      <parent link="suction_cup"/>
+      <child link="sf_grasp_tcp"/>
+      <origin xyz="0 0 0.04"/>
+    </joint>
+  </xacro:macro>
+</robot>

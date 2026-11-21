@@ -7,7 +7,7 @@ namespace arm_cell_motion
 {
 // Work requirement, independent of the robot and finger length. Tool adapters
 // advertise supported strategies and own actuator/capture realization.
-enum class GraspStrategy { BOX_EXTERIOR, INTERNAL_RADIAL };
+enum class GraspStrategy { BOX_EXTERIOR, INTERNAL_RADIAL, SURFACE_SUCTION };
 
 struct GraspExecutionIdentity
 {
@@ -31,7 +31,7 @@ struct GraspSpecification
 
   bool valid() const
   {
-    if (strategy == GraspStrategy::BOX_EXTERIOR) {return true;}
+    if (strategy == GraspStrategy::BOX_EXTERIOR || strategy == GraspStrategy::SURFACE_SUCTION) {return true;}
     if (strategy != GraspStrategy::INTERNAL_RADIAL) {return false;}
     return std::isfinite(insertion_depth_m) && std::isfinite(thickness_m) &&
            std::isfinite(bore_radius_m) && std::isfinite(release_position_m) &&

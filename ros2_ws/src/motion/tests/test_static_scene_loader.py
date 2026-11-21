@@ -28,8 +28,8 @@ def artifact():
                 "id": "selected_box",
                 "geometry": {"type": "box", "dimensions_m": [0.2, 0.3, 0.4]},
                 "pose": {
-                    "position_m": [1.0, 2.0, 3.0],
-                    "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0],
+                    "position_m": [1, 2, 3],
+                    "quaternion_xyzw": [0, 0, 0, 1],
                 },
             }
         ],

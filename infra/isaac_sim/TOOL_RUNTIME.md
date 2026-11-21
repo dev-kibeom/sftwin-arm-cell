@@ -35,6 +35,12 @@ Model Assembly의 URDF/USD는 링크·관절·한계·mimic·collision·질량/�
 공통 Isaac 실행은 선택된 Tool의 pre-Play 설정 hook과 기존 after-Play bootstrap을 호출한다.
 기존 Script Editor·Launcher 진입점과 `gripper_runtime` Python import 이름은 유지한다.
 
+## Conveyor Suction
+
+로봇 조립 Xacro에서 [공통 흡착컵](../../assets/tools/suction/urdf/assembly.xacro)을 include하고 `<xacro:suction_assembly parent="tool_mount"/>`로 장착한다. `parent`에는 해당 로봇의 어댑터 링크를 지정한다. 어댑터가 장착 위치와 방향을 정하고, 컵은 장착면에서 +Z 방향으로 40 mm 떨어진 접촉면 중앙에 `sf_grasp_tcp`를 둔다. 설정을 내보낼 때 컵의 고정 조인트에서 부모 링크를 읽어 Isaac D6의 carrier로 사용한다.
+
+Conveyor의 M0609 조립은 `sf_grasp_tcp`를 흡착컵 접촉면에 둔다. 선택된 Tool이 Play 전에 D6 Joint와 Surface Gripper를 설치하고, Play 중 기존 Tool Intent로 흡착을 켜고 끈다. `surface_suction` 전략은 공식 확장의 단일 Gripped Object를 공급자가 확인한 현재 예약 자재와 대조한다. 이송 중 결합 손실 또는 관측 불명은 HELD를 해제한다. 흡착 OFF 뒤 Open과 빈 Gripped Objects를 확인하며 트레이 점유는 설비가 독립적으로 판정한다. 프로필의 힘 한계와 D6 축 강성은 시뮬레이션 설정이다. [Isaac Sim 5.1 Surface Gripper](https://docs.isaacsim.omniverse.nvidia.com/5.1.0/robot_simulation/ext_isaacsim_robot_surface_gripper.html)
+
 ## Logical / Physics Actuator
 
 Logical은 기존 `Robotiq2F85Actuator._apply_position()`을 보존한다. 매 Physics tick에 여섯 관절의

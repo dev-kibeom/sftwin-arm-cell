@@ -20,15 +20,19 @@ inline std::map<std::string, PreparedGraspCycle> parse_configured_grasp_cycles(
       const auto & value = entry.value();
       const auto & grasp = value.at("grasp");
       PreparedGraspCycle cycle;
-      if (entry.key().empty() || grasp.at("strategy") != "internal_radial") {
+      if (entry.key().empty()) {throw std::invalid_argument("Empty configured slot");}
+      if (grasp.at("strategy") == "surface_suction") {
+        cycle.grasp.strategy = arm_cell_motion::GraspStrategy::SURFACE_SUCTION;
+      } else if (grasp.at("strategy") == "internal_radial") {
+        cycle.grasp.strategy = arm_cell_motion::GraspStrategy::INTERNAL_RADIAL;
+        cycle.grasp.insertion_depth_m = grasp.at("insertion_depth_m");
+        cycle.grasp.thickness_m = grasp.at("thickness_m");
+        cycle.grasp.bore_radius_m = grasp.at("inner_radius_m");
+        cycle.grasp.release_position_m = grasp.at("release_position_m");
+        cycle.grasp.grasp_position_m = grasp.at("grasp_position_m");
+      } else {
         throw std::invalid_argument("Unsupported configured grasp strategy");
       }
-      cycle.grasp.strategy = arm_cell_motion::GraspStrategy::INTERNAL_RADIAL;
-      cycle.grasp.insertion_depth_m = grasp.at("insertion_depth_m");
-      cycle.grasp.thickness_m = grasp.at("thickness_m");
-      cycle.grasp.bore_radius_m = grasp.at("inner_radius_m");
-      cycle.grasp.release_position_m = grasp.at("release_position_m");
-      cycle.grasp.grasp_position_m = grasp.at("grasp_position_m");
       cycle.approach_motion = value.at("approach_motion");
       cycle.insertion_motion = value.at("insertion_motion");
       cycle.transfer_motion = value.at("transfer_motion");

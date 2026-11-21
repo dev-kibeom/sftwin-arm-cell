@@ -8,6 +8,7 @@ import pytest
 import xacro
 
 from arm_cell_bringup.runtime import load_profile
+from arm_cell_bringup.configured_supply import configured_tool_model
 
 ROOT = Path(__file__).resolve().parents[4]
 ASSET = ROOT / 'assets/robots/rb5_850'
@@ -67,3 +68,41 @@ def test_pinned_vendor_inputs_match_recorded_checksums():
     manifest = json.loads((ASSET / 'third_party/rbpodo_description/SHA256SUMS.json').read_text())
     for relative, expected in manifest.items():
         assert hashlib.sha256((ASSET / relative).read_bytes()).hexdigest() == expected
+
+
+def test_shared_suction_assembly_binds_to_rb5_carrier(tmp_path):
+    """Exercise an alternate mounting frame without registering an RB5 deployment."""
+    bringup = ROOT / 'ros2_ws/src/bringup/config'
+    config = load_profile(bringup / 'rb5_850_profile.yaml')
+    conveyor = load_profile(bringup / 'conveyor_pnp_profile.yaml')
+    config['tool'] = conveyor['tool']
+    robot_macro = ASSET / 'urdf/rb5_850_macro.xacro'
+    tool_macro = ROOT / 'assets/tools/suction/urdf/assembly.xacro'
+    urdf = tmp_path / 'rb5_suction.urdf.xacro'
+    urdf.write_text(f"""<robot name="rb5_suction" xmlns:xacro="http://www.ros.org/wiki/xacro">
+      <xacro:include filename="{robot_macro}"/>
+      <xacro:include filename="{tool_macro}"/>
+      <xacro:rb5_850_robot mesh_dir="{ASSET / 'meshes'}"/>
+      <link name="base_link"/>
+      <joint name="base_to_link0" type="fixed"><parent link="base_link"/><child link="link0"/></joint>
+      <link name="rb5_cup_adapter"/>
+      <joint name="tcp_to_adapter" type="fixed">
+        <parent link="tcp"/><child link="rb5_cup_adapter"/><origin rpy="1.57079632679 0 0"/>
+      </joint>
+      <xacro:suction_assembly parent="rb5_cup_adapter"/>
+    </robot>""")
+    semantic = tmp_path / 'rb5_suction.srdf'
+    semantic.write_text("""<robot name="rb5_suction"><group name="arm">
+      <chain base_link="base_link" tip_link="sf_grasp_tcp"/></group></robot>""")
+    config['model_configuration'].update(model_id='rb5_suction', tool_id='suction',
+                                         urdf=str(urdf), semantic=str(semantic))
+    configured_tool_model(config)
+    runtime = config['tool']['runtime']
+    assert runtime['carrier_link'] == 'rb5_cup_adapter'
+    expanded = ET.fromstring(xacro.process_file(str(urdf)).toxml())
+    cup = expanded.find(f"link[@name='{runtime['cup_link']}']")
+    cylinder = cup.find('collision/geometry/cylinder')
+    tcp = next(joint for joint in expanded.findall('joint')
+               if joint.find('child').get('link') == 'sf_grasp_tcp')
+    assert tcp.find('parent').get('link') == runtime['cup_link']
+    assert [float(v) for v in tcp.find('origin').get('xyz').split()] == [0, 0, float(cylinder.get('length'))]

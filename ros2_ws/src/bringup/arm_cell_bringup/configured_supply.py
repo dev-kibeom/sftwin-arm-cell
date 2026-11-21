@@ -8,7 +8,7 @@ from .runtime import read, resolve, selected_profiles, write_recipes, configure_
 from .model_validation import validate_assembly_configuration, finite_number, names
 
 
-def radial_tool_model(config):
+def configured_tool_model(config):
     links, joints, arm = validate_assembly_configuration(config)
     for name in ('robot','tool'):
         if config['model_configuration'][name+'_id'] != config[name][name+'_id']:
@@ -18,6 +18,29 @@ def radial_tool_model(config):
     if pair not in runtime['supported_combinations']:
         raise ValueError(f'Unsupported Tool actuator/grasp combination: {pair}')
     runtime['mode_id'] = next(mode['id'] for mode in runtime['launcher_modes'] if mode['combination'] == pair)
+    if config['tool']['tool_type'] == 'radial_gripper':
+        _validate_radial_model(config, links, joints, arm)
+    elif config['tool']['tool_type'] == 'suction_gripper':
+        names(config['tool']['grasp_pose_collision_links'], 'Suction contact links', links)
+        cup = runtime['cup_link']
+        mounts = [joint for joint in joints.values() if joint.find('child').get('link') == cup]
+        if len(mounts) != 1 or mounts[0].get('type') != 'fixed':
+            raise ValueError('Suction cup requires one fixed mounting joint')
+        carrier = mounts[0].find('parent').get('link')
+        names([cup, carrier], 'Suction D6 body links', links)
+        runtime['carrier_link'] = carrier
+        for key in ('max_grip_distance_m', 'coaxial_force_limit_n', 'shear_force_limit_n', 'retry_interval_s'):
+            if not finite_number(runtime[key]) or runtime[key] <= 0:
+                raise ValueError(f'Invalid suction Tool {key}')
+        if runtime['grasp_strategies'] != ['surface_suction']:
+            raise ValueError('Suction Tool requires its cup link and surface_suction strategy')
+    else:
+        raise ValueError('Unsupported configured Tool model')
+    return config
+
+
+def _validate_radial_model(config, links, joints, arm):
+    runtime = config['tool']['runtime']
     primary = runtime['primary_joint']
     if primary not in joints or primary in arm or joints[primary].find('mimic') is not None:
         raise ValueError('Radial primary must be independent and outside the arm')
@@ -56,7 +79,6 @@ def radial_tool_model(config):
             raise ValueError(f'Invalid radial Tool {key}')
     if runtime['max_velocity_fraction'] > 1:
         raise ValueError('Radial speed cannot exceed model limits')
-    return config
 
 
 def load_configured_profile(source, path, *, tool_actuator=None, tool_grasp=None, tool_parameters=None,
@@ -77,7 +99,7 @@ def load_configured_profile(source, path, *, tool_actuator=None, tool_grasp=None
     motion_path=resolve(source['motion_configuration'],path.parent)
     config['motion_configuration']={key:str(resolve(value,motion_path.parent)) for key,value in read(motion_path).items()}
     config['home_joint_positions']=read(config['robot']['home'])['home_joint_positions']
-    radial_tool_model(config)
+    configured_tool_model(config)
     mission_path=resolve(source['mission'],path.parent)
     mission=read(mission_path)
     if mission['schema_version'] != 3 or mission['source']['type'] != 'configured_slots':

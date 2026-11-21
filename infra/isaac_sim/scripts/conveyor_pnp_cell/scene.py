@@ -24,6 +24,12 @@ def build_scene(*, configuration, world_cls=None, add_reference_to_stage=None, *
     if stage and stage.GetPrimAtPath(ROOT):
         # Rebuilding an active stream would destroy its physical reconciliation evidence.
         raise RuntimeError('Open a fresh stage before rebuilding the Conveyor cell')
+    mount_path = configuration['cell']['isaac']['robot_prim_path'].rsplit('/', 1)[0]
+    if mount_path != '/World':
+        mount = UsdGeom.Xform.Define(stage, mount_path)
+        from tape_roll_cell.teaching_program import base_matrix
+        transform = base_matrix(configuration['cell']['world_to_base'])
+        mount.MakeMatrixXform().Set(Gf.Matrix4d(*transform.T.flatten().tolist()))
     world, robot = build_robot_world(configuration, world_cls, add_reference_to_stage)
     stage = world.stage
     UsdGeom.Xform.Define(stage, ROOT)
@@ -75,6 +81,14 @@ class Equipment:
         prim.CreateAttribute('arm_cell:slot_id', Sdf.ValueTypeNames.String).Set(f'slot_{cycle}')
         self.path, self.cycle = path, cycle
         return True
+
+    def material_path(self, material_id, slot_id):
+        if self.path and slot_id == f'slot_{self.cycle}':
+            prim = self.stage.GetPrimAtPath(self.path)
+            if (prim and prim.GetAttribute('arm_cell:material_id').Get() == material_id
+                    and prim.GetAttribute('arm_cell:slot_id').Get() == slot_id):
+                return self.path
+        return None
 
     def body(self, path):
         handle = self.dc.get_rigid_body(path)
