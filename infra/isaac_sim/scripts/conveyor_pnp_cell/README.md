@@ -45,6 +45,17 @@ export SFTWIN_PROJECT_ROOT="$PWD" ARM_CELL_RUNTIME_CONFIG=/tmp/conveyor-runtime.
 ~/isaac_sim/python.sh infra/isaac_sim/scripts/conveyor_pnp_cell/tests/commission_robot_bt.py
 ```
 
+
+## 지속 생산 이력과 품질 검사
+
+Cell 측 Sidecar는 `conveyor.history_db_path`의 SQLite에 실제 생성 개체·배정·예약·PLC Cycle/Commit 관측과 품질 판정을 남긴다. 제어의 Source of Truth는 기존 Isaac Equipment·Task·PLC이며 DB는 독립 이력이다. 다른 검사 설비는 `/cell/conveyor/record_inspection` (`RecordConveyorInspection.srv`)에 **알고 있는 material_instance_id**와 검사 ID, 설비 ID, 실제 판정(`PASS`/`FAIL`/`INCONCLUSIVE`), 증거 참조를 제출할 수 있다. 이 호출은 PLC Commit 또는 로봇 동작을 승인하지 않는다. 재전송한 동일 검사는 멱등이고 다른 결과로 덮어쓸 수 없다.
+
+`/cell/conveyor/query_history` (`QueryConveyorHistory.srv`)에 특정 `material_instance_id`를 보내면 해당 개체의 자재·예약·PLC 관측·검사·변경 기록 JSON을 반환한다. 빈 ID는 보존된 전체 스트림의 생산 집계를 반환한다. 여러 소비자는 읽기 서비스를 이용하거나 동일 호스트의 SQLite WAL 읽기 연결로 보고서를 생성할 수 있다. SQLite 원본 파일은 Git·진단 스냅샷과 독립적으로 유지하고 운영 백업 정책을 별도로 설정한다.
+
+재시작 후 동일 Equipment 스트림이면 이전 예약 Snapshot과 ID를 읽되, 현재 실물과 PLC의 위치 확정이 재관측되기 전에는 해당 예약을 실행 가능한 것으로 공개하지 않는다. Stage를 새로 생성했거나 PLC RETAIN과 실제 자재가 불일치하면 과거 이력만 복원하며 물리 작업 자동 복귀는 하지 않는다. Sidecar 복원만으로 Robot Goal, PLC 단계 또는 물리 바디를 재생성하지 않는다.
+
+실행 전에 `arm_cell_interfaces`를 포함한 ROS Overlay를 다시 빌드해야 한다. SQLite 원장은 Python 표준 라이브러리를 사용한다. Pure DB 회귀는 `python3 -m pytest -q infra/isaac_sim/scripts/tests/test_conveyor_production_ledger.py`로 확인할 수 있다. 외부 CODESYS + Isaac 통합 및 재시작 시운전은 별도 live 증거로 확인해야 한다.
+
 ## 실제 설비 반복 시험
 
 전용 loopback CODESYS 인스턴스를 초기 ID 0으로 준비한다. 동일한 전용 ROS 도메인을 쓰고, 세 프로세스에 같은 빈 임시 디렉터리를 전달한다. 아래 예시는 PLC의 1502 포트와 시험 중 끊을 설비 프록시의 11502 포트를 쓴다. 경로는 저장소 루트 기준이다.

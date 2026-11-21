@@ -145,6 +145,8 @@ class Exchange:
                 if after != before:
                     self.ledger.save_supply(after)
                 if valid:
+                    self.ledger.record_created(packet.get('created_cycle', 0),
+                                               packet.get('created_type_id', ''))
                     self.ledger.record_plc(command)
             except (ValueError, sqlite3.Error):
                 self.supply.restore_snapshot(before)
@@ -181,7 +183,8 @@ class Exchange:
                                    slot_id=supply.slot, supply_epoch=supply.epoch,
                                    material_type_id=supply.material_type_id,
                                    material_instance_id=supply.material_instance_id,
-                                   reservation_id=supply.reservation) if supply.reservation and self.valid() else None
+                                   reservation_id=supply.reservation) if (
+                    supply.reservation and self.valid() and not self.restored_unverified) else None
             self.ipc.send(dict(op='command', at=at, command=asdict(cmd), permitted=permitted,
                                permit_at=permit_at, reservation=reservation))
         except (OSError, ValueError, sqlite3.Error, ModbusException) as error:

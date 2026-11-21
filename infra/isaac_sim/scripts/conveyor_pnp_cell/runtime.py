@@ -86,6 +86,8 @@ class ConveyorRuntime:
                                    valid=valid and self.feeder.pending is None, sensors=asdict(sensors),
                                    observed=self.equipment.cycle if sensors.pick else 0,
                                    material_type_id=self.equipment.material_type_id if sensors.pick else '',
+                                   created_cycle=self.feeder.last_generated,
+                                   created_type_id=self.equipment.material_type_id,
                                    feeder=stock))
 
     def spin_once(self):

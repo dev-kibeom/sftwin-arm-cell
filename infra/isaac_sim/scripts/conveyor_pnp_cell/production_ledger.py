@@ -136,6 +136,14 @@ class ProductionLedger:
                         dict(type_id=material_type, plc_number=snapshot['plc_number']))
         return instance
 
+    def record_created(self, plc_number, material_type_id):
+        """A positive physical creation receipt is not a Pick arrival."""
+        if type(plc_number) is not int or plc_number <= 0 or not material_type_id:
+            return
+        with self.transaction():
+            self._material(dict(stream_id=self.stream_id, plc_number=plc_number,
+                                type_id=material_type_id))
+
     def supply_snapshot(self):
         with self.lock:
             row = self.db.execute('SELECT * FROM supply_snapshots WHERE stream_id=?',
@@ -261,7 +269,9 @@ class ProductionLedger:
         with self.lock:
             return dict(
                 materials=self.db.execute('SELECT COUNT(*) FROM materials').fetchone()[0],
-                plc_commits=self.db.execute('SELECT COUNT(*) FROM plc_cycles WHERE committed=1').fetchone()[0],
+                plc_commits=self.db.execute('''SELECT COUNT(*) FROM plc_cycles p
+                    JOIN materials m ON p.stream_id=m.stream_id AND p.plc_number=m.plc_number
+                    WHERE p.committed=1''').fetchone()[0],
                 inspected=self.db.execute('SELECT COUNT(DISTINCT instance_id) FROM inspections').fetchone()[0],
                 unresolved_reservations=self.db.execute("SELECT COUNT(*) FROM reservations WHERE status='ACTIVE'").fetchone()[0],
                 streams=self.db.execute('SELECT COUNT(DISTINCT stream_id) FROM materials').fetchone()[0])

@@ -79,3 +79,18 @@ def test_multiple_streams_and_unresolved_reservation_survive_restart(tmp_path):
     assert fresh.history('stream-a/1')['reservations'][0]['status'] == 'ACTIVE'
     assert fresh.history('stream-b/1')['material']['stream_id'] == 'stream-b'
     fresh.close()
+
+def test_physical_birth_precedes_pick_and_plc_result_is_not_fabricated(tmp_path):
+    ledger = ProductionLedger(tmp_path/'born.sqlite', 'stream-a')
+    ledger.record_created(7, 'B')
+    ledger.record_created(7, 'B')
+    assert ledger.history('stream-a/7')['plc'] is None
+    assert ledger.history('stream-a/7')['reservations'] == []
+    assert ledger.summary()['plc_commits'] == 0
+    with pytest.raises(ValueError):
+        ledger.record_created(7, 'A')
+    ledger.record_plc(Plc(cycle=7, phase=50, result_state=4, placement=2, committed=7))
+    assert ledger.summary()['plc_commits'] == 1
+    ledger.record_plc(Plc(cycle=8, phase=10, result_state=0, placement=0, committed=7))
+    assert ledger.summary()['plc_commits'] == 1
+    ledger.close()
