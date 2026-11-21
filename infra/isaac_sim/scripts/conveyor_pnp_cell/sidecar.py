@@ -28,8 +28,8 @@ class Exchange:
         link = config['connection']
         self.client = ModbusTcpClient(link['host'], port=link['port'], timeout=link['timeout_seconds'])
         self.io = ConveyorIO(self.client, link['unit_id'])
+        self.pick_configured = config['pick_configured']
         self.supply = ConveyorPickSupply(uuid4().hex, **config['supply'])
-        self.slots = set(config['slots'])
         self.permit_at = self.valid_at = 0.
         self.at_pick = self.permitted = False
         self.sent = {}
@@ -81,11 +81,10 @@ class Exchange:
         at_pick = (valid and observed == command.cycle and sensors.pick and sensors.stopped
                    and sensors.extended and not sensors.occupied)
 
-        def expose(slot):
-            return slot in self.slots and self.supply.expose_slot(slot)
-
         with self.lock:
-            bound = bind_confirmed_pick(command, observed, expose) if at_pick else 0
+            bound = 0
+            if at_pick and self.pick_configured:
+                bound = bind_confirmed_pick(command, observed, self.supply.expose_slot)
             self.at_pick = at_pick and self.supply.slot == f'slot_{observed}'
             self.valid_at = packet['acquired'] if valid else 0.
         self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),

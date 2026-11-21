@@ -19,7 +19,7 @@ std::string id_string(const rclcpp_action::GoalUUID & uuid)
 }
 ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
   rclcpp::Node * node, std::shared_ptr<MotionPort> motion, std::shared_ptr<TaskExecutor> task,
-  std::map<std::string, PreparedGraspCycle> catalog)
+  ConfiguredGraspCatalog catalog)
 {
   const auto state = state_;
   supply_subscription_ = node->create_subscription<arm_cell_interfaces::msg::ConfiguredSupplyState>(
@@ -32,6 +32,7 @@ ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
         state->observed_epoch != message->supply_epoch))
         {
           state->consumed.clear();
+          state->executed_arrivals.clear();
           state->observed_supply = message->supply_id;
           state->observed_epoch = message->supply_epoch;
         }
@@ -46,21 +47,25 @@ ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
     node, "/task_execution/execute_configured_grasp",
     [catalog, state](const rclcpp_action::GoalUUID & uuid,
     std::shared_ptr<const Action::Goal> goal) {
-      const auto found = catalog.find(goal->slot_id);
-      if (found == catalog.end() || found->second.identity.supply_id != goal->supply_id ||
-      goal->supply_epoch.empty() || goal->reservation_id.empty())
-      {return rclcpp_action::GoalResponse::REJECT;}
-      auto identity = found->second.identity;
-      identity.execution_id = id_string(uuid);
-      identity.supply_epoch = goal->supply_epoch;
-      identity.reservation_id = goal->reservation_id;
+      if (goal->slot_id.empty() || goal->supply_epoch.empty() || goal->reservation_id.empty()) {
+        return rclcpp_action::GoalResponse::REJECT;
+      }
       std::lock_guard<std::mutex> lock(state->mutex);
+      arm_cell_motion::GraspExecutionIdentity identity{
+        id_string(uuid), state->lease.material_id(), goal->supply_id, goal->slot_id,
+        goal->supply_epoch, goal->reservation_id};
       if (!state->lease.matches(identity, ConfiguredSupplyLease::Clock::now()) ||
-      state->consumed.count(
-        State::LeaseKey{identity.supply_id, identity.supply_epoch,
-          identity.reservation_id}))
+        state->consumed.count({identity.supply_id, identity.supply_epoch, identity.reservation_id}) ||
+        state->executed_arrivals.count(identity.slot_id))
       {return rclcpp_action::GoalResponse::REJECT;}
-      State::Active active; active.identity = identity; active.uuid.uuid = uuid;
+      const auto * teaching = catalog.find(identity.slot_id);
+      if (!teaching || teaching->identity.supply_id != identity.supply_id ||
+        teaching->identity.material_id != identity.material_id)
+      {return rclcpp_action::GoalResponse::REJECT;}
+      State::Active active;
+      active.cycle = *teaching;
+      active.cycle.identity = identity;
+      active.uuid.uuid = uuid;
       state->active.emplace(identity.execution_id, std::move(active));
       return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     },
@@ -71,15 +76,15 @@ ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
       task->cancel_active_motion(uuid);
       return rclcpp_action::CancelResponse::ACCEPT;
     },
-    [state, task, motion, catalog](const std::shared_ptr<GoalHandle> handle) {
-      auto cycle = catalog.at(handle->get_goal()->slot_id);
-      const auto & goal = *handle->get_goal();
-      cycle.identity.execution_id = id_string(handle->get_goal_id());
-      cycle.identity.supply_epoch = goal.supply_epoch;
-      cycle.identity.reservation_id = goal.reservation_id;
+    [state, task, motion, fixed = catalog.fixed.has_value()](const std::shared_ptr<GoalHandle> handle) {
+      PreparedGraspCycle cycle;
+      {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        cycle = state->active.at(id_string(handle->get_goal_id())).cycle;
+      }
       std::thread(
         &ExecuteConfiguredGraspActionServer::execute, handle, motion, task, state,
-        cycle).detach();
+        std::move(cycle), fixed).detach();
     });
 }
 
@@ -91,7 +96,7 @@ void ExecuteConfiguredGraspActionServer::fence_leases(
     std::lock_guard<std::mutex> lock(state->mutex);
     const auto now = ConfiguredSupplyLease::Clock::now();
     for (const auto & active : state->active) {
-      if (!state->lease.matches(active.second.identity, now) &&
+      if (!state->lease.matches(active.second.cycle.identity, now) &&
         state->invalidated.insert(active.first).second) {stops.push_back(active.second.uuid);}
     }
   }
@@ -103,7 +108,7 @@ void ExecuteConfiguredGraspActionServer::fence_leases(
 void ExecuteConfiguredGraspActionServer::execute(
   const std::shared_ptr<GoalHandle> & handle,
   std::shared_ptr<MotionPort> motion, std::shared_ptr<TaskExecutor> task,
-  std::shared_ptr<State> state, PreparedGraspCycle cycle)
+  std::shared_ptr<State> state, PreparedGraspCycle cycle, bool fixed_teaching)
 {
   using Code = arm_cell_interfaces::msg::MotionTaskResultCode;
   auto result = std::make_shared<Action::Result>();
@@ -177,11 +182,19 @@ void ExecuteConfiguredGraspActionServer::execute(
     std::lock_guard<std::mutex> state_lock(state->mutex);
     const State::LeaseKey key{cycle.identity.supply_id, cycle.identity.supply_epoch,
       cycle.identity.reservation_id};
-    if (!state->consumed.emplace(key, id).second) {
+    if (state->invalidated.count(id) ||
+      !state->lease.matches(cycle.identity, ConfiguredSupplyLease::Clock::now()))
+    {
+      result->result_code = Code::TASK_RESULT_PERMISSION_DENIED;
+      result->failure_stage = "configured_supply:lease_admission";
+      handle->abort(result); return;
+    }
+    if (state->executed_arrivals.count(cycle.identity.slot_id) || !state->consumed.insert(key).second) {
       result->result_code = Code::TASK_RESULT_INVALID_GOAL;
       result->failure_stage = "configured_supply:lease_already_used";
       handle->abort(result); return;
     }
+    if (fixed_teaching) {state->executed_arrivals.insert(cycle.identity.slot_id);}
   }
   try {
     result->result_code = task->execute_grasp_cycle(cycle, id);

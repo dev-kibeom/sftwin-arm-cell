@@ -12,6 +12,7 @@ public:
   using Clock = std::chrono::steady_clock;
   void update(const arm_cell_interfaces::msg::ConfiguredSupplyState & state, Clock::time_point now)
   {state_ = state; received_ = now; observed_ = true;}
+  const std::string & material_id() const {return state_.material_id;}
   bool matches(
     const arm_cell_motion::GraspExecutionIdentity & identity,
     Clock::time_point now) const

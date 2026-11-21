@@ -29,7 +29,7 @@ Configured Task Action은 운영 Backend 초기화가 완료된 뒤 제공하며
 하위 실행 준비를 가정하지 않는다. 이 준비는 장면 시작이나 Supply 요청 수락을 차단하지 않는다.
 
 `/task_execution/execute_configured_grasp`의 `ExecuteConfiguredGrasp` goal은 공급·슬롯·epoch·예약 ID만 가진다.
-Task Execution이 배포된 registry에서 기하·티칭을 찾는다. 호출자가 관절값·임의 Tool 기하·Vision 후보를 주입하지 않는다.
+Task Execution은 현재 유효한 예약의 공급·자재·슬롯을 확인하고 배포된 기하·티칭을 선택한다. Tape는 예약 슬롯별 티칭을, Conveyor는 도착 자재들이 공유하는 고정 Pick/Place 티칭을 사용한다. Tool과 Motion에는 각 실행의 실제 예약 슬롯과 Goal UUID를 전달한다. 호출자가 관절값·임의 Tool 기하·Vision 후보를 주입하지 않는다.
 Task는 공통 GraspCycle BT와 동일 운영 MotionCore/GripperPort를 사용하고 ROS Goal UUID를 움직임·Tool 의도와 연결한다.
 새 Task→Motion ROS 경계는 만들지 않는다.
 

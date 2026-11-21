@@ -99,20 +99,21 @@ def test_supported_robots_share_role_based_stage_installation(tmp_path, profile_
     }
 
 
-def test_exported_catalog_requires_the_same_installed_teaching_for_each_arrival():
+def test_conveyor_exports_one_teaching_bound_to_the_reserved_arrival():
     config = load_profile(CONFIG / 'conveyor_pnp_profile.yaml')
     from conveyor_pnp_cell.configuration import compile_cell
     cell = config['cell']
     catalog = json.loads(config['motion']['configured_grasp_cycles_json'])
-    assert set(catalog) == {'slot_1', 'slot_2'}
-    assert catalog['slot_1']['grasp'] == {'strategy': 'surface_suction'}
+    assert set(catalog) == {'fixed_pick'}
+    assert catalog['fixed_pick']['use_reserved_slot'] is True
+    assert catalog['fixed_pick']['grasp'] == {'strategy': 'surface_suction'}
     assert config['motion']['tool_grasp_strategies'] == ['surface_suction']
     fixed = dict(cell['configured_supply'], approach_motion='approach', insertion_motion='pick',
                  transfer_motion='place', retreat_motion='retreat')
-    cell['conveyor']['teaching'] = dict(cycle=fixed, first=10, count=2)
+    cell['conveyor']['teaching'] = dict(cycle=fixed)
     with pytest.raises(ValueError, match='installed taught motion'):
         compile_cell(configuration=config)
     config['motion']['taught_motions_json'] = json.dumps({name: {} for name in ('approach', 'pick', 'place', 'retreat')})
     compile_cell(configuration=config)
     catalog = json.loads(config['motion']['configured_grasp_cycles_json'])
-    assert catalog == {'slot_10': fixed, 'slot_11': fixed}
+    assert catalog == {'fixed_pick': dict(fixed, use_reserved_slot=True)}

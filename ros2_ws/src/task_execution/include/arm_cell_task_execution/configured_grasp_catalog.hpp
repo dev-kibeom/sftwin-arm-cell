@@ -1,20 +1,34 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <nlohmann/json.hpp>
 #include "arm_cell_task_execution/prepared_grasp_cycle.hpp"
 
 namespace arm_cell_task_execution
 {
-inline std::map<std::string, PreparedGraspCycle> parse_configured_grasp_cycles(
+struct ConfiguredGraspCatalog
+{
+  std::map<std::string, PreparedGraspCycle> by_slot;
+  std::optional<PreparedGraspCycle> fixed;
+
+  const PreparedGraspCycle * find(const std::string & slot) const
+  {
+    if (fixed) {return &*fixed;}
+    const auto entry = by_slot.find(slot);
+    return entry == by_slot.end() ? nullptr : &entry->second;
+  }
+};
+
+inline ConfiguredGraspCatalog parse_configured_grasp_cycles(
   const std::string & source)
 {
   const auto json = nlohmann::json::parse(source);
   if (!json.is_object()) {
     throw std::invalid_argument("Configured grasp catalog must be a mapping");
   }
-  std::map<std::string, PreparedGraspCycle> result;
+  ConfiguredGraspCatalog result;
   for (const auto & entry : json.items()) {
     try {
       const auto & value = entry.value();
@@ -39,13 +53,20 @@ inline std::map<std::string, PreparedGraspCycle> parse_configured_grasp_cycles(
       cycle.retreat_motion = value.at("retreat_motion");
       cycle.identity.supply_id = value.at("supply_id");
       cycle.identity.material_id = value.at("material_id");
-      cycle.identity.slot_id = entry.key();
       if (!cycle.valid() || cycle.identity.supply_id.empty() ||
         cycle.identity.material_id.empty())
       {
         throw std::invalid_argument("Invalid configured grasp operation");
       }
-      result.emplace(entry.key(), std::move(cycle));
+      if (value.value("use_reserved_slot", false)) {
+        if (json.size() != 1) {
+          throw std::invalid_argument("A fixed teaching must be the only catalog entry");
+        }
+        result.fixed = std::move(cycle);
+      } else {
+        cycle.identity.slot_id = entry.key();
+        result.by_slot.emplace(entry.key(), std::move(cycle));
+      }
     } catch (const std::exception & error) {
       throw std::invalid_argument("Configured grasp slot " + entry.key() + ": " + error.what());
     }
