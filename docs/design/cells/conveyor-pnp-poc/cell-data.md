@@ -45,7 +45,7 @@ erDiagram
 
 ## 영속성·복원·추적
 
-별도의 SQLite `production.sqlite`는 실제 생성 개체, 공급 Snapshot 및 예약 이력, PLC에서 관측한 Cycle 상태·Commit, 검사 근거와 상태 변화 이력을 보존한다. 요약 수량은 **원장에 실제 식별된 자재와 PLC가 Commit을 보고한 Cycle의 결합**으로만 계산한다. PLC Adapter의 별도 SQLite `receipt`가 가진 `command_id ↔ Mission Goal UUID`는 정식 실행 영수증이며 Ledger가 임의로 재발급하지 않는다.
+별도의 SQLite `production.sqlite`는 실제 생성 개체, 공급 Snapshot 및 예약 이력, PLC에서 관측한 Cycle 상태·Commit, 검사 근거와 상태 변화 이력을 보존한다. 요약 수량은 **원장에 실제 식별된 자재와 PLC가 Commit을 보고한 Cycle의 결합**으로만 계산한다. 실행 영수증은 PLC Adapter가 소유한다. 생산 원장은 [요청 스트림과 요청 ID에 연결된 영수증](../../interfaces/icd-plc-task.md#새-요청-스트림과-영수증)을 참조한다.
 
 동일 `stream_id`로 Equipment Sidecar만 재시작하면 이전 Snapshot·epoch·예약을 읽되, 같은 장면이 자동 운전 중이면 기존 장치 스트림에 재접속한다. 공급자는 현재 PLC 자재 번호, 해당 공급 때 기록한 품종과 슬롯 점유 관측을 대조해 예약을 복원한다. Robot 실행 단계에서는 PLC가 Pick 위치 확정 신호를 해제하므로, 같은 PLC 사이클과 실물 개체로 이미 실행 중인 예약을 확인한다. 이미 위치가 확정된 개체의 예약 가능 조건은 [Cell Control](cell-control.md)을 따른다. 공급 관측이 지연되는 동안에는 마지막 배정을 보존한다. 다음 재파지에는 같은 자재가 여전히 Pick 위치에 있다는 현재 관측이 필요하다.
 
