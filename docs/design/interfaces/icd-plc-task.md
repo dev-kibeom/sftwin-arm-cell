@@ -1,17 +1,17 @@
 # PLC 단일 작업 요청·응답 계약
 
 - **Contract ID:** ARM-CELL-PLC-TASK
-- **Owner:** PLC Adapter (요청 상관 및 결과 전달)
+- **Owner:** PLC Adapter (요청 스트림 식별, 실행 영수증 소유 및 결과 전달)
 - **참여자:** PLC, PLC Adapter, Configured-source Orchestration
 
-PLC는 작업 요청을 유지하고 Adapter는 같은 `command_id`의 마지막 관측을 반환한다. Adapter는 [Configured Supply Mission](icd-configured-supply.md)에 설정된 자재, 수량 1, zero Delivery UUID를 제출한다. Goal 수락·실행·terminal은 Orchestration, 슬롯 예약·퇴역은 Configured Supply, 장치 해제 사실은 Task Execution에서 온다. 설비 Gate·Cell Commit·실제 슬롯 점유의 판단은 이 인터페이스 밖에 있다.
+PLC는 작업 요청을 유지하고 Adapter는 현재 요청 스트림에서 같은 `command_id`의 마지막 관측을 반환한다. Adapter는 [Configured Supply Mission](icd-configured-supply.md)에 설정된 자재, 수량 1, zero Delivery UUID를 제출한다. Goal 수락·실행·terminal은 Orchestration, 슬롯 예약·퇴역은 Configured Supply, 장치 해제 사실은 Task Execution에서 온다. 설비 Gate·Cell Commit·실제 슬롯 점유의 판단은 이 인터페이스 밖에 있다.
 
 ## 요청과 결과
 
 | 필드 | PLC가 해석하는 의미 |
 |---|---|
 | 요청 ID | 단일 PLC 요청 스트림에서 1부터 연속 증가하는 부호 없는 32비트 값. 0은 마지막 상태 조회 및 신규 스트림의 초기 유휴 상태다. PLC는 미확정 ID를 재시작 후에도 보존한다. |
-| 응답 ID | 조회한 ID의 기록. 새로운 요청을 제출할 수 없으면 현재 마지막 기록을 반환한다. PLC는 자신의 ID와 일치하는 응답만 적용한다. |
+| 응답 ID | 조회한 ID의 기록. 새로운 요청을 제출할 수 없으면 현재 마지막 기록을 반환한다. PLC는 현재 요청 스트림에 속하고 자신의 요청 ID와 일치하는 응답만 적용한다. |
 | 상태 | 유휴(0), 제출 기록(1), ROS 수락(2), ROS 실행 피드백 관측(3), 성공(4), 취소(5), 중단(6), 명시적 거부(7), 실행 여부 또는 결과 미확정(8). 폴링 사이에 중간 상태를 건너뛸 수 있다. 제출은 수락을 보장하지 않는다. |
 | terminal 사유 | ROS terminal에서 받은 `MissionExitReason.value`. 거부·미확정 등 Mission 결과가 없으면 0이다. |
 | 배치 사실 | 0은 정보 없음, 1은 관측된 Task 결과의 `material_placed=false`, 2는 `true`다. Mission 실패와 배치 사실이 동시에 성립할 수 있다. |
@@ -31,6 +31,14 @@ Adapter는 제출 전에 ID와 ROS Goal UUID를 영속화하고 결과를 저장
 
 PLC는 응답 블록이 오래되었거나 ID가 다르면 공정 판단을 보류한다. PLC의 보존 ID와 Adapter 기록은 동일 설비 스트림에 속해야 한다. 기록 유실·ID 소진·설비 교체 시에는 잔류 작업·자재와 PLC의 인수 기록을 대조한 후 양측에서 새 스트림을 초기화한다. Cell Commit 기록은 PLC에 보존한다.
 
+## 새 요청 스트림과 영수증
+
+PLC Adapter는 요청 스트림의 식별과 해당 스트림의 영수증을 소유한다. 한 요청은 **요청 스트림 식별자와 `command_id`의 조합**으로 식별한다. Adapter는 제출 전에 이 조합을 ROS Goal UUID와 연결하며, 다음 번호 계산·중복 판정·PLC 응답에는 현재 스트림의 영수증만 사용한다. 이전 스트림의 영수증과 결과는 원래 식별자로 계속 조회할 수 있다.
+
+로컬 시뮬레이션의 Initialize가 새 스트림 전환을 요청한다. 이전 요청·응답이 새 작업에 적용될 수 없게 된 뒤, Adapter는 이전 스트림과 구별되는 식별자를 확정한다. PLC는 해당 전환에 대해 요청·Commit의 원점(0)을 확인하고, Adapter는 해당 식별자에서 처리한 요청이 없음을 확인한다. Initialize는 두 확인이 같은 스트림에 속할 때 PLC 요청 스트림의 전환을 완료한 것으로 본다. 확인이 누락되거나 서로 다른 스트림을 가리키면 새 요청을 보류한다. 같은 Initialize의 재시도는 진행 중인 전환을 이어간다.
+
+새 스트림의 첫 요청 번호는 1이다. Start, 한쪽에서 관측한 0, 통신 재접속 또는 Adapter 재시작만으로 새 스트림을 열지 않는다. 재접속 시에는 기존 스트림 식별자와 영수증을 복원한다.
+
 ## 검증 조건
 
 | ID | 소비자가 관찰할 수 있는 결과 |
@@ -38,5 +46,7 @@ PLC는 응답 블록이 오래되었거나 ID가 다르면 공정 판단을 보�
 | VR-PLC-01 | 지연 또는 동일 ID 반복 시 한 ROS Goal만 제출되고 응답 ID는 제출한 작업과 일치한다. |
 | VR-PLC-02 | 단절 중 완료된 작업은 재접속 후 원래 terminal 사유와 배치 사실을 반환한다. |
 | VR-PLC-03 | 재시작 시 보존된 terminal 또는 같은 Goal의 조회 결과만 복원한다. 미저장 결과가 서버에서도 만료됐으면 배치 사실 미확정(0)과 상태 8을 유지하고 동일·후속 ID 모두 제출하지 않는다. |
+| VR-PLC-04 | 스트림 A의 1번 영수증을 보존한 채 Initialize로 스트림 B를 연다. B의 첫 1번은 새 Goal 하나를 제출하고, B에서 1번을 재전송하면 같은 Goal의 영수증을 반환한다. A의 늦은 응답은 B의 결과를 바꾸지 않으며 A의 1번은 원래 Goal과 결과로 조회된다. |
+| VR-PLC-05 | PLC만 0으로 돌아왔거나 PLC와 Adapter의 스트림 확인이 불일치하면 Initialize는 미완료이며 새 Goal은 0건이다. 같은 초기화를 재시도해 두 확인이 일치하면 처음 요청한 새 스트림에서 1번을 수락할 수 있다. |
 
 Modbus TCP 블록과 장치별 구성 예시는 [Modbus 프로필](../../../ros2_ws/src/plc_adapter/config/conveyor_pnp_codesys.yaml)과 [공정 파라미터](../../../ros2_ws/src/plc_adapter/config/conveyor_process.yaml)에 있다.

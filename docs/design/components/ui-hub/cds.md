@@ -53,6 +53,7 @@ classDiagram
 
 | 역할 | Hub의 책임 | 공식 결과 Owner |
 |---|---|---|
+| 공정 운전 | Initialize는 런처에 새 시뮬레이션 세션을 요청하고, Start·Pause 조작은 선택된 Cell의 운전 제어 주체에 전달 | Cell의 자동운전 상태와 공정 정지·재개 |
 | Supply | 선택된 Cell의 자재·수량 단위를 표시하고 Owner에 요청 전달, CNC는 기존 공용 Trigger 발행 | Cell 공급 상태·완료, Gateway 수락, Orchestration Mission Admission |
 | Live Camera / Vision Viewer | 원본 영상 및 Snapshot·선택 Target Annotation 읽기 전용 표시 | Camera Publisher·Vision·공유 ICD |
 | Teaching | 선택된 Cell의 설비 기준 TCP 포인트·작업 순서 편집, 저장·적용 및 수동 시험 요청 | Cell 티칭 설정, Motion 계획·실행 |

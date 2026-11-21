@@ -27,7 +27,7 @@ flowchart LR
 |---|---|---|---|---|
 | P1 공급 허용 | 투입·이송 영역과 배출 트레이 슬롯이 비어 있음 · PLC | 새 자재 공급 위치에 출현 | `infeed_part_detected` 확인 및 공급 명령과 대응 · PLC | 해당 Cycle의 자재 공급 수락 · PLC |
 | P2 이송·위치 확정 | 공급된 자재, 이송 전 유효한 `pick_station_part_detected=FALSE`, 컨베이어 가동 가능, Pick 구역에 로봇 없음 · PLC | 자재가 Pick 지점으로 이동 | 이번 이송 중 신규 감지 후 현재 점유, 유효한 `conveyor_stopped_feedback=TRUE`와 `stopper_extended_feedback=TRUE` 확인 · PLC | 세 조건으로 `pick_position_confirmed` 판정 · PLC |
-| P3 로봇 Pick·Place | `pick_position_confirmed` 유지, Mission 수락 가능 상태 · PLC | 자재를 고정 트레이 슬롯에 배치 | 같은 요청 ID의 terminal 결과와 `material_placed` 확인 · 로봇 → PLC | 원래 로봇 결과를 보존하고 배치 사실을 P4에 전달 |
+| P3 로봇 Pick·Place | 요청 발행 시 `pick_position_confirmed`와 Mission 수락 가능 상태 확인 · PLC | 자재를 고정 트레이 슬롯에 배치 | 같은 요청 ID의 terminal 결과와 `material_placed` 확인 · 로봇 → PLC | 원래 로봇 결과를 보존하고 배치 사실을 P4에 전달 |
 | P4 인수 확인·Commit | 해당 Cycle의 인수 미확정 · PLC | 슬롯에 놓인 자재의 인수를 기록 | 같은 요청의 `material_placed=true`와 유효한 `tray_slot_occupied_feedback=TRUE` 확인 · PLC | 두 근거가 갖춰지면 로봇 복구 중에도 해당 Cycle을 한 번만 Commit · PLC |
 | P5 배출 및 다음 Cycle 준비 | 현재 Cycle Commit, 로봇의 배출 설비 가동 영역 이탈, 해당 설비의 동작 허가 확인 · PLC | 인수된 자재를 자동 배출 | 슬롯이 비고 투입·Pick 공간 재사용 가능, Mission 수락 가능 상태 및 필요한 운전 허가 유지 · PLC | 다음 P1 허가 · PLC |
 
@@ -71,6 +71,7 @@ BT의 기존 재시도 범위와 종료 결과를 따른다. 지속 고장이나
 | 검증 ID | 대상 계약 | 주입 시나리오 | 기대 결과 |
 |---|---|---|---|
 | `VC-01` | 정상 자동 반복 | 빈 트레이 슬롯에서 기준 Cycle만큼 반복 | Cycle마다 인수 Commit 1회, 자동 배출 후 빈 슬롯에서 다음 자재 공급. 수동 조작 0회 |
+| `VC-01` 연속 공급 사례 | 재고가 없는 상태에서 Start 후 Supply | 한 실험에서 수락한 다섯 개를 연속 처리하며, 첫 물량 소진 후 운전 중에 추가 공급 | 다섯 자재 각각 Pick·Place, 인수 Commit 1회 및 실제 배출을 확인. 사이클 사이 Initialize·Start 없이 마지막 슬롯이 비어 있음 |
 | `VC-02` | 이송 중 복구 | 벨트 운전 중 일시 정지 후 상태 정상화 | 자재 중복 생성 없이 P2에서 자동 재개 |
 | `VC-03` | 위치·정지 확인 | (a) 이송 중 `pick_station_part_detected` 지연 후 복원, (b) Stop 명령 후 벨트 감속 중 또는 정지 피드백 무효 | 각각 P3 요청 0회. 해당 이송의 신규 감지·현재 점유와 유효한 정지·스토퍼 고정 확인 후 진행 |
 | `VC-04` | 센서 영구 불일치 | 이송 전부터 `pick_station_part_detected`이 TRUE로 고착되거나, 센서 위치가 어긋나 이송 중 도착 감지가 없음 | 이번 이송의 해제→신규 감지를 확인할 수 없어 P2 보류, Pick·추가 공급 0회 |
@@ -81,6 +82,7 @@ BT의 기존 재시도 범위와 종료 결과를 따른다. 지속 고장이나
 | `VC-09` | 슬롯 수용·재사용 | 기동 시 출처 불명 자재가 있거나 Commit 후 배출이 지연됨. 배출 후 Mission 수락 가능 상태도 지연됨 | 출처 불명이면 보류. 슬롯 점유 중 또는 배출 후 Mission 수락 가능 전에는 새 공급 0회. P5 완료 조건 충족 후 다음 P1 시작 |
 | `VC-10` | 배치 후 인수와 동작 재개 | 배치 후 (a) 배출 영역 안에서 Retreat·GO_HOME 실패 또는 (b) 관리자 Reset이 필요한 Safety 선점으로 배출 금지. 중단 중 같은 요청의 배치 사실과 실제 점유를 확인 | 두 경우 모두 복구·Reset 전 Commit 정확히 1회, 원래 결과 보존, 재Pick·재Place 0회. 영역 이탈 또는 동작 허가가 미확인인 동안 배출 0회. 둘 다 확인되면 배출하고, 빈 슬롯과 Mission 수락 가능 상태 등 P5 완료 조건 충족 후 다음 Cycle 시작 |
 
+- **설비 단독 검증:** 장치 동작이 허가된 상태에서 동일한 명령과 물리 조건을 유지하고 공정 기록만 바꾼다. 빈 벨트의 운전·정지와 스토퍼의 전진·후퇴는 공급 예약 유무에 관계없이 관측되어야 한다. 배출기는 배출 명령이 없으면 Commit만으로 움직이지 않고, 유효한 배출 명령을 받으면 Commit 기록을 별도로 읽지 않고 동작한다. 통합 시험에서는 P5의 배출 조건을 PLC에서 확인한다.
 - **Fault Injection 원칙:** 정식 센서/장치 관측 경로에 고장을 주입한다. 시험기가 PLC·BT의 확정 상태를 직접 덮어쓰거나 Simulator Ground Truth를 우회 공급하지 않는다.
 - **시험 반복성:** 시나리오 ID, 주입 시점/지속 시간/해제 조건, 초기 자재 상태와 기대 결과를 기록한다. 세부 실행 설정·결과는 별도 시험 자산에서 관리한다.
 - **가상 시운전 주장 범위:** 공정 제어 계약·복구를 확인하는 것이며 실제 장비의 모터 성능·정밀 티칭·기계 내부 복구·Safety 인증을 주장하지 않는다.

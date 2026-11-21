@@ -89,7 +89,7 @@ Bringup이 조립·검증·export한 Runtime Configuration의 Camera·Material S
 12. Production 센서 대상 환경은 시뮬레이터 Prim 식별자, 정확한 World 좌표, Simulator Metadata, API Ground Truth 없이 센서 관측으로 Target 증거를 노출해야 한다(SHALL).
 13. Physics·중력·충돌 설정은 각 Acceptance 주장에 적합해야 하며(SHALL), 설정 Profile이 해당 주장을 무효화해서는 안 된다(SHALL NOT).
 14. Fault Injection Scene 요소는 자극 대상인 Safety, Orchestration, Vision, Motion, VDA, Gateway, Material Supply의 정식 권한을 우회·덮어써서는 안 된다(SHALL NOT).
-15. 새로 수락된 Delivery ID는 이전 생성 자재를 삭제하거나 활성 Mission 상태를 변경하지 않고 자재 추가 생성을 즉시 시작해야 한다(SHALL). 명시적 Isaac Timeline Stop만 Isaac 소유 생성 자재 및 검증 Fixture를 제거한다. 표준 새 실험 순서는 수동 ROS Bringup 중지 → Timeline Stop → 수동 Bringup 시작 및 Endpoint 검증 → Timeline Play·Runtime 준비다. 새 ROS 프로세스는 프로세스 로컬 작업량 계산을 빈 상태로 시작한다. Isaac Python·Extension만 Reload하면 Stage·자재 상태를 보존한다.
+15. 새로 수락된 Delivery ID는 이전 생성 자재를 삭제하거나 활성 Mission 상태를 변경하지 않고 자재 추가 생성을 즉시 시작해야 한다(SHALL). CNC Demo의 Timeline Stop은 Isaac 소유 생성 자재와 검증 Fixture를 제거한다. 수동 Bringup 교체 및 런처 Initialize의 실험 경계는 [Simulation Session FDS](simulation/fds-sim-session.md)를 따른다. 새 ROS 프로세스는 프로세스 로컬 작업량 계산을 빈 상태로 시작한다. Isaac Python·Extension만 Reload하면 Stage·자재 상태를 보존한다.
 16. 시뮬레이션 생성은 Isaac Material Supply Adapter와 설정된 Spawn·Drop 구성을 사용해야 한다(SHALL). Mission·Motion·Vision Idle 상태를 기다리지 않고 활성 Goal이나 인계된 PICK Pose를 변경하지 않는다. 기존 Vision 안정화와 Motion·Safety Fail-safe 계약이 관측 결과를 결정하며 별도의 공급 Gate나 Safety 정책을 추가하지 않는다.
 
 ## 9. 검증 요구사항
