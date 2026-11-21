@@ -341,3 +341,40 @@ def test_launcher_simulation_permit_tracks_safety_and_plc_link(tmp_path, monkeyp
         expect(True, safe)
         adapter.close()
         wait_for(lambda: observer.count_publishers(topic) == 0)
+
+
+def test_admission_words_during_slow_modbus_read(tmp_path, monkeypatch):
+    class SlowReadPLC(ModbusSlaveContext):
+        def getValues(self, function, address, count=1):
+            if function == 4:
+                time.sleep(.6)
+            return super().getValues(function, address, count)
+
+    bank = SlowReadPLC(ir=ModbusSequentialDataBlock(0, [0] * 32),
+                       hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
+    with ExitStack() as stack:
+        monkeypatch.setenv('ROS_DOMAIN_ID', str(stack.enter_context(domain_id())))
+        monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
+        monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'logs'))
+        port = stack.enter_context(plc_server(bank))
+        rclpy.init()
+        stack.callback(rclpy.try_shutdown)
+        mission = Node('admission_test_mission')
+        stack.callback(mission.destroy_node)
+        admission = mission.create_publisher(Bool, '/orchestration/mission_admission_available', 1)
+        stack.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter', '--ros-args',
+                                    '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
+                                    '-p', 'admission_holding_offset:=6', '-p', 'timeout_seconds:=1.0',
+                                    '-p', 'target_id:=test', '-p', f'receipt_file:={tmp_path / "plc.sqlite"}'))
+
+        def fresh(value, previous_sequence=0):
+            admission.publish(Bool(data=value))
+            sequence, available = bank.getValues(3, 6, 2)
+            return sequence not in (0, previous_sequence) and available == int(value)
+
+        wait_for(lambda: fresh(True))
+        sequence = bank.getValues(3, 6, 2)[0]
+        wait_for(lambda: fresh(True, sequence))
+        wait_for(lambda: fresh(False))
+        wait_for(lambda: bank.getValues(3, 6, 2) == [0, 0])
+        wait_for(lambda: fresh(True))
