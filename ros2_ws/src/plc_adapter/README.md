@@ -37,14 +37,14 @@ ConveyorPart는 예시 자재 키다. 같은 Pick 위치에 연속 도착하는 
 
 ### CODESYS 4 로컬 실통신 시험
 
-[시험용 PLC_PRG](tests/codesys/PLC_PRG.prg.st)는 위와 같은 FC04·FC16 블록을 CODESYS의 `ModbusServer` 함수 블록으로 제공한다. CODESYS 4에서 Linux SL 프로젝트를 생성하고 기본 주기 Task의 `PLC_PRG`를 이 소스로 교체한다. 애플리케이션의 `Libraries.json`에서 `Standard` 참조를 유지하고 `ModbusTCP Server, 4.6.0 (CODESYS)`를 `MB` 네임스페이스로 참조한다. `placeholderOverrides`에서 `IoDrvModbus`와 `IoDrvModbusBase`는 각각 동명의 4.6.0 (CODESYS) 라이브러리로, `CommFB`는 `CommFB, 3.5.21 (CODESYS)`로 지정한 뒤 라이브러리를 resolve하고 빌드한다. Control for Linux SL 4.23.0.0에서 실행했으며 서버는 `lo`의 TCP 1502에 바인딩한다. [CODESYS ModbusServer](https://content.helpme-codesys.com/en/CODESYS%20Modbus/_mod_lib_modbusserver.html)
+[시험용 PLC_PRG](../../../infra/plc/common/commissioning/PLC_PRG.prg.st)는 위와 같은 FC04·FC16 블록을 CODESYS의 `ModbusServer` 함수 블록으로 제공한다. CODESYS 4에서 Linux SL 프로젝트를 생성하고 기본 주기 Task의 `PLC_PRG`를 이 소스로 교체한다. 애플리케이션의 `Libraries.json`에서 `Standard` 참조를 유지하고 `ModbusTCP Server, 4.6.0 (CODESYS)`를 `MB` 네임스페이스로 참조한다. `placeholderOverrides`에서 `IoDrvModbus`와 `IoDrvModbusBase`는 각각 동명의 4.6.0 (CODESYS) 라이브러리로, `CommFB`는 `CommFB, 3.5.21 (CODESYS)`로 지정한 뒤 라이브러리를 resolve하고 빌드한다. Control for Linux SL 4.23.0.0에서 실행했으며 서버는 `lo`의 TCP 1502에 바인딩한다. [CODESYS ModbusServer](https://content.helpme-codesys.com/en/CODESYS%20Modbus/_mod_lib_modbusserver.html)
 
 별도의 시험 클라이언트가 FC06으로 holding register 6에 작은 요청 ID를 쓰면 PLC가 다음 주기에 해당 ID를 게시한다. FC04로 input register 0부터 8 WORD를 읽으면 요청 ID(0–1), PLC가 관측한 응답 ID의 하위 WORD·상태·사유·배치·heartbeat(2–6), 시험 프로그램 식별값 `0xC04E`(7)를 확인할 수 있다. Holding register 7에 1을 쓰면 PLC가 서버를 3초 동안 내린다. 시험을 마치면 holding register 6에 0을 쓴다. 이 추가 레지스터는 로컬 시험 프로그램 전용이다.
 
 
 ### Conveyor PnP Cell 공정 프로그램
 
-[Conveyor.fbsdev](../../../infra/plc/Conveyor.fbsdev)에는 Linux SL 장치, 라이브러리 버전과 [공정 PLC_PRG](../../../infra/plc/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st)를 실행하는 주기 Task가 들어 있다. 새 체크아웃에서는 프로젝트가 지정한 장치 정의를 설치하고 저장소 루트에서 `c4-cli library install infra/plc/Conveyor.fbsdev/Application.iecapp`로 라이브러리 캐시를 복원한다. PLC에 접속할 때는 IDE에서 로컬 게이트웨이를 선택한다. Linux SL의 RETAIN 저장소를 구성한다. PLC는 활성 단계와 자재 ID, 로봇 요청 ID, 원래 terminal 결과 및 마지막 Commit ID를 유지한다. ID는 1부터 연속 증가하며 최댓값에서 멈춘다. 마지막 Commit ID는 그 ID까지 연속 인수가 끝났음을 뜻한다. 새 프로그램 다운로드·콜드 리셋·전원 상실 시 RETAIN 복원 특성은 대상별로 검증한다. PLC·Adapter 기록 또는 설비 생성 이력이 유실되면 현물과 대조해 동일 스트림을 복원한 후 자동운전을 시작한다.
+[Conveyor.fbsdev](../../../infra/plc/conveyor_pnp_cell/Conveyor.fbsdev)에는 Linux SL 장치, 라이브러리 버전과 [공정 PLC_PRG](../../../infra/plc/conveyor_pnp_cell/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st)를 실행하는 주기 Task가 들어 있다. 새 체크아웃에서는 프로젝트가 지정한 장치 정의를 설치하고 저장소 루트에서 `c4-cli library install infra/plc/conveyor_pnp_cell/Conveyor.fbsdev/Application.iecapp`로 라이브러리 캐시를 복원한다. PLC에 접속할 때는 IDE에서 로컬 게이트웨이를 선택한다. Linux SL의 RETAIN 저장소를 구성한다. PLC는 활성 단계와 자재 ID, 로봇 요청 ID, 원래 terminal 결과 및 마지막 Commit ID를 유지한다. ID는 1부터 연속 증가하며 최댓값에서 멈춘다. 마지막 Commit ID는 그 ID까지 연속 인수가 끝났음을 뜻한다. 새 프로그램 다운로드·콜드 리셋·전원 상실 시 RETAIN 복원 특성은 대상별로 검증한다. PLC·Adapter 기록 또는 설비 생성 이력이 유실되면 현물과 대조해 동일 스트림을 복원한 후 자동운전을 시작한다.
 
 아래는 loopback 프로필의 0 기준 WORD 주소다. ID는 상위 WORD 먼저, 명령과 개별 BOOL은 0/1이다. 설비는 일관된 새 관측마다 HR16–25를 한 번의 FC16으로 쓰고 IR16–29를 한 번의 FC04로 읽는다. HR의 각 블록에는 지정한 생산자 하나만 쓴다.
 

@@ -27,7 +27,7 @@ Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /
 
 ## 런처의 CODESYS GUI와 서비스 권한
 
-`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 현재 체크아웃의 [infra/plc/Conveyor.fbsdev](../../../../infra/plc/Conveyor.fbsdev)다. 다른 위치는 런처를 실행하기 전에 `ARM_CELL_CODESYS_PROJECT`로 지정한다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
+`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 현재 체크아웃의 [infra/plc/conveyor_pnp_cell/Conveyor.fbsdev](../../../../infra/plc/conveyor_pnp_cell/Conveyor.fbsdev)다. 다른 위치는 런처를 실행하기 전에 `ARM_CELL_CODESYS_PROJECT`로 지정한다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
 
 기본 로컬 서비스 제어는 systemd의 데스크톱 인증을 사용한다. 호스트 관리자가 특정 운영 계정의 반복 인증을 생략하려면 `visudo`로 `/etc/sudoers.d/arm-cell-codesys-<계정명>`에 아래 규칙을 설치한다. 예시의 `operator`를 해당 계정으로 바꾸고 파일 소유권은 root, 모드는 0440으로 설정한다.
 
