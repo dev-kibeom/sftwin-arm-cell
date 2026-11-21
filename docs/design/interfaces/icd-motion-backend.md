@@ -69,9 +69,20 @@ Logical Snap의 일반 PICK은 목표 파지력을 요구하거나 질량 기반
 직접 제공된 선택적 힘 입력의 검증·보존은 물리 힘 실현 Capability나 PICK 진입 조건을 뜻하지 않는다.
 Physics Snap과 Physics Real은 동일한 힘 정책을 적용한다. 실제 힘 실현은 Physics Actuator 또는 해당 Capability를 제공하는 Hardware Adapter의 책임이다.
 
-### Tool Grasp Mode와 Holding / Attachment
+### Tool 파지 모드와 Holding / Attachment
 
-모드는 기존 Actuator/Grasp 조합으로 고정되며 실행 중 전환·실패 시 Fallback을 하지 않는다.
+각 Tool은 지원하는 Actuator/Grasp 조합마다 파지 판정과 유지 방식에 맞는 공통 모드 하나를 지정한다. 신규 Tool과 파지 구현에도 다음 세 표시명을 사용한다.
+
+| 파지 모드 | 판정과 유지 방식 |
+|---|---|
+| 논리 판정 + 고정 | 위치·형상 등 논리 조건을 확인한 뒤 대상 자재를 고정한다. |
+| 물리 판정 + 고정 | 접촉 반력 등 물리 관측으로 파지 조건을 확인한 뒤 대상 자재를 고정한다. |
+| 물리 파지 | Tool의 물리 모델로 자재를 유지한다. 평행·내경 그리퍼는 접촉과 마찰을, 흡착컵은 하중 한계가 있는 흡착 결합을 사용한다. |
+
+런처는 선택한 Tool이 지원하는 모드만 표시한다. 표면 흡착·외측 파지·내경 파지 같은 **파지 전략**은 별도로 표시한다.
+실행 시작 시 선택한 조합을 고정하며 실행 중 전환·실패 시 Fallback을 하지 않는다.
+
+다음 표는 Robotiq 2F-85의 실행 ID별 관측과 Attachment 의미다.
 
 | Mode | 구동과 Qualification | HELD 의미 | Attachment |
 |---|---|---|---|

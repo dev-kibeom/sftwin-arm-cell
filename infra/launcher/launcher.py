@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
+from arm_cell_bringup.tool_modes import tool_mode_choices
 from arm_cell_bringup.tool_parameters import available_fields, parameter_value, apply_tool_parameters
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 if __package__:
@@ -69,17 +70,6 @@ def selected_deployment(entries, selection):
     if len(matches) != 1:
         raise ValueError('Unsupported or ambiguous combination: select a registered production Profile')
     return matches[0]
-
-
-def tool_mode_choices(profile):
-    """Tool-owned display names bind to the existing supported runtime pairs."""
-    runtime = profile['runtime']
-    names = {tuple(mode['combination']): mode for mode in runtime.get('launcher_modes', [])}
-    return [dict(combination=pair,
-                 id=names.get(tuple(pair), {}).get("id"),
-                 label=names.get(tuple(pair), {}).get('label', ' / '.join(pair)),
-                 description=names.get(tuple(pair), {}).get('description', ''))
-            for pair in runtime.get('supported_combinations', [['logical', 'fixed_attach']])]
 
 
 def validation_note(entry):
@@ -187,7 +177,7 @@ class Launcher(QMainWindow):
         self.mode_display = QStackedWidget()
         self.mode_display.addWidget(self.tool_mode)
         self.mode_display.addWidget(self.fixed_mode)
-        form.insertRow(form.rowCount() - 1, 'Grasp Mode', self.mode_display)
+        form.insertRow(form.rowCount() - 1, '파지 모드', self.mode_display)
         self.tool_mode.currentIndexChanged.connect(self.refresh_parameters)
         self.mode_pairs = []
         self.parameter_edits = {}
@@ -258,7 +248,12 @@ class Launcher(QMainWindow):
         tool = self.selectors['tool'].currentData()
         profile = read(tool) if tool is not None else None
         runtime = profile['runtime'] if profile is not None else {}
-        choices = tool_mode_choices(profile) if profile is not None else []
+        self.mode_error = ''
+        try:
+            choices = tool_mode_choices(profile) if profile is not None else []
+        except ValueError as exc:
+            self.mode_error = str(exc)
+            choices = []
         labels = {'surface_suction': '표면 흡착', 'internal_radial': '내경 파지', 'box_exterior': '외측 파지'}
         strategies = runtime.get('grasp_strategies', [])
         self.strategy.setText(', '.join(labels.get(key, key) for key in strategies) or '—')
@@ -267,7 +262,7 @@ class Launcher(QMainWindow):
         self.tool_mode.clear()
         for choice in choices:
             self.tool_mode.addItem(choice['label'], choice['combination'])
-            self.tool_mode.setItemData(self.tool_mode.count() - 1, choice['description'], Qt.ToolTipRole)
+            self.tool_mode.setItemData(self.tool_mode.count() - 1, choice.get('description', ''), Qt.ToolTipRole)
         default = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
         self.tool_mode.setCurrentIndex(self.tool_mode.findData(default))
         self.tool_mode.blockSignals(False)
@@ -338,6 +333,8 @@ class Launcher(QMainWindow):
         if entry['profile'] != self.component_settings.profile:
             self.component_settings.load_profile(entry['profile'])
         pair = self.tool_mode.currentData()
+        if self.mode_error:
+            raise ValueError(self.mode_error)
         if pair not in self.mode_pairs:
             raise ValueError('Unsupported Tool actuator/grasp combination')
         runtime = read(self.selectors['tool'].currentData())['runtime']

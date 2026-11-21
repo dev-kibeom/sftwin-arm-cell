@@ -333,13 +333,13 @@ def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
 
 
 @pytest.mark.parametrize('label,pair', [
-    ('Logical Attach', ['logical', 'fixed_attach']),
-    ('Physics + Fixed Attach', ['physics', 'fixed_attach']),
-    ('Physics', ['physics', 'physical']),
+    ('논리 판정 + 고정', ['logical', 'fixed_attach']),
+    ('물리 판정 + 고정', ['physics', 'fixed_attach']),
+    ('물리 파지', ['physics', 'physical']),
 ])
 def test_tool_mode_presets_export_one_shared_selection(window, monkeypatch, label, pair):
     combo = window.tool_mode
-    assert combo.currentText() == 'Logical Attach'
+    assert combo.currentText() == '논리 판정 + 고정'
     combo.setCurrentIndex(combo.findText(label))
     assert combo.currentData() == pair
     assert window.isaac.isEnabled()
@@ -358,7 +358,7 @@ def test_mode_choices_follow_selected_tool_profile(window, tmp_path):
         'runtime': {
             'actuator': 'logical', 'grasp': 'fixed_attach',
             'supported_combinations': [['logical', 'fixed_attach']],
-            'launcher_modes': [dict(label='Selected Tool Snap',
+            'launcher_modes': [dict(label='논리 판정 + 고정',
                 combination=['logical', 'fixed_attach'], description='Selected Tool description')],
         }
     }
@@ -367,10 +367,32 @@ def test_mode_choices_follow_selected_tool_profile(window, tmp_path):
     tool = window.selectors['tool']
     tool.addItem('Selected Tool', str(path))
     tool.setCurrentIndex(tool.findData(str(path)))
-    assert window.tool_mode.currentText() == 'Selected Tool Snap'
+    assert window.tool_mode.currentText() == '논리 판정 + 고정'
     assert window.tool_mode.count() == 1
     assert window.tool_mode.toolTip() == 'Selected Tool description'
     assert not window.isaac.isEnabled()  # No registered deployment claims this test Tool.
+
+
+def test_invalid_mode_label_disables_start_until_profile_is_valid(window, monkeypatch):
+    selected = window.selectors['tool'].currentData()
+    original_read = launcher.read
+
+    def read_invalid_mode(path):
+        profile = original_read(path)
+        if path == selected:
+            profile['runtime']['launcher_modes'][0]['label'] = '새 모드'
+        return profile
+
+    with monkeypatch.context() as patch:
+        patch.setattr(launcher, 'read', read_invalid_mode)
+        window.refresh_tool_modes()
+        assert '파지 모드' in window.status.text()
+        assert window.tool_mode.count() == 0
+        assert not window.isaac.isEnabled()
+
+    window.refresh_tool_modes()
+    assert window.tool_mode.currentText() == '논리 판정 + 고정'
+    assert window.isaac.isEnabled()
 
 
 def test_grasp_parameters_export_reset_and_mode_scope(window, tmp_path):
@@ -381,7 +403,7 @@ def test_grasp_parameters_export_reset_and_mode_scope(window, tmp_path):
     assert document['configuration']['tool']['runtime']['move_duration_s'] == 0.75
     window.reset_parameters.click()
     assert window.parameter_edits['move_duration_s'].value() == 0.4
-    window.tool_mode.setCurrentText('Physics')
+    window.tool_mode.setCurrentText('물리 파지')
     assert 'move_duration_s' not in window.parameter_edits
     window.parameter_edits['physics.speed_fraction'].setValue(0.25)
     window.parameter_edits['physics.contact_material.dynamic_friction'].setValue(2.)
@@ -447,17 +469,17 @@ def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
     assert window.tool_mode.count() == 3
     assert window.selection()['profile'].stem == 'operational_profile'
 
-    window.tool_mode.setCurrentText('Physics + Fixed Attach')
+    window.tool_mode.setCurrentText('물리 판정 + 고정')
     robot.setCurrentIndex(options(robot).index('rb5_850'))
     assert window.selection()['profile'].stem == 'rb5_850_profile'
-    assert window.tool_mode.currentText() == 'Physics + Fixed Attach'
+    assert window.tool_mode.currentText() == '물리 판정 + 고정'
 
     cells.setCurrentIndex(options(cells).index('tape_roll_cell'))
     assert set(options(robot)) == {'m0609', 'rb5_850', 'hcr14'}
     assert Path(robot.currentData()).stem == 'rb5_850'
     assert set(options(tool)) == {'hand_e_c10', 'hand_e_c10_long'}
     assert window.tool_mode.count() == 1
-    assert window.tool_mode.currentText() == 'Physics'
+    assert window.tool_mode.currentText() == '물리 파지'
     assert not window.isaac.isEnabled()
 
     robot.setCurrentIndex(options(robot).index('m0609'))
@@ -551,7 +573,7 @@ def test_conveyor_displays_strategy_and_fixed_mode_and_enables_plc_after_ros(app
     for key, combo in window.selectors.items():
         combo.setCurrentIndex(combo.findData(entry[key]))
     assert window.strategy.text() == '표면 흡착'
-    assert window.fixed_mode.text() == 'Physics'
+    assert window.fixed_mode.text() == '물리 파지'
     assert window.tool_mode.isHidden()
     assert not window.plc_button.isHidden()
     assert not window.plc_button.isEnabled()

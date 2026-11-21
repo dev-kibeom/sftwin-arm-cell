@@ -417,3 +417,16 @@ def test_physical_real_release_settings_reject_invalid_observation_thresholds(se
         runtime['physics']['release'][key] = value
     with pytest.raises(ValueError, match=key):
         selection(change)
+
+
+@pytest.mark.parametrize('label', [None, '새 모드'])
+def test_tool_rejects_unclassified_supported_mode(selection, label):
+    def change(documents):
+        mode = documents['tool']['runtime']['launcher_modes'][-1]
+        if label is None:
+            del mode['label']
+        else:
+            mode['label'] = label
+
+    with pytest.raises(ValueError, match='파지 모드'):
+        selection(change)

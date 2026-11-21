@@ -103,7 +103,7 @@ CODESYS가 공급·이송·스토퍼·트레이 배출을 제어하는 Isaac Sim
 
 ## Tape Handling Cell
 
-M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Launcher의 Physics 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.
+M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. 런처의 `물리 파지` 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.
 
 ## 설계 기록과 Sim-to-Real 방향
 
@@ -186,7 +186,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 
 **4. 셀을 시작합니다.**
 
-1. Cell을 먼저 선택한 뒤 Robot, Tool, Grasp Mode, Backend를 고릅니다.
+1. Cell을 먼저 선택한 뒤 Robot, Tool, 파지 모드, Backend를 고릅니다.
    로봇 목록은 Cell을 바꿔도 유지됩니다. PnP_CNC에서는 Robotiq 2F-85를,
    Tape Handling Cell에서는 Hand-E C10 기본형 또는 100 mm 핑거형을 선택할 수 있습니다.
    Isaac 시작은 선택한 조합의 배포 프로필이 등록된 경우에만 활성화됩니다.
@@ -194,9 +194,9 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
    `파지 전략`에는 Tool이 지원하는 파지 방법을 표시합니다. Conveyor 흡착컵은 `표면 흡착`이며
-   `Grasp Mode`는 `Physics`입니다. 단일 모드는 읽기 전용입니다. Robotiq의 세 모드는
-   `Logical Attach`, 물리 접촉 확인 후 고정하는 `Physics + Fixed Attach`, 물리 접촉으로 유지하는 `Physics`입니다.
-   `Physics`는 실물 장비 연결이나 실제 파지의 라이브 검증 완료를 뜻하지 않습니다.
+   `파지 모드`는 `물리 파지`입니다. 지원 모드가 하나이면 읽기 전용입니다.
+   Robotiq에서는 `논리 판정 + 고정`, `물리 판정 + 고정`, `물리 파지` 중 하나를 선택합니다.
+   실제 파지의 라이브 검증 여부는 런처 상태 표시에서 확인합니다.
 2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
 3. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
 4. Conveyor에서는 `PLC 시작`을 누릅니다. 로컬 CODESYS 서비스를 재사용하거나 시작한 뒤,
@@ -427,7 +427,7 @@ Hand-E C10 1단계 모델 통합은 Launcher의 별도 **M0609 + Hand-E C10 · �
 **HCR-14 + Hand-E C10 · 모델·관절 실험** 버튼으로 실행할 수 있습니다.
 기본 실행은 손가락의 방사형 관절 왕복이며, ROS Mission과 운영 파지 모드는 지원하지 않습니다.
 M0609의 기본형·연장형에는 `--internal-grasp`로 고정 티칭 자세 기반 내경 파지
-실험(Logical Attach)을 실행할 수 있습니다.
+실험(논리 판정 + 고정)을 실행할 수 있습니다.
 자세한 내용은 [C10 모델 및 라이브 실험 안내](assets/robots/m0609_hand_e_c10/README.md)를 참조하세요.
 
 17 mm Tape Roll의 수평 Physical Grasp는 별도 [Tape Roll 실험 플러그인](infra/isaac_sim/scripts/tape_roll_cell/README.md)으로

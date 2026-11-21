@@ -167,7 +167,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 **4. Start the cell.** Button labels currently appear in Korean.
 
 1. Select the Cell, Robot, Tool, and Backend. The launcher shows the Tool’s grasp strategy
-   and supported grasp modes. The Conveyor suction cup displays surface suction and a fixed `Physics` mode.
+   and supported grasp modes. The Conveyor suction cup shows `표면 흡착` (surface suction) as its strategy and `물리 파지` (physical grasp) as its only mode.
 2. Click `Isaac 시작` (Start Isaac). Wait for the scene, Timeline, and After Playing initialization.
 3. Click `ROS 2 시작` (Start ROS 2). For detailed logs, select `ROS 2 디버그 모드` before starting.
 4. For Conveyor, click `PLC 시작` (Start PLC). The launcher starts or reuses the local CODESYS service,

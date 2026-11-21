@@ -9,7 +9,7 @@ runtime:
   supported_combinations: [[physics, surface_gripper]]
   launcher_modes:
     - id: surface_suction
-      label: Physics
+      label: 물리 파지
       combination: [physics, surface_gripper]
       description: D6 결합 대상과 예약 자재를 대조합니다.
   capabilities: [actuator_observation]

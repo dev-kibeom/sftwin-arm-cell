@@ -61,15 +61,15 @@ runtime:
   # Presentation metadata only; supported_combinations owns executable support.
   launcher_modes:
     - id: logical_snap
-      label: Logical Attach
+      label: 논리 판정 + 고정
       combination: [logical, fixed_attach]
       description: 논리적으로 손가락을 구동하고 Fixed Joint로 물체를 고정합니다.
     - id: physical_snap
-      label: Physics + Fixed Attach
+      label: 물리 판정 + 고정
       combination: [physics, fixed_attach]
       description: 물리 접촉 반력·폭 Qualification 후 Fixed Joint로 물체를 고정합니다.
     - id: physical_real
-      label: Physics
+      label: 물리 파지
       combination: [physics, physical]
       description: 관절 Object Detection으로 파지를 추정하고 접촉·마찰만으로 유지합니다. 미끄러짐·낙하가 가능합니다.
   isaac_prepare: gripper_runtime.physics_model:prepare

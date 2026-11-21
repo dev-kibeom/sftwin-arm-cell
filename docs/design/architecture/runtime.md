@@ -141,7 +141,7 @@ sequenceDiagram
 
 Tool Runtime은 실행 시작 시 기존 Actuator/Grasp 조합을 고정한다. Logical Snap과 Physical Snap은
 각각의 Qualification 뒤 같은 Attachment Owner를 사용하고, Physical Real은 Tool 관측으로 보유를
-추정하며 Attach 없이 유지한다. Session은 Detection을 재구현하지 않고 선택된 구현의 Holding과
+추정하며 접촉과 마찰로 유지한다. 흡착컵은 물리 파지를 하중 한계가 있는 흡착 결합으로 실현한다. Session은 Detection을 재구현하지 않고 선택된 구현의 Holding과
 Attachment를 독립 전달한다. 구체적인 상태 의미는 [Motion Backend ICD](../interfaces/icd-motion-backend.md),
 역할 책임은 [Components](components.md)를 따른다. 실행 중 모드 교체나 다른 모드로의 Fallback은 없다.
 

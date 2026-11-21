@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 
 import yaml
 
+from .tool_modes import tool_mode_choices
+
 
 def finite_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
@@ -210,9 +212,9 @@ def tool_runtime_model(tool, joints, arm):
     combination = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
     if combination not in runtime.get('supported_combinations', [['logical', 'fixed_attach']]):
         raise ValueError(f'Unsupported Tool actuator/grasp combination: {combination}')
-    modes = [mode for mode in runtime.get('launcher_modes', []) if mode['combination'] == combination]
-    if modes and 'id' in modes[0]:
-        runtime['mode_id'] = modes[0]['id']  # Derived display identity, never an independent selector.
+    mode = next(mode for mode in tool_mode_choices(tool) if mode['combination'] == combination)
+    if 'id' in mode:
+        runtime['mode_id'] = mode['id']  # Derived display identity, never an independent selector.
     if combination[0] != 'physics':
         return
     settings = runtime['physics']
