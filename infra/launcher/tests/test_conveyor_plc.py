@@ -52,3 +52,16 @@ def test_adapter_uses_conveyor_process_params_and_session_endpoint(monkeypatch, 
         'conveyor_pnp_codesys.yaml', 'conveyor_process.yaml']
     assert 'port:=11502' in args and 'unit_id:=3' in args
     assert 'receipt_file:=/tmp/selected stream.sqlite' in args
+
+
+def test_only_service_start_and_stop_use_opted_in_host_rule(tmp_path, monkeypatch):
+    import plc_control
+    policy = tmp_path / 'policy'
+    monkeypatch.setattr(plc_control, 'service_policy_path', lambda: policy)
+    assert plc_control.service_command('start') == ['systemctl', 'start', '--no-ask-password', 'codesyscontrol.service']
+    policy.touch()
+    for verb in ('start', 'stop'):
+        assert plc_control.service_command(verb) == [
+            '/usr/bin/sudo', '-n', '-k', '--', '/usr/bin/systemctl', verb, '--no-ask-password', 'codesyscontrol.service']
+    with pytest.raises(ValueError):
+        plc_control.service_command('restart')

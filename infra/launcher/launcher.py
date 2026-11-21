@@ -202,6 +202,8 @@ class Launcher(QMainWindow):
         self.resize(760, 650)
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
+        self.plc_gui = QCheckBox('PLC 시작 시 CODESYS GUI 열기')
+        layout.addWidget(self.plc_gui)
         buttons = QHBoxLayout()
         layout.addLayout(buttons)
         self.isaac = QPushButton('Isaac 시작')
@@ -363,6 +365,8 @@ class Launcher(QMainWindow):
         self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
+        self.plc_gui.setVisible(self.conveyor)
+        self.plc_gui.setEnabled(not self.stopping and self.plc.phase is None)
         self.plc_button.setVisible(self.conveyor)
         self.plc_button.setEnabled(self.can_start_plc())
         self.stop.setEnabled(active and not self.stopping)
@@ -375,6 +379,10 @@ class Launcher(QMainWindow):
             message = states + ' | ' + message
         if self.plc.message and self.conveyor:
             message = f'{self.plc.message} | {message}'
+        if self.conveyor and self.plc_gui.isChecked():
+            editor_error = self.plc.editor_status()
+            if editor_error:
+                message = f'{message} | {editor_error}'
         self.status.setText(self.error or ('종료 중…' if self.stopping else message))
 
     def spawn(self, name, command, environment):
@@ -481,6 +489,8 @@ class Launcher(QMainWindow):
 
     def start_plc(self):
         if self.can_start_plc():
+            if self.plc_gui.isChecked():
+                self.plc.open_editor(self.environment)
             self.plc.start(self.runtime, self.environment)
             self.validate()
 

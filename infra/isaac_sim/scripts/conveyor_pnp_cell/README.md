@@ -24,6 +24,18 @@ Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /
 - 설비 허가 생산자는 `/cell/conveyor/equipment_permitted`에 `std_msgs/Bool`을 주기적으로 제공한다. 이 값은 시뮬레이션 설비 동작 허가다. 미수신·만료는 설비 동작을 보류한다. 운영 사용에는 해당 허가 생산자를 연결한다.
 - UI 자동운전 일시 정지, Timeline Pause, TCP 재접속은 같은 자재와 생성 영수증을 유지한다. Timeline Stop은 설비를 보류한다. 프로세스 재기동으로 생성 이력이나 예약을 잃은 경우에는 PLC RETAIN과 현물을 대조해야 한다.
 
+## 런처의 CODESYS GUI와 서비스 권한
+
+`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 `$XDG_DATA_HOME/arm_cell/codesys/Conveyor.fbsdev`이며 XDG 설정을 생략하면 `~/.local/share`를 사용한다. 다른 위치는 런처를 실행하기 전에 `ARM_CELL_CODESYS_PROJECT`로 지정한다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
+
+기본 로컬 서비스 제어는 systemd의 데스크톱 인증을 사용한다. 호스트 관리자가 특정 운영 계정의 반복 인증을 생략하려면 `visudo`로 `/etc/sudoers.d/arm-cell-codesys-<계정명>`에 아래 규칙을 설치한다. 예시의 `operator`를 해당 계정으로 바꾸고 파일 소유권은 root, 모드는 0440으로 설정한다.
+
+```sudoers
+operator ALL=(root) NOPASSWD: NOSETENV: /usr/bin/systemctl start --no-ask-password codesyscontrol.service, /usr/bin/systemctl stop --no-ask-password codesyscontrol.service
+```
+
+런처는 해당 계정의 규칙 파일이 보일 때 위 두 명령에만 비대화형 sudo를 사용한다. 관리자가 규칙을 제거하면 기본 systemd 인증으로 돌아간다. IDE와 ROS 어댑터는 일반 사용자로 실행한다.
+
 ## 고정 Pick과 Robot BT
 
 공급자는 PLC의 위치 확정과 실제 도착 ID를 대조해 고정 Pick 슬롯에서 현재 자재의 품종과 개체 ID를 공개한다. Task는 유효한 예약을 확인하고 고정 Pick/Place 티칭 한 개를 M0609와 지름 30 mm 흡착컵으로 실행한다. Tool은 예약의 개체 ID와 투입 시 기록한 품종으로 흡착할 바디를 확인한다. 로봇 베이스는 월드 X=0.30 m에 설치한다. TCP는 컵의 접촉면 중앙이며 +Z가 자재 상면을 향한다. Pick은 월드 (0.754, 0.38, 0.332) m, Release는 (0.46, −0.38, 0.38) m다.

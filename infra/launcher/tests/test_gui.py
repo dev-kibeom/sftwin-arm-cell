@@ -573,6 +573,8 @@ def test_plc_retry_preserves_ros_and_releases_only_owned_service(app, window, tm
     entry = next(item for item in window.entries if item['profile'].stem == 'conveyor_pnp_profile')
     for key, combo in window.selectors.items():
         combo.setCurrentIndex(combo.findData(entry[key]))
+    monkeypatch.setattr(launcher.plc_control, 'service_command',
+                        lambda verb: ['systemctl', verb, '--no-ask-password', launcher.plc_control.UNIT])
     state = tmp_path / 'active'
     if service_active:
         state.touch()
@@ -616,3 +618,45 @@ esac
     window.begin_stop()
     until(app, window, lambda: not window.stopping)
     assert state.exists() is service_active
+
+
+def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monkeypatch):
+    assert window.plc_gui.isHidden()
+    cell = window.selectors['cell']
+    cell.setCurrentIndex(next(i for i in range(cell.count()) if Path(cell.itemData(i)).stem == 'conveyor_pnp_cell'))
+    assert not window.plc_gui.isHidden()
+    assert not window.plc_gui.isChecked()
+    project = tmp_path / 'Conveyor.fbsdev'
+    project.mkdir()
+    opened = []
+    class Editor:
+        def poll(self):
+            return None
+    def open_process(args, **kwargs):
+        opened.append(args)
+        return Editor()
+    monkeypatch.setattr(launcher.plc_control.subprocess, 'Popen', open_process)
+    window.environment = dict(os.environ, ARM_CELL_CODESYS_PROJECT=str(project))
+    window.runtime = tmp_path / 'runtime.json'
+    monkeypatch.setattr(window, 'can_start_plc', lambda: True)
+    starts = []
+    monkeypatch.setattr(window.plc, 'start', lambda *args: starts.append(args))
+    window.start_plc()
+    assert not opened
+    window.plc_gui.setChecked(True)
+    window.start_plc()
+    window.start_plc()
+    assert len(starts) == 3
+    assert opened == [['c4-cli', 'standalone-session', str(project)]]
+
+
+def test_missing_editor_project_keeps_plc_start_available(window, tmp_path, monkeypatch):
+    window.environment = dict(os.environ, ARM_CELL_CODESYS_PROJECT=str(tmp_path / 'missing.fbsdev'))
+    window.runtime = tmp_path / 'runtime.json'
+    window.plc_gui.setChecked(True)
+    monkeypatch.setattr(window, 'can_start_plc', lambda: True)
+    starts = []
+    monkeypatch.setattr(window.plc, 'start', lambda runtime, env: starts.append(runtime))
+    window.start_plc()
+    assert starts == [window.runtime]
+    assert 'missing.fbsdev' in window.plc.editor_status()

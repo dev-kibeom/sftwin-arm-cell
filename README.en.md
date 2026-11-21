@@ -172,7 +172,9 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 3. Click `ROS 2 시작` (Start ROS 2). For detailed logs, select `ROS 2 디버그 모드` before starting.
 4. For Conveyor, click `PLC 시작` (Start PLC). The launcher starts or reuses the local CODESYS service,
    checks the Conveyor Modbus response and starts the PLC adapter. Check the launcher terminal for
-   the startup log and use the same button to retry. Stop all releases the adapter and a local
+   the startup log and use the same button to retry. Select `PLC 시작 시 CODESYS GUI 열기` to open the
+   Conveyor project in the CODESYS 4 IDE. The launcher reports the application ID, phase and material
+   number observed at startup. Stop all releases the adapter and a local
    service started by this session. See the [Conveyor instructions](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)
    for the equipment permit and automatic feed.
 5. Check the camera/Vision views in Isaac Sim's UI Hub and errors in both run terminals.
