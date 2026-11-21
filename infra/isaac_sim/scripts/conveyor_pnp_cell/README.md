@@ -27,7 +27,11 @@ Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /
 
 ## 런처의 CODESYS GUI와 서비스 권한
 
-`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 현재 체크아웃의 [infra/plc/conveyor_pnp_cell/Conveyor.fbsdev](../../../../infra/plc/conveyor_pnp_cell/Conveyor.fbsdev)다. 다른 위치는 런처를 실행하기 전에 `ARM_CELL_CODESYS_PROJECT`로 지정한다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
+`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 현재 체크아웃의 [infra/plc/conveyor_pnp_cell/Conveyor.fbsdev](../../../../infra/plc/conveyor_pnp_cell/Conveyor.fbsdev)다. 다른 프로젝트는 런처의 `프로젝트 선택…`에서 `.fbsdev` 폴더 안의 `*.iecapp` 파일을 선택한다. 선택하면 GUI 열기가 켜진다. 시작 시 기본값은 `ARM_CELL_CODESYS_PROJECT`에 프로젝트 폴더 또는 애플리케이션 파일 경로를 지정해 바꿀 수 있다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
+
+런처가 IDE를 열 때 선택한 애플리케이션의 `Libraries.lock.json`으로 라이브러리 캐시를 복원한다. 프로젝트에 통신 설정이 없으면 `Communication.settings.json`에 기본 로컬 게이트웨이(`localhost:1217`)를 설정한다. 기존 설정이 있으면 그대로 사용한다.
+
+처음 로그인할 때 IDE에서 `Communication.settings.json → Configure Device`를 열고 게이트웨이에서 검색된 PLC를 선택한다. `Connect Device`에서 장치 계정으로 인증한 뒤 `Select`로 저장한다. Linux용 CODESYS 4 IDE와 게이트웨이는 별도 설치 항목이다. 기본 주소에 게이트웨이가 없으면 로컬 Edge Gateway를 설치·기동하거나 통신 설정에서 접근 가능한 게이트웨이를 지정한다. [CODESYS 접속 절차](https://content.helpme-codesys.com/en/CODESYS%204/_c4_task_create_applikation_and_download.html) · [Linux 설치 안내](https://content.helpme-codesys.com/en/CODESYS%204/_c4_install_desktop_linux.html)
 
 기본 로컬 서비스 제어는 systemd의 데스크톱 인증을 사용한다. 호스트 관리자가 특정 운영 계정의 반복 인증을 생략하려면 `visudo`로 `/etc/sudoers.d/arm-cell-codesys-<계정명>`에 아래 규칙을 설치한다. 예시의 `operator`를 해당 계정으로 바꾸고 파일 소유권은 root, 모드는 0440으로 설정한다.
 

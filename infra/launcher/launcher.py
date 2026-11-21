@@ -11,7 +11,7 @@ import tempfile
 import time
 
 from PySide6.QtCore import QLockFile, QSignalBlocker, QTimer, Qt
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout, QHBoxLayout,
                               QLabel, QMainWindow, QPushButton, QDoubleSpinBox, QGroupBox,
                               QStackedWidget, QVBoxLayout, QWidget)
 
@@ -22,9 +22,11 @@ from arm_cell_bringup.tool_modes import tool_mode_choices
 from arm_cell_bringup.tool_parameters import available_fields, parameter_value, apply_tool_parameters
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 if __package__:
+    from .codesys_project import DEFAULT_PROJECT
     from . import plc_control
     from .component_settings import ComponentSettings
 else:
+    from codesys_project import DEFAULT_PROJECT
     import plc_control
     from component_settings import ComponentSettings
 
@@ -193,7 +195,14 @@ class Launcher(QMainWindow):
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
         self.plc_gui = QCheckBox('PLC 시작 시 CODESYS GUI 열기')
-        layout.addWidget(self.plc_gui)
+        self.plc_project = Path(os.environ.get('ARM_CELL_CODESYS_PROJECT') or DEFAULT_PROJECT).expanduser()
+        plc_row = QHBoxLayout()
+        layout.addLayout(plc_row)
+        plc_row.addWidget(self.plc_gui)
+        self.plc_project_button = QPushButton(f'프로젝트 선택… · {self.plc_project.name}')
+        self.plc_project_button.setToolTip(str(self.plc_project))
+        self.plc_project_button.clicked.connect(self.choose_plc_project)
+        plc_row.addWidget(self.plc_project_button)
         buttons = QHBoxLayout()
         layout.addLayout(buttons)
         self.isaac = QPushButton('Isaac 시작')
@@ -364,6 +373,8 @@ class Launcher(QMainWindow):
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
         self.plc_gui.setVisible(self.conveyor)
         self.plc_gui.setEnabled(not self.stopping and self.plc.phase is None)
+        self.plc_project_button.setVisible(self.conveyor)
+        self.plc_project_button.setEnabled(self.plc_gui.isEnabled())
         self.plc_button.setVisible(self.conveyor)
         self.plc_button.setEnabled(self.can_start_plc())
         self.stop.setEnabled(active and not self.stopping)
@@ -484,10 +495,19 @@ class Launcher(QMainWindow):
         return (self.conveyor and 'isaac' in self.processes and not self.stopping
                 and self.plc.phase is None)
 
+    def choose_plc_project(self):
+        filename, _ = QFileDialog.getOpenFileName(
+            self, 'CODESYS 프로젝트의 Application 선택', str(self.plc_project.parent), 'CODESYS Application (*.iecapp)')
+        if filename:
+            self.plc_project = Path(filename)
+            self.plc_project_button.setText(f'프로젝트 선택… · {self.plc_project.parent.name}')
+            self.plc_project_button.setToolTip(filename)
+            self.plc_gui.setChecked(True)
+
     def start_plc(self):
         if self.can_start_plc():
             if self.plc_gui.isChecked():
-                self.plc.open_editor(self.environment)
+                self.plc.open_editor(self.plc_project, self.environment)
             self.plc.start(self.runtime, self.environment)
             self.validate()
 

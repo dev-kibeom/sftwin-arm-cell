@@ -172,7 +172,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 3. For Conveyor, click `PLC 시작` (Start PLC). The launcher starts or reuses the local CODESYS service
    and checks the Conveyor Modbus response. Check the launcher terminal for
    the startup log and use the same button to retry. Select `PLC 시작 시 CODESYS GUI 열기` to open the
-   Conveyor project in the CODESYS 4 IDE. The launcher reports the application ID, phase and material
+   Conveyor project in the CODESYS 4 IDE, or use `프로젝트 선택…` to choose another project’s `*.iecapp` file. The launcher reports the application ID, phase and material
    number observed at startup. Stop all releases the adapter and a local
    service started by this session. See the [Conveyor instructions](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)
    for the equipment permit and automatic feed.
