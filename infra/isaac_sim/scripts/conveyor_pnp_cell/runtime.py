@@ -29,7 +29,8 @@ class ConveyorRuntime:
                                supply=dict(cell['configured_supply'], slot_id=layout['pick_slot_id'],
                                            stream_id=equipment.stream_id,
                                            material_type_ids=layout['material_type_ids']),
-                               pick_configured=bool(cell['conveyor']['teaching']['cycle'])))
+                               pick_configured=bool(cell['conveyor']['teaching']['cycle']),
+                               history_db_path=layout['history_db_path']))
         self.feeder.bind_ui()
 
     def set_tool_session(self, session):

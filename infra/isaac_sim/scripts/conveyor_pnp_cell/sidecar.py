@@ -1,5 +1,7 @@
 """System-Python owner of Modbus, equipment permits and configured-supply ROS services."""
 import socket
+import sqlite3
+import json
 import sys
 import time
 from dataclasses import asdict
@@ -10,7 +12,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from arm_cell_interfaces.msg import ConfiguredSupplyState
-from arm_cell_interfaces.srv import ConfiguredSupply
+from arm_cell_interfaces.srv import ConfiguredSupply, RecordConveyorInspection, QueryConveyorHistory
 from pymodbus.client.sync import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 import rclpy
@@ -20,6 +22,7 @@ from conveyor_pnp_cell.configured_supply import ConveyorPickSupply
 from conveyor_pnp_cell.equipment_io import ConveyorIO, Sensors
 from conveyor_pnp_cell.runtime import MAX_AGE
 from conveyor_pnp_cell.supply import bind_confirmed_pick
+from conveyor_pnp_cell.production_ledger import ProductionLedger
 
 
 class Exchange:
@@ -29,12 +32,23 @@ class Exchange:
         self.client = ModbusTcpClient(link['host'], port=link['port'], timeout=link['timeout_seconds'])
         self.io = ConveyorIO(self.client, link['unit_id'])
         self.pick_configured = config['pick_configured']
-        self.supply = ConveyorPickSupply(uuid4().hex, **config['supply'])
+        self.ledger = ProductionLedger(config['history_db_path'], config['supply']['stream_id'])
+        previous = self.ledger.supply_snapshot()
+        self.supply = ConveyorPickSupply(previous['epoch'] if previous else uuid4().hex, **config['supply'])
+        if previous:
+            self.supply.restore_snapshot(previous)
+        else:
+            self.ledger.save_supply(self.supply.snapshot())
+        # A recovered pending lease is historical evidence until the physical
+        # arrival and the retained PLC command are observed again.
+        self.restored_unverified = bool(previous and previous['available'])
         self.permit_at = self.valid_at = 0.
         self.at_pick = self.permitted = False
         self.sent = {}
         self.publisher = node.create_publisher(ConfiguredSupplyState, '/cell/configured_supply/state', 10)
         node.create_service(ConfiguredSupply, '/cell/configured_supply', self.reserve)
+        node.create_service(RecordConveyorInspection, '/cell/conveyor/record_inspection', self.record_inspection)
+        node.create_service(QueryConveyorHistory, '/cell/conveyor/query_history', self.query_history)
         node.create_subscription(Bool, config['permit_topic'], self.permit, 1)
         self.lock = Lock()
         self.shutdown = Event()
@@ -55,11 +69,13 @@ class Exchange:
     def close(self):
         self.shutdown.set()
         self.worker.join()
+        self.ledger.close()
 
     def publish_supply(self):
         with self.lock:
             reservable = self.supply.available and not self.supply.reservation
-            state = self.supply.state(valid=self.valid() and (not reservable or self.at_pick))
+            state = self.supply.state(valid=self.valid() and not self.restored_unverified
+                                      and (not reservable or self.at_pick))
         self.publisher.publish(state)
 
     def permit(self, message):
@@ -72,7 +88,44 @@ class Exchange:
 
     def reserve(self, request, response):
         with self.lock:
-            return self.supply.handle(request, response, valid=self.valid() and self.at_pick)
+            if self.restored_unverified:
+                response.diagnostic_detail = 'Recovered reservation requires physical reconciliation'
+                return response
+            before = self.supply.snapshot()
+            response = self.supply.handle(request, response, valid=self.valid() and self.at_pick)
+            after = self.supply.snapshot()
+            if response.success and after != before:
+                try:
+                    self.ledger.save_supply(after, released=bool(request.material_placed))
+                except (ValueError, sqlite3.Error) as error:
+                    self.supply.restore_snapshot(before)
+                    response.success = False
+                    response.diagnostic_detail = f'Production history unavailable: {error}'
+            return response
+
+    def record_inspection(self, request, response):
+        try:
+            self.ledger.inspect(
+                instance_id=request.material_instance_id,
+                inspection_id=request.inspection_id, station_id=request.station_id,
+                verdict=request.verdict, evidence_ref=request.evidence_ref)
+            response.accepted = True
+        except (ValueError, sqlite3.Error) as error:
+            response.diagnostic_detail = str(error)
+        return response
+
+    def query_history(self, request, response):
+        try:
+            report = (self.ledger.history(request.material_instance_id)
+                      if request.material_instance_id else self.ledger.summary())
+            if report is None:
+                response.diagnostic_detail = 'Unknown material instance'
+            else:
+                response.success = True
+                response.json_result = json.dumps(report, sort_keys=True)
+        except sqlite3.Error as error:
+            response.diagnostic_detail = str(error)
+        return response
 
     def sample(self, packet, command):
         sensors = Sensors(**packet['sensors'])
@@ -82,13 +135,27 @@ class Exchange:
                    and sensors.extended and not sensors.occupied)
 
         with self.lock:
+            before = self.supply.snapshot()
             bound = 0
             material_type_id = packet['material_type_id']
             if at_pick and self.pick_configured:
                 bound = bind_confirmed_pick(command, observed, material_type_id, self.supply.expose_arrival)
+            after = self.supply.snapshot()
+            try:
+                if after != before:
+                    self.ledger.save_supply(after)
+                if valid:
+                    self.ledger.record_plc(command)
+            except (ValueError, sqlite3.Error):
+                self.supply.restore_snapshot(before)
+                self.at_pick = False
+                self.valid_at = 0.
+                raise
             self.at_pick = (at_pick and command.confirmed and self.pick_configured
                             and self.supply.available and observed == self.supply.cycle
                             and material_type_id == self.supply.material_type_id)
+            if self.at_pick:
+                self.restored_unverified = False
             self.valid_at = packet['acquired'] if valid else 0.
         self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),
                         sensors=sensors, bound_cycle=bound)
@@ -117,7 +184,7 @@ class Exchange:
                                    reservation_id=supply.reservation) if supply.reservation and self.valid() else None
             self.ipc.send(dict(op='command', at=at, command=asdict(cmd), permitted=permitted,
                                permit_at=permit_at, reservation=reservation))
-        except (OSError, ValueError, ModbusException) as error:
+        except (OSError, ValueError, sqlite3.Error, ModbusException) as error:
             if self.sent or self.valid_at:
                 self.node.get_logger().warning(f'Conveyor link unavailable: {error}')
             self.client.close()

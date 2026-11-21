@@ -50,6 +50,8 @@ set(msg_files
 set(srv_files
   "srv/ConfigureTeaching.srv"
   "srv/ConfiguredSupply.srv"
+  "srv/RecordConveyorInspection.srv"
+  "srv/QueryConveyorHistory.srv"
   "srv/DetectTarget.srv"
   "srv/RequestMaterial.srv"
   "srv/RequestGripperOpen.srv"

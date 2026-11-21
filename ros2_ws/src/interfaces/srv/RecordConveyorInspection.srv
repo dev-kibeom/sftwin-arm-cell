@@ -1,0 +1,11 @@
+# Stores a separately observed quality fact for a known material instance.
+# This does not authorize robot actions, PLC Commit or a quality PASS inference.
+string material_instance_id
+string inspection_id
+string station_id
+# PASS, FAIL or INCONCLUSIVE; supplied by the independent inspection owner.
+string verdict
+string evidence_ref
+---
+bool accepted
+string diagnostic_detail

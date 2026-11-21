@@ -14,6 +14,8 @@ conveyor:
   pick_slot_id: conveyor_pnp_cell/CV-01/pick
   place_slot_id: conveyor_pnp_cell/TR-01/receive
   material_type_ids: [ConveyorPart]
+  # The PLC and Robot remain the authorities for process and task outcomes.
+  history_db_path: ~/.local/state/arm_cell/conveyor-pnp-poc/production.sqlite
   plc_profile: package://arm_cell_plc_adapter/config/conveyor_pnp_codesys.yaml
   equipment_permit_topic: /cell/conveyor/equipment_permitted
   speed_m_s: 0.14
