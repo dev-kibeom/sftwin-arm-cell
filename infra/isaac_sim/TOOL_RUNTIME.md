@@ -23,12 +23,11 @@ Mode ID는 기존 `actuator`/`grasp` 조합에서 파생한 표시 identity다. 
 Actuator와 파지 구현을 조립한다. `GraspManager`는 기존 Fixed Attach를, `PhysicalGraspManager`는
 선택적 접촉 진단과 Object Detection 기반 보유 추정을 소유한다. Physical Attach은 Tool Capture 전략만 교체하고 기존 GraspManager를 재사용한다. 새 Tool은 이 선택 경계에 구현과 Tool Profile을 등록한다.
 공통 Session은 주입된 Tool의 command/update/관측·파지 계약을 소비한다. 장치 전용 Cell·Robot·Motion·Orchestration 분기는 추가하지 않는다.
-운영 Session의 지원 Tool은 2F-85다. C10의 기본형·Long은 동일한 `internal_radial`
-전략과 의미적 GRASP(확장)·RELEASE(수축)를 실험 경계에서 사용한다.
+Tape Cell의 C10 기본형·Long은 같은 `internal_radial` 전략으로 GRASP(확장)·RELEASE(수축)를 수행한다.
 `runtime.grasp_strategies`는 파지 능력이며 `supported_combinations`·Launcher 모드의
 운영 지원 선언을 대신하지 않는다. 명시적 내경·두께·삽입 깊이는 선택 Tool 기하에서
 검증하고, 시험 Fixture 생성·보고는 전략 밖에 둔다.
-[C10 공통 Task 통합 검증](../../assets/robots/m0609_hand_e_c10/README.md#3단계--공통-grasp-strategytask-통합-검증)을 참조한다.
+[Tape Cell의 시퀀스와 검증 기준](../../docs/design/components/simulation/fds-tape-cell-supply.md)을 참조한다.
 
 Cell은 Scene·설치·Material Supply·Camera와 기존 Action Graph 통합을 소유한다. Robot은 Arm Drive와 HOME을,
 Model Assembly의 URDF/USD는 링크·관절·한계·mimic·collision·질량/관성을 소유한다.
@@ -258,4 +257,4 @@ Actuator 진단의 max_drive_effort_nm은 구동 상한이고 joint_effort_nm은
 
 ## C10 Physical Real
 
-M0609 Tape Cell은 일반 Launcher의 Physics 모드로 C10/Long을 선택한다. 실제 prismatic drive와 세 예약 대상 접촉·팽창 obstruction/dwell을 사용하며, 수축·접촉 소실 뒤 RELEASED를 발행한다. 폭·두 손가락 힘 정책은 사용하지 않는다. 정식 ROS Task/Mission은 configured 슬롯 예약을 사용하고 Vision 결과를 합성하지 않는다. 자세한 실행은 [Tape Cell 안내](scripts/tape_roll_cell/README.md)를 따른다.
+M0609 Tape Cell은 일반 Launcher의 Physics 모드로 C10/Long을 선택한다. 주축의 위치 피드백에서 팽창 목표 미도달과 지속 정지로 보유를 추정하고, 수축 위치를 유지하면 RELEASED를 발행한다. 폭·두 손가락 힘 정책은 사용하지 않는다. 정식 ROS Task/Mission은 configured 슬롯 예약을 사용하고 Vision 결과를 합성하지 않는다. 자세한 실행은 [Tape Cell 안내](../../README.md#tape-handling-cell)를 따른다.

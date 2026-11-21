@@ -99,11 +99,19 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 ## Conveyor PnP Cell
 
-CODESYS가 공급·이송·스토퍼·트레이 배출을 제어하는 Isaac Sim 설비의 프로필, UI 설정과 반복 시운전 절차는 [Conveyor PnP Cell 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)에 있습니다. 30 Cycle 종료 후에는 저장된 원장과 진단으로 자재별 결과를 확인할 수 있습니다. [오프라인 분석 및 테스트 명령](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md#30-cycle-종료-후-오프라인-분석)
+런처에서 Conveyor PnP Cell을 선택합니다. [공정용 CODESYS 프로젝트](infra/plc/conveyor_pnp_cell/Conveyor.fbsdev)를 로컬 Linux SL에 배포하고 Run 상태에서 아래 GUI 절차를 따릅니다. IDE에서 프로젝트를 여는 동작과 PLC에 배포하는 동작은 별개입니다. 운전 전에 공정 앱 식별값 `0xC051`(IR29)을 확인합니다.
+
+- PLC 장치 선택과 로그인은 IDE의 `Communication.settings.json → Configure Device`에서 합니다. `Connect Device`로 인증하고 `Select`로 저장합니다. 로컬 서비스 시작·종료에는 호스트의 systemd 권한이 필요합니다.
+- 공정의 레지스터 배치는 [PLC 프로그램](infra/plc/conveyor_pnp_cell/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st), ROS 측 접속·작업 블록은 [Modbus 프로필](ros2_ws/src/plc_adapter/config/conveyor_pnp_codesys.yaml)과 [공정 파라미터](ros2_ws/src/plc_adapter/config/conveyor_process.yaml)에서 확인합니다. 연결 시험에는 [통신 시험 프로그램](infra/plc/common/commissioning/PLC_PRG.prg.st)을 사용합니다. 과거 실패 분기는 [공정 예제](infra/plc/conveyor_pnp_cell/examples)에서 비교할 수 있습니다. PLC의 보존 상태와 원장 또는 실제 자재가 맞지 않으면 자동운전 전에 대조합니다.
+- 30 Cycle 시험 후에는 같은 실행의 생산 원장 경로(`DB`), 스트림 ID(`STREAM`), 첫 자재 번호(`FIRST`), 진단 디렉터리(`DIAG`)를 지정합니다. ROS와 Isaac 진단을 따로 보관했다면 `--diagnostic`을 두 번 지정합니다. 근거가 부족한 자재는 `UNKNOWN`으로 표시됩니다. [분석 도구](tools/analyze_conveyor_cycles.py)
+
+```bash
+python3 tools/analyze_conveyor_cycles.py "$DB" --stream "$STREAM" --first "$FIRST" --count 30 --diagnostic "$DIAG"
+```
 
 ## Tape Handling Cell
 
-M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. 런처의 `물리 파지` 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.
+런처에서 M0609, Hand-E C10 기본형 또는 100 mm 연장형, Tape Handling Cell과 `물리 파지`를 선택합니다. Isaac과 ROS를 시작한 뒤 UI Hub의 **Supply**에 가득 찬 카트리지 수를 입력합니다. 카트리지 하나에 17 mm 롤 15개가 들어갑니다. 티칭 포인트는 **Teaching → Manual Teaching**에서 편집하고 **Save**로 저장한 뒤 **Apply**로 자동운전에 반영합니다. [한화 HCR-14](assets/robots/hcr14/README.md)와 C10 조합은 정적 조립 모델로 제공합니다. [셀 설정](ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml) · [Tape 공급 및 검증 기준](docs/design/components/simulation/fds-tape-cell-supply.md) · [C10 원본 자산](assets/tools/hand_e_c10/third_party/robotiq/UPSTREAM.md)
 
 ## 설계 기록과 Sim-to-Real 방향
 
@@ -201,12 +209,11 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 3. Conveyor에서는 `PLC 시작`을 누릅니다. 로컬 CODESYS 서비스를 재사용하거나 시작한 뒤,
    Conveyor 공정 프로그램의 Modbus 응답을 확인합니다. 서비스 시작·종료에는
    해당 호스트의 systemd 권한이 필요합니다. 단계와 오류는 런처 터미널에, 마지막 결과는 창에 표시됩니다.
-   실패 원인을 해결한 뒤 같은 버튼을 누르면 재시도합니다. 자재 투입과 자동운전 설정은
-   [Conveyor 실행 절차](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)를 따릅니다.
-   `PLC 시작 시 CODESYS GUI 열기`를 선택하면 현재 체크아웃의 Conveyor 프로젝트를 엽니다. 다른 프로젝트를 열려면 `프로젝트 선택…`에서 해당 폴더 안의 `*.iecapp` 파일을 고릅니다. 공정 프로젝트와 학습용 PLC 원본은 [PLC 안내](infra/plc/README.md)에서 확인할 수 있습니다.
+   실패 원인을 해결한 뒤 같은 버튼을 누르면 재시도합니다.
+   `PLC 시작 시 CODESYS GUI 열기`를 선택하면 현재 체크아웃의 Conveyor 프로젝트를 엽니다. 다른 프로젝트를 열려면 `프로젝트 선택…`에서 해당 폴더 안의 `*.iecapp` 파일을 고릅니다.
    런처에는 기동 시 읽은 PLC 앱 식별값, 단계, 자재 번호가 표시됩니다.
    `모두 종료`는 어댑터를 정리하고 이번 런처가 시작한 로컬 서비스만 중지합니다.
-   IDE는 별도 창에서 직접 닫습니다. 프로젝트 위치와 서비스 인증 설정은 [Conveyor 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md#런처의-codesys-gui와-서비스-권한)를 참조하세요.
+   IDE는 별도 창에서 직접 닫습니다. 장치 로그인과 공정 앱 확인 방법은 [Conveyor PnP Cell](#conveyor-pnp-cell)을 참조하세요.
 4. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
    Conveyor PLC 어댑터는 PLC 응답 확인과 ROS 사전 점검이 모두 끝나면 자동으로 시작합니다. ROS 2를 먼저 시작해도 됩니다.
    런처는 PLC 통신과 신선한 정상 Safety 상태를 확인해 시뮬레이션 설비 허가를 주기적으로 발행합니다.
@@ -425,17 +432,3 @@ SubTree를 재사용해 Holding 확인·이동·해제·Release 확인을 함께
 배포 profile의 `taught_motion_configuration`으로 파일을 선택할 수 있습니다.
 소스 YAML/XML 변경 후 재빌드·overlay 적용·Task Execution 프로세스 재시작이 필요하며,
 현재 실행 중 동작의 속도가 자동으로 바뀌지는 않습니다. 새 자세 저장 UI는 제공하지 않습니다.
-
-Hand-E C10 1단계 모델 통합은 Launcher의 별도 **M0609 + Hand-E C10 · 모델·관절 실험** 또는
-**HCR-14 + Hand-E C10 · 모델·관절 실험** 버튼으로 실행할 수 있습니다.
-기본 실행은 손가락의 방사형 관절 왕복이며, ROS Mission과 운영 파지 모드는 지원하지 않습니다.
-M0609의 기본형·연장형에는 `--internal-grasp`로 고정 티칭 자세 기반 내경 파지
-실험(논리 판정 + 고정)을 실행할 수 있습니다.
-자세한 내용은 [C10 모델 및 라이브 실험 안내](assets/robots/m0609_hand_e_c10/README.md)를 참조하세요.
-
-17 mm Tape Roll의 수평 Physical Grasp는 별도 [Tape Roll 실험 플러그인](infra/isaac_sim/scripts/tape_roll_cell/README.md)으로
-실행합니다. M0609+C10 기본형·Long이 같은 접촉 기반 전략과 공통 Task BT를 사용하며,
-운영 Cell Profile·Vision·Mission 통합은 제공하지 않습니다.
-
-사진을 참고한 **100 mm 연장 핑거**는 별도 M0609·HCR-14 모델 실험 항목으로 제공합니다.
-기본 C10 모델은 유지하며, 치수·물성 가정과 실행법은 [연장 핑거 안내](assets/tools/hand_e_c10/README.md)를 참조하세요.
