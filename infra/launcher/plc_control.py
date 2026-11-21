@@ -47,6 +47,7 @@ class ConveyorPLC(QObject):
         self.kill_timer.timeout.connect(self.process.kill)
         self.phase = None
         self.message = ''
+        self.probe_result = ''
         self.owned_invocation = ''
         self.closing = False
         self.editor = None
@@ -165,11 +166,16 @@ class ConveyorPLC(QObject):
         elif phase == 'stop':
             self.log('CODESYS 종료됨')
         elif phase == 'probe':
-            result = output.splitlines()[-1] if output else 'Conveyor PLC 응답 확인'
-            self.log(f'{result} · PLC 어댑터 기동')
-            self.run('adapter', runtime_command('adapter', self.runtime))
+            self.probe_result = output.splitlines()[-1] if output else 'Conveyor PLC 응답 확인'
+            self.phase = 'awaiting_ros'
+            self.log(f'{self.probe_result} · ROS 2 사전 점검 대기')
         elif phase == 'adapter':
             self.log('PLC 어댑터 종료됨')
+
+    def start_adapter(self):
+        if self.phase == 'awaiting_ros' and not self.closing:
+            self.log(f'{self.probe_result} · PLC 어댑터 기동')
+            self.run('adapter', runtime_command('adapter', self.runtime))
 
     def service_observed(self, phase, output):
         fields = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
@@ -207,7 +213,8 @@ class ConveyorPLC(QObject):
                 except ProcessLookupError:
                     pass
             self.kill_timer.start(5000)
-        elif self.phase is None:
+        elif self.phase in (None, 'awaiting_ros'):
+            self.phase = None
             self.release()
 
     def release(self):

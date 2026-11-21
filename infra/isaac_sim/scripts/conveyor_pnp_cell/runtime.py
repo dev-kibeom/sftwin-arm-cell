@@ -20,6 +20,8 @@ class ConveyorRuntime:
         self.feeder = ConveyorFeeder(cell['configured_supply']['material_id'], last_generated=0,
                                      material_type_ids=layout['material_type_ids'])
         self.packet = None
+        self.plc_offline = False
+        self.diagnostics = None
         self.reservation = None
         self.retry_at = 0.
         self.startup_deadline = None
@@ -39,6 +41,7 @@ class ConveyorRuntime:
 
     def reconnect(self, *, wait_ready):
         self.packet = None
+        self.plc_offline = False
         self.sidecar.close()
         self.sidecar = ConfiguredSupplyClient.launch(Path(__file__).with_name('sidecar.py'), wait_ready=wait_ready)
         self.sidecar.send(dict(self.sidecar_config, resume_stream=True))
@@ -78,6 +81,7 @@ class ConveyorRuntime:
                 self.startup_deadline = None
                 continue
             self.packet = packet if packet.get('op') == 'command' else None
+            self.plc_offline = packet.get('op') == 'offline'
             if self.packet and not packet.get('observation_pending') and now - packet['at'] < MAX_AGE:
                 self.reservation = packet.get('reservation')
         if self.startup_deadline is not None and now >= self.startup_deadline:
@@ -90,23 +94,33 @@ class ConveyorRuntime:
             except (OSError, RuntimeError) as error:
                 logging.getLogger(__name__).warning('Equipment reconnect failed: %s', error)
         packet = self.packet
-        if (not self.sidecar.available or not packet or time.monotonic()-packet['at'] >= MAX_AGE
-                or self.stopped):
+        now = time.monotonic()
+        if not self.sidecar.available:
+            status = 'disconnected'
+        elif packet:
+            status = 'fresh' if now - packet['at'] < MAX_AGE else 'expired'
+        else:
+            status = 'offline' if self.plc_offline else 'not_received'
+        if status != 'fresh' or self.stopped:
             self.equipment.drive(0.)
+            self._record_decision(now, status)
             return
         command = Commands(**packet['command'])
         if not self.synchronized:
             self.synchronized = command.phase == command.cycle == command.committed == 0
-        valid = (self.synchronized and command.cycle in
-                 (self.feeder.last_generated, self.feeder.last_generated + 1)
-                 and time.monotonic()-packet['permit_at'] < MAX_AGE)
+        cycle_matches = command.cycle in (self.feeder.last_generated, self.feeder.last_generated + 1)
+        permit_fresh = now - packet['permit_at'] < MAX_AGE
+        valid = self.synchronized and cycle_matches and permit_fresh
         sensors = Sensors()
         stock = {key: getattr(self.feeder, key) for key in
                  ('automatic', 'remaining', 'material_id', 'last_generated')}
+        pending_before = self.feeder.pending
+        observed_sensors = None
         identity_observed = False
         body_id = ''
         try:
             sensors = self.equipment.observe(valid and packet['permitted'])
+            observed_sensors = sensors
             enabled = valid and sensors.permitted and self.feeder.automatic
             if (enabled and command.feed and sensors.path_clear and sensors.pick_zone_clear
                     and not sensors.occupied):
@@ -124,6 +138,10 @@ class ConveyorRuntime:
             if self.failure != str(error):
                 self.failure = str(error)
                 logging.getLogger(__name__).warning('Equipment observation unavailable: %s', error)
+        if self.diagnostics is not None:
+            self._record_decision(now, status, feeder=dict(stock, pending=pending_before),
+                                  cycle_matches=cycle_matches, permit_fresh=permit_fresh,
+                                  sensors=observed_sensors, error=self.failure or None)
         now = time.monotonic()
         if now-self.last_sample >= .05:
             self.last_sample = now
@@ -144,10 +162,33 @@ class ConveyorRuntime:
         # Kit still ticks while paused. Never replay commands buffered across a pause.
         self.sidecar.poll_messages()
         self.packet = None
+        self.plc_offline = False
         self.equipment.drive(0.)
 
+    def _record_decision(self, now, status, *, feeder=None, **inputs):
+        if self.diagnostics is None:
+            return
+        try:
+            if feeder is None:
+                feeder = {key: getattr(self.feeder, key) for key in
+                          ('automatic', 'remaining', 'material_id', 'last_generated', 'pending')}
+            self.diagnostics.observe(stream_id=self.equipment.stream_id, now=now, command_status=status,
+                                     packet=self.packet, synchronized=self.synchronized, feeder=feeder,
+                                     stopped=self.stopped, max_age=MAX_AGE, **inputs)
+        except Exception as error:
+            logging.getLogger(__name__).warning('Conveyor decision recording unavailable: %s', error)
+            self.set_live_test_session_id(None)
+
     def set_live_test_session_id(self, session_id, root=None):
-        pass
+        previous, self.diagnostics = self.diagnostics, None
+        try:
+            if previous is not None:
+                previous.close()
+            if session_id is not None and root is not None:
+                from .feed_diagnostics import FeedDiagnostics
+                self.diagnostics = FeedDiagnostics(session_id, root)
+        except Exception as error:
+            logging.getLogger(__name__).warning('Conveyor decision recorder unavailable: %s', error)
 
     def reset_generated_materials(self, attachment_reset):
         # A timeline Stop cannot reset PLC RETAIN. Hold the stream for reconciliation.
@@ -162,7 +203,10 @@ class ConveyorRuntime:
         try:
             self.equipment.drive(0.)
         finally:
-            self.sidecar.close()
+            try:
+                self.sidecar.close()
+            finally:
+                self.set_live_test_session_id(None)
 
 
 def create_adapter(*, configuration, context):

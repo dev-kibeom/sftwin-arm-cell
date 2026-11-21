@@ -4,7 +4,7 @@
 
 ## 실행
 
-GUI에서는 Conveyor PnP Cell을 선택하고 Isaac과 ROS 2를 시작한 뒤 **PLC 시작**을 누른다. 버튼이 PLC 어댑터까지 실행한다. 설비 허가 발행과 UI 자동운전 설정은 아래 절차를 따른다.
+GUI에서는 Conveyor PnP Cell을 선택하고 Isaac을 시작한 뒤 **PLC 시작**으로 서비스와 Modbus 응답을 확인할 수 있다. **ROS 2 시작**은 PLC 시작 전후 모두 가능하며, PLC 응답 확인과 ROS 사전 점검이 끝나면 런처가 PLC 어댑터를 실행한다. 설비 허가 발행과 UI 자동운전 설정은 아래 절차를 따른다.
 
 수동 실행 시 ROS 2 Humble overlay에 `arm_cell_bringup`, `arm_cell_interfaces`, `arm_cell_plc_adapter`를 빌드하고 시스템 Python에 `python3-pymodbus` 2.x를 설치한다. CODESYS에는 Conveyor 공정 프로그램을 사용한다. 설비 Sidecar는 기존 Adapter 프로필의 Modbus 접속 설정을 읽고 HR16–25만 쓴다. HR0–7은 별도 Robot Adapter의 영역이다. 시험용 Mock과 Robot Adapter 중 하나만 해당 영역을 소유해야 한다. [PLC 실행 및 매핑](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)
 
@@ -71,6 +71,8 @@ Cell 측 Sidecar는 `conveyor.history_db_path`의 SQLite에 실제 생성 개체
 재시작 후 동일 Equipment 스트림이면 이전 예약 Snapshot과 ID를 읽되, 현재 실물과 PLC의 위치 확정이 재관측되기 전에는 해당 예약을 실행 가능한 것으로 공개하지 않는다. 이미 배치한 자재는 기존 예약과 일치하는 COMPLETE 또는 ABANDON 및 Release 확인으로 퇴역시킬 수 있다. 재연결할 스트림의 Snapshot이 누락되면 설비 관측을 계속하며 공급 예약은 보류한다. Stage를 새로 생성했거나 PLC RETAIN과 실제 자재가 불일치하면 과거 이력만 복원하며 물리 작업 자동 복귀는 하지 않는다. Sidecar 복원만으로 Robot Goal, PLC 단계 또는 물리 바디를 재생성하지 않는다.
 
 원장 쓰기가 실패하면 설비 Sidecar는 센서 피드백을 계속 전송한다. 배정·예약 변경은 저장에 성공한 뒤 확인하며, 관측 쓰기는 다음 유효 표본에서 다시 시도한다. 장애 동안 지나간 중간 PLC 단계는 이력에서 누락될 수 있다. 새 자재가 첫 로봇 요청 전인 단계 10·20·21·22에서는 결과·사유·배치를 0(미확정)으로 조회한다. 기존 v1 원장은 처음 열 때 이 귀속을 보정하고 해당 이벤트의 원래 값은 `retained_registers`에 남긴다.
+
+라이브 세션의 `diagnostic/simulation/conveyor_supply/decision-*.json`에는 Isaac이 물리 스텝에서 처음 판단했을 때와 투입 조건이 바뀌었을 때의 입력이 남는다. 파일을 순번대로 읽으면 PLC 명령 수신·만료·연결 상태, 단계·자재·Commit 번호, 초기 동기화, 설비 허가의 값과 마지막 수신 후 경과시간, 자동운전·남은 수량·공급 명령·경로와 구역 점유를 대조할 수 있다. 경과시간 단위는 초이며 단조 시계를 사용한다. `null`은 해당 판단에서 관측값을 얻지 못했음을 뜻한다. `blockers`에는 동시에 성립한 투입 보류 조건이 담긴다. 실제 생성·예약 결과는 같은 `stream_id`의 생산 원장에서 확인한다. 기록 유실과 쓰기 실패는 같은 디렉터리의 `capture_summary.json`에서 확인한다.
 
 공급 관측 지연 시 Mission은 0.5초에 WARN, 5초에 ERROR, 관측 복구 시 복구 로그를 남긴다. 지연 중인 예약의 현장 대조와 실제 Task terminal을 각각 확인한다. Pick 접근 중 Task가 취소되고 배치가 확인되지 않은 경우 PLC는 단계 39(현장 대조)에서 마지막 Commit을 유지한다.
 
