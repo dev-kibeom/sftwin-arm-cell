@@ -1,0 +1,21 @@
+{
+  "references": {
+    "Standard": {
+      "$type": "Placeholder",
+      "placeholder": "Standard"
+    },
+    "MB": {
+      "$type": "ManagedLibrary",
+      "libraryId": "ModbusTCP Server, 4.6.0.0 (CODESYS)"
+    }
+  },
+  "placeholderOverrides": {
+    "CommFB": "CommFB, 3.5.21 (CODESYS)",
+    "IoDrvModbusTCP": "IoDrvModbusTCP, 4.6.0 (CODESYS)",
+    "ModbusFB": "ModbusFB, 4.5.0 (CODESYS)",
+    "IoDrvModbusSerialServer": "IoDrvModbusSerialServer, 4.6.0 (CODESYS)",
+    "IoDrvModbus": "IoDrvModbus, 4.6.0 (CODESYS)",
+    "IoDrvModbusTCPServer": "IoDrvModbusTCPServer, 4.5.0 (CODESYS)",
+    "IoDrvModbusBase": "IoDrvModbusBase, 4.6.0 (CODESYS)"
+  }
+}

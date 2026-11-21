@@ -1,0 +1,1656 @@
+{
+	"resolutions": {
+		"3SLicense, 3.5.22 (CODESYS)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CODESYS/3SLicense/3.5.22/3SLicense.compiled-library",
+			"sha384": "A27DAF831239DE243A509ABE8D455FB89654D53865C18916BE0BA5116D693A40F9A3D7BEAF095530310D735DEDBE850C",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CAA Types Extern, 3.5.17 (CAA Technical Workgroup)": {
+					"sources": {
+						"CAA": {
+							"$type": "Placeholder",
+							"defaultResolution": "CAA Types Extern, >=0.0.0 (CAA Technical Workgroup)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CAA Types",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpApp, 3.5.21 (System)": {
+					"sources": {
+						"CmpApp": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpApp, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpApp",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpCodeMeter, 3.5.18 (System)": {
+					"sources": {
+						"CmpCodeMeter": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpCodeMeter, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpCodeMeter",
+							"allowUnqualifiedAccess": true,
+							"optional": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpEventMgr, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpEventMgr, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpEventMgr",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpLog, 3.5.21 (System)": {
+					"sources": {
+						"CmpLog": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpLog, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpLog",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Component Manager, 3.5.21 (System)": {
+					"sources": {
+						"Component_Manager": {
+							"$type": "Placeholder",
+							"defaultResolution": "Component Manager, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Component Manager",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Standard, 3.5.22 (System)": {
+					"sources": {
+						"Standard": {
+							"$type": "Placeholder",
+							"defaultResolution": "Standard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Standard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysCpuHandling, 3.5.17 (System)": {
+					"sources": {
+						"SysCpuHandling": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysCpuHandling, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysCpuHandling",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"Application": {
+			"$type": "Application",
+			"references": {
+				"3SLicense, 3.5.22 (CODESYS)": {
+					"sources": {
+						"_3S_LICENSE": {
+							"$type": "Placeholder",
+							"placeholder": "3SLicense"
+						}
+					}
+				},
+				"ModbusTCP Server, 4.6.0 (CODESYS)": {
+					"sources": {
+						"MB": {
+							"$type": "ManagedLibrary",
+							"libraryId": "ModbusTCP Server, 4.6.0 (CODESYS)"
+						}
+					}
+				},
+				"Standard, 3.5.22 (System)": {
+					"sources": {
+						"Standard": {
+							"$type": "Placeholder",
+							"placeholder": "Standard"
+						}
+					}
+				}
+			}
+		},
+		"Base Interfaces, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/Base%20Interfaces/3.5.17/Base%20Interfaces.compiled-library",
+			"sha384": "4D250B145E631B5E6F93EDC4A49E1B9978DD3BEED670828FDFB9856F3BA8E65CFD12EC9C374510CB87DF8BB5F2F578CE",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {}
+		},
+		"CAA Device Diagnosis, 3.5.22 (CAA Technical Workgroup)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CAA%20Technical%20Workgroup/CAA%20Device%20Diagnosis/3.5.22/CAA%20Device%20Diagnosis.compiled-library",
+			"sha384": "4E5EC95FEA31C5741EA5086C13D3E1F5B5DAC9BEDBB65EED13AD69776B0D6C72E461678CEB6FCDD157916EC313DC59E8",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"Base Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IBaseLibrary": {
+							"$type": "ManagedLibrary",
+							"libraryId": "Base Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CAA Types Extern, 3.5.17 (CAA Technical Workgroup)": {
+					"sources": {
+						"CAA": {
+							"$type": "Placeholder",
+							"defaultResolution": "CAA Types Extern, >=0.0.0 (CAA Technical Workgroup)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CAA Types",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpAsyncMgr, 3.5.21 (System)": {
+					"sources": {
+						"CmpAsyncMgr": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpAsyncMgr, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpAsyncMgr",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpEventMgr, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpEventMgr, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpEventMgr",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CommFB, 3.5.21 (CODESYS)": {
+					"sources": {
+						"CommFB": {
+							"$type": "Placeholder",
+							"defaultResolution": "CommFB, >=0.0.0 (3S - Smart Software Solutions GmbH)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CommFB",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDriver Interfaces, 3.5.2 (System)": {
+					"sources": {
+						"IIoDrv": {
+							"$type": "ManagedLibrary",
+							"libraryId": "IoDriver Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CAA Types Extern, 3.5.17 (CAA Technical Workgroup)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CAA%20Technical%20Workgroup/CAA%20Types%20Extern/3.5.17/CAA%20Types%20Extern.compiled-library",
+			"sha384": "E44392B5C5E37D91584BECCE9E38601780268885902CBF62198AB0E3CAE454191DFC4E3F3822F2FECDAD5F91A2857201",
+			"references": {
+				"SysCpuHandling, 3.5.17 (System)": {
+					"sources": {
+						"SysCpuHandling": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysCpuHandling, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysCpuHandling",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpApp, 3.5.21 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpApp/3.5.21/CmpApp.compiled-library",
+			"sha384": "CA8D393F7EC341AB85C1FB3CF33F5483CD965D1819979F1488C3096E3D48F50C918610F13774F4896EDC81CD54D2FF55",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpEventMgr, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpEventMgr, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpEventMgr",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpAsyncMgr, 3.5.21 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpAsyncMgr/3.5.21/CmpAsyncMgr.compiled-library",
+			"sha384": "54E7DF3CFCF8B6DEE2745AC0BCE6DDB964D583A6066CCF0A0673BB098850234D6750AE91AF0CDD7125655C2C2EB65397",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpCodeMeter, 3.5.18 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpCodeMeter/3.5.18/CmpCodeMeter.compiled-library",
+			"sha384": "BE371BAE41075C27CBE2D0AF6C7745D2294C9044CE375A2F3A9E6F2D59401FC02A16171D8B6E30264C8CD7A7385B7A4D",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpEventMgr Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpEventMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpErrors2 Interfaces, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpErrors2%20Interfaces/3.5.22/CmpErrors2%20Interfaces.compiled-library",
+			"sha384": "0C1AB3F5D4D6099253FFFD7D352767DFB4D9877245CA9E90196390B79B319B17D26542E72C2F5AD9A5941D28D108BC70",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {}
+		},
+		"CmpEventMgr Implementation, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpEventMgr%20Implementation/3.5.17/CmpEventMgr%20Implementation.compiled-library",
+			"sha384": "741571873506832A0B233BD59D1CE117892A841673F70CF1C8C1DF7B819211FA798D324EFB3AE4F83EA14189F133293D",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpEventMgr Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpEventMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpEventMgr Interfaces, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpEventMgr%20Interfaces/3.5.17/CmpEventMgr%20Interfaces.compiled-library",
+			"sha384": "0269F63D173F33899A0A9CA800A71629B7B94D0454D6B06B3234FA4B70F6923565A184041ECB0239C64CFE17629B1023",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpEventMgr, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpEventMgr/3.5.17/CmpEventMgr.compiled-library",
+			"sha384": "787392DD3AD665A00106B8EADA4F3C150D1FD0855D63222501A5D59766D8C42B2A8FB75348596F02C7D4D3B7657669E6",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpEventMgr Implementation, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr_Implementation": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpEventMgr Implementation, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpEventMgr Implementation",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				},
+				"CmpEventMgr Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpEventMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpIoConfig Implementation, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpIoConfig%20Implementation/3.5.22/CmpIoConfig%20Implementation.compiled-library",
+			"sha384": "9024AC73C3ABBAF99B5F5BE44C1A8E16F42EE81513DA7598DA70689D3403160B49D1905DFBC179DB3796F9A6D3ED7A02",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"Base Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IBaseLibrary": {
+							"$type": "ManagedLibrary",
+							"libraryId": "Base Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoConfig Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoConfig_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpIoConfig Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoMgr Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpIoMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpIoConfig Interfaces, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpIoConfig%20Interfaces/3.5.22/CmpIoConfig%20Interfaces.compiled-library",
+			"sha384": "025CFD0AF0D7345EA7F7D0375A525EE1333F42E27A746316BFBDA7E8290D38E298167AEEB3B987959CE0CD9E975F6812",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoMgr Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpIoMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpIoMgr Implementation, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpIoMgr%20Implementation/3.5.17/CmpIoMgr%20Implementation.compiled-library",
+			"sha384": "F4BDA83DED2EEB641F0769DE8F134CEBBB4E2495CB9BB2D1F59A419CFA2DB874590436366C3911DFFEFBCA4199D65EDB",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"Base Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IBaseLibrary": {
+							"$type": "ManagedLibrary",
+							"libraryId": "Base Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoMgr Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpIoMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpIoMgr Interfaces, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpIoMgr%20Interfaces/3.5.22/CmpIoMgr%20Interfaces.compiled-library",
+			"sha384": "5C4D60D2B7B9610551B138A495168C91321E2C5A9EC2503C0803DFC299EDECDD696EF11DF3F172B3963C28D5F5DEB704",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CmpLog, 3.5.21 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/CmpLog/3.5.21/CmpLog.compiled-library",
+			"sha384": "3408C080905AA163A8A5D3197C6D074A32E0C74A07C3DB99A2701409E2B4C3229C2220F9A197FF1A920F3B0D3E27466E",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"CommFB, 3.5.21 (CODESYS)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CODESYS/CommFB/3.5.21/CommFB.compiled-library",
+			"sha384": "F45C673D2EF4060019389205F85EB1264BB5DACEEFAF4DDC0C0D276F74DCF838E85918579FA07E82B02083D1AD305345",
+			"references": {
+				"IoDriver Profibus2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IIoDrvProfibus": {
+							"$type": "ManagedLibrary",
+							"libraryId": "IoDriver Profibus2 Interfaces, >=0.0.0 (System)"
+						}
+					}
+				},
+				"SysMem, 3.5.17 (System)": {
+					"sources": {
+						"SysMem": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysMem, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysMem"
+						}
+					}
+				}
+			}
+		},
+		"Component Manager, 3.5.21 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/Component%20Manager/3.5.21/Component%20Manager.compiled-library",
+			"sha384": "18FB20DAB272F7F94D63F6AD7F9052E2D497A27FE24C4E18D4561F7981EEF95D5D905ABB4E9D2C7213DE11631D9A3584",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpApp, 3.5.21 (System)": {
+					"sources": {
+						"CmpApp": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpApp, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpApp",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpEventMgr, 3.5.17 (System)": {
+					"sources": {
+						"CmpEventMgr": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpEventMgr, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpEventMgr",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"IoDriver Interfaces, 3.5.2 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/IoDriver%20Interfaces/3.5.2/IoDriver%20Interfaces.compiled-library",
+			"sha384": "B58B84A23459A0E8EF675E0B474F4A4C8873D136B756306AA4472248023F7C08ED11BD0CDD852F6D6D648E75E1D5335A",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes Interfaces, 3.5.2 (System)": {
+					"sources": {
+						"SysTypes_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"IoDriver Parameter Interfaces, 3.5.2 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/IoDriver%20Parameter%20Interfaces/3.5.2/IoDriver%20Parameter%20Interfaces.compiled-library",
+			"sha384": "EB3A1D8D795C7768BC961A0C0D00A455637EAD48AB952933635AEBE34A536CAAAE78B88F82CD8B8F6F0D5F78E1A6F9A4",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"IoDriver Profibus2 Interfaces, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/IoDriver%20Profibus2%20Interfaces/3.5.17/IoDriver%20Profibus2%20Interfaces.compiled-library",
+			"sha384": "160660FADF14B2320023CCFB93E2999B89F3D4627CD1594B6E4FD1C695678BCCF01747E2362432F85BB8CAEAD1274ABC",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {}
+		},
+		"IoDrvBase, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/IoDrvBase/3.5.17/IoDrvBase.compiled-library",
+			"sha384": "D2F63AD32379EA8D623B515D87066E9A6024A6956A03D13F97514D426C42F09151D18396768C632FCE8352EDA2E61940",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"Base Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IBaseLibrary": {
+							"$type": "ManagedLibrary",
+							"libraryId": "Base Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDriver Interfaces, 3.5.2 (System)": {
+					"sources": {
+						"IoDriver_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "IoDriver Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"IoDrvModbus, 4.6.0 (CODESYS)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CODESYS/IoDrvModbus/4.6.0/IoDrvModbus.compiled-library",
+			"sha384": "58CE776D201FEAA51ECC97A3A74170EA080C38CE5DD25C332D61084D5255DD3DC4F28AE497FAD53164DEC4714C09EFFB",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"3SLicense, 3.5.22 (CODESYS)": {
+					"sources": {
+						"_3S_LICENSE": {
+							"$type": "Placeholder",
+							"defaultResolution": "3SLicense, >=0.0.0 (3S - Smart Software Solutions GmbH)",
+							"resolverGuid": "97c3b452-d9fa-4ac2-9d0c-3d420aa6d95b",
+							"placeholder": "3SLicense",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CAA Device Diagnosis, 3.5.22 (CAA Technical Workgroup)": {
+					"sources": {
+						"DED": {
+							"$type": "Placeholder",
+							"defaultResolution": "CAA Device Diagnosis, >=0.0.0 (CAA Technical Workgroup)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CAA Device Diagnosis",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CAA Types Extern, 3.5.17 (CAA Technical Workgroup)": {
+					"sources": {
+						"CAA": {
+							"$type": "Placeholder",
+							"defaultResolution": "CAA Types Extern, >=0.0.0 (CAA Technical Workgroup)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CAA Types",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpLog, 3.5.21 (System)": {
+					"sources": {
+						"CmpLog": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpLog, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpLog",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDriver Interfaces, 3.5.2 (System)": {
+					"sources": {
+						"IIoDrv": {
+							"$type": "ManagedLibrary",
+							"libraryId": "IoDriver Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDriver Parameter Interfaces, 3.5.2 (System)": {
+					"sources": {
+						"IIoDrvParameter": {
+							"$type": "ManagedLibrary",
+							"libraryId": "IoDriver Parameter Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDrvBase, 3.5.17 (System)": {
+					"sources": {
+						"IoDrvBase": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoDrvBase, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoDrvBase",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDrvModbusBase, 4.6.0 (CODESYS)": {
+					"sources": {
+						"IoDrvModbusBase": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoDrvModbusBase, >=0.0.0 (3S - Smart Software Solutions GmbH)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoDrvModbusBase",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Standard, 3.5.22 (System)": {
+					"sources": {
+						"Standard": {
+							"$type": "Placeholder",
+							"defaultResolution": "Standard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Standard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysCom, 3.5.17 (System)": {
+					"sources": {
+						"SysCom": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysCom, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysCom",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTarget, 3.5.17 (System)": {
+					"sources": {
+						"SysTarget": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTarget, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTarget",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTime, 3.5.17 (System)": {
+					"sources": {
+						"SysTime": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTime, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTime",
+							"allowUnqualifiedAccess": true
+						}
+					},
+					"isContainer": true
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"IoDrvModbusBase, 4.6.0 (CODESYS)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CODESYS/IoDrvModbusBase/4.6.0/IoDrvModbusBase.compiled-library",
+			"sha384": "B532443678B3294657CCB5F3F52FBDDDDECF4F35AF38AEF6113BCDD466A34109E765E4BE512E4D844AEA47BCD28C4C50",
+			"references": {
+				"Base Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IBaseLibrary": {
+							"$type": "ManagedLibrary",
+							"libraryId": "Base Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpLog, 3.5.21 (System)": {
+					"sources": {
+						"CmpLog": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpLog, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpLog",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Component Manager, 3.5.21 (System)": {
+					"sources": {
+						"Component_Manager": {
+							"$type": "Placeholder",
+							"defaultResolution": "Component Manager, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Component Manager",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDrvBase, 3.5.17 (System)": {
+					"sources": {
+						"IoDrvBase": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoDrvBase, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoDrvBase",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Standard, 3.5.22 (System)": {
+					"sources": {
+						"Standard": {
+							"$type": "Placeholder",
+							"defaultResolution": "Standard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Standard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysCpuHandling, 3.5.17 (System)": {
+					"sources": {
+						"SysCpuHandling": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysCpuHandling, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysCpuHandling",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysMem, 3.5.17 (System)": {
+					"sources": {
+						"SysMem": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysMem, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysMem",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"IoStandard, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/IoStandard/3.5.22/IoStandard.compiled-library",
+			"sha384": "A760336374B99D21E29ECBA50F6439BBCB1493D945B4517145096335219371CDA9142CE6DF6764001699001C0ABEFD00",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"Base Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"IBaseLibrary": {
+							"$type": "ManagedLibrary",
+							"libraryId": "Base Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoConfig Implementation, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoConfig_Implementation": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpIoConfig Implementation, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpIoConfig Implementation",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoConfig Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoConfig_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpIoConfig Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpIoMgr Implementation, 3.5.17 (System)": {
+					"sources": {
+						"CmpIoMgr_Implementation": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpIoMgr Implementation, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpIoMgr Implementation",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				},
+				"CmpIoMgr Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpIoMgr_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpIoMgr Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"ModbusTCP Server, 4.6.0 (CODESYS)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/CODESYS/ModbusTCP%20Server/4.6.0/ModbusTCP%20Server.compiled-library",
+			"sha384": "4222C07775080A6635F19C3091960E710ED62BB32F9E775C2A9BCC2CB496DF11780B307B73F3DBDC5E5981191EDAE7DC",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"3SLicense, 3.5.22 (CODESYS)": {
+					"sources": {
+						"_3S_LICENSE": {
+							"$type": "Placeholder",
+							"defaultResolution": "3SLicense, >=0.0.0 (3S - Smart Software Solutions GmbH)",
+							"resolverGuid": "97c3b452-d9fa-4ac2-9d0c-3d420aa6d95b",
+							"placeholder": "3SLicense",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CAA Types Extern, 3.5.17 (CAA Technical Workgroup)": {
+					"sources": {
+						"CAA": {
+							"$type": "Placeholder",
+							"defaultResolution": "CAA Types Extern, >=0.0.0 (CAA Technical Workgroup)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CAA Types",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"CmpLog, 3.5.21 (System)": {
+					"sources": {
+						"CmpLog": {
+							"$type": "Placeholder",
+							"defaultResolution": "CmpLog, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "CmpLog",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"IoDrvModbus, 4.6.0 (CODESYS)": {
+					"sources": {
+						"IoDrvModbus": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoDrvModbus, >=0.0.0 (3S - Smart Software Solutions GmbH)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "IoDrvModbus",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Standard, 3.5.22 (System)": {
+					"sources": {
+						"Standard": {
+							"$type": "Placeholder",
+							"defaultResolution": "Standard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Standard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"StringUtils, 3.5.22 (System)": {
+					"sources": {
+						"Stu": {
+							"$type": "Placeholder",
+							"defaultResolution": "StringUtils, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "StringUtils",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysCpuHandling, 3.5.17 (System)": {
+					"sources": {
+						"SysCpuHandling": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysCpuHandling, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysCpuHandling",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysMem, 3.5.17 (System)": {
+					"sources": {
+						"SysMem": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysMem, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysMem",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysSocket, 3.5.19 (System)": {
+					"sources": {
+						"SysSocket": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysSocket, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysSocket",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTarget, 3.5.17 (System)": {
+					"sources": {
+						"SysTarget": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTarget, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTarget",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"Softmotion3S/0000 0005/4.22.0.0": {
+			"$type": "Device",
+			"path": "../Devices/.devDesc-cache/4102/0000%200005/4.22.0.0/device.devdesc.xml",
+			"references": {
+				"3SLicense, 3.5.22 (CODESYS)": {
+					"sources": {
+						"_3S_LICENSE": {
+							"$type": "Placeholder",
+							"defaultResolution": "3SLicense, 0.0.0 (CODESYS)",
+							"placeholder": "3SLicense",
+							"allowUnqualifiedAccess": true,
+							"optional": true,
+							"warnIfMissing": true
+						}
+					}
+				},
+				"IoStandard, 3.5.22 (System)": {
+					"sources": {
+						"IoStandard": {
+							"$type": "Placeholder",
+							"defaultResolution": "IoStandard, >=0.0.0 (System)",
+							"placeholder": "IoStandard",
+							"allowUnqualifiedAccess": true,
+							"optional": true,
+							"warnIfMissing": true
+						}
+					}
+				}
+			}
+		},
+		"Standard, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/Standard/3.5.22/Standard.compiled-library",
+			"sha384": "3F220DDB7A3A646ABE93E5A5E7C91998FCCE474A9BDD58DEEB0C43C95C74DF2F1BAB2F0EB70D9AA988A328817670C069",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {}
+		},
+		"StringUtils, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/StringUtils/3.5.22/StringUtils.compiled-library",
+			"sha384": "09F4D8CC362951A3B1CF0CF3387FD734138C979F5C9088CC94C76B4DD8805A21DF272080CD972DF981C314607D4B1C13",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Component Manager, 3.5.21 (System)": {
+					"sources": {
+						"Component_Manager": {
+							"$type": "Placeholder",
+							"defaultResolution": "Component Manager, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Component Manager",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"Standard, 3.5.22 (System)": {
+					"sources": {
+						"Standard": {
+							"$type": "Placeholder",
+							"defaultResolution": "Standard, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "Standard",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysMem, 3.5.17 (System)": {
+					"sources": {
+						"SysMem": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysMem, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysMem",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTimeRtc, 3.5.22 (System)": {
+					"sources": {
+						"SysTimeRtc": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTimeRtc, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTimeRtc",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysCom, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysCom/3.5.17/SysCom.compiled-library",
+			"sha384": "C7C5C1D31E43CD2EECEB9D1D0AD310A2C1FCC9F53021CE2CC43886C6004DEC69C47C15FE44F9DDAC6F4FD1FAA5F4E4DB",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysCpuHandling, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysCpuHandling/3.5.17/SysCpuHandling.compiled-library",
+			"sha384": "D0B08B53BA03B5190178721F0CF9582FDEFB105CEAE43CAD2D354E68B699761E2882EE3CD3BD0F1EDC630AE3199D7E24",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"CmpErrors2 Interfaces, 3.5.22 (System)": {
+					"sources": {
+						"CmpErrors": {
+							"$type": "ManagedLibrary",
+							"libraryId": "CmpErrors2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysMem, 3.5.17 (System)": {
+					"sources": {
+						"SysMem": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysMem, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysMem",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysMem, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysMem/3.5.17/SysMem.compiled-library",
+			"sha384": "D3E149F4A9ABC2443A62EC2AC42EE6711650A723D7DD1280FCCBA0333B8AFF1C2BFC41AEAF2731236931BB40C295DBE5",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysSocket Implementation, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysSocket%20Implementation/3.5.22/SysSocket%20Implementation.compiled-library",
+			"sha384": "4D62764B54D6F17D508FA38D9566372F4645E667EDE5E6A9AE5D0F1CAF42A8CEA41265F1F2102F3D13F5187784E25B72",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysSocket Interfaces, 3.5.19 (System)": {
+					"sources": {
+						"SysSocket_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysSocket Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysSocket Interfaces, 3.5.19 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysSocket%20Interfaces/3.5.19/SysSocket%20Interfaces.compiled-library",
+			"sha384": "C116EE13FFF243D2586194EE7F217D9FBBFF8D1964CACDAAFBC7CEC5723B4C1A5C93FD30B0AB1DFF5D511E3B892086C6",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysSocket, 3.5.19 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysSocket/3.5.19/SysSocket.compiled-library",
+			"sha384": "06450E9E10E78706F0534243A81A8530171AA36BA36E713CB8B670A0D337514D9CDE1FA20017EBBC193621F8E27E9F7B",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysSocket Implementation, 3.5.22 (System)": {
+					"sources": {
+						"SysSocket_Implementation": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysSocket Implementation, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysSocket Implementation",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				},
+				"SysSocket Interfaces, 3.5.19 (System)": {
+					"sources": {
+						"SysSocket_Interfaces": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysSocket Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				}
+			}
+		},
+		"SysTarget, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysTarget/3.5.17/SysTarget.compiled-library",
+			"sha384": "69B19B27F0B65224D8F293BE4C64A5243602DA0700B86759098B7F932F6F59A113D38075135DCCC0FD2F60128AF6C36B",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysTime, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysTime/3.5.17/SysTime.compiled-library",
+			"sha384": "B7CAD1108A914D82A8D02B7EF7712F9F93A40ED28EB0D3E6ACE54128EAD66510A88F7DC3A817AB0ED7486D290663FFCC",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTimeCore, 3.5.17 (System)": {
+					"sources": {
+						"SysTimeCore": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTimeCore, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTimeCore",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				},
+				"SysTimeRtc, 3.5.22 (System)": {
+					"sources": {
+						"SysTimeRtc": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTimeRtc, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTimeRtc",
+							"allowUnqualifiedAccess": true,
+							"publishSymbolsInContainer": true
+						}
+					}
+				}
+			}
+		},
+		"SysTimeCore, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysTimeCore/3.5.17/SysTimeCore.compiled-library",
+			"sha384": "BCBCCF4B2FFCCD207D4A25794915A8C06027440DEE71C34963E024F6ED3300279232056917C9B4BBD07150B65C4CF234",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysTimeRtc, 3.5.22 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysTimeRtc/3.5.22/SysTimeRtc.compiled-library",
+			"sha384": "A3571BE13C98988A12F2FF1F4E2F855C9687A757FF6F6CD96B1D976E464FFDFBC53ADC1EE31579A0661937C3DC0CEF8D",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {
+				"SysTimeCore, 3.5.17 (System)": {
+					"sources": {
+						"SysTimeCore": {
+							"$type": "Placeholder",
+							"defaultResolution": "SysTimeCore, >=0.0.0 (System)",
+							"resolverGuid": "b303f5ce-75ff-4668-a777-7da8debb449c",
+							"placeholder": "SysTimeCore",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				},
+				"SysTypes2 Interfaces, 3.5.17 (System)": {
+					"sources": {
+						"SysTypes": {
+							"$type": "ManagedLibrary",
+							"libraryId": "SysTypes2 Interfaces, >=0.0.0 (System)",
+							"allowUnqualifiedAccess": true
+						}
+					}
+				}
+			}
+		},
+		"SysTypes Interfaces, 3.5.2 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysTypes%20Interfaces/3.5.2/SysTypes%20Interfaces.compiled-library",
+			"sha384": "8DD678AF4D15F58DA469FF64F04D16ECDEC877979E3ACEB95B24007004440CE7587ACF594BFAC0F2480DEA58DB1DB517",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {}
+		},
+		"SysTypes2 Interfaces, 3.5.17 (System)": {
+			"$type": "CompiledLibrary",
+			"path": "../.library-cache/System/SysTypes2%20Interfaces/3.5.17/SysTypes2%20Interfaces.compiled-library",
+			"sha384": "545EA5F9E3F5C82013655C4DBCC107989B2C2A0F1ABE22EDCAA13E65B13D6C1312D04763B7F232FB5377F75EB0972349",
+			"allowUnqualifiedAccessByLibrary": true,
+			"references": {}
+		}
+	}
+}

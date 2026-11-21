@@ -203,7 +203,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    해당 호스트의 systemd 권한이 필요합니다. 단계와 오류는 런처 터미널에, 마지막 결과는 창에 표시됩니다.
    실패 원인을 해결한 뒤 같은 버튼을 누르면 재시도합니다. 자재 투입과 자동운전 설정은
    [Conveyor 실행 절차](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)를 따릅니다.
-   `PLC 시작 시 CODESYS GUI 열기`를 선택하면 현재 체크아웃의 Conveyor 프로젝트를 엽니다. 프로젝트 구성과 이전 실패 사례는 [PLC 안내](infra/plc/README.md)에서 확인할 수 있습니다.
+   `PLC 시작 시 CODESYS GUI 열기`를 선택하면 현재 체크아웃의 Conveyor 프로젝트를 엽니다. 공정 프로젝트와 학습용 PLC 원본은 [PLC 안내](infra/plc/README.md)에서 확인할 수 있습니다.
    런처에는 기동 시 읽은 PLC 앱 식별값, 단계, 자재 번호가 표시됩니다.
    `모두 종료`는 어댑터를 정리하고 이번 런처가 시작한 로컬 서비스만 중지합니다.
    IDE는 별도 창에서 직접 닫습니다. 프로젝트 위치와 서비스 인증 설정은 [Conveyor 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md#런처의-codesys-gui와-서비스-권한)를 참조하세요.
