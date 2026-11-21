@@ -658,19 +658,22 @@ esac
 
 
 @pytest.mark.parametrize('use_override', [False, True])
-def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monkeypatch, use_override):
+def test_optional_codesys_gui_opens_selected_project_once(request, tmp_path, monkeypatch, use_override):
+    project = Path(__file__).resolve().parents[2] / 'plc/conveyor_pnp_cell/Conveyor.fbsdev'
+    monkeypatch.delenv('ARM_CELL_CODESYS_PROJECT', raising=False)
+    if use_override:
+        project = tmp_path / 'Conveyor.fbsdev'
+        project.mkdir()
+        (project / 'Application.iecapp').write_text('{}')
+        (project / 'Application.iecapp^').mkdir()
+        monkeypatch.setenv('ARM_CELL_CODESYS_PROJECT', str(project))
+    window = request.getfixturevalue('window')
+    window.environment = dict(os.environ)
     assert window.plc_gui.isHidden()
     cell = window.selectors['cell']
     cell.setCurrentIndex(next(i for i in range(cell.count()) if Path(cell.itemData(i)).stem == 'conveyor_pnp_cell'))
     assert not window.plc_gui.isHidden()
     assert not window.plc_gui.isChecked()
-    project = Path(__file__).resolve().parents[2] / 'plc/conveyor_pnp_cell/Conveyor.fbsdev'
-    window.environment = dict(os.environ)
-    window.environment.pop('ARM_CELL_CODESYS_PROJECT', None)
-    if use_override:
-        project = tmp_path / 'Conveyor.fbsdev'
-        project.mkdir()
-        window.environment['ARM_CELL_CODESYS_PROJECT'] = str(project)
     opened = []
     class Editor:
         def poll(self):
@@ -689,11 +692,12 @@ def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monk
     window.start_plc()
     window.start_plc()
     assert len(starts) == 3
-    assert opened == [['c4-cli', 'standalone-session', str(project)]]
+    assert opened == [[sys.executable, str(launcher.plc_control.HERE / 'codesys_project.py'), str(project)]]
 
 
 def test_missing_editor_project_keeps_plc_start_available(window, tmp_path, monkeypatch):
-    window.environment = dict(os.environ, ARM_CELL_CODESYS_PROJECT=str(tmp_path / 'missing.fbsdev'))
+    window.environment = dict(os.environ)
+    window.plc_project = tmp_path / 'missing.fbsdev'
     window.runtime = tmp_path / 'runtime.json'
     window.plc_gui.setChecked(True)
     monkeypatch.setattr(window, 'can_start_plc', lambda: True)
@@ -702,3 +706,24 @@ def test_missing_editor_project_keeps_plc_start_available(window, tmp_path, monk
     window.start_plc()
     assert starts == [window.runtime]
     assert 'missing.fbsdev' in window.plc.editor_status()
+
+
+def test_choose_codesys_application(window, monkeypatch, tmp_path):
+    application = tmp_path / 'Example.fbsdev' / 'Line.iecapp'
+    application.parent.mkdir()
+    application.write_text('{}')
+    (application.parent / 'Line.iecapp^').mkdir()
+    chosen = iter([str(application), ''])
+    monkeypatch.setattr(launcher.QFileDialog, 'getOpenFileName', lambda *args: (next(chosen), ''))
+    window.choose_plc_project()
+    window.choose_plc_project()
+    assert window.plc_gui.isChecked()
+    assert str(application) in window.plc_project_button.toolTip()
+    window.environment = dict(os.environ, ARM_CELL_CODESYS_PROJECT='old.fbsdev')
+    window.runtime = tmp_path / 'runtime.json'
+    monkeypatch.setattr(window, 'can_start_plc', lambda: True)
+    monkeypatch.setattr(window.plc, 'start', lambda *args: None)
+    calls = []
+    monkeypatch.setattr(window.plc, 'open_editor', lambda selected, env: calls.append(selected))
+    window.start_plc()
+    assert calls == [application]

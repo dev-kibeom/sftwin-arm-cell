@@ -6,6 +6,7 @@ from pathlib import Path
 import pwd
 import signal
 import subprocess
+import sys
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer
 
@@ -50,7 +51,7 @@ class ConveyorPLC(QObject):
         self.probe_result = ''
         self.owned_invocation = ''
         self.closing = False
-        self.editor = None
+        self.editors = {}
         self.editor_error = ''
         self.runtime = None
         self.output = b''
@@ -67,31 +68,32 @@ class ConveyorPLC(QObject):
     def inspect(self, phase):
         self.run(phase, ['systemctl', 'show', '--property=ActiveState,InvocationID,LoadState', UNIT])
 
-    def open_editor(self, environment):
-        if self.editor is not None and self.editor.poll() is None:
-            return
+    def open_editor(self, selected, environment):
+        selected = selected.resolve()
+        project = selected.parent if selected.suffix == '.iecapp' else selected
         self.editor_error = ''
-        selected = environment.get('ARM_CELL_CODESYS_PROJECT')
-        project = Path(selected).expanduser() if selected else HERE.parent / 'plc/conveyor_pnp_cell/Conveyor.fbsdev'
-        if not project.exists():
-            self.editor_error = f'CODESYS 프로젝트를 찾을 수 없습니다 · {project}'
+        editor = self.editors.get(project)
+        if editor is not None and editor.poll() is None:
+            return
+        if not selected.exists():
+            self.editor_error = f'CODESYS 프로젝트를 찾을 수 없습니다 · {selected}'
         else:
             try:
-                self.editor = subprocess.Popen(['c4-cli', 'standalone-session', str(project)],
-                                               env=environment, start_new_session=True)
-                print(f'[PLC] CODESYS GUI 열기 · {project}', flush=True)
+                command = [sys.executable, str(HERE / 'codesys_project.py'), str(selected)]
+                self.editors[project] = subprocess.Popen(command, env=environment, start_new_session=True)
+                print(f'[PLC] CODESYS 프로젝트 준비 · {selected}', flush=True)
             except OSError as error:
                 self.editor_error = f'CODESYS GUI 실행 실패 · {error}'
         if self.editor_error:
             print('[PLC]', self.editor_error, flush=True)
 
     def editor_status(self):
-        if self.editor is not None:
-            code = self.editor.poll()
+        for project, editor in list(self.editors.items()):
+            code = editor.poll()
             if code is not None:
-                self.editor = None
+                del self.editors[project]
                 if code:
-                    self.editor_error = f'CODESYS GUI 종료 · 코드 {code}'
+                    self.editor_error = f'CODESYS 프로젝트 준비 또는 IDE 실행 실패 · {project.name} · 코드 {code} · 런처 로그 확인'
                     print('[PLC]', self.editor_error, flush=True)
         return self.editor_error
 
