@@ -219,6 +219,7 @@ class Exchange:
                    and packet['body_instance_id'] == material_instance_id(self.supply.stream_id, observed)
                    and packet['material_type_id'] == packet['created_type_id'])
 
+        reconciled = None
         with self.lock:
             if self.ledger is None and time.monotonic() >= self.next_history_retry:
                 self._open_history()
@@ -261,14 +262,17 @@ class Exchange:
                 else:
                     resolution = None
                 if resolution:
-                    self._record_reconnect('RESERVATION_RECONCILED', saved, result=resolution,
-                                           plc_number=command.cycle, body=packet['body_instance_id'])
+                    reconciled = saved, resolution
                     self._restored_lease = None
             self.valid_at = packet['acquired'] if valid else 0.
         try:
             self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),
                             sensors=sensors, bound_cycle=bound)
         finally:
+            if reconciled:
+                saved, resolution = reconciled
+                self._record_reconnect('RESERVATION_RECONCILED', saved, result=resolution,
+                                       plc_number=command.cycle, body=packet['body_instance_id'])
             if valid and self.ledger is not None:
                 self._record_observations(packet, command)
 

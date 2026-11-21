@@ -180,11 +180,16 @@ class Cycle:
         reservation = lease_by_id.get(selected.get('reservation_id'), {})
         self.stages['retirement'] = reservation.get('status') == 'RELEASED'
         self.durations['held_to_release'] = interval(held, release, 'producer')
-        linked = [r for r in missions if r.get('task_goal_uuid') == task and r.get('event') == 'task_accepted']
-        accepted = first(linked)
-        outcome = first(r for r in missions if accepted and r.get('execute_cycle_id') == accepted['execute_cycle_id']
-                        and r.get('reservation_id') == accepted.get('reservation_id') and r.get('event') == 'task_outcome')
-        self.durations['task_accepted_to_outcome'] = interval(accepted, outcome, 'file')
+        accepted = [r for r in missions if task and r.get('task_goal_uuid') == task
+                    and r.get('event') == 'task_accepted']
+        self.durations['task_accepted_to_outcome'] = None
+        if len(accepted) == 1:
+            start = accepted[0]
+            outcomes = [r for r in missions if r.get('event') == 'task_outcome'
+                        and r.get('execute_cycle_id') == start.get('execute_cycle_id')
+                        and r.get('reservation_id') == start.get('reservation_id')]
+            if len(outcomes) == 1:
+                self.durations['task_accepted_to_outcome'] = interval(start, outcomes[0], 'file')
         return selected
 
     def supply(self, material, leases, events):
