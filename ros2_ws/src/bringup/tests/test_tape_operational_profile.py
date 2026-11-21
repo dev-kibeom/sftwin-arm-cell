@@ -68,8 +68,9 @@ def test_configured_launch_preserves_common_observation_settings(tmp_path, monke
         planning_scene_log_level='warn', diagnostics='motion,safety,orchestration')
     actions=module.compose(context)
     nodes=[action for action in actions if isinstance(action,Node)]
+    from arm_cell_motion.launch_output import OperatorLogNode
     for node in nodes:
-        assert node._ExecuteLocal__output_format==module.CONSOLE_OUTPUT_FORMAT
+        assert isinstance(node, OperatorLogNode)
         assert node._Node__ros_arguments[:2]==['--log-level','error']
         if node.node_package=='arm_cell_vda':continue
         parameters=evaluate_parameters(context,node._Node__parameters)[0]
@@ -79,7 +80,6 @@ def test_configured_launch_preserves_common_observation_settings(tmp_path, monke
     environment={context.perform_substitution(action.name[0]):action for action in actions
                  if isinstance(action,SetEnvironmentVariable)}
     assert 'ARM_CELL_RECORDING_SESSION_PATH' in environment
-    assert 'RCUTILS_CONSOLE_OUTPUT_FORMAT' in environment
 
 
 def test_configured_supply_exports_motion_experiment_settings(tmp_path):

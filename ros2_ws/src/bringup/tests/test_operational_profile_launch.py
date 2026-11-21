@@ -153,18 +153,14 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     assert not kinematics["arm"].get("position_only_ik", False)
 
 
-def test_launch_uses_utc_and_preserves_ros_console_fields():
+def test_launch_uses_utc_and_routes_all_nodes_through_operator_log():
     actions = _composed_nodes()
     environment = [
         action for action in actions if isinstance(action, SetEnvironmentVariable)
     ]
     context = LaunchContext()
-    output_format = next(
-        action
-        for action in environment
-        if action.name[0].perform(context) == "RCUTILS_CONSOLE_OUTPUT_FORMAT"
-    )
-    assert output_format.value[0].perform(context) == "[{severity}] [{name}] {message}"
+    from arm_cell_motion.launch_output import OperatorLogNode
+    assert all(isinstance(node, OperatorLogNode) for node in actions if isinstance(node, Node))
     timezone = next(
         action for action in environment if action.name[0].perform(context) == "TZ"
     )
@@ -577,6 +573,8 @@ def test_component_diagnostics_selects_only_requested_component_producers():
         "info",
         "--log-level",
         "orchestration_node.rclcpp_action:=warn",
+        "--disable-external-lib-logs",
+        "--disable-rosout-logs",
     ]
     assert (
         _node_parameters(orchestration_nodes["orchestration_node"])[

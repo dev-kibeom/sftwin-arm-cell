@@ -101,6 +101,8 @@ def test_validation_profile_owns_moveit_planning_scaling():
         "info",
         "--log-level",
         "move_group_interface:=warn",
+        "--disable-external-lib-logs",
+        "--disable-rosout-logs",
     ]
 
     assert motion_parameters["planning_velocity_scaling_factor"] == 1.0

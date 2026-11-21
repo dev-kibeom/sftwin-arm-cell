@@ -50,7 +50,8 @@ def test_adapter_uses_conveyor_process_params_and_session_endpoint(monkeypatch, 
         connection=dict(host='127.0.0.1', port=11502, unit_id=3, poll_seconds=.1, timeout_seconds=.8),
         receipt_file='/tmp/selected stream.sqlite'))))
     args, = launched
-    assert args[1] == str(tmp_path / 'lib/arm_cell_plc_adapter/plc_task_adapter')
+    assert args[1:4] == ['-m', 'arm_cell_motion.launch_output',
+                         str(tmp_path / 'lib/arm_cell_plc_adapter/plc_task_adapter')]
     assert [Path(args[i+1]).name for i, arg in enumerate(args) if arg == '--params-file'] == [
         'conveyor_pnp_codesys.yaml', 'conveyor_process.yaml']
     assert ('simulation_equipment_permit_topic:=/test/equipment_permit' in args) == isaac_conveyor

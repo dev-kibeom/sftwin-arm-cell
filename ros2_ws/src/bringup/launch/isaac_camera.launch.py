@@ -1,6 +1,5 @@
 """Publish only the two static camera-overlay TF edges from a verified snapshot."""
 
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -10,27 +9,9 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration, EnvironmentVariable
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode
 import yaml
 from arm_cell_bringup.runtime import load_profile
-
-
-def _load_console_output_format():
-    helper_path = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "launch/console_output_format.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "arm_cell_console_output_format", helper_path
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load console formatter from {helper_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.ConsoleOutputFormat("{line}")
-
-
-CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
 
 
 def _transform_arguments(transform):
@@ -82,21 +63,17 @@ def compose(context):
     ]:
         raise RuntimeError("camera snapshot violates approved TF ownership")
     return [
-        Node(
+        OperatorLogNode(
             package="tf2_ros",
             executable="static_transform_publisher",
             name="world_to_camera_link",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             arguments=_transform_arguments(transforms[0]),
             parameters=[{"use_sim_time": True}],
         ),
-        Node(
+        OperatorLogNode(
             package="tf2_ros",
             executable="static_transform_publisher",
             name="camera_link_to_optical",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             arguments=_transform_arguments(transforms[1]),
             parameters=[{"use_sim_time": True}],
         ),
@@ -107,10 +84,6 @@ def generate_launch_description():
     share = Path(get_package_share_directory("arm_cell_bringup"))
     return LaunchDescription(
         [
-            SetEnvironmentVariable(
-                "RCUTILS_CONSOLE_OUTPUT_FORMAT",
-                "[{severity}] [{name}] {message}",
-            ),
             SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument(
                 "profile", default_value=str(share / "config/isaac_camera.yaml")

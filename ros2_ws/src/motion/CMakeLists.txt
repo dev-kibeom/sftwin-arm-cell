@@ -28,6 +28,8 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
+ament_python_install_package(${PROJECT_NAME})
 find_package(orocos_kdl_vendor REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(urdf REQUIRED)

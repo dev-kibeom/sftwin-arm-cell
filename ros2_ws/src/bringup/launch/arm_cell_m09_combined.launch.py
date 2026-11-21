@@ -16,17 +16,16 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode
 import yaml
 
 
 def material_adapter(_context):
     return [
-        Node(
+        OperatorLogNode(
             package="arm_cell_gateway",
             executable="material_handoff_node",
             name="material_handoff_node",
-            output="screen",
             parameters=[{"use_sim_time": True}],
         )
     ]
