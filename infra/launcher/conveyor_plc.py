@@ -19,7 +19,8 @@ def probe(link):
     deadline = time.monotonic() + 10
     while True:
         try:
-            io.commands()
+            command = io.commands()
+            print(f'Conveyor PLC 응답 0xC051 · 단계 {command.phase} · 자재 번호 {command.cycle}', flush=True)
             return
         except (OSError, ModbusException) as error:
             if time.monotonic() >= deadline:

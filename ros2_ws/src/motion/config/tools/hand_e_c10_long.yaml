@@ -11,7 +11,7 @@ runtime:
     - physical
   launcher_modes:
   - id: physical_real
-    label: Physics
+    label: 물리 파지
     combination:
     - physics
     - physical

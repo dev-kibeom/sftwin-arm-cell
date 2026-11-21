@@ -20,7 +20,7 @@
   하우징 뒷면부터 **254.76571 mm**이며, 기존 제조사 TCP와 연장부 장착면 사이의
   약 0.00429 mm 차이도 반영합니다. 도구 삽입 방향은 +Z로 유지합니다.
 
-Launcher의 정식 Robot·Tool·Cell·Grasp Mode 선택으로 M0609 Tape Cell을 실행합니다.
+Launcher의 정식 Robot·Tool·Cell·파지 모드 선택으로 M0609 Tape Cell을 실행합니다.
 지원 모드는 Physical Real이며 세 핑거의 실제 접촉·팽창과 수축/접촉 소실을 관측합니다.
 실험 전용 버튼·왕복 구동 실행기는 제거했습니다. 실행 절차와 ROS Task/Mission 경계는
 [Tape Handling Cell 안내](../../../infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요.

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
+from arm_cell_bringup.tool_modes import tool_mode_choices
 from arm_cell_bringup.tool_parameters import available_fields, parameter_value, apply_tool_parameters
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 if __package__:
@@ -69,17 +70,6 @@ def selected_deployment(entries, selection):
     if len(matches) != 1:
         raise ValueError('Unsupported or ambiguous combination: select a registered production Profile')
     return matches[0]
-
-
-def tool_mode_choices(profile):
-    """Tool-owned display names bind to the existing supported runtime pairs."""
-    runtime = profile['runtime']
-    names = {tuple(mode['combination']): mode for mode in runtime.get('launcher_modes', [])}
-    return [dict(combination=pair,
-                 id=names.get(tuple(pair), {}).get("id"),
-                 label=names.get(tuple(pair), {}).get('label', ' / '.join(pair)),
-                 description=names.get(tuple(pair), {}).get('description', ''))
-            for pair in runtime.get('supported_combinations', [['logical', 'fixed_attach']])]
 
 
 def validation_note(entry):
@@ -187,7 +177,7 @@ class Launcher(QMainWindow):
         self.mode_display = QStackedWidget()
         self.mode_display.addWidget(self.tool_mode)
         self.mode_display.addWidget(self.fixed_mode)
-        form.insertRow(form.rowCount() - 1, 'Grasp Mode', self.mode_display)
+        form.insertRow(form.rowCount() - 1, '파지 모드', self.mode_display)
         self.tool_mode.currentIndexChanged.connect(self.refresh_parameters)
         self.mode_pairs = []
         self.parameter_edits = {}
@@ -202,6 +192,8 @@ class Launcher(QMainWindow):
         self.resize(760, 650)
         self.debug = QCheckBox('ROS 2 디버그 모드')
         layout.addWidget(self.debug)
+        self.plc_gui = QCheckBox('PLC 시작 시 CODESYS GUI 열기')
+        layout.addWidget(self.plc_gui)
         buttons = QHBoxLayout()
         layout.addLayout(buttons)
         self.isaac = QPushButton('Isaac 시작')
@@ -256,7 +248,12 @@ class Launcher(QMainWindow):
         tool = self.selectors['tool'].currentData()
         profile = read(tool) if tool is not None else None
         runtime = profile['runtime'] if profile is not None else {}
-        choices = tool_mode_choices(profile) if profile is not None else []
+        self.mode_error = ''
+        try:
+            choices = tool_mode_choices(profile) if profile is not None else []
+        except ValueError as exc:
+            self.mode_error = str(exc)
+            choices = []
         labels = {'surface_suction': '표면 흡착', 'internal_radial': '내경 파지', 'box_exterior': '외측 파지'}
         strategies = runtime.get('grasp_strategies', [])
         self.strategy.setText(', '.join(labels.get(key, key) for key in strategies) or '—')
@@ -265,7 +262,7 @@ class Launcher(QMainWindow):
         self.tool_mode.clear()
         for choice in choices:
             self.tool_mode.addItem(choice['label'], choice['combination'])
-            self.tool_mode.setItemData(self.tool_mode.count() - 1, choice['description'], Qt.ToolTipRole)
+            self.tool_mode.setItemData(self.tool_mode.count() - 1, choice.get('description', ''), Qt.ToolTipRole)
         default = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
         self.tool_mode.setCurrentIndex(self.tool_mode.findData(default))
         self.tool_mode.blockSignals(False)
@@ -336,6 +333,8 @@ class Launcher(QMainWindow):
         if entry['profile'] != self.component_settings.profile:
             self.component_settings.load_profile(entry['profile'])
         pair = self.tool_mode.currentData()
+        if self.mode_error:
+            raise ValueError(self.mode_error)
         if pair not in self.mode_pairs:
             raise ValueError('Unsupported Tool actuator/grasp combination')
         runtime = read(self.selectors['tool'].currentData())['runtime']
@@ -363,6 +362,8 @@ class Launcher(QMainWindow):
         self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
+        self.plc_gui.setVisible(self.conveyor)
+        self.plc_gui.setEnabled(not self.stopping and self.plc.phase is None)
         self.plc_button.setVisible(self.conveyor)
         self.plc_button.setEnabled(self.can_start_plc())
         self.stop.setEnabled(active and not self.stopping)
@@ -375,6 +376,10 @@ class Launcher(QMainWindow):
             message = states + ' | ' + message
         if self.plc.message and self.conveyor:
             message = f'{self.plc.message} | {message}'
+        if self.conveyor and self.plc_gui.isChecked():
+            editor_error = self.plc.editor_status()
+            if editor_error:
+                message = f'{message} | {editor_error}'
         self.status.setText(self.error or ('종료 중…' if self.stopping else message))
 
     def spawn(self, name, command, environment):
@@ -481,6 +486,8 @@ class Launcher(QMainWindow):
 
     def start_plc(self):
         if self.can_start_plc():
+            if self.plc_gui.isChecked():
+                self.plc.open_editor(self.environment)
             self.plc.start(self.runtime, self.environment)
             self.validate()
 

@@ -3,6 +3,7 @@ import copy
 import importlib
 import json
 import sys
+from .tool_modes import tool_mode_choices
 from .component_parameters import apply_component_parameters
 from .runtime import read, resolve, selected_profiles, write_recipes, configure_grip_force, project_root
 from .model_validation import validate_assembly_configuration, finite_number, names
@@ -17,7 +18,7 @@ def configured_tool_model(config):
     pair = [runtime['actuator'], runtime['grasp']]
     if pair not in runtime['supported_combinations']:
         raise ValueError(f'Unsupported Tool actuator/grasp combination: {pair}')
-    runtime['mode_id'] = next(mode['id'] for mode in runtime['launcher_modes'] if mode['combination'] == pair)
+    runtime['mode_id'] = next(mode['id'] for mode in tool_mode_choices(config['tool']) if mode['combination'] == pair)
     if config['tool']['tool_type'] == 'radial_gripper':
         _validate_radial_model(config, links, joints, arm)
     elif config['tool']['tool_type'] == 'suction_gripper':

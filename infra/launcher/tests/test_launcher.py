@@ -142,7 +142,8 @@ def test_tool_display_metadata_cannot_add_unsupported_runtime_combination():
     from launcher import tool_mode_choices
     profile = {'runtime': {
         'supported_combinations': [['logical', 'fixed_attach']],
-        'launcher_modes': [dict(label='Unsupported mode', combination=['logical', 'physical'])],
+        'launcher_modes': [dict(label='논리 판정 + 고정', combination=['logical', 'fixed_attach']),
+                           dict(label='Unsupported mode', combination=['logical', 'physical'])],
     }}
     choices = tool_mode_choices(profile)
     assert [choice['combination'] for choice in choices] == [['logical', 'fixed_attach']]

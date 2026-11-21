@@ -3,13 +3,29 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import pwd
 import signal
+import subprocess
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer
 
 
 UNIT = 'codesyscontrol.service'
 HERE = Path(__file__).resolve().parent
+
+
+def service_policy_path():
+    user = pwd.getpwuid(os.getuid()).pw_name
+    return Path('/etc/sudoers.d') / f'arm-cell-codesys-{user}'
+
+
+def service_command(verb):
+    if verb not in ('start', 'stop'):
+        raise ValueError(f'Unsupported CODESYS service operation: {verb}')
+    args = [verb, '--no-ask-password', UNIT]
+    if os.access(service_policy_path(), os.F_OK):
+        return ['/usr/bin/sudo', '-n', '-k', '--', '/usr/bin/systemctl', *args]
+    return ['systemctl', *args]
 
 
 def runtime_command(stage, runtime):
@@ -33,6 +49,8 @@ class ConveyorPLC(QObject):
         self.message = ''
         self.owned_invocation = ''
         self.closing = False
+        self.editor = None
+        self.editor_error = ''
         self.runtime = None
         self.output = b''
 
@@ -47,6 +65,35 @@ class ConveyorPLC(QObject):
 
     def inspect(self, phase):
         self.run(phase, ['systemctl', 'show', '--property=ActiveState,InvocationID,LoadState', UNIT])
+
+    def open_editor(self, environment):
+        if self.editor is not None and self.editor.poll() is None:
+            return
+        self.editor_error = ''
+        selected = environment.get('ARM_CELL_CODESYS_PROJECT')
+        data_home = Path(environment.get('XDG_DATA_HOME') or Path.home() / '.local/share')
+        project = Path(selected).expanduser() if selected else data_home / 'arm_cell/codesys/Conveyor.fbsdev'
+        if not project.exists():
+            self.editor_error = f'CODESYS 프로젝트를 찾을 수 없습니다 · {project}'
+        else:
+            try:
+                self.editor = subprocess.Popen(['c4-cli', 'standalone-session', str(project)],
+                                               env=environment, start_new_session=True)
+                print(f'[PLC] CODESYS GUI 열기 · {project}', flush=True)
+            except OSError as error:
+                self.editor_error = f'CODESYS GUI 실행 실패 · {error}'
+        if self.editor_error:
+            print('[PLC]', self.editor_error, flush=True)
+
+    def editor_status(self):
+        if self.editor is not None:
+            code = self.editor.poll()
+            if code is not None:
+                self.editor = None
+                if code:
+                    self.editor_error = f'CODESYS GUI 종료 · 코드 {code}'
+                    print('[PLC]', self.editor_error, flush=True)
+        return self.editor_error
 
     def start(self, runtime, environment):
         if self.phase or self.closing:
@@ -118,7 +165,8 @@ class ConveyorPLC(QObject):
         elif phase == 'stop':
             self.log('CODESYS 종료됨')
         elif phase == 'probe':
-            self.log('Conveyor PLC 응답 확인 · PLC 어댑터 기동')
+            result = output.splitlines()[-1] if output else 'Conveyor PLC 응답 확인'
+            self.log(f'{result} · PLC 어댑터 기동')
             self.run('adapter', runtime_command('adapter', self.runtime))
         elif phase == 'adapter':
             self.log('PLC 어댑터 종료됨')
@@ -130,7 +178,7 @@ class ConveyorPLC(QObject):
         if phase == 'release':
             if active == 'active' and invocation == self.owned_invocation:
                 self.log('런처가 시작한 CODESYS 종료 중')
-                self.run('stop', ['systemctl', 'stop', '--no-ask-password', UNIT])
+                self.run('stop', service_command('stop'))
             self.owned_invocation = ''
             return
         if phase == 'identify':
@@ -145,7 +193,7 @@ class ConveyorPLC(QObject):
             self.probe()
         elif active in ('inactive', 'failed') and fields.get('LoadState') == 'loaded':
             self.log('CODESYS 서비스 시작 중')
-            self.run('start', ['systemctl', 'start', '--no-ask-password', UNIT])
+            self.run('start', service_command('start'))
         else:
             self.failed(output or 'CODESYS 서비스 상태 확인 불가')
 

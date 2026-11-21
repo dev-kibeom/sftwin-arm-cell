@@ -1,6 +1,6 @@
 # Tape Handling Cell
 
-Launcher에서 M0609, Hand-E C10 또는 C10 + 100 mm 핑거, Tape Handling Cell을 선택하고 Grasp Mode가 Physics인지 확인한다. Isaac 시작 → ROS 2 시작 후 공통 Simulation UI Hub의 **Supply**에 가득 찬 카트리지 개수를 입력한다. 한 카트리지는 17 mm 롤 15개를 30 mm 피치로 보관한다.
+Launcher에서 M0609, Hand-E C10 또는 C10 + 100 mm 핑거, Tape Handling Cell을 선택하고 파지 모드가 `물리 파지`인지 확인한다. Isaac 시작 → ROS 2 시작 후 공통 Simulation UI Hub의 **Supply**에 가득 찬 카트리지 개수를 입력한다. 한 카트리지는 17 mm 롤 15개를 30 mm 피치로 보관한다.
 
 Cell 설정은 `ros2_ws/src/bringup/config/cells/tape_roll_cell.yaml`이다. 설비·슬롯·컨베이어·티칭은 Cell, 중공 형상·질량·마찰은 Material, 핑거 구동·장치 보유 추정은 Tool, 관절 제한·HOME은 Robot이 소유한다. 공통 UI는 Cell의 Supply capability를 사용하며 CNC의 기존 Gateway 공급 경로도 유지한다.
 

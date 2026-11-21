@@ -8,7 +8,7 @@ Physics 모드는 명시적 실험 선택이다. 물리 접촉·자재 유지를
 Tool Profile의 `runtime`은 모델 구현, `actuator`, `grasp`, Capability와 제어 설정을 소유한다.
 Bringup은 선택을 Runtime Configuration에 고정하고 지원 조합을 검사한다. 실행 중 전환·실패 시 자동 fallback은 없다.
 
-| Mode ID | Actuator + Grasp | Qualification | 유지와 HELD | Release |
+| Robotiq Mode ID | Actuator + Grasp | Qualification | 유지와 HELD | Release |
 |---|---|---|---|---|
 | `logical_snap` | logical + fixed_attach | 기존 Capture Qualification | Fixed Joint Attach 완료 뒤 HELD | OPEN·Detach 완료 뒤 RELEASED |
 | `physical_snap` | physics + fixed_attach | 같은 참조 대상의 양손가락 반력·예상 폭·위치 안정성 | Qualification 뒤 Fixed Joint Attach 완료를 확인하여 HELD | Fixed Joint 제거 및 실제 OPEN 완료 뒤 RELEASED |
@@ -194,10 +194,9 @@ Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick
 
 ## 실행
 
-GUI 런처는 Tool의 파지 전략과 `Grasp Mode`를 별도 행에 표시한다. 모드가 하나이면 텍스트로 표시한다.
-병렬 그리퍼의 `Logical Attach`은 Logical + Fixed Attach(기본), `Physics + Fixed Attach`은 물리 접촉 확인 후 Fixed Attach,
-`Physics`는 Physics + Physical로 접촉·마찰 기반 시뮬레이션을 의미한다.
-Tool Profile의 `runtime.launcher_modes`가 표시 이름·설명을 제공하며, 실제 지원 범위는 기존 `supported_combinations`가 소유한다.
+GUI 런처는 Tool의 `파지 전략`과 `파지 모드`를 별도 행에 표시한다. 모드가 하나이면 텍스트로 표시한다.
+Tool Profile 작성 시 `supported_combinations`의 각 조합에 대응하는 `runtime.launcher_modes` 항목을 하나씩 등록한다.
+`label`은 [Motion Backend ICD의 공통 표시명](../../docs/design/interfaces/icd-motion-backend.md#tool-파지-모드와-holding--attachment)에서 선택하고, `description`에는 해당 Tool의 판정·유지 방식을 설명한다.
 표시용 메타데이터가 미지원 조합을 추가하지 않는다. 내부 Actuator·Grasp 분리는 유지하고 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
 Isaac과 ROS에 같은 Runtime Configuration을 전달한다. 원본 Tool/Deployment YAML을 수정하거나 복사하지 않는다.
 
@@ -216,7 +215,7 @@ bash infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /tmp/arm-cell-ph
 
 Script Editor 직접 실행은 위 파일을 `ARM_CELL_RUNTIME_CONFIG`로 지정하고 기존 Before Play/After Play 순서를 따른다.
 이미 export한 설정은 실행 중 수정하지 않는다. 선택을 바꿀 때 원본 Profile에서 다시 export하고 실행을 재시작한다.
-원본 generated USD를 다시 저장하지 않는다. Physics + Fixed Attach는 `--tool-grasp fixed_attach`를 지정한다.
+원본 generated USD를 다시 저장하지 않는다. `물리 판정 + 고정`은 `--tool-grasp fixed_attach`를 지정한다.
 
 ## 검증 범위와 사용자 라이브 확인
 
@@ -232,7 +231,7 @@ URDF 연동 파생·configuration export, 두 Robot의 HOME·Profile 보존을 �
 - 빈 CLOSE와 물체/환경 걸림의 진단 구분; 고착을 보유로 보고하지 않는지.
 - 실제 payload 질량·형상별 마찰, 토크, 손가락 접촉·유지·미끄러짐/낙하. 현 tuning은 성공 보장이 없다.
 - Physical 모드에서 Fixed Joint 생성·자재 순간이동·충돌 무시가 없는지, 유효한 추정 HELD/근거 소실 시 UNKNOWN, HELD 이후 참조 퇴역과 후퇴·PLACE 진행.
-- Physics + Fixed Attach의 실제 접촉 정지 이후 Capture Qualification 가능 여부는 별도 확인.
+- `물리 판정 + 고정`의 실제 접촉 정지 이후 Capture Qualification 가능 여부는 별도 확인.
 
 실제 Isaac Physics tick을 실행한 파지/접촉/하중 유지 검증은 이번 자동 검증의 완료 주장에 포함하지 않는다.
 
