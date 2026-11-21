@@ -103,7 +103,7 @@ CODESYS가 공급·이송·스토퍼·트레이 배출을 제어하는 Isaac Sim
 
 ## Tape Handling Cell
 
-M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Launcher의 정식 Physical Real 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.
+M0609 + C10/Long의 카트리지 다중 롤 물리 시험은 [Tape Handling Cell 안내](infra/isaac_sim/scripts/tape_roll_cell/README.md)를 참조하세요. Launcher의 Physics 모드로 공통 Tool Runtime과 ROS Task/Mission을 실행합니다. 정렬 슬롯은 Vision과 구분되는 configured-source 공급 입력을 사용합니다.
 
 ## 설계 기록과 Sim-to-Real 방향
 
@@ -193,13 +193,19 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    기본 조합은 M0609 + Robotiq 2F-85 +
    `isaac_pnp_cnc` Cell입니다. RB5-850E + 동일 Tool/Cell도 선택할 수 있으며 **라이브 검증 전**으로
    표시됩니다. [RB5 준비·자동 검사·사용자 라이브 절차](infra/isaac_sim/RB5_850.md)를 먼저 확인하세요.
-   병렬 그리퍼의 기본 모드는 `Logical Attach`이며,
-   물리 구동과 논리 고정은 `Physical Attach`, 접촉·마찰 기반 시뮬레이션 파지는 `Physics`입니다.
-   Tool Profile이 지원하는 모드만 표시하고 실행 중에는 선택을 잠급니다.
+   `파지 전략`에는 Tool이 지원하는 파지 방법을 표시합니다. Conveyor 흡착컵은 `표면 흡착`이며
+   `Grasp Mode`는 `Physics`입니다. 단일 모드는 읽기 전용입니다. Robotiq의 세 모드는
+   `Logical Attach`, 물리 접촉 확인 후 고정하는 `Physics + Fixed Attach`, 물리 접촉으로 유지하는 `Physics`입니다.
    `Physics`는 실물 장비 연결이나 실제 파지의 라이브 검증 완료를 뜻하지 않습니다.
 2. `Isaac 시작`을 누릅니다. 씬이 로드되고 Timeline과 After Playing 초기화가 끝날 때까지 기다립니다.
 3. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
-4. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.
+4. Conveyor에서는 `PLC 시작`을 누릅니다. 로컬 CODESYS 서비스를 재사용하거나 시작한 뒤,
+   Conveyor 공정 프로그램의 Modbus 응답을 확인하고 PLC 어댑터를 실행합니다. 서비스 시작·종료에는
+   해당 호스트의 systemd 권한이 필요합니다. 단계와 오류는 런처 터미널에, 마지막 결과는 창에 표시됩니다.
+   실패 원인을 해결한 뒤 같은 버튼을 누르면 재시도합니다. 설비 운전 허가와 자동운전은
+   [Conveyor 실행 절차](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)를 따릅니다.
+   `모두 종료`는 어댑터를 정리하고 이번 런처가 시작한 로컬 서비스만 중지합니다.
+5. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.
    런처의 실행 표시는 프로세스가 실행 중이라는 뜻입니다. 시스템 준비나 PnP 성공을 보장하지 않습니다.
 
 Isaac과 ROS마다 별도 `xterm` 창이 열립니다. 출력과 오류는 해당 터미널에서 확인합니다.

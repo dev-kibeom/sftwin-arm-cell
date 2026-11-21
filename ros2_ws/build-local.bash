@@ -27,6 +27,6 @@ source install/local_setup.bash
 ros2 pkg prefix trac_ik_kinematics_plugin
 
 cd "$workspace"
-colcon build --base-paths src --packages-up-to arm_cell_bringup \
+colcon build --base-paths src --packages-up-to arm_cell_bringup arm_cell_plc_adapter \
   --cmake-args -DBUILD_TESTING=ON
 source "$workspace/install/setup.bash"

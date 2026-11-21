@@ -131,6 +131,10 @@ def main():
     if classify(snapshot(), root, os.getpid()):
         raise RuntimeError('새 잔존 프로세스가 발견되어 시작을 중단합니다.')
     os.set_inheritable(fd, True)
+    # After this check a sibling adapter can safely join the new session.
+    marker = os.environ.pop('ARM_CELL_ROS_PREFLIGHT_FILE', None)
+    if marker:
+        Path(marker).touch(exist_ok=False)
     os.execvp(sys.argv[1], sys.argv[1:])
 
 

@@ -194,8 +194,8 @@ Contact LOST/관측 부재는 보유 성공이 아니며, contact buffer는 tick
 
 ## 실행
 
-GUI 런처는 선택한 Tool에 연동된 단일 `Grasp Mode`를 표시한다.
-병렬 그리퍼의 `Logical Attach`은 Logical + Fixed Attach(기본), `Physical Attach`은 Physics + Fixed Attach,
+GUI 런처는 Tool의 파지 전략과 `Grasp Mode`를 별도 행에 표시한다. 모드가 하나이면 텍스트로 표시한다.
+병렬 그리퍼의 `Logical Attach`은 Logical + Fixed Attach(기본), `Physics + Fixed Attach`은 물리 접촉 확인 후 Fixed Attach,
 `Physics`는 Physics + Physical로 접촉·마찰 기반 시뮬레이션을 의미한다.
 Tool Profile의 `runtime.launcher_modes`가 표시 이름·설명을 제공하며, 실제 지원 범위는 기존 `supported_combinations`가 소유한다.
 표시용 메타데이터가 미지원 조합을 추가하지 않는다. 내부 Actuator·Grasp 분리는 유지하고 실행 중에는 선택을 잠근다. 선택값은 Bringup의 공통 조립기가 검증하고,
@@ -259,4 +259,4 @@ Actuator 진단의 max_drive_effort_nm은 구동 상한이고 joint_effort_nm은
 
 ## C10 Physical Real
 
-M0609 Tape Cell은 일반 Launcher의 Physical Real 모드로 C10/Long을 선택한다. 실제 prismatic drive와 세 예약 대상 접촉·팽창 obstruction/dwell을 사용하며, 수축·접촉 소실 뒤 RELEASED를 발행한다. 폭·두 손가락 힘 정책은 사용하지 않는다. 정식 ROS Task/Mission은 configured 슬롯 예약을 사용하고 Vision 결과를 합성하지 않는다. 자세한 실행은 [Tape Cell 안내](scripts/tape_roll_cell/README.md)를 따른다.
+M0609 Tape Cell은 일반 Launcher의 Physics 모드로 C10/Long을 선택한다. 실제 prismatic drive와 세 예약 대상 접촉·팽창 obstruction/dwell을 사용하며, 수축·접촉 소실 뒤 RELEASED를 발행한다. 폭·두 손가락 힘 정책은 사용하지 않는다. 정식 ROS Task/Mission은 configured 슬롯 예약을 사용하고 Vision 결과를 합성하지 않는다. 자세한 실행은 [Tape Cell 안내](scripts/tape_roll_cell/README.md)를 따른다.

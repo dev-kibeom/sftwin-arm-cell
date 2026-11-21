@@ -4,7 +4,9 @@
 
 ## 실행
 
-ROS 2 Humble overlay에 `arm_cell_bringup`, `arm_cell_interfaces`, `arm_cell_plc_adapter`를 빌드하고 시스템 Python에 `python3-pymodbus` 2.x를 설치한다. CODESYS에는 Conveyor 공정 프로그램을 사용한다. 설비 Sidecar는 기존 Adapter 프로필의 Modbus 접속 설정을 읽고 HR16–25만 쓴다. HR0–7은 별도 Robot Adapter의 영역이다. 시험용 Mock과 Robot Adapter 중 하나만 해당 영역을 소유해야 한다. [PLC 실행 및 매핑](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)
+GUI에서는 Conveyor PnP Cell을 선택하고 Isaac과 ROS 2를 시작한 뒤 **PLC 시작**을 누른다. 버튼이 PLC 어댑터까지 실행한다. 설비 허가 발행과 UI 자동운전 설정은 아래 절차를 따른다.
+
+수동 실행 시 ROS 2 Humble overlay에 `arm_cell_bringup`, `arm_cell_interfaces`, `arm_cell_plc_adapter`를 빌드하고 시스템 Python에 `python3-pymodbus` 2.x를 설치한다. CODESYS에는 Conveyor 공정 프로그램을 사용한다. 설비 Sidecar는 기존 Adapter 프로필의 Modbus 접속 설정을 읽고 HR16–25만 쓴다. HR0–7은 별도 Robot Adapter의 영역이다. 시험용 Mock과 Robot Adapter 중 하나만 해당 영역을 소유해야 한다. [PLC 실행 및 매핑](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)
 
 저장소 루트에서 ROS 환경으로 스냅샷을 export한다.
 
