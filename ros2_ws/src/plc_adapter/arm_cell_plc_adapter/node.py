@@ -8,12 +8,14 @@ from pymodbus.exceptions import ModbusException
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Bool
 from unique_identifier_msgs.msg import UUID
 
 from .modbus import ModbusRegisters, REPLY_FIELDS, REQUEST_FIELDS
 from .receipts import Receipts, State
+from .simulation_permit import SimulationEquipmentPermit
 
 
 RESULT_STATES = {
@@ -75,6 +77,8 @@ class PlcTaskAdapter(Node):
         self.result = None
         self.next_lookup = 0.
         self.connected = None
+        permit_topic = param('simulation_equipment_permit_topic', '')
+        self.simulation_permit = SimulationEquipmentPermit(self, permit_topic) if permit_topic else None
         self.create_timer(period, self.poll)
 
     def on_admission(self, message):
@@ -176,6 +180,8 @@ class PlcTaskAdapter(Node):
             if not self.connected:
                 self.get_logger().info('PLC register exchange synchronized')
             self.connected = True
+        if self.simulation_permit is not None:
+            self.simulation_permit.publish(self.connected)
 
     def destroy_node(self):
         self.plc.close()
@@ -189,8 +195,12 @@ def main(args=None):
         node = PlcTaskAdapter()
         try:
             rclpy.spin(node)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, ExternalShutdownException):
             pass
+        except (RuntimeError, TypeError) as error:
+            # Humble can wrap SIGINT during Python message conversion in take().
+            if node.context.ok() and not isinstance(error.__cause__, KeyboardInterrupt):
+                raise
         finally:
             node.destroy_node()
     finally:

@@ -178,7 +178,9 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    for the equipment permit and automatic feed.
 4. Click `ROS 2 시작` (Start ROS 2). For detailed logs, select `ROS 2 디버그 모드` before starting.
    The Conveyor PLC adapter starts automatically once the PLC probe and ROS preflight both complete.
-   You can also start ROS 2 before the PLC.
+   You can also start ROS 2 before the PLC. The launcher-managed adapter publishes the simulated equipment
+   permit while PLC exchanges succeed and fresh Safety feedback permits normal motion. In the Isaac UI Hub,
+   enter the quantity under `Supply`, click `Set available stock`, then `Start automatic`.
 5. Check the camera/Vision views in Isaac Sim's UI Hub and errors in both run terminals.
    The launcher reports process execution; this does not establish system readiness or PnP success.
 

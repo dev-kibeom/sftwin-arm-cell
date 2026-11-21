@@ -24,6 +24,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_action_status_default
 from rclpy.time import Time
 from rosgraph_msgs.msg import Clock
+from std_msgs.msg import Bool
 
 from arm_cell_plc_adapter.receipts import State
 
@@ -207,6 +208,7 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, 
 
         start_adapter()
         wait_for(lambda: reply()[5] > 1)
+        assert robot.count_publishers('/cell/conveyor/equipment_permitted') == 0
         wait_for(lambda: robot.supply_pub.get_subscription_count() > 0)
         bank.setValues(4, 7, [1, 0])
         wait_for(lambda: reply()[1:3] == [1, State.ACCEPTED])
@@ -254,3 +256,56 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, 
         else:
             wait_for(lambda: reply()[1:5] == [3, State.REJECTED, 0, 0])
         assert robot.goals == ['first', 'second']
+
+
+def test_launcher_simulation_permit_tracks_safety_and_plc_link(tmp_path, monkeypatch):
+    bank = ModbusSlaveContext(ir=ModbusSequentialDataBlock(0, [0] * 32),
+                              hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
+    topic = '/test/conveyor/equipment_permitted'
+    with ExitStack() as stack:
+        monkeypatch.setenv('ROS_DOMAIN_ID', str(stack.enter_context(domain_id())))
+        monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
+        monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'logs'))
+        rclpy.init()
+        stack.callback(rclpy.try_shutdown)
+        observer = Node('permit_observer')
+        stack.callback(observer.destroy_node)
+        received = []
+        observer.create_subscription(Bool, topic, lambda msg: received.append(msg.data), 1)
+        safety = observer.create_publisher(SafetyState, '/safety/state', 1)
+        safe = SafetyState(valid=True, required_inputs_fresh=True, motion_envelope_valid=True,
+                           max_velocity_scale=1., max_acceleration_scale=1.,
+                           safety_state=SafetyState.SAFETY_STATE_SAFE)
+        safe.motion_capability.value = safe.motion_capability.MOTION_NORMAL
+
+        def expect(value, sample=None):
+            received.clear()
+            def observed():
+                if sample is not None:
+                    safety.publish(sample)
+                rclpy.spin_once(observer, timeout_sec=.04)
+                return received and received[-1] is value
+            wait_for(observed)
+
+        plc = stack.enter_context(ExitStack())
+        port = plc.enter_context(plc_server(bank))
+        adapter = stack.enter_context(ExitStack())
+        adapter.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter',
+                                      '--ros-args', '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
+                                      '-p', 'target_id:=demo', '-p', 'poll_seconds:=0.05',
+                                      '-p', f'receipt_file:={tmp_path / "plc.sqlite"}',
+                                      '-p', f'simulation_equipment_permit_topic:={topic}'))
+        expect(False)
+        expect(True, safe)
+        expect(False)  # Safety samples stop while the PLC link remains healthy.
+        expect(True, safe)
+        safe.motion_capability.value = safe.motion_capability.MOTION_RECOVERY_ONLY
+        expect(False, safe)
+        safe.motion_capability.value = safe.motion_capability.MOTION_NORMAL
+        expect(True, safe)
+        plc.close()
+        expect(False, safe)
+        plc.enter_context(plc_server(bank, port))
+        expect(True, safe)
+        adapter.close()
+        wait_for(lambda: observer.count_publishers(topic) == 0)

@@ -18,6 +18,7 @@ def test_unconfirmed_action_keeps_id_and_uuid(tmp_path, pending, outcome):
     adapter.mission.server_is_ready.return_value = True
     adapter.acceptance = adapter.result = None
     adapter.connected = True
+    adapter.simulation_permit = None
     adapter.receipts = Receipts(tmp_path / 'plc.sqlite')
     try:
         adapter.receipts.observe_idle()

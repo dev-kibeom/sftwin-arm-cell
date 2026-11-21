@@ -36,13 +36,16 @@ def test_probe_requires_the_conveyor_command_block(monkeypatch, signature):
     assert reads == [(16, 14, 1), 'closed']
 
 
-def test_adapter_uses_conveyor_process_params_and_session_endpoint(monkeypatch, tmp_path):
+@pytest.mark.parametrize('isaac_conveyor', [True, False])
+def test_adapter_uses_conveyor_process_params_and_session_endpoint(monkeypatch, tmp_path, isaac_conveyor):
     index = ModuleType('ament_index_python.packages')
     index.get_package_prefix = lambda _: str(tmp_path)
     monkeypatch.setitem(sys.modules, 'ament_index_python.packages', index)
     launched = []
     monkeypatch.setattr(conveyor_plc.os, 'execv', lambda program, args: launched.append(args))
-    conveyor_plc.start_adapter(dict(cell=dict(conveyor=dict(
+    isaac = {'material_supply_factory': 'conveyor_pnp_cell.runtime:create_adapter'} if isaac_conveyor else {}
+    conveyor_plc.start_adapter(dict(cell=dict(isaac=isaac, conveyor=dict(
+        equipment_permit_topic='/test/equipment_permit',
         plc_profile='package://arm_cell_plc_adapter/config/conveyor_pnp_codesys.yaml',
         connection=dict(host='127.0.0.1', port=11502, unit_id=3, poll_seconds=.1, timeout_seconds=.8),
         receipt_file='/tmp/selected stream.sqlite'))))
@@ -50,6 +53,7 @@ def test_adapter_uses_conveyor_process_params_and_session_endpoint(monkeypatch, 
     assert args[1] == str(tmp_path / 'lib/arm_cell_plc_adapter/plc_task_adapter')
     assert [Path(args[i+1]).name for i, arg in enumerate(args) if arg == '--params-file'] == [
         'conveyor_pnp_codesys.yaml', 'conveyor_process.yaml']
+    assert ('simulation_equipment_permit_topic:=/test/equipment_permit' in args) == isaac_conveyor
     assert 'port:=11502' in args and 'unit_id:=3' in args
     assert 'receipt_file:=/tmp/selected stream.sqlite' in args
 
