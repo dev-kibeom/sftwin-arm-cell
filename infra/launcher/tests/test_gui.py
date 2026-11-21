@@ -83,7 +83,8 @@ def terminal_text(widget, name):
     return path.read_text(errors='replace') if path.exists() else ''
 
 
-WAIT = [sys.executable, '-c', 'import time; print("started", flush=True); time.sleep(100)']
+WAIT = [sys.executable, '-c', 'import signal,time; signal.signal(signal.SIGINT, signal.SIG_DFL); '
+        'print("started", flush=True); time.sleep(100)']
 
 
 @pytest.mark.parametrize('robot', ['m0609', 'rb5_850', 'hcr14'])
@@ -149,6 +150,7 @@ def test_snapshot_same_for_both_duplicate_guard_and_graceful_close(app, window, 
         assert '라이브 검증 전' in window.status.text()
     if robot == 'hcr14':
         assert '실험적 모델' in window.status.text()
+    until(app, window, lambda: all('started' in terminal_text(window, name) for name in ('ros', 'isaac')))
     processes = list(window.processes.values())
     window.show()
     window.close()
