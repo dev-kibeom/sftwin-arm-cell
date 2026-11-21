@@ -331,11 +331,14 @@ TEST(ConfiguredGraspCatalog, SelectsFixedOrSlotSpecificSuctionTeachingWithoutBor
   EXPECT_EQ(slots.find("slot_2")->approach_motion, "above_second_slot");
   EXPECT_EQ(slots.find("slot_3"), nullptr);
 
-  entries["slot_1"]["use_reserved_slot"] = true;
+  entries["slot_1"]["pick_slot_id"] = "cell/belt/pick";
+  entries["slot_1"]["material_type_ids"] = {"A", "B"};
   EXPECT_THROW(parse_configured_grasp_cycles(entries.dump()), std::invalid_argument);
   entries.erase("slot_2");
   const auto fixed = parse_configured_grasp_cycles(entries.dump());
-  ASSERT_NE(fixed.find("slot_3"), nullptr);
-  EXPECT_EQ(fixed.find("slot_3")->approach_motion, "above");
-  EXPECT_TRUE(fixed.find("slot_3")->valid());
+  const auto * first = fixed.find("cell/belt/pick", "A");
+  ASSERT_NE(first, nullptr);
+  EXPECT_EQ(first, fixed.find("cell/belt/pick", "B"));
+  EXPECT_EQ(nullptr, fixed.find("cell/belt/pick", "C"));
+  EXPECT_EQ(nullptr, fixed.find("cell/other/pick", "A"));
 }

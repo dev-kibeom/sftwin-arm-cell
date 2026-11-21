@@ -1,8 +1,11 @@
 """One native PhysX belt, a travelling side stop and one discharge slot."""
+from uuid import uuid4
+
 from pxr import Gf, PhysxSchema, Sdf, UsdGeom, UsdPhysics
 from isaac_runtime.cuboid import author_cuboid_body
 from isaac_runtime.robot_scene import build_robot_world
 from tape_roll_cell.conveyor_belts import ConveyorBelts
+from .supply import material_instance_id
 
 ROOT = '/World/ConveyorPnP'
 
@@ -61,6 +64,8 @@ class Equipment:
         self.query = get_physx_scene_query_interface()
         self.surface = PhysxSchema.PhysxSurfaceVelocityAPI(stage.GetPrimAtPath(ROOT+'/InfeedBelt'))
         self.stop_position = stage.GetPrimAtPath(ROOT+'/Stopper').GetAttribute('xformOp:translate')
+        self.material_type_id = ''
+        self.stream_id = uuid4().hex
         self.cycle = 0
         self.path = None
         self.speed = None
@@ -77,16 +82,17 @@ class Equipment:
         prim = part.GetPrim()
         author_cuboid_body(self.stage, prim, self.layout['part_size_m'], self.layout['mass_kg'],
                           (.8, .45, .14))
-        prim.CreateAttribute('arm_cell:material_id', Sdf.ValueTypeNames.String).Set(material)
-        prim.CreateAttribute('arm_cell:slot_id', Sdf.ValueTypeNames.String).Set(f'slot_{cycle}')
-        self.path, self.cycle = path, cycle
+        prim.CreateAttribute('arm_cell:material_type_id', Sdf.ValueTypeNames.String).Set(material)
+        prim.CreateAttribute('arm_cell:material_instance_id', Sdf.ValueTypeNames.String).Set(
+            material_instance_id(self.stream_id, cycle))
+        self.path, self.cycle, self.material_type_id = path, cycle, material
         return True
 
-    def material_path(self, material_id, slot_id):
-        if self.path and slot_id == f'slot_{self.cycle}':
+    def material_path(self, material_type_id, instance_id):
+        if self.path and instance_id == material_instance_id(self.stream_id, self.cycle):
             prim = self.stage.GetPrimAtPath(self.path)
-            if (prim and prim.GetAttribute('arm_cell:material_id').Get() == material_id
-                    and prim.GetAttribute('arm_cell:slot_id').Get() == slot_id):
+            if (prim and prim.GetAttribute('arm_cell:material_type_id').Get() == material_type_id
+                    and prim.GetAttribute('arm_cell:material_instance_id').Get() == instance_id):
                 return self.path
         return None
 
@@ -118,8 +124,7 @@ class Equipment:
         from .equipment_io import Sensors
         import math
         if self.path:
-            prim = self.stage.GetPrimAtPath(self.path)
-            if not prim or prim.GetAttribute('arm_cell:slot_id').Get() != f'slot_{self.cycle}':
+            if not self.material_path(self.material_type_id, material_instance_id(self.stream_id, self.cycle)):
                 raise ValueError('Tracked material identity unavailable')
             handle = self.body(self.path)
             pose = self.dc.get_rigid_body_pose(handle).p

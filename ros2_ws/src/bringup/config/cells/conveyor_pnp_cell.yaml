@@ -11,6 +11,9 @@ world_to_base: {x: 0.30, y: 0, z: 0, roll: 0, pitch: 0, yaw: 0}
 static_scene: conveyor_static.json
 configured_supply: {supply_id: conveyor_pick, material_id: ConveyorPart}
 conveyor:
+  pick_slot_id: conveyor_pnp_cell/CV-01/pick
+  place_slot_id: conveyor_pnp_cell/TR-01/receive
+  material_type_ids: [ConveyorPart]
   plc_profile: package://arm_cell_plc_adapter/config/conveyor_pnp_codesys.yaml
   equipment_permit_topic: /cell/conveyor/equipment_permitted
   speed_m_s: 0.14

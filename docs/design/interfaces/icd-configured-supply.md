@@ -6,9 +6,10 @@
 ## 예약과 공급 사실
 
 `/cell/configured_supply`의 `ConfiguredSupply` service가 RESERVE·COMPLETE·ABANDON을 제공한다.
-RESERVE는 현재 epoch의 미완료 슬롯 하나와 예약 ID를 반환한다. 활성 예약이 있으면 새 예약을 수락하지 않는다.
+RESERVE는 현재 epoch의 점유 슬롯 하나와 예약 ID를 반환한다. 활성 예약이 있으면 새 예약을 수락하지 않는다.
 COMPLETE·ABANDON은 supply_id, supply_epoch, slot_id, reservation_id가 정확히 일치해야 한다.
-COMPLETE는 성공한 Task 시퀀스와 같은 예약의 장치 Release 확인으로 슬롯을 퇴역한다.
+개체를 추적하는 공급자는 RESERVE 응답에 `material_type_id`와 `material_instance_id`를 함께 반환한다. 상태의 두 필드는 한 자리 공급의 현재 점유를 나타내며, COMPLETE·ABANDON은 응답의 두 값을 그대로 돌려줘야 한다. Tape의 명목 슬롯에서는 두 필드가 빈 문자열이다.
+COMPLETE는 성공한 Task 시퀀스와 같은 예약의 장치 Release 확인으로 해당 점유의 처리를 끝낸다.
 material_placed는 기존 필드명이며 실제 수령·안착의 GT 증거가 아니다. 실제 자재 완료 수량은 집계하지 않는다.
 중복·만료·이전 epoch 요청은 슬롯 진행을 바꾸지 않는다. ABANDON은 예약을 해제하며 확인된 목적지 Release를 기존 `material_placed` 필드로 함께 전달한다. Tape의 명목 슬롯은 기존 실패 정책을 따른다. Conveyor 공급자는 같은 예약의 Release가 확인됐으면 해당 도착 자재를 선택 대상에서 제외한다. 실패한 Mission을 성공으로 집계하지 않는다. Task 결과가 불명확하면 예약을 유지한다.
 
@@ -28,8 +29,8 @@ Configured Task Action은 운영 Backend 초기화가 완료된 뒤 제공하며
 그 Task와 Cell 공급 service가 발견된 뒤 제공한다. 프로세스 시작이나 Safety 정상 상태만으로
 하위 실행 준비를 가정하지 않는다. 이 준비는 장면 시작이나 Supply 요청 수락을 차단하지 않는다.
 
-`/task_execution/execute_configured_grasp`의 `ExecuteConfiguredGrasp` goal은 공급·슬롯·epoch·예약 ID만 가진다.
-Task Execution은 현재 유효한 예약의 공급·자재·슬롯을 확인하고 배포된 기하·티칭을 선택한다. Tape는 예약 슬롯별 티칭을, Conveyor는 도착 자재들이 공유하는 고정 Pick/Place 티칭을 사용한다. Tool과 Motion에는 각 실행의 실제 예약 슬롯과 Goal UUID를 전달한다. 호출자가 관절값·임의 Tool 기하·Vision 후보를 주입하지 않는다.
+`/task_execution/execute_configured_grasp`의 `ExecuteConfiguredGrasp` goal은 공급·슬롯·epoch·예약 ID와 예약에서 받은 품종·개체 ID를 전달한다.
+Task Execution은 현재 유효한 예약의 공급·자재·슬롯을 확인하고 배포된 기하·티칭을 선택한다. Tape는 예약 슬롯별 티칭을, Conveyor는 도착 자재들이 공유하는 고정 Pick/Place 티칭을 사용한다. Conveyor의 기존 `material_id`는 Mission과 PLC 프로필이 선택한 공급 대상이며, `material_type_id`는 투입 당시 개체의 품종이다. 고정 티칭은 배포된 설비 주소와 호환 품종이 둘 다 일치해야 선택된다. Tool과 Motion은 Goal UUID와 예약을 전달하며 Conveyor Tool은 같은 개체·품종의 실제 rigid body를 흡착 대상으로 확인한다. 호출자가 관절값·임의 Tool 기하·Vision 후보를 주입하지 않는다.
 Task는 공통 GraspCycle BT와 동일 운영 MotionCore/GripperPort를 사용하고 ROS Goal UUID를 움직임·Tool 의도와 연결한다.
 새 Task→Motion ROS 경계는 만들지 않는다.
 

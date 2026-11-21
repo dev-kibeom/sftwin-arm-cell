@@ -51,7 +51,8 @@ def main():
                     req.command = req.RESERVE
                 elif hr[5] & 16:
                     req.command = req.COMPLETE
-                    req.slot_id, req.reservation_id = lease
+                    req.slot_id, req.reservation_id = lease.slot_id, lease.reservation_id
+                    req.material_instance_id, req.material_type_id = lease.material_instance_id, lease.material_type_id
                     req.material_placed = True
                 else:
                     req = None
@@ -61,9 +62,10 @@ def main():
                     result = future.result()
                     assert result and result.success, (result, w, hr, states[-1])
                     if req.command == req.RESERVE:
-                        assert result.slot_id == f'slot_{task}'
+                        assert result.slot_id == 'conveyor_pnp_cell/CV-01/pick'
+                        assert result.material_instance_id.rsplit('/', 1)[-1] == str(task)
                         assert hr[9] == task or w[18] == 30
-                        lease = result.slot_id, result.reservation_id
+                        lease = result
                         (args.exchange_dir/f'place-{task}').touch()
                     else:
                         completed, lease = task, None

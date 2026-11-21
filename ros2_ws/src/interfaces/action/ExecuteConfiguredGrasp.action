@@ -1,6 +1,9 @@
 # A Cell reservation selects a configured operation, never a fabricated Vision observation.
 string supply_id
 string slot_id
+# Occupant of the selected location for individually tracked supplies.
+string material_type_id
+string material_instance_id
 string supply_epoch
 string reservation_id
 ---

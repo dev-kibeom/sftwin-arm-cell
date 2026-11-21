@@ -20,6 +20,8 @@ public:
     if (!observed_ || now < received_ || now - received_ > std::chrono::milliseconds(500) ||
       !state_.valid || state_.supply_id != identity.supply_id ||
       state_.material_id != identity.material_id ||
+      state_.material_type_id != identity.material_type_id ||
+      state_.material_instance_id != identity.material_instance_id ||
       state_.supply_epoch != identity.supply_epoch ||
       state_.reservation_id != identity.reservation_id ||
       state_.selected_slot_id != identity.slot_id ||

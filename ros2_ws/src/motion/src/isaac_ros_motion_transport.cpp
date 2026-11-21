@@ -1971,6 +1971,10 @@ bool IsaacRosMotionTransport::prepare_configured_grasp(
     {"material_id", identity.material_id}, {"supply_id", identity.supply_id},
     {"slot_id", identity.slot_id}, {"supply_epoch", identity.supply_epoch},
     {"reservation_id", identity.reservation_id}};
+  if (!identity.material_instance_id.empty()) {
+    reference["material_type_id"] = identity.material_type_id;
+    reference["material_instance_id"] = identity.material_instance_id;
+  }
   if (!suction) {
     reference["insertion_depth_m"] = spec.insertion_depth_m;
     reference["thickness_m"] = spec.thickness_m;

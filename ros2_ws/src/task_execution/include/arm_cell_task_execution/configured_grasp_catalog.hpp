@@ -2,6 +2,7 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <nlohmann/json.hpp>
 #include "arm_cell_task_execution/prepared_grasp_cycle.hpp"
@@ -13,9 +14,11 @@ struct ConfiguredGraspCatalog
   std::map<std::string, PreparedGraspCycle> by_slot;
   std::optional<PreparedGraspCycle> fixed;
 
-  const PreparedGraspCycle * find(const std::string & slot) const
+  std::set<std::string> material_types;
+
+  const PreparedGraspCycle * find(const std::string & slot, const std::string & type = {}) const
   {
-    if (fixed) {return &*fixed;}
+    if (fixed) {return fixed->identity.slot_id == slot && material_types.count(type) ? &*fixed : nullptr;}
     const auto entry = by_slot.find(slot);
     return entry == by_slot.end() ? nullptr : &entry->second;
   }
@@ -58,12 +61,20 @@ inline ConfiguredGraspCatalog parse_configured_grasp_cycles(
       {
         throw std::invalid_argument("Invalid configured grasp operation");
       }
-      if (value.value("use_reserved_slot", false)) {
+      if (value.contains("pick_slot_id")) {
         if (json.size() != 1) {
           throw std::invalid_argument("A fixed teaching must be the only catalog entry");
         }
+        cycle.identity.slot_id = value.at("pick_slot_id");
+        result.material_types = value.at("material_type_ids").get<std::set<std::string>>();
+        if (cycle.identity.slot_id.empty() || result.material_types.empty() || result.material_types.count("")) {
+          throw std::invalid_argument("Fixed teaching requires a pick location and compatible types");
+        }
         result.fixed = std::move(cycle);
       } else {
+        if (value.value("use_reserved_slot", false)) {
+          throw std::invalid_argument("Re-export the fixed teaching with a physical pick location");
+        }
         cycle.identity.slot_id = entry.key();
         result.by_slot.emplace(entry.key(), std::move(cycle));
       }

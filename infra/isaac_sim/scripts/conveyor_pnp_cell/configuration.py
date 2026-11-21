@@ -26,6 +26,17 @@ def compile_cell(*, configuration):
                 raise ValueError(f'Conveyor {key} requires an installed taught motion')
         configuration['motion']['taught_cycle_motion_names'] = [
             cycle[key] for key in ('approach_motion', 'insertion_motion', 'transfer_motion', 'retreat_motion')]
-    catalog = {'fixed_pick': dict(cycle, use_reserved_slot=True)} if cycle else {}
+    types = layout['material_type_ids']
+    if (not isinstance(types, list) or not types or any(not isinstance(t, str) or not t.strip() for t in types)
+            or len(set(types)) != len(types)):
+        raise ValueError('Conveyor requires distinct material type IDs')
+    pick, place = layout['pick_slot_id'], layout['place_slot_id']
+    for slot in (pick, place):
+        if len(slot.split('/')) != 3 or not all(part.strip() for part in slot.split('/')):
+            raise ValueError('Expected cell/equipment/slot address')
+    if pick == place or pick.split('/')[0] != place.split('/')[0]:
+        raise ValueError('Pick and Place must be distinct slots in the same cell')
+    catalog = {'fixed_pick': dict(cycle, pick_slot_id=pick, place_slot_id=place,
+                                 material_type_ids=types)} if cycle else {}
     configuration['motion']['configured_grasp_cycles_json'] = json.dumps(catalog)
     configuration['orchestration']['plc_admission_enabled'] = True

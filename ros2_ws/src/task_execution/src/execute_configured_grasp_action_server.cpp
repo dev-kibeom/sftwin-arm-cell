@@ -32,7 +32,6 @@ ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
         state->observed_epoch != message->supply_epoch))
         {
           state->consumed.clear();
-          state->executed_arrivals.clear();
           state->observed_supply = message->supply_id;
           state->observed_epoch = message->supply_epoch;
         }
@@ -53,12 +52,13 @@ ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
       std::lock_guard<std::mutex> lock(state->mutex);
       arm_cell_motion::GraspExecutionIdentity identity{
         id_string(uuid), state->lease.material_id(), goal->supply_id, goal->slot_id,
-        goal->supply_epoch, goal->reservation_id};
+        goal->supply_epoch, goal->reservation_id, goal->material_type_id, goal->material_instance_id};
       if (!state->lease.matches(identity, ConfiguredSupplyLease::Clock::now()) ||
         state->consumed.count({identity.supply_id, identity.supply_epoch, identity.reservation_id}) ||
-        state->executed_arrivals.count(identity.slot_id))
+        (catalog.fixed && identity.material_instance_id.empty()) ||
+        state->executed_arrivals.count({identity.supply_id, identity.material_instance_id}))
       {return rclcpp_action::GoalResponse::REJECT;}
-      const auto * teaching = catalog.find(identity.slot_id);
+      const auto * teaching = catalog.find(identity.slot_id, identity.material_type_id);
       if (!teaching || teaching->identity.supply_id != identity.supply_id ||
         teaching->identity.material_id != identity.material_id)
       {return rclcpp_action::GoalResponse::REJECT;}
@@ -189,12 +189,13 @@ void ExecuteConfiguredGraspActionServer::execute(
       result->failure_stage = "configured_supply:lease_admission";
       handle->abort(result); return;
     }
-    if (state->executed_arrivals.count(cycle.identity.slot_id) || !state->consumed.insert(key).second) {
+    const auto arrival = std::make_pair(cycle.identity.supply_id, cycle.identity.material_instance_id);
+    if (state->executed_arrivals.count(arrival) || !state->consumed.insert(key).second) {
       result->result_code = Code::TASK_RESULT_INVALID_GOAL;
       result->failure_stage = "configured_supply:lease_already_used";
       handle->abort(result); return;
     }
-    if (fixed_teaching) {state->executed_arrivals.insert(cycle.identity.slot_id);}
+    if (fixed_teaching) {state->executed_arrivals.insert(arrival);}
   }
   try {
     result->result_code = task->execute_grasp_cycle(cycle, id);

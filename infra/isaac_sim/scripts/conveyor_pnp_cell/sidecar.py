@@ -83,9 +83,12 @@ class Exchange:
 
         with self.lock:
             bound = 0
+            material_type_id = packet['material_type_id']
             if at_pick and self.pick_configured:
-                bound = bind_confirmed_pick(command, observed, self.supply.expose_slot)
-            self.at_pick = at_pick and self.supply.slot == f'slot_{observed}'
+                bound = bind_confirmed_pick(command, observed, material_type_id, self.supply.expose_arrival)
+            self.at_pick = (at_pick and command.confirmed and self.pick_configured
+                            and self.supply.available and observed == self.supply.cycle
+                            and material_type_id == self.supply.material_type_id)
             self.valid_at = packet['acquired'] if valid else 0.
         self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),
                         sensors=sensors, bound_cycle=bound)
@@ -109,6 +112,8 @@ class Exchange:
                 supply = self.supply
                 reservation = dict(supply_id=supply.supply_id, material_id=supply.material_id,
                                    slot_id=supply.slot, supply_epoch=supply.epoch,
+                                   material_type_id=supply.material_type_id,
+                                   material_instance_id=supply.material_instance_id,
                                    reservation_id=supply.reservation) if supply.reservation and self.valid() else None
             self.ipc.send(dict(op='command', at=at, command=asdict(cmd), permitted=permitted,
                                permit_at=permit_at, reservation=reservation))

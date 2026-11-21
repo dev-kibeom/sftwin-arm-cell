@@ -14,6 +14,8 @@ def configured_reference(packet, strategy):
             not isinstance(packet.get(k), str) or not re.fullmatch(uuid, packet[k]) for k in keys):
         return None
     fields = ('material_id', 'supply_id', 'slot_id')
+    if 'material_instance_id' in packet or 'material_type_id' in packet:
+        fields += ('material_type_id', 'material_instance_id')
     if any(not isinstance(packet.get(k), str) or not packet[k].strip() for k in fields):
         return None
     return {k: packet[k] for k in (*keys, *fields, 'strategy')}

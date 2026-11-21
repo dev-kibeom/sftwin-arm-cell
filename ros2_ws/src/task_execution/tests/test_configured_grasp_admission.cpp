@@ -73,7 +73,7 @@ TEST_P(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActive
   cycle.transfer_motion = "transfer"; cycle.retreat_motion = "retreat";
   ConfiguredGraspCatalog catalog;
   if (GetParam()) {
-    cycle.identity.slot_id.clear();
+    catalog.material_types.insert("Tape");
     catalog.fixed = cycle;
   } else {
     catalog.by_slot.emplace("slot_0", cycle);
@@ -96,8 +96,10 @@ TEST_P(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActive
         executor.spin_some(); std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
     };
+  if (GetParam()) {supply.material_type_id = "Tape"; supply.material_instance_id = "1";}
   publisher->publish(supply); pump(10);
   Action::Goal goal; goal.supply_id = "supply"; goal.slot_id = "slot_0";
+  goal.material_type_id = supply.material_type_id; goal.material_instance_id = supply.material_instance_id;
   goal.supply_epoch = "epoch"; goal.reservation_id = "forged";
   auto rejected = client->async_send_goal(goal);
   ASSERT_EQ(
@@ -157,6 +159,7 @@ TEST_P(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActive
   EXPECT_EQ(motion->moves.load(), 1);
   if (GetParam()) {
     // A new reservation cannot retry a Conveyor arrival that entered the BT.
+    supply.supply_epoch = goal.supply_epoch = "new-epoch";
     supply.reservation_id = goal.reservation_id = "next-token";
     publisher->publish(supply); pump(5);
     auto duplicate = client->async_send_goal(goal);
@@ -164,6 +167,20 @@ TEST_P(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActive
       rclcpp::FutureReturnCode::SUCCESS);
     EXPECT_FALSE(duplicate.get());
     EXPECT_EQ(motion->moves.load(), 1);
+    supply.material_instance_id = "2"; publisher->publish(supply); pump(5);
+    auto stale = client->async_send_goal(goal);
+    ASSERT_EQ(executor.spin_until_future_complete(stale, std::chrono::seconds(1)),
+      rclcpp::FutureReturnCode::SUCCESS);
+    EXPECT_FALSE(stale.get());
+    goal.material_instance_id = "2";
+    auto next = client->async_send_goal(goal);
+    ASSERT_EQ(executor.spin_until_future_complete(next, std::chrono::seconds(1)),
+      rclcpp::FutureReturnCode::SUCCESS);
+    ASSERT_TRUE(next.get());
+    auto terminal = client->async_get_result(next.get());
+    ASSERT_EQ(executor.spin_until_future_complete(terminal, std::chrono::seconds(2)),
+      rclcpp::FutureReturnCode::SUCCESS);
+    EXPECT_GT(motion->moves.load(), 1);
   }
   executor.remove_node(node);
   rclcpp::shutdown();

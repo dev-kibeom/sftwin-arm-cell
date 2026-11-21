@@ -38,7 +38,7 @@ private:
     ConfiguredSupplyLease lease;
     using LeaseKey = std::tuple<std::string, std::string, std::string>;
     std::set<LeaseKey> consumed;
-    std::set<std::string> executed_arrivals;
+    std::set<std::pair<std::string, std::string>> executed_arrivals;
     std::string observed_supply, observed_epoch;
   };
   static void fence_leases(const std::shared_ptr<State> &, const std::shared_ptr<TaskExecutor> &);

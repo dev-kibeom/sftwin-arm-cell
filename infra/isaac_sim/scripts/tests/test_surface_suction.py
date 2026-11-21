@@ -12,7 +12,8 @@ from gripper_runtime.surface_suction import SurfaceCapture, SurfaceManager, Suct
 from gripper_runtime.tool_plugin import ToolIntent
 
 REFERENCE = dict(strategy='surface_suction', motion_goal_uuid='a'*32, material_id='Part',
-                 slot_id='slot_1', supply_id='belt', supply_epoch='b'*32, reservation_id='c'*32)
+                 slot_id='cell/belt/pick', material_type_id='A', material_instance_id='run/1',
+                 supply_id='belt', supply_epoch='b'*32, reservation_id='c'*32)
 
 
 class Device:

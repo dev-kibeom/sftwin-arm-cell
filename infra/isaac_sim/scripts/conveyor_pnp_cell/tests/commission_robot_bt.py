@@ -22,7 +22,9 @@ def commission():
     try:
         world.reset()
         run_step('bootstrap_tool.py', namespace)
-        assert cell_supply.request_supply('ConveyorPart', 3)['accepted']
+        types = adapter.feeder.material_type_ids
+        first_batch = 2 if len(types) > 1 else 3
+        assert cell_supply.request_supply(types[0], first_batch)['accepted']
         assert cell_supply.set_automatic(True)['accepted']
         tool = namespace['grasp_manager']
         reservations = {}
@@ -54,15 +56,18 @@ def commission():
             if cmd['phase'] == 39:
                 raise RuntimeError(f'PLC requires reconciliation: {cmd}')
             if holding == 'held':
-                assert lease and lease['slot_id'] == f'slot_{cycle}'
-                target = equipment.material_path(lease['material_id'], lease['slot_id'])
+                assert lease and lease['slot_id'] == 'conveyor_pnp_cell/CV-01/pick'
+                assert lease['material_instance_id'] == f'{equipment.stream_id}/{cycle}'
+                assert lease['material_type_id'] == types[int(cycle > first_batch)]
+                target = equipment.material_path(lease['material_type_id'], lease['material_instance_id'])
                 assert target and device['requested_body'] == target
                 assert device['gripped_objects'] == [target]
                 identity = (lease['supply_epoch'], lease['reservation_id'])
                 if cycle not in reservations:
                     assert cycle == len(reservations) + 1 and len(discharged) == cycle - 1
                     assert identity not in reservations.values()
-                    print('HELD', cycle, target, identity, flush=True)
+                    print('HELD', cycle, target, lease['material_type_id'], lease['material_instance_id'],
+                          identity, flush=True)
                     reservations[cycle] = identity
                 assert reservations[cycle] == identity
             if cycle in reservations and holding == 'released':
@@ -77,6 +82,10 @@ def commission():
                     assert sensors.discharge_zone_clear and not sensors.occupied
                     assert not lease and not device['gripped_objects']
                     discharged.add(cycle)
+                    if cycle == first_batch and cycle < 3:
+                        assert cell_supply.set_automatic(False)['accepted']
+                        assert cell_supply.request_supply(types[1], 1)['accepted']
+                        assert cell_supply.set_automatic(True)['accepted']
                     print('DISCHARGED', cycle, cmd, 'joints_rad',
                           context['robot'].get_joint_positions().tolist(), flush=True)
             if discharged == {1, 2, 3} and cmd['phase'] == 0:

@@ -108,6 +108,8 @@ def supply_permits(state, received_at, now, supply_id, material_id):
 def lease_matches(state, lease):
     return bool(state is not None and state.supply_epoch == lease.supply_epoch and
                 state.selected_slot_id == lease.slot_id and state.reservation_id == lease.reservation_id and
+                state.material_type_id == lease.material_type_id and
+                state.material_instance_id == lease.material_instance_id and
                 lease.slot_id in state.slot_ids and state.occupied[state.slot_ids.index(lease.slot_id)])
 
 
@@ -249,9 +251,15 @@ def main(args=None):
             except Exception as error:
                 raise RuntimeError(f'ROS operation response unavailable: {error}') from error
 
-        def command(self,command,epoch='',slot='',reservation='',placed=False):
+        def command(self,command,epoch,lease=None,placed=False):
             request=ConfiguredSupply.Request();request.command=command;request.supply_id=self.supply_id
-            request.supply_epoch=epoch;request.slot_id=slot;request.reservation_id=reservation;request.material_placed=placed
+            request.supply_epoch=epoch
+            request.material_placed=placed
+            if lease is not None:
+                request.slot_id=lease.slot_id
+                request.reservation_id=lease.reservation_id
+                request.material_type_id=lease.material_type_id
+                request.material_instance_id=lease.material_instance_id
             return self.wait(self.cell.call_async(request),3.5)
 
         def feedback(self,handle,count,phase,detail):
@@ -287,9 +295,11 @@ def main(args=None):
                             raise RuntimeError('Cell reservation state not confirmed')
                         time.sleep(.01)
                     self.capture_event(handle,'reservation_confirmed',supply_epoch=lease.supply_epoch,
-                        reservation_id=lease.reservation_id,slot_id=lease.slot_id)
+                        reservation_id=lease.reservation_id,slot_id=lease.slot_id,
+                        material_type_id=lease.material_type_id,material_instance_id=lease.material_instance_id)
                     goal=ExecuteConfiguredGrasp.Goal();goal.supply_id=self.supply_id;goal.slot_id=lease.slot_id
                     goal.supply_epoch=lease.supply_epoch;goal.reservation_id=lease.reservation_id
+                    goal.material_type_id=lease.material_type_id;goal.material_instance_id=lease.material_instance_id
                     abandoned=threading.Event()
                     terminal_known=False
                     sent=self.task.send_goal_async(goal)
@@ -306,7 +316,8 @@ def main(args=None):
                         terminal_known=True
                         raise RuntimeError('Task goal rejected')
                     self.capture_event(handle,'task_accepted',task_goal_uuid=bytes(child.goal_id.uuid).hex(),
-                        supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
+                        supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id,
+                        material_type_id=lease.material_type_id,material_instance_id=lease.material_instance_id)
                     pending=child.get_result_async();cancel_sent=False;interrupted=None;cancel_deadline=None
                     self.feedback(handle,0,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id)
                     while not pending.done():
@@ -335,7 +346,8 @@ def main(args=None):
                     self.capture_event(handle,'task_outcome',task_status=task_result.status,
                         task_result_code=outcome.result_code,material_placed=outcome.material_placed,
                         failure_stage=outcome.failure_stage,diagnostic_detail=outcome.diagnostic_detail,
-                        supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id)
+                        supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id,
+                        material_type_id=lease.material_type_id,material_instance_id=lease.material_instance_id)
                     if outcome.result_code == TaskCode.TASK_RESULT_SAFETY_PREEMPTED or not self.safety_allows_motion():
                         safety_preempted = True
                         interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
@@ -345,7 +357,7 @@ def main(args=None):
                                   f'{outcome.failure_stage} {outcome.diagnostic_detail}')
                     if interrupted is None and task_succeeded and outcome.material_placed:
                         complete=self.command(ConfiguredSupply.Request.COMPLETE,
-                            lease.supply_epoch,lease.slot_id,lease.reservation_id,True)
+                            lease.supply_epoch,lease,True)
                         if not complete.success:
                             raise RuntimeError('Cell cycle retirement failed: '+complete.diagnostic_detail)
                         sequence_completed=True;lease=None
@@ -372,7 +384,7 @@ def main(args=None):
                 if lease is not None and terminal_known:
                     try:
                         cleanup = self.command(ConfiguredSupply.Request.ABANDON,lease.supply_epoch,
-                            lease.slot_id,lease.reservation_id,placed=result.has_material_placed and result.material_placed)
+                            lease,placed=result.has_material_placed and result.material_placed)
                         if not cleanup.success:
                             detail += '; reservation cleanup rejected: '+cleanup.diagnostic_detail
                     except (RuntimeError,TimeoutError) as error:detail+='; reservation cleanup failed: '+str(error)

@@ -34,7 +34,8 @@ class ConveyorRobot(RobotFixture):
         self.admission_samples = []
         self.create_subscription(Bool, '/orchestration/mission_admission_available',
                                  lambda message: self.admission_samples.append(message.data), 10)
-        self.pick_supply = ConveyorPickSupply('commission-epoch')
+        self.pick_supply = ConveyorPickSupply('commission-epoch', supply_id='conveyor_pick',
+            slot_id='cell/belt/pick', stream_id='test', material_id='ConveyorPart', material_type_ids=['ConveyorPart'])
         self.motion = MotionStatus(execution_state=MotionStatus.MOTION_STATE_IDLE)
         self.motion_pub = self.create_publisher(MotionStatus, '/motion/state', 10)
 
@@ -47,22 +48,24 @@ class ConveyorRobot(RobotFixture):
         return self.pick_supply.handle(request, response, valid=True)
 
     def execute(self, goal):
-        slot = goal.request.slot_id
-        if slot == 'slot_2' and self.busy_at is None:
+        assert goal.request.slot_id == self.pick_supply.slot
+        stream, instance = goal.request.material_instance_id.split('/')
+        assert stream == 'test'
+        if instance == '2' and self.busy_at is None:
             self.busy_at = time.monotonic()
             goal.abort()
             return ExecuteConfiguredGrasp.Result(result_code=10, failure_stage='configured_supply:execution_admission')
-        if slot == 'slot_2':
+        if instance == '2':
             assert time.monotonic() - self.busy_at >= 1.
-        self.goals.append(slot)
+        self.goals.append(instance)
         assert self.finish.wait(30)
         result = ExecuteConfiguredGrasp.Result(material_placed=True)
-        if slot == 'slot_6':
+        if instance == '6':
             goal.abort()
             return ExecuteConfiguredGrasp.Result(result_code=3, material_placed=False, failure_stage='TRANSFER')
-        if slot in ('slot_2', 'slot_3'):
+        if instance in ('2', '3'):
             result.result_code = 3
-            result.failure_stage = 'RETREAT' if slot == 'slot_2' else 'GO_HOME'
+            result.failure_stage = 'RETREAT' if instance == '2' else 'GO_HOME'
             goal.abort()
         else:
             goal.succeed()
@@ -143,7 +146,7 @@ def commission(port):
                 assert cell_supply.set_automatic(False)['accepted']
                 assert cell_supply.request_supply('ConveyorPart', 2)['accepted']
                 assert cell_supply.set_automatic(True)['accepted']
-            slot = f'slot_{cycle}'
+            instance = str(cycle)
             robot.finish.clear()
             until('feed', lambda c: c.feed and c.cycle == cycle)
             feeder.feed(cycle, spawn)
@@ -171,11 +174,11 @@ def commission(port):
             until('stopper command', lambda c: c.extend)
             sensors.extended = True
             cmd = until('pick confirmed', lambda c: c.confirmed)
-            assert bind_confirmed_pick(cmd, cycle - 1, robot.pick_supply.expose_slot) == 0
+            assert bind_confirmed_pick(cmd, cycle - 1, feeder.material_type_id, robot.pick_supply.expose_arrival) == 0
             if cycle == 1:
                 robot.safety.valid = False
                 hold('no slot bound', lambda c: c.phase == 22 and not robot.goals, 1.)
-            bound = bind_confirmed_pick(cmd, cycle, robot.pick_supply.expose_slot)
+            bound = bind_confirmed_pick(cmd, cycle, feeder.material_type_id, robot.pick_supply.expose_arrival)
             assert bound == cycle
             if cycle == 1:
                 hold('robot not ready', lambda c: c.phase == 22 and not robot.goals)
@@ -210,8 +213,8 @@ def commission(port):
                 assert cell_supply.set_automatic(True)['accepted']
             if cycle == 2:
                 until('pre-BT executor busy', lambda c: c.phase == 23 and c.reason == 9)
-                hold('busy retry delay', lambda c: c.phase == 23 and c.confirmed and slot not in robot.goals, .6)
-            until('one robot job', lambda c: c.phase == 30 and robot.goals[-1:] == [slot])
+                hold('busy retry delay', lambda c: c.phase == 23 and c.confirmed and instance not in robot.goals, .6)
+            until('one robot job', lambda c: c.phase == 30 and robot.goals[-1:] == [instance])
             if cycle == 6:
                 robot.finish.set()
                 until('executed failure without placement', lambda c: c.phase == 39)
@@ -243,7 +246,7 @@ def commission(port):
             cmd = until('commit', lambda c: c.phase == 50 and c.committed == cycle)
             expected_result = {2: (6, 3, 2), 3: (6, 4, 2)}.get(cycle, (4, 7, 2))
             assert (cmd.result_state, cmd.reason, cmd.placement) == expected_result, cmd
-            assert not robot.pick_supply.expose_slot(slot), 'placed arrival became reservable again'
+            assert not robot.pick_supply.expose_arrival(cycle, feeder.material_type_id), 'placed arrival became reservable again'
             hold('duplicate terminal during blocked discharge', lambda c: c.committed == cycle
                  and c.phase == 50 and not c.discharge and not c.feed)
             sensors.permitted = False
@@ -266,7 +269,7 @@ def commission(port):
                 robot.motion.backend_inactivity_confirmed = True
             print('cycle', cycle, 'commit', cmd.committed, 'result', cmd.result_state,
                   cmd.reason, cmd.placement, 'goals', list(robot.goals), flush=True)
-        assert robot.goals == [f'slot_{n}' for n in range(1, 7)]
+        assert robot.goals == [str(n) for n in range(1, 7)]
         adapter.close()
         with sqlite3.connect(run / 'receipt.sqlite') as db:
             history = db.execute('SELECT command_id,state,reason,placement FROM receipt ORDER BY command_id').fetchall()

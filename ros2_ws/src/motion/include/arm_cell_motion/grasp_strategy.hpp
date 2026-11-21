@@ -12,6 +12,7 @@ enum class GraspStrategy { BOX_EXTERIOR, INTERNAL_RADIAL, SURFACE_SUCTION };
 struct GraspExecutionIdentity
 {
   std::string execution_id, material_id, supply_id, slot_id, supply_epoch, reservation_id;
+  std::string material_type_id{}, material_instance_id{};
   bool valid() const {return execution_id.size() == 32 &&
     execution_id.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos &&
     execution_id.find_first_not_of('0') != std::string::npos && !material_id.empty() &&
