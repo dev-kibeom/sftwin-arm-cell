@@ -30,7 +30,7 @@ class ConveyorRuntime:
                                            stream_id=equipment.stream_id,
                                            material_type_ids=layout['material_type_ids']),
                                pick_configured=bool(cell['conveyor']['teaching']['cycle']),
-                               history_db_path=layout['history_db_path']))
+                               history_db_path=layout.get('history_db_path', '~/.local/state/arm_cell/conveyor-pnp-poc/production.sqlite')))
         self.feeder.bind_ui()
 
     def set_tool_session(self, session):

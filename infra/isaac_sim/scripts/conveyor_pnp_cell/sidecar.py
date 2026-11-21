@@ -189,7 +189,7 @@ class Exchange:
                                permit_at=permit_at, reservation=reservation))
         except (OSError, ValueError, sqlite3.Error, ModbusException) as error:
             if self.sent or self.valid_at:
-                self.node.get_logger().warning(f'Conveyor link unavailable: {error}')
+                self.node.get_logger().warning(f'Conveyor equipment or history unavailable: {error}')
             self.client.close()
             self.sent.clear()
             with self.lock:

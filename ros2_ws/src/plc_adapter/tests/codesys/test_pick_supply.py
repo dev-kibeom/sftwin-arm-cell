@@ -55,6 +55,7 @@ def test_unreserved_arrival_loses_admission_if_the_pick_observation_is_lost():
     exchange = Exchange.__new__(Exchange)
     exchange.lock = Lock()
     exchange.valid_at = monotonic()
+    exchange.restored_unverified = False
     exchange.supply = pick_supply('epoch')
     states = []
     exchange.publisher = SimpleNamespace(publish=states.append)
@@ -66,21 +67,24 @@ def test_unreserved_arrival_loses_admission_if_the_pick_observation_is_lost():
         assert states[-1].slot_ids == ['cell/belt/pick']
 
 
-def test_sidecar_binds_observed_arrivals_beyond_the_old_teaching_range():
+def test_sidecar_binds_observed_arrivals_beyond_the_old_teaching_range(tmp_path):
     from dataclasses import asdict
     from threading import Lock
     from time import monotonic
     from types import SimpleNamespace
-    from conveyor_pnp_cell.equipment_io import Sensors
+    from conveyor_pnp_cell.equipment_io import Sensors, Commands
     from conveyor_pnp_cell.sidecar import Exchange
 
     exchange = Exchange.__new__(Exchange)
     exchange.lock = Lock()
     exchange.supply = pick_supply('new-epoch')
+    exchange.restored_unverified = False
+    from conveyor_pnp_cell.production_ledger import ProductionLedger
+    exchange.ledger = ProductionLedger(tmp_path/'pick-history.sqlite', 'test')
     exchange.pick_configured = False
     samples = []
     exchange.io = SimpleNamespace(publish=lambda **sample: samples.append(sample))
-    command = SimpleNamespace(cycle=65537, confirmed=True)
+    command = Commands(65537, 22, False, False, True, True, False, 0, 0, 0, 0)
     packet = dict(sensors=asdict(Sensors(pick=True, stopped=True, extended=True)),
                   material_type_id='A', observed=65536, valid=True, acquired=monotonic(), feeder={})
     exchange.sample(packet, command)
@@ -102,6 +106,8 @@ def test_sidecar_binds_observed_arrivals_beyond_the_old_teaching_range():
     assert exchange.reserve(request, ConfiguredSupply.Response()).success
     exchange.sample(packet, command)
     assert samples[-1]['bound_cycle'] == 0
+    assert exchange.ledger.history('test/65537')['reservations'][0]['status'] == 'RELEASED'
+    exchange.ledger.close()
 
 
 def test_first_piece_after_plc_reset_is_distinct_from_a_new_reservation_epoch():
