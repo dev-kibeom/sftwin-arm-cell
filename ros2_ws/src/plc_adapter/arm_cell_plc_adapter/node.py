@@ -8,7 +8,7 @@ from pymodbus.exceptions import ModbusException
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.action.client import ClientGoalHandle
-from rclpy.executors import ExternalShutdownException
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import Bool
 from unique_identifier_msgs.msg import UUID
@@ -181,7 +181,7 @@ class PlcTaskAdapter(Node):
                 self.get_logger().info('PLC register exchange synchronized')
             self.connected = True
         if self.simulation_permit is not None:
-            self.simulation_permit.publish(self.connected)
+            self.simulation_permit.observe_exchange(self.connected)
 
     def destroy_node(self):
         self.plc.close()
@@ -193,8 +193,9 @@ def main(args=None):
     rclpy.init(args=args)
     try:
         node = PlcTaskAdapter()
+        executor = MultiThreadedExecutor(num_threads=2) if node.simulation_permit else None
         try:
-            rclpy.spin(node)
+            rclpy.spin(node, executor=executor)
         except (KeyboardInterrupt, ExternalShutdownException):
             pass
         except (RuntimeError, TypeError) as error:
@@ -202,6 +203,8 @@ def main(args=None):
             if node.context.ok() and not isinstance(error.__cause__, KeyboardInterrupt):
                 raise
         finally:
+            if executor is not None:
+                executor.shutdown()
             node.destroy_node()
     finally:
         rclpy.try_shutdown()

@@ -21,7 +21,7 @@ PYTHONPATH="$PWD/ros2_ws/src/bringup:$PYTHONPATH" python3 ros2_ws/src/bringup/sc
 Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /tmp/conveyor-runtime.json`으로 실행한다. ROS Python 경로는 별도 Sidecar가 설정한다. 다른 overlay를 사용할 때는 `ARM_CELL_ROS_SETUP`에 그 setup.bash 경로를 지정한다. 두 프로세스는 같은 ROS 도메인을 사용한다.
 
 - 새 장면은 빈 설비와 PLC의 자재 ID·단계·마지막 Commit이 모두 0인 표본에서 동기화한다. UI에서 자재 종류·가용 수량을 설정하고 자동운전을 켠다. PLC의 식별된 공급 명령이 와야 자재가 생성된다.
-- GUI에서 시작한 Isaac Conveyor PLC 어댑터는 선택한 셀의 `equipment_permit_topic`(기본 `/cell/conveyor/equipment_permitted`)에 매 PLC 폴링 후 `std_msgs/Bool`을 발행한다. 현재 레지스터 교환이 성공하고 0.5초 이내에 수신한 Safety 상태가 유효한 SAFE·MOTION_NORMAL 및 정상 운동 상한을 제공할 때만 허가한다. Safety 미수신·만료·정지 또는 PLC 교환 실패 시 `false`를 보낸다. 어댑터 종료나 통신 정지로 갱신이 끊기면 Isaac의 기존 0.9초 만료 조건이 적용된다.
+- GUI에서 시작한 Isaac Conveyor PLC 어댑터는 선택한 셀의 `equipment_permit_topic`(기본 `/cell/conveyor/equipment_permitted`)에 0.1초마다 `std_msgs/Bool`을 발행한다. PLC 응답을 기다리는 동안에도 Safety를 수신하고 허가를 갱신한다. 마지막 레지스터 교환 성공 후 0.9초 미만이고, 0.5초 이내에 수신한 Safety 상태가 유효한 SAFE·MOTION_NORMAL 및 정상 운동 상한을 제공할 때만 허가한다. PLC 교환 실패, 입력 미수신·만료 또는 Safety 정지 시 다음 발행 값은 `false`다. 발행이 끊기면 Isaac도 마지막 수신 후 0.9초에 허가를 만료시킨다.
 - 수동 실행 시에는 별도 설비 허가 생산자를 같은 ROS 도메인에 연결한다. 허가 토픽에는 한 생산자만 연결한다. 실제 설비의 운전 허가는 해당 설비 제어계가 제공한다.
 - UI 자동운전 일시 정지, Timeline Pause, TCP 재접속은 같은 자재와 생성 영수증을 유지한다. Timeline Stop은 설비를 보류한다. 프로세스 재기동으로 생성 이력이나 예약을 잃은 경우에는 PLC RETAIN과 현물을 대조해야 한다.
 

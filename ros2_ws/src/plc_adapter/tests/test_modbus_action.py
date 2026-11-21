@@ -199,12 +199,14 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, 
         adapter = stack.enter_context(ExitStack())
 
         def start_adapter():
+            # Exercise receipt and Action callbacks with both deployed executor configurations.
+            permit_args = [] if expire else ['-p', 'simulation_equipment_permit_topic:=/test/permit']
             adapter.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter',
                                   '--ros-args', '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
                                   '-p', 'target_id:=test_part', '-p', 'poll_seconds:=0.04',
                                   '-p', 'request_input_offset:=7', '-p', 'reply_holding_offset:=12',
                                   '-p', 'request_fields:=[id_low, id_high]',
-                                  '-p', f'receipt_file:={tmp_path / "plc.sqlite"}'))
+                                  '-p', f'receipt_file:={tmp_path / "plc.sqlite"}', *permit_args))
 
         start_adapter()
         wait_for(lambda: reply()[5] > 1)
@@ -259,8 +261,21 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, 
 
 
 def test_launcher_simulation_permit_tracks_safety_and_plc_link(tmp_path, monkeypatch):
-    bank = ModbusSlaveContext(ir=ModbusSequentialDataBlock(0, [0] * 32),
-                              hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
+    respond = threading.Event()
+    respond.set()
+
+    class SlowPLC(ModbusSlaveContext):
+        def getValues(self, *args):
+            respond.wait(timeout=4)
+            time.sleep(.2)
+            return super().getValues(*args)
+
+        def setValues(self, *args):
+            time.sleep(.2)
+            return super().setValues(*args)
+
+    bank = SlowPLC(ir=ModbusSequentialDataBlock(0, [0] * 32),
+                   hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
     topic = '/test/conveyor/equipment_permitted'
     with ExitStack() as stack:
         monkeypatch.setenv('ROS_DOMAIN_ID', str(stack.enter_context(domain_id())))
@@ -293,15 +308,32 @@ def test_launcher_simulation_permit_tracks_safety_and_plc_link(tmp_path, monkeyp
         adapter.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter',
                                       '--ros-args', '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
                                       '-p', 'target_id:=demo', '-p', 'poll_seconds:=0.05',
+                                      '-p', 'admission_holding_offset:=6', '-p', 'timeout_seconds:=3.0',
                                       '-p', f'receipt_file:={tmp_path / "plc.sqlite"}',
                                       '-p', f'simulation_equipment_permit_topic:={topic}'))
         expect(False)
         expect(True, safe)
+        # Three successful operations take 0.6 s. Keep granting across multiple exchanges.
+        received.clear()
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            safety.publish(safe)
+            rclpy.spin_once(observer, timeout_sec=.04)
+        assert len(received) >= 5 and all(received)
         expect(False)  # Safety samples stop while the PLC link remains healthy.
         expect(True, safe)
         safe.motion_capability.value = safe.motion_capability.MOTION_RECOVERY_ONLY
         expect(False, safe)
         safe.motion_capability.value = safe.motion_capability.MOTION_NORMAL
+        expect(True, safe)
+        # Withhold the next response beyond the link freshness window but below the I/O timeout.
+        respond.clear()
+        try:
+            started = time.monotonic()
+            expect(False, safe)
+            assert time.monotonic() - started < 2.5
+        finally:
+            respond.set()
         expect(True, safe)
         plc.close()
         expect(False, safe)

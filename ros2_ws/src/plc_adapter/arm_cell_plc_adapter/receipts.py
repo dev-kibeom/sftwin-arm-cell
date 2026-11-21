@@ -67,7 +67,8 @@ class Receipts:
                 fcntl.flock(self.owner_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as error:
                 raise sqlite3.OperationalError('PLC receipt writer already locked') from error
-            self.db = sqlite3.connect(path, timeout=0, isolation_level=None)
+            # Adapter receipt callbacks share one mutually exclusive group, whose worker may change.
+            self.db = sqlite3.connect(path, timeout=0, isolation_level=None, check_same_thread=False)
             pending.callback(self.db.close)
             self._initialize()
             pending.pop_all()
