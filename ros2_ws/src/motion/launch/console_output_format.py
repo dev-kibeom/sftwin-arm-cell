@@ -1,67 +1,90 @@
 """Format and persist Launch-observed output with elapsed-time prefixes."""
 
-import time
 from pathlib import Path
+import sys
+import time
+
+from launch.logging import get_logger, launch_config
+
+
+class _LaunchOutput:
+    """One clock and output file for all formatter imports in a Launch session."""
+
+    def __init__(self):
+        self.started_at_ns = time.monotonic_ns()
+        self.directory = None
+        self.stream = None
+        self.failed = False
+
+    def select_directory(self, directory):
+        if directory != self.directory:
+            if self.stream is not None:
+                try:
+                    self.stream.close()
+                except OSError as error:
+                    self.report_failure(error)
+            self.directory = directory
+            self.stream = None
+            self.failed = False
+
+    def report_failure(self, error):
+        self.failed = True
+        message = f"ROS output file incomplete / {error}"
+        try:
+            get_logger("arm_cell_bringup").warning(message)
+        except OSError:
+            # The launch log directory can also be unavailable.
+            try:
+                print(f"[WARN] [arm_cell_bringup] {message}", file=sys.stderr)
+            except (OSError, ValueError):
+                pass
+
+    def write(self, line, elapsed_ns, process):
+        if self.failed or process is None:
+            return
+        try:
+            if self.stream is None:
+                directory = Path(self.directory or launch_config.log_dir)
+                directory.mkdir(parents=True, exist_ok=True)
+                path = directory / "ros_output_nanoseconds.log"
+                self.stream = path.open("a", encoding="utf-8", buffering=1)
+                self.stream.write(
+                    "# clock=monotonic_ns; time_basis=launch output observation time; "
+                    "origin=first ConsoleOutputFormat initialization in this Launch session; "
+                    "ROS event time=false\n"
+                )
+
+            description = getattr(process, "process_description", None)
+            name = getattr(description, "final_name", None) or "process"
+            seconds, nanoseconds = divmod(elapsed_ns, 1_000_000_000)
+            self.stream.write(f"[{seconds}.{nanoseconds:09d}s] [{name}] {line}\n")
+        except OSError as error:
+            self.report_failure(error)
+            if self.stream is not None:
+                try:
+                    self.stream.close()
+                except OSError:
+                    pass
+                self.stream = None
 
 
 class ConsoleOutputFormat(str):
-    """Prefix console output and persist a nanosecond-timed copy for analysis."""
+    """Prefix flattened ROS output without modifying backend fields."""
 
     def __new__(cls, template):
         instance = super().__new__(cls, template)
-        instance._started_at_ns = time.monotonic_ns()
-        instance._file_log = None
-        instance.record_directory = None
-        from launch.logging import launch_config
-
         session = launch_config.file_handlers
         if getattr(launch_config, "_console_output_session", None) is not session:
             launch_config._console_output_session = session
-            launch_config._console_output_started_at_ns = instance._started_at_ns
-            launch_config._console_output_header_written = False
-        instance._session_started_at_ns = launch_config._console_output_started_at_ns
+            launch_config._arm_cell_output = _LaunchOutput()
+        instance._output = launch_config._arm_cell_output
         return instance
+
+    def set_record_directory(self, directory):
+        self._output.select_directory(directory)
 
     def format(self, **kwargs):
         line = super().format(**kwargs)
-        observed_at_ns = time.monotonic_ns()
-        session_elapsed_ns = max(0, observed_at_ns - self._session_started_at_ns)
-        self._write_nanosecond_file_log(line, session_elapsed_ns, kwargs.get("this"))
-        elapsed = session_elapsed_ns / 1_000_000_000
-        return f"[{elapsed:.3f}s] {line}"
-
-    def _write_nanosecond_file_log(self, line, elapsed_ns, process):
-        """Write output with elapsed time from the shared Launch session origin."""
-        if process is None or self._file_log is False:
-            return
-
-        try:
-            if self._file_log is None:
-                from launch.logging import launch_config
-
-                directory = Path(self.record_directory or launch_config.log_dir)
-                directory.mkdir(parents=True, exist_ok=True)
-                log_path = directory / "ros_output_nanoseconds.log"
-                self._file_log = log_path.open("a", encoding="utf-8", buffering=1)
-                if not launch_config._console_output_header_written:
-                    self._file_log.write(
-                        "# clock=monotonic_ns; time_basis=launch output observation "
-                        "time; origin=first ConsoleOutputFormat initialization in "
-                        "this Launch session; ROS event time=false\n"
-                    )
-                    launch_config._console_output_header_written = True
-
-            process_description = getattr(process, "process_description", None)
-            process_name = getattr(process_description, "final_name", None) or "process"
-            seconds, nanoseconds = divmod(elapsed_ns, 1_000_000_000)
-            self._file_log.write(
-                f"[{seconds}.{nanoseconds:09d}s] [{process_name}] {line}\n"
-            )
-        except OSError:
-            # Log persistence must not interfere with the existing terminal output.
-            if self._file_log is not None:
-                try:
-                    self._file_log.close()
-                except OSError:
-                    pass
-            self._file_log = False
+        elapsed_ns = max(0, time.monotonic_ns() - self._output.started_at_ns)
+        self._output.write(line, elapsed_ns, kwargs.get("this"))
+        return f"[{elapsed_ns / 1_000_000_000:.3f}s] {line}"

@@ -75,8 +75,8 @@ def test_isaac_preexport_option_rejects_missing_snapshot(tmp_path, arguments):
     assert 'UNEXPECTED_START' not in result.stdout
 
 
-@pytest.mark.parametrize('level', [None, 'debug'])
-def test_ros_terminal_script_forwards_existing_launch_options(tmp_path, level):
+@pytest.mark.parametrize(('level', 'diagnostics'), [(None, ''), ('debug', ''), ('info', 'motion,vision')])
+def test_ros_terminal_script_forwards_existing_launch_options(tmp_path, level, diagnostics):
     import subprocess
     import json
     # Isolate installed ROS setup while exercising the real entry script argv.
@@ -88,11 +88,12 @@ def test_ros_terminal_script_forwards_existing_launch_options(tmp_path, level):
     profile = str(tmp_path / 'snapshot with spaces.json')
     result = subprocess.run(['bash', str(ROOT / 'infra/launcher/start_ros.bash'), profile,
                              *([level] if level else [])],
-                            env=dict(os.environ, BASH_ENV=str(setup),
+                            env=dict(os.environ, BASH_ENV=str(setup), ARM_CELL_DIAGNOSTICS=diagnostics,
                                      PATH=str(tmp_path) + os.pathsep + os.environ['PATH']),
                             capture_output=True, text=True, check=True)
     assert json.loads(result.stdout) == ['launch', 'arm_cell_bringup', 'arm_cell.launch.py',
-                                       f'profile:={profile}', f'log_level:={level or "info"}']
+                                       f'profile:={profile}', f'log_level:={level or "info"}',
+                                       f'diagnostics:={diagnostics or "none"}']
 
 
 def test_registered_rb5_export_is_isolated_from_default(tmp_path):

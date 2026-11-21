@@ -61,6 +61,10 @@ MOVEIT_PROGRESS_LOGGERS = (
     "moveit.ompl_planning.model_based_planning_context",
 )
 MOVEIT_RAW_LOG_LEVELS = (
+    "moveit_kinematics_base.kinematics_base:=warn",
+    "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
+    "moveit_rdf_loader.rdf_loader:=warn",
+    "moveit_robot_model.robot_model:=warn",
     "ompl:=fatal",
     "moveit_kinematic_constraints.kinematic_constraints:=warn",
     "moveit_collision_detection_fcl.collision_common:=warn",

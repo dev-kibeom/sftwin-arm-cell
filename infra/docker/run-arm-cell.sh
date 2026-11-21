@@ -17,7 +17,7 @@ export SFTWIN_MATERIAL_SIDECAR_PORT="${SFTWIN_MATERIAL_SIDECAR_PORT:-47631}"
 export SFTWIN_HUB_SIDECAR_HOST=127.0.0.1
 export SFTWIN_HUB_SIDECAR_PORT="${SFTWIN_HUB_SIDECAR_PORT:-47632}"
 log_level="${ARM_CELL_LOG_LEVEL:-info}"
-diagnostics="${ARM_CELL_DIAGNOSTICS:-__log_level_default__}"
+diagnostics="${ARM_CELL_DIAGNOSTICS:-none}"
 
 python3.10 /arm_cell/infra/isaac_sim/scripts/pnp_cnc_cell/material_supply_ros_sidecar.py --listen &
 material_pid=$!

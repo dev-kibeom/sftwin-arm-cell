@@ -175,7 +175,6 @@ void MotionExecutionSupport::set_runtime_geometry(MotionGeometry geometry)
 uint8_t MotionExecutionSupport::execute_motion(const MotionPortRequest & request)
 {
   const auto started = std::chrono::steady_clock::now();
-  const auto parent_execution_id = execution_uuid_string(request.execution_id);
   NormalizedMotionRequest normalized;
   try {
     normalized = normalized_request(request);
@@ -184,10 +183,6 @@ uint8_t MotionExecutionSupport::execute_motion(const MotionPortRequest & request
     return MotionTaskResultCode::TASK_RESULT_INVALID_GOAL;
   }
   normalized.interruption_result = interruption_checker_;
-  RCLCPP_DEBUG(
-    rclcpp::get_logger("motion_execution_support"),
-    "Executing movement_id=%s under execution_id=%s",
-    request.movement_id.c_str(), parent_execution_id.c_str());
 
   std::uint8_t result = MotionTaskResultCode::TASK_RESULT_BACKEND_ERROR;
   std::string failure_detail;

@@ -80,3 +80,27 @@ def test_installed_rb5_assembly_relocates_with_shared_tool():
         return canonical(model), digests
 
     assert expanded(installed) == expanded(source)
+
+
+def test_ros_model_preserves_base_frame_and_rigid_body_inertia():
+    import xacro
+    import importlib.util
+
+    source_root = Path(__file__).resolve().parents[4]
+    spec = importlib.util.spec_from_file_location(
+        'motion_description', source_root / 'ros2_ws/src/motion/launch/robot_description.py')
+    loader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loader)
+    robots = source_root / 'assets/robots'
+    source = robots / 'm0609_suction/urdf/m0609_suction.urdf.xacro'
+    original = ET.fromstring(xacro.process_file(str(source)).toxml())
+    ros = ET.fromstring(loader.load_robot_description(source, robots / 'm0609_robotiq_2f85/meshes'))
+    base = ros.find("link[@name='base_link']")
+    assert base.find('inertial') is None
+    assert base.find('collision') is not None
+    assert ros.find("joint/child[@link='base_link']") is None
+    joint = ros.find("joint[@name='base_link_to_base_inertia']")
+    assert joint.get('type') == 'fixed' and joint.find('origin') is None
+    assert joint.find('parent').get('link') == 'base_link'
+    body = ros.find(f"link[@name='{joint.find('child').get('link')}']")
+    assert canonical(body.find('inertial')) == canonical(original.find("link[@name='base_link']/inertial"))

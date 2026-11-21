@@ -119,7 +119,7 @@ void IsaacRosMotionTransport::run_teaching_preparation()
       prepared_teaching_ = std::make_shared<const PreparedTeaching>(std::move(entries));
     }
     teaching_startup_pending_ = false;
-    RCLCPP_INFO(
+    RCLCPP_DEBUG(
       node_->get_logger(), "Prepared %zu taught trajectories in %.3f s", count,
       std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
   }

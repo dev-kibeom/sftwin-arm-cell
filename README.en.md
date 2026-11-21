@@ -257,8 +257,8 @@ See [UI Hub behavior](docs/design/components/ui-hub/fds.md) and
   exports its configuration to `.run_records/runtime_configuration.json` by default.
 - Material definitions are in `ros2_ws/src/bringup/config/materials/`. The UI Hub uses the catalog loaded at startup.
 - Diagnostic records default to `.run_records/`. Launcher terminal output disappears when the terminal closes.
-- For host ROS, use `log_level:=debug` for detailed logs. Default `info` disables optional
-  diagnostic collection; `debug` enables all ROS diagnostic collection. Select records with
+- For host ROS, use `log_level:=debug` for detailed logs. Optional diagnostic collection defaults to `none` at every log level.
+  The GUI launcher reads `ARM_CELL_DIAGNOSTICS`. Select records on the CLI with
   `diagnostics:=none`, `all`, or a comma-separated subset of `motion,vision,safety,orchestration`.
 
 For Docker, select logs and diagnostics with environment variables at startup.

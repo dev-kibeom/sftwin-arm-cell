@@ -2211,8 +2211,8 @@ private:
       result.diagnostic_detail = "ExecutePnp COMPLETED result omitted material_placed";
     }
     RCLCPP_DEBUG(get_logger(),
-      "ExecutePnp terminal recipe_id=%s goal_uuid=%s outcome=%s material_placed=%s action=%s",
-      recipe_id.c_str(), result.goal_uuid.c_str(),
+      "ExecutePnp terminal recipe_id=%s outcome=%s material_placed=%s action=%s",
+      recipe_id.c_str(),
       result.action_terminal == "CANCELED" ? "canceled" : pnp_outcome_name(result.outcome),
       result.material_placed ? "true" : "false", result.action_terminal.c_str());
     cancellation_registry_.clear_active_action(key, submission);

@@ -302,8 +302,8 @@ Isaac Sim의 **UI Hub**는 카메라·Vision 결과와 운영자 조작을 제�
   자재·TCP 관측이며, 상세 선택 시 상태 변화 전후를 유계로 보존합니다.
 - Vision 저장 예산은 `diagnostics.storage_budget_bytes`(기본 256 MiB)이며
   예산 소진·출력 실패는 종료 요약에 남습니다. 진단 실패는 제어 결과를 바꾸지 않습니다.
-- 호스트 ROS 상세 로그는 `log_level:=debug`로 켭니다. 기본 `info`는 선택적 진단 수집을 끄고,
-  `debug`는 모든 ROS 진단 수집을 켭니다. `diagnostics:=none`, `all`, 또는
+- 호스트 ROS 상세 로그는 `log_level:=debug`로 켭니다. 선택적 진단 수집은 로그 레벨과 독립이며 기본값은 `none`입니다.
+  GUI 런처는 `ARM_CELL_DIAGNOSTICS` 환경변수를 사용합니다. `diagnostics:=none`, `all`, 또는
   `motion,vision,safety,orchestration` 중 쉼표 구분 목록으로 수집 범위를 선택합니다.
 
 Docker에서는 시작할 때 환경변수로 로그와 진단을 선택합니다. 변경하려면 기존 실행을 종료하고 다시 시작합니다.

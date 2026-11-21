@@ -5,7 +5,7 @@ import xacro
 
 
 def load_robot_description(source, mesh_root):
-    document = xacro.process_file(str(source), mappings={'mesh_root': str(mesh_root)})
+    document = xacro.process_file(str(source), mappings={'ros_kdl_model': 'true', 'mesh_root': str(mesh_root)})
     # geometric_shapes/resource_retriever requires a URI, unlike Isaac's importer.
     for mesh in document.getElementsByTagName('mesh'):
         filename = mesh.getAttribute('filename')

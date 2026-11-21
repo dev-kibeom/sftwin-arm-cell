@@ -325,6 +325,8 @@ def test_moveit_raw_logs_are_filtered_at_their_source_logger(monkeypatch):
         "moveit_kinematic_constraints.kinematic_constraints:=" "warn",
         "moveit_collision_detection_fcl.collision_common:=" "warn",
         "ompl:=fatal",
+        "moveit_kinematics_base.kinematics_base:=warn",
+        "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
     }
     for log_level in ("info", "debug"):
         arguments = module.node_ros_arguments("arm_cell_motion", log_level)
@@ -516,39 +518,15 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
     ]
 
 
-def test_omitted_diagnostics_defaults_to_all_only_for_debug_logging():
-    info_actions = _composed_nodes(log_level="info")
-    debug_actions = _composed_nodes(log_level="debug")
-    info_nodes = _project_nodes(info_actions)
-    debug_nodes = _project_nodes(debug_actions)
+@pytest.mark.parametrize("level", ["info", "debug"])
+def test_omitted_diagnostics_keeps_optional_capture_off(level):
+    actions = _composed_nodes(log_level=level)
+    nodes = _project_nodes(actions)
+    for executable in ("motion_node", "detect_target_node", "safety_node", "orchestration_node"):
+        assert _node_parameters(nodes[executable])["diagnostics.capture_enabled"] is False
 
-    for executable in (
-        "motion_node",
-        "detect_target_node",
-        "safety_node",
-        "orchestration_node",
-    ):
-        assert (
-            _node_parameters(info_nodes[executable])["diagnostics.capture_enabled"]
-            is False
-        )
-        assert (
-            _node_parameters(debug_nodes[executable])["diagnostics.capture_enabled"]
-            is True
-        )
-
-    info_summary = next(
-        action for action in info_actions if isinstance(action, LogInfo)
-    )
-    debug_summary = next(
-        action for action in debug_actions if isinstance(action, LogInfo)
-    )
-    assert "diagnostics=none" in "".join(
-        part.text for part in info_summary._LogInfo__msg
-    )
-    assert "diagnostics=motion,orchestration,safety,vision" in "".join(
-        part.text for part in debug_summary._LogInfo__msg
-    )
+    summary = next(action for action in actions if isinstance(action, LogInfo))
+    assert "diagnostics=none" in "".join(part.text for part in summary._LogInfo__msg)
 
 
 def test_component_diagnostics_selects_only_requested_component_producers():

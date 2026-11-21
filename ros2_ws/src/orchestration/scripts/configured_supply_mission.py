@@ -154,6 +154,7 @@ class PendingTaskUncertain(RuntimeError):
 
 def main(args=None):
     import rclpy
+    from rclpy.logging import LoggingSeverity
     from rclpy.node import Node
     from rclpy.action import ActionServer, ActionClient, GoalResponse, CancelResponse
     from rclpy.callback_groups import ReentrantCallbackGroup
@@ -170,6 +171,12 @@ def main(args=None):
     class Mission(Node):
         def __init__(self):
             super().__init__('orchestration_node')
+            logger = self.get_logger()
+            self.mission_logger = logger.get_child('mission')
+            if logger.is_enabled_for(LoggingSeverity.DEBUG):
+                # Humble's ActionServer logs goal IDs through the node logger.
+                self.mission_logger.set_level(LoggingSeverity.DEBUG)
+                logger.set_level(LoggingSeverity.INFO)
             self.supply_id=self.declare_parameter('supply_id','tape_cartridge').value
             self.target=self.declare_parameter('mission_target_id','TapeRoll17').value
             self.safety=None;self.safety_at=0.;self.supply=None;self.supply_at=0.
@@ -186,7 +193,7 @@ def main(args=None):
             self.server=None;self.startup_wait=None
             self.capture=ConfiguredMissionDiagnostics(
                 self.declare_parameter('diagnostics.output_directory','').value,
-                self.declare_parameter('diagnostics.capture_enabled',False).value,logger=self.get_logger())
+                self.declare_parameter('diagnostics.capture_enabled',False).value,logger=self.mission_logger)
             self.plc_admission = self.declare_parameter('plc_admission_enabled', False).value
             self.motion_sample = (None, 0.)
             if self.plc_admission:
@@ -214,7 +221,7 @@ def main(args=None):
 
         def log_event(self, level, message):
             # Humble binds the severity to the Python call site.
-            logger = self.get_logger()
+            logger = self.mission_logger
             if level == 'warning':
                 logger.warning(message)
             elif level == 'error':

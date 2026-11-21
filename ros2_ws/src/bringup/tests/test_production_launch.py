@@ -56,7 +56,7 @@ def test_public_entrypoint_preserves_production_profile_and_simulator_compositio
         for action in actions
         if isinstance(action, DeclareLaunchArgument) and action.name == "diagnostics"
     )
-    assert diagnostics.default_value[0].text == "__log_level_default__"
+    assert diagnostics.default_value[0].text == "none"
 
     includes = [
         action for action in actions if isinstance(action, IncludeLaunchDescription)

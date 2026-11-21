@@ -91,8 +91,11 @@ PROJECT_DEBUG_LOGGERS = {
 SUPPORTED_DIAGNOSTIC_COMPONENTS = frozenset(
     {"motion", "vision", "safety", "orchestration"}
 )
-DIAGNOSTICS_DEFAULT = "__log_level_default__"
 MOVEIT_RAW_LOG_LEVELS = (
+    "moveit_kinematics_base.kinematics_base:=warn",
+    "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
+    "moveit_rdf_loader.rdf_loader:=warn",
+    "moveit_robot_model.robot_model:=warn",
     "ompl:=fatal",
     "moveit_kinematic_constraints.kinematic_constraints:=warn",
     "moveit_collision_detection_fcl.collision_common:=warn",
@@ -125,7 +128,7 @@ DEBUG_FRAMEWORK_LOGGERS = (
 def parse_diagnostics(value):
     """Resolve the operator's component diagnostic selection."""
     selection = value.strip()
-    if selection == "none":
+    if selection in ("none", "__log_level_default__"):  # Older launch wrappers used this sentinel.
         return frozenset()
     if selection == "all":
         return SUPPORTED_DIAGNOSTIC_COMPONENTS
@@ -145,13 +148,6 @@ def parse_diagnostics(value):
             "diagnostics contains unsupported component(s): " + ",".join(unknown)
         )
     return frozenset(components)
-
-
-def resolve_diagnostics(value, log_level):
-    """Use log level only when the operator omitted diagnostics."""
-    if value == DIAGNOSTICS_DEFAULT:
-        value = "all" if log_level == "debug" else "none"
-    return parse_diagnostics(value)
 
 
 def project_checkout_root():
@@ -609,11 +605,8 @@ def compose(context):
     selected_planning_scene_log_level = LaunchConfiguration(
         "planning_scene_log_level"
     ).perform(context)
-    selected_diagnostics = resolve_diagnostics(
-        LaunchConfiguration("diagnostics", default=DIAGNOSTICS_DEFAULT).perform(
-            context
-        ),
-        selected_log_level,
+    selected_diagnostics = parse_diagnostics(
+        LaunchConfiguration("diagnostics", default="none").perform(context)
     )
     artifact_directory = Path(project_artifacts_directory())
     live_session_root = join_live_test_session(artifact_directory)
@@ -698,7 +691,7 @@ def compose(context):
         else diagnostic_root(artifact_directory) / "orchestration"
     )
     run_log_directory = (live_session_root if live_session_root else diagnostic_root(artifact_directory)) / 'ros_logs'
-    CONSOLE_OUTPUT_FORMAT.record_directory = run_log_directory
+    CONSOLE_OUTPUT_FORMAT.set_record_directory(run_log_directory)
     selected_action_logger_level = LaunchConfiguration("action_logger_level").perform(
         context
     )
@@ -993,11 +986,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "diagnostics",
-                default_value=DIAGNOSTICS_DEFAULT,
-                description=(
-                    "Optional component diagnostics; when omitted, debug selects all "
-                    "ROS Bringup producers and other log levels select none"
-                ),
+                default_value="none",
+                description="Optional component diagnostics: none (default), all, or a component list",
             ),
             DeclareLaunchArgument("action_logger_level", default_value="warn"),
             OpaqueFunction(function=compose),

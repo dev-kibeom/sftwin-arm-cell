@@ -20,7 +20,7 @@ def test_formatters_share_session_elapsed_time_and_preserve_console_format(
     source = Path(__file__).resolve().parents[1] / "launch/console_output_format.py"
     formatter_a = _load_formatter(source, "console_output_format_a")
     formatter_b = _load_formatter(source, "console_output_format_b")
-    observed_ns = iter((1_000_000_000, 3_000_000_000, 4_000_000_000, 5_000_000_000))
+    observed_ns = iter((1_000_000_000, 4_000_000_000, 5_000_000_000))
     monkeypatch.setattr("time.monotonic_ns", lambda: next(observed_ns))
     monkeypatch.setattr(launch_config, "_log_dir", str(tmp_path))
     monkeypatch.setattr(launch_config, "file_handlers", {})
@@ -71,22 +71,23 @@ def test_ompl_raw_ros_logs_remain_on_console_if_file_logging_fails(
 ):
     source = Path(__file__).resolve().parents[1] / "launch/console_output_format.py"
     formatter_type = _load_formatter(source, "console_output_format_ompl_file_error")
-    observed_ns = iter((1_000, 1_010))
+    observed_ns = iter((1_000, 1_010, 1_020))
     monkeypatch.setattr("time.monotonic_ns", lambda: next(observed_ns))
     monkeypatch.setattr(launch_config, "_log_dir", str(tmp_path))
     monkeypatch.setattr(launch_config, "file_handlers", {})
 
-    def fail_open(*args, **kwargs):
-        raise OSError("file log unavailable")
-
-    monkeypatch.setattr(Path, "open", fail_open)
     move_group = SimpleNamespace(
         process_description=SimpleNamespace(final_name="move_group")
     )
     formatter = formatter_type("{line}")
+    blocked = tmp_path / "not-a-directory"
+    blocked.touch()
+    formatter.set_record_directory(blocked)
     error_line = "[ERROR] [ompl] ./src/ompl/RRTConnect.cpp:265 - planner failed"
 
     assert formatter.format(line=error_line, this=move_group).endswith(error_line)
+    assert formatter.format(line=error_line, this=move_group).endswith(error_line)
+    assert (tmp_path / "launch.log").read_text().count("ROS output file incomplete") == 1
 
 
 def test_formatter_records_in_the_selected_run_instead_of_global_launch_directory(
@@ -97,9 +98,14 @@ def test_formatter_records_in_the_selected_run_instead_of_global_launch_director
     monkeypatch.setattr(launch_config, '_log_dir', str(tmp_path / 'global-logs'))
     monkeypatch.setattr(launch_config, 'file_handlers', {})
     formatter = formatter_type('{line}')
-    formatter.record_directory = tmp_path / '20261120/001122/diagnostic/ros_logs'
+    directory = tmp_path / '20261120/001122/diagnostic/ros_logs'
+    formatter.set_record_directory(directory)
+    nested = _load_formatter(source, 'nested_planning_formatter')('{line}')
     process = SimpleNamespace(process_description=SimpleNamespace(final_name='motion'))
+    nested.format(line='planning ready', this=process)
     assert formatter.format(line='completed', this=process).endswith('completed')
-    saved = formatter.record_directory / 'ros_output_nanoseconds.log'
+    saved = directory / 'ros_output_nanoseconds.log'
+    assert saved.read_text().count('# clock=') == 1
+    assert '[motion] planning ready' in saved.read_text()
     assert '[motion] completed' in saved.read_text()
     assert not (tmp_path / 'global-logs/ros_output_nanoseconds.log').exists()

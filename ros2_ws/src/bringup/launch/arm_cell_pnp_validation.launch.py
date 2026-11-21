@@ -86,7 +86,7 @@ def compose(context):
     use_sim_time = config.get("use_sim_time", True)
     model = config['model_configuration']
     robot_description = xacro.process_file(
-        model['urdf'], mappings={'mesh_root': model['mesh_root']},
+        model['urdf'], mappings={'ros_kdl_model': 'true', 'mesh_root': model['mesh_root']},
     ).toxml()
     robot_description_semantic = Path(model['semantic']).read_text()
     kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())

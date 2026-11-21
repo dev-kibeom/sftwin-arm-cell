@@ -67,6 +67,10 @@ DEBUG_FRAMEWORK_LOGGERS = (
     "moveit_constraint_samplers",
 )
 MOVEIT_RAW_LOG_LEVELS = (
+    "moveit_kinematics_base.kinematics_base:=warn",
+    "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
+    "moveit_rdf_loader.rdf_loader:=warn",
+    "moveit_robot_model.robot_model:=warn",
     "ompl:=fatal",
     "moveit_kinematic_constraints.kinematic_constraints:=warn",
     "moveit_collision_detection_fcl.collision_common:=warn",
@@ -114,7 +118,7 @@ def compose(context):
                 raise ValueError(f'Selected model is incompatible with {name} profile')
     model = {
         "robot_description": xacro.process_file(
-            description['urdf'], mappings={'mesh_root': description['mesh_root']},
+            description['urdf'], mappings={'ros_kdl_model': 'true', 'mesh_root': description['mesh_root']},
         ).toxml(),
         "use_sim_time": True,
     }
