@@ -4,7 +4,7 @@
 
 ## 실행
 
-GUI에서는 Conveyor PnP Cell을 선택하고 Isaac을 시작한 뒤 **PLC 시작**으로 서비스와 Modbus 응답을 확인할 수 있다. **ROS 2 시작**은 PLC 시작 전후 모두 가능하며, PLC 응답 확인과 ROS 사전 점검이 끝나면 런처가 PLC 어댑터를 실행한다. 설비 허가 발행과 UI 자동운전 설정은 아래 절차를 따른다.
+GUI에서는 Conveyor PnP Cell을 선택하고 Isaac을 시작한 뒤 **PLC 시작**으로 서비스와 Modbus 응답을 확인할 수 있다. **ROS 2 시작**은 PLC 시작 전후 모두 가능하며, PLC 응답 확인과 ROS 사전 점검이 끝나면 런처가 PLC 어댑터를 실행한다. GUI 시뮬레이션에서는 이 어댑터가 설비 허가도 함께 발행한다. UI Hub의 **Supply**에서 가용 수량을 입력하고 **Set available stock**을 누른 뒤 **Start automatic**을 누른다.
 
 수동 실행 시 ROS 2 Humble overlay에 `arm_cell_bringup`, `arm_cell_interfaces`, `arm_cell_plc_adapter`를 빌드하고 시스템 Python에 `python3-pymodbus` 2.x를 설치한다. CODESYS에는 Conveyor 공정 프로그램을 사용한다. 설비 Sidecar는 기존 Adapter 프로필의 Modbus 접속 설정을 읽고 HR16–25만 쓴다. HR0–7은 별도 Robot Adapter의 영역이다. 시험용 Mock과 Robot Adapter 중 하나만 해당 영역을 소유해야 한다. [PLC 실행 및 매핑](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)
 
@@ -21,12 +21,13 @@ PYTHONPATH="$PWD/ros2_ws/src/bringup:$PYTHONPATH" python3 ros2_ws/src/bringup/sc
 Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /tmp/conveyor-runtime.json`으로 실행한다. ROS Python 경로는 별도 Sidecar가 설정한다. 다른 overlay를 사용할 때는 `ARM_CELL_ROS_SETUP`에 그 setup.bash 경로를 지정한다. 두 프로세스는 같은 ROS 도메인을 사용한다.
 
 - 새 장면은 빈 설비와 PLC의 자재 ID·단계·마지막 Commit이 모두 0인 표본에서 동기화한다. UI에서 자재 종류·가용 수량을 설정하고 자동운전을 켠다. PLC의 식별된 공급 명령이 와야 자재가 생성된다.
-- 설비 허가 생산자는 `/cell/conveyor/equipment_permitted`에 `std_msgs/Bool`을 주기적으로 제공한다. 이 값은 시뮬레이션 설비 동작 허가다. 미수신·만료는 설비 동작을 보류한다. 운영 사용에는 해당 허가 생산자를 연결한다.
+- GUI에서 시작한 Isaac Conveyor PLC 어댑터는 선택한 셀의 `equipment_permit_topic`(기본 `/cell/conveyor/equipment_permitted`)에 0.1초마다 `std_msgs/Bool`을 발행한다. PLC 응답을 기다리는 동안에도 Safety를 수신하고 허가를 갱신한다. 마지막 레지스터 교환 성공 후 0.9초 미만이고, 0.5초 이내에 수신한 Safety 상태가 유효한 SAFE·MOTION_NORMAL 및 정상 운동 상한을 제공할 때만 허가한다. PLC 교환 실패, 입력 미수신·만료 또는 Safety 정지 시 다음 발행 값은 `false`다. 발행이 끊기면 Isaac도 마지막 수신 후 0.9초에 허가를 만료시킨다.
+- 수동 실행 시에는 별도 설비 허가 생산자를 같은 ROS 도메인에 연결한다. 허가 토픽에는 한 생산자만 연결한다. 실제 설비의 운전 허가는 해당 설비 제어계가 제공한다.
 - UI 자동운전 일시 정지, Timeline Pause, TCP 재접속은 같은 자재와 생성 영수증을 유지한다. Timeline Stop은 설비를 보류한다. 프로세스 재기동으로 생성 이력이나 예약을 잃은 경우에는 PLC RETAIN과 현물을 대조해야 한다.
 
 ## 런처의 CODESYS GUI와 서비스 권한
 
-`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 `$XDG_DATA_HOME/arm_cell/codesys/Conveyor.fbsdev`이며 XDG 설정을 생략하면 `~/.local/share`를 사용한다. 다른 위치는 런처를 실행하기 전에 `ARM_CELL_CODESYS_PROJECT`로 지정한다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
+`PLC 시작 시 CODESYS GUI 열기`는 `c4-cli standalone-session`으로 로컬 프로젝트를 현재 사용자의 IDE에 연다. 기본 프로젝트는 현재 체크아웃의 [infra/plc/Conveyor.fbsdev](../../../../infra/plc/Conveyor.fbsdev)다. 다른 위치는 런처를 실행하기 전에 `ARM_CELL_CODESYS_PROJECT`로 지정한다. GUI 열기는 프로젝트 다운로드나 PLC 로그인 명령을 실행하지 않는다. 기동 시점의 실제 PLC 응답(IR29의 `0xC051`, 공정 단계, 자재 번호)은 런처에서 확인한다. PLC에 통신 시험 앱(`0xC04E`)이 설치된 경우 [공정 PLC_PRG 배포 절차](../../../../ros2_ws/src/plc_adapter/README.md#conveyor-pnp-cell-공정-프로그램)에 따라 먼저 부팅 앱을 준비한다.
 
 기본 로컬 서비스 제어는 systemd의 데스크톱 인증을 사용한다. 호스트 관리자가 특정 운영 계정의 반복 인증을 생략하려면 `visudo`로 `/etc/sudoers.d/arm-cell-codesys-<계정명>`에 아래 규칙을 설치한다. 예시의 `operator`를 해당 계정으로 바꾸고 파일 소유권은 root, 모드는 0440으로 설정한다.
 

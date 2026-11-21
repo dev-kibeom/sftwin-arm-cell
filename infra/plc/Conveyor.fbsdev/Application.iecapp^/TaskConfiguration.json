@@ -1,0 +1,22 @@
+{
+	"taskGroups": [
+		{
+			"groupName": "IEC-Tasks",
+			"tasks": {
+				"DefaultTask": {
+					"calls": [
+						"PLC_PRG"
+					],
+					"priority": 1,
+					"type": "Cyclic",
+					"interval": 200000,
+					"watchdogEnable": false,
+					"watchdogTime": 0,
+					"watchdogSensitivity": 0
+				}
+			},
+			"coreConfig": "FixedPinned"
+		}
+	],
+	"systemEvents": []
+}

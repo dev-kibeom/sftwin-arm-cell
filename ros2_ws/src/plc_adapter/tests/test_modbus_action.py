@@ -24,6 +24,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_action_status_default
 from rclpy.time import Time
 from rosgraph_msgs.msg import Clock
+from std_msgs.msg import Bool
 
 from arm_cell_plc_adapter.receipts import State
 
@@ -198,15 +199,18 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, 
         adapter = stack.enter_context(ExitStack())
 
         def start_adapter():
+            # Exercise receipt and Action callbacks with both deployed executor configurations.
+            permit_args = [] if expire else ['-p', 'simulation_equipment_permit_topic:=/test/permit']
             adapter.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter',
                                   '--ros-args', '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
                                   '-p', 'target_id:=test_part', '-p', 'poll_seconds:=0.04',
                                   '-p', 'request_input_offset:=7', '-p', 'reply_holding_offset:=12',
                                   '-p', 'request_fields:=[id_low, id_high]',
-                                  '-p', f'receipt_file:={tmp_path / "plc.sqlite"}'))
+                                  '-p', f'receipt_file:={tmp_path / "plc.sqlite"}', *permit_args))
 
         start_adapter()
         wait_for(lambda: reply()[5] > 1)
+        assert robot.count_publishers('/cell/conveyor/equipment_permitted') == 0
         wait_for(lambda: robot.supply_pub.get_subscription_count() > 0)
         bank.setValues(4, 7, [1, 0])
         wait_for(lambda: reply()[1:3] == [1, State.ACCEPTED])
@@ -254,3 +258,123 @@ def test_plc_disconnect_and_restart_across_robot_results(tmp_path, monkeypatch, 
         else:
             wait_for(lambda: reply()[1:5] == [3, State.REJECTED, 0, 0])
         assert robot.goals == ['first', 'second']
+
+
+def test_launcher_simulation_permit_tracks_safety_and_plc_link(tmp_path, monkeypatch):
+    respond = threading.Event()
+    respond.set()
+
+    class SlowPLC(ModbusSlaveContext):
+        def getValues(self, *args):
+            respond.wait(timeout=4)
+            time.sleep(.2)
+            return super().getValues(*args)
+
+        def setValues(self, *args):
+            time.sleep(.2)
+            return super().setValues(*args)
+
+    bank = SlowPLC(ir=ModbusSequentialDataBlock(0, [0] * 32),
+                   hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
+    topic = '/test/conveyor/equipment_permitted'
+    with ExitStack() as stack:
+        monkeypatch.setenv('ROS_DOMAIN_ID', str(stack.enter_context(domain_id())))
+        monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
+        monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'logs'))
+        rclpy.init()
+        stack.callback(rclpy.try_shutdown)
+        observer = Node('permit_observer')
+        stack.callback(observer.destroy_node)
+        received = []
+        observer.create_subscription(Bool, topic, lambda msg: received.append(msg.data), 1)
+        safety = observer.create_publisher(SafetyState, '/safety/state', 1)
+        safe = SafetyState(valid=True, required_inputs_fresh=True, motion_envelope_valid=True,
+                           max_velocity_scale=1., max_acceleration_scale=1.,
+                           safety_state=SafetyState.SAFETY_STATE_SAFE)
+        safe.motion_capability.value = safe.motion_capability.MOTION_NORMAL
+
+        def expect(value, sample=None):
+            received.clear()
+            def observed():
+                if sample is not None:
+                    safety.publish(sample)
+                rclpy.spin_once(observer, timeout_sec=.04)
+                return received and received[-1] is value
+            wait_for(observed)
+
+        plc = stack.enter_context(ExitStack())
+        port = plc.enter_context(plc_server(bank))
+        adapter = stack.enter_context(ExitStack())
+        adapter.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter',
+                                      '--ros-args', '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
+                                      '-p', 'target_id:=demo', '-p', 'poll_seconds:=0.05',
+                                      '-p', 'admission_holding_offset:=6', '-p', 'timeout_seconds:=3.0',
+                                      '-p', f'receipt_file:={tmp_path / "plc.sqlite"}',
+                                      '-p', f'simulation_equipment_permit_topic:={topic}'))
+        expect(False)
+        expect(True, safe)
+        # Three successful operations take 0.6 s. Keep granting across multiple exchanges.
+        received.clear()
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            safety.publish(safe)
+            rclpy.spin_once(observer, timeout_sec=.04)
+        assert len(received) >= 5 and all(received)
+        expect(False)  # Safety samples stop while the PLC link remains healthy.
+        expect(True, safe)
+        safe.motion_capability.value = safe.motion_capability.MOTION_RECOVERY_ONLY
+        expect(False, safe)
+        safe.motion_capability.value = safe.motion_capability.MOTION_NORMAL
+        expect(True, safe)
+        # Withhold the next response beyond the link freshness window but below the I/O timeout.
+        respond.clear()
+        try:
+            started = time.monotonic()
+            expect(False, safe)
+            assert time.monotonic() - started < 2.5
+        finally:
+            respond.set()
+        expect(True, safe)
+        plc.close()
+        expect(False, safe)
+        plc.enter_context(plc_server(bank, port))
+        expect(True, safe)
+        adapter.close()
+        wait_for(lambda: observer.count_publishers(topic) == 0)
+
+
+def test_admission_words_during_slow_modbus_read(tmp_path, monkeypatch):
+    class SlowReadPLC(ModbusSlaveContext):
+        def getValues(self, function, address, count=1):
+            if function == 4:
+                time.sleep(.6)
+            return super().getValues(function, address, count)
+
+    bank = SlowReadPLC(ir=ModbusSequentialDataBlock(0, [0] * 32),
+                       hr=ModbusSequentialDataBlock(0, [0] * 32), zero_mode=True)
+    with ExitStack() as stack:
+        monkeypatch.setenv('ROS_DOMAIN_ID', str(stack.enter_context(domain_id())))
+        monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
+        monkeypatch.setenv('ROS_LOG_DIR', str(tmp_path / 'logs'))
+        port = stack.enter_context(plc_server(bank))
+        rclpy.init()
+        stack.callback(rclpy.try_shutdown)
+        mission = Node('admission_test_mission')
+        stack.callback(mission.destroy_node)
+        admission = mission.create_publisher(Bool, '/orchestration/mission_admission_available', 1)
+        stack.enter_context(process('arm_cell_plc_adapter', 'plc_task_adapter', '--ros-args',
+                                    '-p', 'host:=127.0.0.1', '-p', f'port:={port}',
+                                    '-p', 'admission_holding_offset:=6', '-p', 'timeout_seconds:=1.0',
+                                    '-p', 'target_id:=test', '-p', f'receipt_file:={tmp_path / "plc.sqlite"}'))
+
+        def fresh(value, previous_sequence=0):
+            admission.publish(Bool(data=value))
+            sequence, available = bank.getValues(3, 6, 2)
+            return sequence not in (0, previous_sequence) and available == int(value)
+
+        wait_for(lambda: fresh(True))
+        sequence = bank.getValues(3, 6, 2)[0]
+        wait_for(lambda: fresh(True, sequence))
+        wait_for(lambda: fresh(False))
+        wait_for(lambda: bank.getValues(3, 6, 2) == [0, 0])
+        wait_for(lambda: fresh(True))

@@ -1,0 +1,5 @@
+Communication.settings.json
+.intermediate/
+.devDesc-cache/
+.library-cache/
+.bootapp/

@@ -18,6 +18,7 @@ def test_unconfirmed_action_keeps_id_and_uuid(tmp_path, pending, outcome):
     adapter.mission.server_is_ready.return_value = True
     adapter.acceptance = adapter.result = None
     adapter.connected = True
+    adapter.simulation_permit = None
     adapter.receipts = Receipts(tmp_path / 'plc.sqlite')
     try:
         adapter.receipts.observe_idle()
@@ -45,20 +46,23 @@ def test_unconfirmed_action_keeps_id_and_uuid(tmp_path, pending, outcome):
 
 def test_expired_admission_is_distinct_from_observed_false_even_at_rollover(monkeypatch):
     from std_msgs.msg import Bool
-    from arm_cell_plc_adapter import node
+    from arm_cell_plc_adapter import mission_admission
 
     adapter = PlcTaskAdapter.__new__(PlcTaskAdapter)
     adapter.plc = Mock(admission_offset=6)
     adapter.plc.read_command.return_value = 0
     adapter.receipts = Mock()
-    adapter.admission_sequence = 65535
-    monkeypatch.setattr(node.time, 'monotonic', lambda: 10.)
-    adapter.on_admission(Bool(data=False))
-    adapter.exchange()
-    adapter.plc.write_admission.assert_called_with(1, False)
-    monkeypatch.setattr(node.time, 'monotonic', lambda: 11.)
+    adapter.admission = mission_admission.MissionAdmission()
     adapter.exchange()
     adapter.plc.write_admission.assert_called_with(0, False)
-    adapter.on_admission(Bool(data=True))
+    adapter.admission.sequence = 65535
+    monkeypatch.setattr(mission_admission.time, 'monotonic', lambda: 10.)
+    adapter.admission.observe(Bool(data=False))
+    adapter.exchange()
+    adapter.plc.write_admission.assert_called_with(1, False)
+    monkeypatch.setattr(mission_admission.time, 'monotonic', lambda: 11.)
+    adapter.exchange()
+    adapter.plc.write_admission.assert_called_with(0, False)
+    adapter.admission.observe(Bool(data=True))
     adapter.exchange()
     adapter.plc.write_admission.assert_called_with(2, True)

@@ -72,8 +72,7 @@ class ConveyorPLC(QObject):
             return
         self.editor_error = ''
         selected = environment.get('ARM_CELL_CODESYS_PROJECT')
-        data_home = Path(environment.get('XDG_DATA_HOME') or Path.home() / '.local/share')
-        project = Path(selected).expanduser() if selected else data_home / 'arm_cell/codesys/Conveyor.fbsdev'
+        project = Path(selected).expanduser() if selected else HERE.parent / 'plc/Conveyor.fbsdev'
         if not project.exists():
             self.editor_error = f'CODESYS 프로젝트를 찾을 수 없습니다 · {project}'
         else:

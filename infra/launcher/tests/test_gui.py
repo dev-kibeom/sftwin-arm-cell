@@ -657,14 +657,20 @@ esac
     assert state.exists() is service_active
 
 
-def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monkeypatch):
+@pytest.mark.parametrize('use_override', [False, True])
+def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monkeypatch, use_override):
     assert window.plc_gui.isHidden()
     cell = window.selectors['cell']
     cell.setCurrentIndex(next(i for i in range(cell.count()) if Path(cell.itemData(i)).stem == 'conveyor_pnp_cell'))
     assert not window.plc_gui.isHidden()
     assert not window.plc_gui.isChecked()
-    project = tmp_path / 'Conveyor.fbsdev'
-    project.mkdir()
+    project = Path(__file__).resolve().parents[2] / 'plc' / 'Conveyor.fbsdev'
+    window.environment = dict(os.environ)
+    window.environment.pop('ARM_CELL_CODESYS_PROJECT', None)
+    if use_override:
+        project = tmp_path / 'Conveyor.fbsdev'
+        project.mkdir()
+        window.environment['ARM_CELL_CODESYS_PROJECT'] = str(project)
     opened = []
     class Editor:
         def poll(self):
@@ -673,7 +679,6 @@ def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monk
         opened.append(args)
         return Editor()
     monkeypatch.setattr(launcher.plc_control.subprocess, 'Popen', open_process)
-    window.environment = dict(os.environ, ARM_CELL_CODESYS_PROJECT=str(project))
     window.runtime = tmp_path / 'runtime.json'
     monkeypatch.setattr(window, 'can_start_plc', lambda: True)
     starts = []

@@ -201,7 +201,7 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 3. Conveyor에서는 `PLC 시작`을 누릅니다. 로컬 CODESYS 서비스를 재사용하거나 시작한 뒤,
    Conveyor 공정 프로그램의 Modbus 응답을 확인합니다. 서비스 시작·종료에는
    해당 호스트의 systemd 권한이 필요합니다. 단계와 오류는 런처 터미널에, 마지막 결과는 창에 표시됩니다.
-   실패 원인을 해결한 뒤 같은 버튼을 누르면 재시도합니다. 설비 운전 허가와 자동운전은
+   실패 원인을 해결한 뒤 같은 버튼을 누르면 재시도합니다. 자재 투입과 자동운전 설정은
    [Conveyor 실행 절차](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)를 따릅니다.
    `PLC 시작 시 CODESYS GUI 열기`를 선택하면 일반 사용자로 Conveyor 프로젝트를 엽니다.
    런처에는 기동 시 읽은 PLC 앱 식별값, 단계, 자재 번호가 표시됩니다.
@@ -209,6 +209,8 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
    IDE는 별도 창에서 직접 닫습니다. 프로젝트 위치와 서비스 인증 설정은 [Conveyor 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md#런처의-codesys-gui와-서비스-권한)를 참조하세요.
 4. `ROS 2 시작`을 누릅니다. 상세 로그가 필요하면 시작 전에 `ROS 2 디버그 모드`를 선택합니다.
    Conveyor PLC 어댑터는 PLC 응답 확인과 ROS 사전 점검이 모두 끝나면 자동으로 시작합니다. ROS 2를 먼저 시작해도 됩니다.
+   런처는 PLC 통신과 신선한 정상 Safety 상태를 확인해 시뮬레이션 설비 허가를 주기적으로 발행합니다.
+   Isaac UI Hub의 `Supply`에서 수량을 입력하고 `Set available stock` → `Start automatic`을 누릅니다.
 5. Isaac Sim UI Hub의 카메라·Vision 화면과 두 실행 터미널의 오류를 확인합니다.
    런처의 실행 표시는 프로세스가 실행 중이라는 뜻입니다. 시스템 준비나 PnP 성공을 보장하지 않습니다.
 

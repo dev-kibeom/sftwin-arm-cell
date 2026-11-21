@@ -44,6 +44,9 @@ def start_adapter(config):
     # Use the endpoint and receipt stream that Isaac received at session export.
     for key, value in dict(layout['connection'], receipt_file=layout['receipt_file']).items():
         args.extend(['-p', f'{key}:={value}'])
+    factory = config['cell'].get('isaac', {}).get('material_supply_factory')
+    if factory == 'conveyor_pnp_cell.runtime:create_adapter':
+        args.extend(['-p', f"simulation_equipment_permit_topic:={layout['equipment_permit_topic']}"])
     os.execv(sys.executable, [sys.executable, *args])
 
 
