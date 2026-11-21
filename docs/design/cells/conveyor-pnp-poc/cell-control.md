@@ -114,34 +114,8 @@ Conveyor의 UI Supply Port는 자동운전을 멈춘 상태에서 종류와 공�
 
 Pick 센서가 관측한 자재와 PLC가 위치를 확정한 자재가 일치하면 공급자가 그 개체를 고정 Pick 슬롯에서 공개한다. 같은 개체를 다시 관측해도 품종과 개체 ID를 유지한다. 목적지 Release를 확인한 뒤에는 해당 개체를 퇴역시키며 다음 도착 자재가 같은 슬롯을 사용한다. [Configured Supply ICD](../../interfaces/icd-configured-supply.md)
 
-### 슬롯과 자재의 관계
+### 데이터 모델 및 변환 계약
 
-아래 ER 도식은 공급 설정, 설비 관측, 예약 사이의 논리 관계를 나타낸다. 점유는 특정 개체가 Pick 위치에서 예약 가능한 기간이며, 로봇이 이송 중일 때는 예약이 계속 그 개체를 가리킨다.
+자재·슬롯·논리 배정·예약·작업·검사·생산 이력의 Entity·Cardinality·영속성·복원은 [Cell Data Model Design](cell-data.md)이 소유한다. PLC·Equipment·Robot·History의 식별자 및 오류 의미 매핑은 [Integration Mapping Design](integration-mapping.md)이 소유한다.
 
-```mermaid
-erDiagram
-    CELL ||--o{ EQUIPMENT : contains
-    EQUIPMENT ||--o{ SLOT : owns
-    SLOT ||--o{ OCCUPANCY : receives
-    SUPPLY ||--o{ MATERIAL_INSTANCE : feeds
-    MATERIAL_TYPE ||--o{ MATERIAL_INSTANCE : classifies
-    MATERIAL_INSTANCE ||--o| OCCUPANCY : arrives
-    SUPPLY ||--o{ SUPPLY_EPOCH : opens
-    SUPPLY_EPOCH ||--o{ RESERVATION : issues
-    OCCUPANCY ||--o{ RESERVATION : reserves
-    SLOT ||--o{ TEACHING_BINDING : pick
-    SLOT ||--o{ TEACHING_BINDING : place
-    MATERIAL_TYPE ||--o{ TEACHING_BINDING : supports
-    TEACHING ||--o{ TEACHING_BINDING : executes
-```
-
-| 식별자 | 범위와 수명 | 배포 예 |
-|---|---|---|
-| `slot_id` | Cell·설비·로컬 위치의 복합 주소. 자재 교체 후에도 유지 | `conveyor_pnp_cell/CV-01/pick`, `conveyor_pnp_cell/TR-01/receive` |
-| `material_type_id` | 한 번에 한 품종과 수량을 투입 설정으로 받는다. 실제 생성 시 선택한 품종을 개체에 기록한다 | `ConveyorPart` |
-| `material_instance_id` | 설비 스트림 UUID와 실제 생성 때의 PLC 자재 번호를 결합한다. 예약 epoch와 독립적이며 새 PLC 스트림의 첫 자재도 구분한다 | `<stream>/1`, `<stream>/2`, `<stream>/3` |
-| `reservation_id` | 공급 epoch에서 특정 슬롯·품종·개체에 부여한 예약 | RESERVE 응답에서 발급 |
-
-한 슬롯에는 한 번에 한 개체와 최대 한 개의 활성 예약이 있다. 작업 시작 전 BUSY로 반환하면 새 예약이 같은 점유를 이어받을 수 있다. Task가 BT에 진입한 개체는 같은 실행 프로세스에서 다시 Pick하지 않는다. 프로세스를 재시작할 때는 기존 PLC 스트림과 설비의 초기화·대조 계약을 따른다.
-
-배포 설정의 품종 목록은 한 쌍의 Pick/Place 위치, 동일한 물리 규격 및 기존 흡착 티칭을 공유할 수 있는 품종을 명시한다. 운영자는 정지 상태에서 다음 공급 품종을 선택한다. 이미 투입된 개체는 기존 품종을 유지한다. 기본 PoC 프로필은 `ConveyorPart` 한 품종을 설치한다.
+Cell Control은 기존 공정 명령·상태·인터록 및 인수 확정 권한을 유지한다. Data/Mapping 문서는 새 PLC Gate 또는 Safety 상태를 정의하지 않는다.

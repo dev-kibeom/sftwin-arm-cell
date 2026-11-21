@@ -27,6 +27,8 @@ ros2 run arm_cell_plc_adapter plc_task_adapter --ros-args \
   --params-file src/plc_adapter/config/conveyor_pnp_codesys.yaml
 ```
 
+Adapter가 영수증을 연 동안에는 같은 디렉터리의 `.writer.lock` 파일 잠금으로 단일 writer를 유지한다. 운전 중 이 파일을 교체하거나 제거하지 않는다. 같은 호스트의 History 조회는 WAL 읽기 연결에서 개체에 연결된 실행만 읽는다.
+
 `receipt_file`은 요청 스트림마다 전용 영속 경로를 지정한다. 동일 스트림에는 Adapter 하나만 연결한다. 초기 시운전은 PLC 요청 ID 0과 빈 기록에서 시작한다. heartbeat의 변화와 유휴 응답을 확인한 뒤 ID 1을 유지하고 응답 ID·상태·사유·배치 값을 관찰한다. 같은 ID를 유지한 채 TCP를 끊었다 복원하면 같은 작업의 기록이 재전달된다. 실제 운전 중인 스트림의 기록을 지우거나 다른 PLC에 연결하면 상관관계를 잃는다.
 
 Configured Mission은 ROS 2 Humble `ActionServer`의 기본 `result_timeout=900`초를 사용한다. 기준 시각은 해당 Goal이 terminal에 도달한 Mission 서버 시각이다. Adapter가 중단된 동안 완료된 작업은 같은 Mission 서버가 결과를 보유하는 동안 원래 UUID로 조회해야 한다. 재시작·ROS 탐색·재조회에 걸리는 시간도 이 창에 포함된다. Mission 서버가 재시작하면 창 안에서도 미저장 결과를 잃을 수 있다. Adapter가 이미 SQLite에 기록한 terminal은 서버 보존 기간이 지나도 같은 PLC ID로 읽을 수 있다. [Humble ActionServer 구현](https://github.com/ros2/rclpy/blob/humble/rclpy/rclpy/action/server.py)

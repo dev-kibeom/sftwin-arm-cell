@@ -34,6 +34,24 @@ class ConveyorPickSupply:
             return (self.available and not self.reservation and self.cycle == cycle
                     and self.material_type_id == material_type_id)
 
+    def snapshot(self):
+        """Stable supply state persisted before acknowledging a transition."""
+        with self.lock:
+            return dict(stream_id=self.stream_id, epoch=self.epoch, slot_id=self.slot,
+                        plc_number=self.cycle, type_id=self.material_type_id,
+                        available=self.available, reservation_id=self.reservation)
+
+    def restore_snapshot(self, saved):
+        if (saved['stream_id'] != self.stream_id or saved['slot_id'] != self.slot
+                or saved['type_id'] and saved['type_id'] not in self.material_type_ids):
+            raise ValueError('Stored conveyor supply belongs to another physical source')
+        with self.lock:
+            self.epoch = saved['epoch']
+            self.cycle = int(saved['plc_number'])
+            self.material_type_id = saved['type_id']
+            self.available = bool(saved['available'])
+            self.reservation = saved['reservation_id']
+
     def state(self, valid):
         with self.lock:
             return ConfiguredSupplyState(

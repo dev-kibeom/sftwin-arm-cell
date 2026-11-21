@@ -17,8 +17,23 @@ public:
     const arm_cell_motion::GraspExecutionIdentity & identity,
     Clock::time_point now) const
   {
-    if (!observed_ || now < received_ || now - received_ > std::chrono::milliseconds(500) ||
-      !state_.valid || state_.supply_id != identity.supply_id ||
+    return observed_ && now >= received_ && now - received_ < std::chrono::milliseconds(500) &&
+           same_reservation(identity);
+  }
+
+  bool retains(
+    const arm_cell_motion::GraspExecutionIdentity & identity, Clock::time_point now,
+    bool conveyor) const
+  {
+    if (!conveyor) {return matches(identity, now);}
+    return observed_ && ((state_.observation_pending && !state_.valid &&
+           state_.supply_id == identity.supply_id) || same_reservation(identity));
+  }
+
+private:
+  bool same_reservation(const arm_cell_motion::GraspExecutionIdentity & identity) const
+  {
+    if (state_.observation_pending || !state_.valid || state_.supply_id != identity.supply_id ||
       state_.material_id != identity.material_id ||
       state_.material_type_id != identity.material_type_id ||
       state_.material_instance_id != identity.material_instance_id ||
@@ -36,7 +51,6 @@ public:
     return false;
   }
 
-private:
   arm_cell_interfaces::msg::ConfiguredSupplyState state_;
   Clock::time_point received_{};
   bool observed_{false};

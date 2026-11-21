@@ -151,6 +151,11 @@ def test_unit_request_runs_one_sequence_without_material_count(configured_missio
     result=mission.execute(handle)
     assert result.exit_reason.value==MissionExitReason.MISSION_EXIT_QUANTITY_REACHED
     assert result.has_material_placed and result.material_placed
+    trace = result.configured_task
+    assert trace.material_instance_id == '42' and trace.reservation_id == 'lease'
+    assert bytes(trace.task_goal_id.uuid) == bytes([1]*16)
+    assert (trace.task_status, trace.result_code) == (4, 0)
+    assert any(f.configured_task.reservation_id == 'lease' for f in feedback)
     assert terminal==['succeeded']
     assert [request.command for request in requests]==[ConfiguredSupply.Request.RESERVE,ConfiguredSupply.Request.COMPLETE]
     assert requests[-1].material_placed
@@ -310,3 +315,66 @@ def test_mission_safety_precedence_preserves_placed_task_failure(configured_miss
     assert 'RETREAT' in result.diagnostic_detail and 'blocked' in result.diagnostic_detail
     task_outcome, = [facts for event, facts in events if event == 'task_outcome']
     assert task_outcome['task_result_code'] == failure.result_code and task_outcome['material_placed']
+
+
+def test_reconnected_supply_receives_only_the_original_terminal_cleanup(configured_mission):
+    from arm_cell_interfaces.srv import ConfiguredSupply
+    mission, requests, tasks = configured_mission
+    mission.plc_admission = True
+    lease = State(slot_id='slot', reservation_id='lease', material_type_id='A', material_instance_id='stream/1')
+    wait = mission.wait
+    def lost_first_response(future, timeout):
+        if len(requests) == 1:
+            raise TimeoutError('Disconnected during terminal cleanup')
+        return wait(future, timeout)
+    mission.wait = lost_first_response
+    mission.cell.wait_for_service = lambda timeout_sec: True
+    response = mission.command(ConfiguredSupply.Request.ABANDON, 'epoch', lease, placed=False)
+    assert response.success and not tasks
+    assert len(requests) == 2 and requests[0] == requests[1]
+    assert requests[-1].reservation_id == 'lease' and not requests[-1].material_placed
+
+
+def test_supply_delay_reports_transitions_and_counts_polls():
+    delay = module.SupplyDelay()
+    events = []
+    for age in (.49, .5, .8, 5., 6., 0., .1):
+        delay.report(age, lambda level, message: events.append((level, message)))
+    assert [level for level, _ in events] == ['warning', 'error', 'info']
+    assert '4' in events[-1][1]
+
+
+@pytest.mark.parametrize('field,value', [
+    ('reservation_id', ''), ('supply_epoch', 'replacement'),
+    ('material_instance_id', 'stream/other'), ('valid', False)])
+def test_confirmed_conveyor_revocation_is_latched(configured_mission, field, value):
+    from copy import copy
+    mission, _, _ = configured_mission
+    state = copy(mission.supply)
+    state.reservation_id, state.selected_slot_id = 'lease', 'slot_0'
+    mission.active_lease = State(
+        supply_epoch=state.supply_epoch, slot_id='slot_0', reservation_id='lease',
+        material_type_id=state.material_type_id, material_instance_id=state.material_instance_id)
+    pending = copy(state)
+    pending.valid, pending.observation_pending = False, True
+    mission.on_supply(pending)
+    assert not mission.revoked and not mission.supply_is_current()
+    mission.on_supply(state)
+    assert not mission.revoked and mission.supply_is_current()
+    changed = copy(state)
+    setattr(changed, field, value)
+    mission.on_supply(changed)
+    mission.on_supply(state)
+    assert mission.revoked
+
+
+def test_supply_delay_emits_all_severities_to_ros_logger(configured_mission, capfd):
+    from rclpy.logging import get_logger
+    mission, _, _ = configured_mission
+    logger = get_logger('supply_delay_regression')
+    mission.get_logger = lambda: logger
+    for age in (0.5, 5.0, 0.):
+        mission.supply_delay.report(age, mission.log_event)
+    log = capfd.readouterr().err
+    assert log.count('observation delayed') == 2
+    assert '[WARN]' in log and '[ERROR]' in log and '[INFO]' in log

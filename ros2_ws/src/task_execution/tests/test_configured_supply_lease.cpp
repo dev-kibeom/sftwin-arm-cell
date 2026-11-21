@@ -24,3 +24,30 @@ TEST(ConfiguredSupplyLease, RequiresLiveAuthoritativeMatchingOccupiedReservation
   state.occupied = {true}; state.valid = false; lease.update(state, now);
   EXPECT_FALSE(lease.matches(identity, now));
 }
+
+TEST(ConfiguredSupplyLease, ActiveConveyorSeparatesSilenceFromRevocation)
+{
+  ConfiguredSupplyLease lease;
+  const auto now = ConfiguredSupplyLease::Clock::now();
+  arm_cell_motion::GraspExecutionIdentity identity{
+    "goal", "Part", "supply", "pick", "epoch", "token", "A", "stream/1"};
+  arm_cell_interfaces::msg::ConfiguredSupplyState state;
+  state.supply_id = "supply"; state.material_id = "Part"; state.supply_epoch = "epoch";
+  state.slot_ids = {"pick"}; state.occupied = {true}; state.selected_slot_id = "pick";
+  state.reservation_id = "token"; state.material_instance_id = "stream/1";
+  state.material_type_id = "A"; state.valid = true;
+  lease.update(state, now);
+  EXPECT_FALSE(lease.matches(identity, now + std::chrono::seconds(6)));
+  EXPECT_TRUE(lease.retains(identity, now + std::chrono::seconds(6), true));
+  EXPECT_FALSE(lease.retains(identity, now + std::chrono::seconds(6), false));
+  state.valid = false; state.observation_pending = true;
+  lease.update(state, now);
+  EXPECT_FALSE(lease.matches(identity, now));
+  EXPECT_TRUE(lease.retains(identity, now, true));
+  state.observation_pending = false;
+  lease.update(state, now);
+  EXPECT_FALSE(lease.retains(identity, now, true));
+  state.valid = true; state.material_instance_id = "stream/2";
+  lease.update(state, now);
+  EXPECT_FALSE(lease.retains(identity, now, true));
+}

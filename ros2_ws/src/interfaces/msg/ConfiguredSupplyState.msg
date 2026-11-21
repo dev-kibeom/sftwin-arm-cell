@@ -15,3 +15,5 @@ uint32 completed_count
 bool valid
 bool exhausted
 string diagnostic_detail
+# Conveyor has no authoritative physical/PLC observation yet. Never permits admission.
+bool observation_pending

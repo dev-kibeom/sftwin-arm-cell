@@ -23,6 +23,8 @@ Conveyor 프로필의 별도 HR6–7은 Configured Mission이 발행하는 `/orc
 
 PLC는 같은 ID를 유지해 수락·진행·terminal을 조회한다. 결과를 소비한 후 다음 자재에 새 ID를 부여한다. 요청·응답 블록은 각각 일관된 한 프로세스 이미지로 교환한다. 이전 ID의 재조회는 해당 기록만 반환한다. 한 스트림에서 ID를 순환·재사용하지 않는다.
 
+Configured Mission의 개체·예약·하위 Task 식별자는 동일 Mission Goal UUID의 영수증에 연결한다. terminal을 받으면 Adapter는 Mission 결과와 당시 관측한 Task 결과를 함께 저장한다. 자재별 읽기 조회는 원래 영수증을 읽으며 Adapter의 단일 제출 권한과 재시작 상태를 변경하지 않는다.
+
 ## 단절과 재시작
 
 Adapter는 제출 전에 ID와 ROS Goal UUID를 영속화하고 결과를 저장한 뒤 PLC에 전달한다. PLC 링크 단절은 실행 취소 사유가 아니다. 재접속 시 유지된 요청으로 현재 기록을 다시 전달한다. 이미 기록한 terminal은 Mission 서버의 결과 보존 기간과 독립적으로 재전달할 수 있다. Adapter 재시작 시 진행 중이던 ID의 terminal을 같은 UUID로 ROS Action 서버에 조회한다. terminal 이후 서버 보존 기간이 지났거나 서버가 재기동되어 결과가 없으면 조회 응답은 `STATUS_UNKNOWN`이다. `STATUS_UNKNOWN`을 받거나 제출 여부를 확인할 수 없으면 원래 ID·UUID를 보존하고 미확정 상태에서 후속 요청을 보류한다.

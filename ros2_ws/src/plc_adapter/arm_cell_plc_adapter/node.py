@@ -90,8 +90,9 @@ class PlcTaskAdapter(Node):
     def on_feedback(self, message):
         last = self.receipts.latest()
         if (last and last.goal_uuid == bytes(message.goal_id.uuid) and
-                last.state in (State.SUBMITTED, State.ACCEPTED)):
-            self.receipts.update(last.command_id, State.RUNNING)
+                last.state in (State.SUBMITTED, State.ACCEPTED, State.RUNNING) and
+                (last.state != State.RUNNING or message.feedback.configured_task.material_instance_id)):
+            self.receipts.update(last.command_id, State.RUNNING, trace=message.feedback.configured_task)
 
     def observe_action(self):
         last = self.receipts.latest()
@@ -118,7 +119,8 @@ class PlcTaskAdapter(Node):
             else:
                 payload = wrapped.result
                 placement = (1 + int(payload.material_placed)) if payload.has_material_placed else 0
-                self.receipts.update(last.command_id, state, payload.exit_reason.value, placement)
+                self.receipts.update(last.command_id, state, payload.exit_reason.value, placement,
+                                     trace=payload.configured_task)
             return
         if ((self.acceptance is not None or self.result is not None)
                 and not self.mission.server_is_ready()):

@@ -16,6 +16,7 @@ find_package(unique_identifier_msgs REQUIRED)
 
 set(msg_files
   "msg/ConfiguredSupplyState.msg"
+  "msg/ConfiguredTaskTrace.msg"
   "msg/AMRDockingState.msg"
   "msg/DetectTargetResultCode.msg"
   "msg/DisturbanceCandidate.msg"
@@ -50,6 +51,8 @@ set(msg_files
 set(srv_files
   "srv/ConfigureTeaching.srv"
   "srv/ConfiguredSupply.srv"
+  "srv/RecordConveyorInspection.srv"
+  "srv/QueryConveyorHistory.srv"
   "srv/DetectTarget.srv"
   "srv/RequestMaterial.srv"
   "srv/RequestGripperOpen.srv"

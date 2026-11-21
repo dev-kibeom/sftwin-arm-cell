@@ -29,7 +29,7 @@ class ConfiguredSupplyClient:
         self.available = True
 
     @classmethod
-    def launch(cls, script=None):
+    def launch(cls, script=None, *, wait_ready=True):
         root = Path(os.environ['SFTWIN_PROJECT_ROOT'])
         setup = Path(os.environ.get('ARM_CELL_ROS_SETUP', root/'ros2_ws/install/setup.bash'))
         if not setup.is_file():
@@ -52,6 +52,8 @@ class ConfiguredSupplyClient:
             raise
         child.close()
         client = cls(parent, process)
+        if not wait_ready:
+            return client
         deadline = time.monotonic()+15.
         while time.monotonic() < deadline:
             for message in client.poll_messages():
