@@ -22,7 +22,7 @@ from tape_roll_cell.configured_supply_sidecar import ConfiguredSupplyClient
 from conveyor_pnp_cell.configured_supply import ConveyorPickSupply
 from conveyor_pnp_cell.equipment_io import ConveyorIO, Sensors
 from conveyor_pnp_cell.runtime import MAX_AGE
-from conveyor_pnp_cell.supply import bind_confirmed_pick
+from conveyor_pnp_cell.supply import bind_confirmed_pick, material_instance_id
 from conveyor_pnp_cell.production_ledger import ProductionLedger
 
 
@@ -39,9 +39,11 @@ class Exchange:
         self.resume_stream = config.get('resume_stream', False)
         self.ledger = None
         self.restored_unverified = True
+        self.identity_conflict = False
         self._last_birth = self._last_plc = None
         self._open_history()
         self.permit_at = self.valid_at = 0.
+        self.published_observation = None
         self.at_pick = self.permitted = False
         self.sent = {}
         self.publisher = node.create_publisher(ConfiguredSupplyState, '/cell/configured_supply/state', 10)
@@ -100,8 +102,15 @@ class Exchange:
     def publish_supply(self):
         with self.lock:
             reservable = self.supply.available and not self.supply.reservation
-            state = self.supply.state(valid=self.valid() and not self.restored_unverified
+            pending = not self.valid() or self.restored_unverified
+            state = self.supply.state(valid=not pending and not self.identity_conflict
                                       and (not reservable or self.at_pick))
+            state.observation_pending = pending and not self.identity_conflict and self.ledger is not None
+            # Repeating an old acquisition must not refresh DDS consumer admission.
+            observation = (self.valid_at, state.reservation_id, state.valid, state.observation_pending)
+            if state.valid and observation == self.published_observation:
+                return
+            self.published_observation = observation
         self.publisher.publish(state)
 
     def permit(self, message):
@@ -110,7 +119,7 @@ class Exchange:
             self.permitted = message.data
 
     def valid(self):
-        return time.monotonic() - self.valid_at < MAX_AGE
+        return time.monotonic() - self.valid_at < .5
 
     def reserve(self, request, response):
         with self.lock:
@@ -119,6 +128,18 @@ class Exchange:
                 return response
             if self.restored_unverified and request.command == request.RESERVE:
                 response.diagnostic_detail = 'Recovered reservation requires physical reconciliation'
+                return response
+            if (request.command == request.COMPLETE and request.material_placed and
+                    request.reservation_id != self.supply.reservation and
+                    request.supply_id == self.supply.supply_id and request.supply_epoch == self.supply.epoch):
+                try:
+                    response.success = self.ledger.release_recorded(request)
+                except sqlite3.Error as error:
+                    response.diagnostic_detail = f'Production history unavailable: {error}'
+                response.supply_epoch = self.supply.epoch
+                return response
+            if request.command == request.COMPLETE and self.identity_conflict:
+                response.diagnostic_detail = 'PLC cycle or physical material no longer matches reservation'
                 return response
             before = self.supply.snapshot()
             response = self.supply.handle(request, response, valid=self.valid() and self.at_pick)
@@ -184,7 +205,9 @@ class Exchange:
         observed = packet['observed']
         valid = packet['valid']
         at_pick = (valid and observed == command.cycle and sensors.pick and sensors.stopped
-                   and sensors.extended and not sensors.occupied)
+                   and sensors.extended and not sensors.occupied
+                   and packet['body_instance_id'] == material_instance_id(self.supply.stream_id, observed)
+                   and packet['material_type_id'] == packet['created_type_id'])
 
         with self.lock:
             if self.ledger is None and time.monotonic() >= self.next_history_retry:
@@ -208,6 +231,15 @@ class Exchange:
                             and material_type_id == self.supply.material_type_id)
             if self.at_pick:
                 self.restored_unverified = False
+            if self.supply.reservation and packet.get('identity_observed', valid):
+                self.identity_conflict = self.identity_conflict or (
+                    command.cycle != self.supply.cycle or command.phase not in (22, 23, 30, 40)
+                    or packet['body_instance_id'] != self.supply.material_instance_id
+                    or packet['created_type_id'] != self.supply.material_type_id)
+                if valid and not self.identity_conflict and command.phase in (30, 40):
+                    self.restored_unverified = False
+            elif not self.supply.reservation:
+                self.identity_conflict = False
             self.valid_at = packet['acquired'] if valid else 0.
         try:
             self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),
@@ -257,12 +289,13 @@ class Exchange:
                                    material_type_id=supply.material_type_id,
                                    material_instance_id=supply.material_instance_id,
                                    reservation_id=supply.reservation) if (
-                    supply.reservation and self.valid() and not self.restored_unverified) else None
+                    supply.reservation and self.valid() and not self.restored_unverified and not self.identity_conflict) else None
+                pending = (not self.valid() or self.restored_unverified) and not self.identity_conflict and self.ledger is not None
             self.ipc.send(dict(op='command', at=at, command=asdict(cmd), permitted=permitted,
-                               permit_at=permit_at, reservation=reservation))
+                               permit_at=permit_at, reservation=reservation, observation_pending=pending))
         except (OSError, ValueError, ModbusException) as error:
             if self.sent or self.valid_at:
-                self.node.get_logger().warning(f'Conveyor equipment unavailable: {error}')
+                self.node.get_logger().warning(f'Conveyor equipment unavailable: {error}', throttle_duration_sec=5.)
             self.client.close()
             self.sent.clear()
             with self.lock:

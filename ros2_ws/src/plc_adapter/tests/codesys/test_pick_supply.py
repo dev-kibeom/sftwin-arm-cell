@@ -54,7 +54,10 @@ def test_unreserved_arrival_loses_admission_if_the_pick_observation_is_lost():
 
     exchange = Exchange.__new__(Exchange)
     exchange.lock = Lock()
+    exchange.published_observation = None
     exchange.valid_at = monotonic()
+    exchange.ledger = object()
+    exchange.identity_conflict = False
     exchange.restored_unverified = False
     exchange.supply = pick_supply('epoch')
     states = []
@@ -75,7 +78,7 @@ def test_sidecar_binds_observed_arrivals_beyond_the_old_teaching_range(open_exch
     exchange = open_exchange(pick_configured=False)
     command = Commands(65537, 22, False, False, True, True, False, 0, 0, 0, 0)
     packet = dict(sensors=asdict(Sensors(pick=True, stopped=True, extended=True)),
-                  created_cycle=65537, created_type_id='A', material_type_id='A', observed=65536, valid=True, acquired=monotonic(), feeder={})
+                  body_instance_id='stream/65537', created_cycle=65537, created_type_id='A', material_type_id='A', observed=65536, valid=True, acquired=monotonic(), feeder={})
     exchange.sample(packet, command)
     assert exchange.io.publish.call_args.kwargs['bound_cycle'] == 0
     packet['observed'] = command.cycle
@@ -132,16 +135,17 @@ def open_exchange(tmp_path, monkeypatch):
         exchange.close()
 
 
-def send_sample(exchange, *, cycle=1, phase=22, occupied=False):
+def send_sample(exchange, *, cycle=1, phase=22, occupied=False, confirmed=None, body=None):
     from dataclasses import asdict
     from time import monotonic
     from conveyor_pnp_cell.equipment_io import Commands, Sensors
 
     at = monotonic()
-    command = Commands(cycle, phase, False, False, True, not occupied, False, 0, 0, 0, 0)
+    command = Commands(cycle, phase, False, False, True, not occupied if confirmed is None else confirmed, False, 0, 0, 0, 0)
     sensors = Sensors(pick=not occupied, extended=True, stopped=True, occupied=occupied)
     packet = dict(op='sample', at=at, acquired=at, valid=True, sensors=asdict(sensors),
                   observed=cycle if sensors.pick else 0, material_type_id='A' if sensors.pick else '',
+                  body_instance_id=body if body is not None else f'stream/{cycle}',
                   created_cycle=cycle, created_type_id='A', feeder={})
     exchange.sent[at] = command
     exchange.ipc.poll_messages.return_value = [packet]
@@ -305,3 +309,52 @@ def test_receipt_source_index_failure_does_not_block_supply(open_exchange, monke
     exchange = open_exchange(receipt_file='plc.sqlite')
     send_sample(exchange)
     assert exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response()).success
+
+
+def test_restored_running_lease_requires_same_live_plc_and_body(open_exchange):
+    first = open_exchange()
+    send_sample(first)
+    lease = first.reserve(reserve_request(first), ConfiguredSupply.Response())
+    restored = open_exchange(resume_stream=True)
+    restored.publish_supply()
+    assert restored.publisher.publish.call_args.args[0].observation_pending
+    send_sample(restored, phase=30, confirmed=False)
+    restored.publish_supply()
+    state = restored.publisher.publish.call_args.args[0]
+    assert state.valid and state.reservation_id == lease.reservation_id
+    assert not restored.reserve(reserve_request(restored), ConfiguredSupply.Response()).success
+    send_sample(restored, phase=30, confirmed=False, body='stream/2')
+    restored.publish_supply()
+    state = restored.publisher.publish.call_args.args[0]
+    assert not state.valid and not state.observation_pending
+
+
+def test_complete_with_lost_reply_confirms_only_the_same_release(open_exchange):
+    first = open_exchange()
+    send_sample(first)
+    lease = first.reserve(reserve_request(first), ConfiguredSupply.Response())
+    req = ConfiguredSupply.Request(command=ConfiguredSupply.Request.COMPLETE, supply_id='pick',
+                                   supply_epoch=lease.supply_epoch, slot_id=lease.slot_id,
+                                   material_type_id='A', material_instance_id=lease.material_instance_id,
+                                   material_placed=True, reservation_id=lease.reservation_id)
+    assert first.reserve(req, ConfiguredSupply.Response()).success
+    restored = open_exchange(resume_stream=True)
+    assert restored.reserve(req, ConfiguredSupply.Response()).success
+    req.material_instance_id = 'stream/other'
+    assert not restored.reserve(req, ConfiguredSupply.Response()).success
+    assert len(restored.ledger.history('stream/1')['reservations']) == 1
+
+
+def test_stale_sample_cannot_refresh_admission_or_allocate_a_new_lease(open_exchange, monkeypatch):
+    from conveyor_pnp_cell import sidecar
+    exchange = open_exchange()
+    send_sample(exchange)
+    exchange.publish_supply()
+    assert exchange.publisher.publish.call_args.args[0].valid
+    exchange.publish_supply()
+    assert exchange.publisher.publish.call_count == 1
+    monkeypatch.setattr(sidecar.time, 'monotonic', lambda: exchange.valid_at + .5)
+    exchange.publish_supply()
+    state = exchange.publisher.publish.call_args.args[0]
+    assert state.observation_pending and not state.valid
+    assert not exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response()).success

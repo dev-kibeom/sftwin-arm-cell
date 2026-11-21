@@ -31,6 +31,7 @@ private:
     std::unordered_set<std::string> invalidated;
     struct Active
     {
+      bool conveyor{false};
       PreparedGraspCycle cycle;
       unique_identifier_msgs::msg::UUID uuid;
     };

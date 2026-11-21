@@ -31,7 +31,7 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
 
     eq = SimpleNamespace(stream_id='test', cycle=0, material_type_id='', drive=speeds.append, step=lambda *args: None,
                          observe=lambda permit: Sensors(permitted=permit, path_clear=True, pick_zone_clear=True),
-                         spawn=spawn)
+                         spawn=spawn, material_path=lambda *_: None)
     adapter = runtime.ConveyorRuntime(dict(cell=dict(configured_supply=dict(material_id='ConveyorPart'),
         conveyor=dict(material_type_ids=['ConveyorPart'], pick_slot_id='cell/belt/pick', connection={}, equipment_permit_topic='permit', teaching=dict(cycle=None)))),
         eq, ipc)
@@ -69,7 +69,7 @@ def test_suction_resolves_only_the_current_reserved_piece(monkeypatch):
     lease = dict(supply_id='conveyor_pick', slot_id='cell/belt/pick', supply_epoch='epoch',
                  reservation_id='second', material_id='ConveyorPart', material_type_id='B',
                  material_instance_id='13')
-    adapter.packet = dict(at=100., reservation=lease)
+    adapter.reservation = lease
     monkeypatch.setattr(runtime.time, 'monotonic', lambda: 100.)
     assert adapter.reserved_body(lease) == '/World/Part_13'
     for key, previous in (('material_instance_id', '12'), ('material_type_id', 'A'),

@@ -11,6 +11,7 @@ import time
 
 class ConfiguredMissionDiagnostics:
     """Optional bounded decision records, independent of Mission execution."""
+
     def __init__(self, directory, enabled=False, logger=None):
         self.logger=logger or logging.getLogger(__name__)
         self.directory=Path(directory)
@@ -99,8 +100,27 @@ def motion_allows_admission(status, received_at, now):
             (status.execution_state == status.MOTION_STATE_STOPPED and status.backend_inactivity_confirmed))
 
 
+class SupplyDelay:
+    def __init__(self):
+        self.level = None
+        self.polls = 0
+
+    def report(self, age, log):
+        level = 'error' if age >= 5. else 'warning' if age >= .5 else None
+        if level:
+            self.polls += 1
+        if level != self.level:
+            if level:
+                log(level, f'Conveyor supply observation delayed / age={age:.3f}s')
+            else:
+                log('info', f'Conveyor supply observation recovered / delayed polls={self.polls}')
+                self.polls = 0
+            self.level = level
+
+
 def supply_permits(state, received_at, now, supply_id, material_id):
-    return bool(state is not None and now-received_at <= .5 and state.valid and
+    return bool(state is not None and now-received_at < .5 and state.valid and
+                not getattr(state, 'observation_pending', False) and
                 state.supply_id == supply_id and state.material_id == material_id and state.supply_epoch and
                 len(state.slot_ids) == len(state.occupied))
 
@@ -110,7 +130,8 @@ def lease_matches(state, lease):
                 state.selected_slot_id == lease.slot_id and state.reservation_id == lease.reservation_id and
                 state.material_type_id == lease.material_type_id and
                 state.material_instance_id == lease.material_instance_id and
-                lease.slot_id in state.slot_ids and state.occupied[state.slot_ids.index(lease.slot_id)])
+                len(state.slot_ids) == len(state.occupied) and state.slot_ids.count(lease.slot_id) == 1 and
+                state.occupied[state.slot_ids.index(lease.slot_id)])
 
 
 def cancel_abandoned_acceptance(future, abandoned):
@@ -152,6 +173,10 @@ def main(args=None):
             self.target=self.declare_parameter('mission_target_id','TapeRoll17').value
             self.safety=None;self.safety_at=0.;self.supply=None;self.supply_at=0.
             self.lock=threading.Lock();self.busy=False
+            self.active_lease = None
+            self.revoked = False
+            self.last_observation = None
+            self.supply_delay = SupplyDelay()
             self.group=ReentrantCallbackGroup()
             self.create_subscription(SafetyState,'/safety/state',self.on_safety,10,callback_group=self.group)
             self.create_subscription(ConfiguredSupplyState,'/cell/configured_supply/state',self.on_supply,10,callback_group=self.group)
@@ -164,12 +189,14 @@ def main(args=None):
             self.plc_admission = self.declare_parameter('plc_admission_enabled', False).value
             self.motion_sample = (None, 0.)
             if self.plc_admission:
+                self.last_observation = time.monotonic()
                 self.create_subscription(MotionStatus, '/motion/state', self.on_motion, 1)
                 admission_topic = self.declare_parameter('mission_admission_topic',
                     '/orchestration/mission_admission_available').value
                 self.admission_publisher = self.create_publisher(
                     Bool, admission_topic, QoSProfile(depth=1, lifespan=Duration(seconds=.5)))
                 self.create_timer(.1, self.publish_admission)
+                self.create_timer(.05, self.report_supply_delay)
             self.startup_timer=self.create_timer(.1,self.advertise_when_ready)
 
         def advertise_when_ready(self):
@@ -185,8 +212,16 @@ def main(args=None):
                 self.startup_timer.cancel()
 
         def log_event(self, level, message):
-            try:getattr(self.get_logger(),level)(message)
-            except Exception:pass
+            # Humble binds the severity to the Python call site.
+            logger = self.get_logger()
+            if level == 'warning':
+                logger.warning(message)
+            elif level == 'error':
+                logger.error(message)
+            elif level == 'info':
+                logger.info(message)
+            else:
+                logger.debug(message)
 
         def capture_event(self, handle, event, **evidence):
             try:
@@ -206,7 +241,27 @@ def main(args=None):
                     selected_slot_id=supply.selected_slot_id,reservation_id=supply.reservation_id))
 
         def on_safety(self,state):self.safety=state;self.safety_at=time.monotonic()
-        def on_supply(self,state):self.supply=state;self.supply_at=time.monotonic()
+
+        def on_supply(self, state):
+            now = time.monotonic()
+            with self.lock:
+                self.supply, self.supply_at = state, now
+                if (state.supply_id == self.supply_id
+                        and getattr(state, 'observation_pending', False)):
+                    return
+                self.last_observation = now
+                if self.active_lease and not self.same_active_lease(state):
+                    self.revoked = True
+
+        def same_active_lease(self, state):
+            return (state.valid and state.supply_id == self.supply_id
+                    and state.material_id == self.target and lease_matches(state, self.active_lease))
+
+        def report_supply_delay(self):
+            with self.lock:
+                if self.last_observation is not None:
+                    age = time.monotonic() - self.last_observation
+                    self.supply_delay.report(age, self.log_event)
 
         def on_motion(self, status):
             self.motion_sample = (status, time.monotonic())
@@ -216,6 +271,10 @@ def main(args=None):
 
         def supply_is_current(self):
             return supply_permits(self.supply, self.supply_at, time.monotonic(), self.supply_id, self.target)
+
+        def awaiting_supply(self):
+            return (self.plc_admission and (time.monotonic() - self.supply_at >= .5
+                    or getattr(self.supply, 'observation_pending', False)))
 
         def inputs_permit_execution(self):
             return self.safety_allows_motion() and self.supply_is_current()
@@ -251,7 +310,7 @@ def main(args=None):
             except Exception as error:
                 raise RuntimeError(f'ROS operation response unavailable: {error}') from error
 
-        def command(self,command,epoch,lease=None,placed=False):
+        def command(self, command, epoch, lease=None, placed=False, handle=None):
             request=ConfiguredSupply.Request();request.command=command;request.supply_id=self.supply_id
             request.supply_epoch=epoch
             request.material_placed=placed
@@ -260,16 +319,22 @@ def main(args=None):
                 request.reservation_id=lease.reservation_id
                 request.material_type_id=lease.material_type_id
                 request.material_instance_id=lease.material_instance_id
-            for attempt in range(2):
+            attempt = 0
+            while True:
                 pending = self.cell.call_async(request)
                 try:
                     return self.wait(pending, 3.5)
                 except TimeoutError:
                     pending.cancel()
                     # Only resend cleanup for the exact lease after provider replacement.
+                    if (command == request.COMPLETE and self.plc_admission and
+                            self.safety_allows_motion() and handle is not None
+                            and not handle.is_cancel_requested):
+                        continue
                     if (attempt or command != request.ABANDON or not self.plc_admission or
                             not self.cell.wait_for_service(timeout_sec=1.)):
                         raise
+                    attempt += 1
 
         def feedback(self,handle,count,phase,detail,trace=None):
             message=ExecuteCycle.Feedback();message.phase.value=phase
@@ -290,6 +355,9 @@ def main(args=None):
                 while not sequence_completed:
                     if handle.is_cancel_requested:
                         reason=MissionExitReason.MISSION_EXIT_CANCELED;detail='Canceled before slot reservation';break
+                    if self.safety_allows_motion() and self.awaiting_supply():
+                        time.sleep(.01)
+                        continue
                     if not self.inputs_permit_execution() or self.supply.supply_epoch != epoch:
                         reason=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED;detail='Safety or configured supply became unavailable';break
                     reserved=self.command(ConfiguredSupply.Request.RESERVE,epoch)
@@ -306,9 +374,21 @@ def main(args=None):
                     self.feedback(handle, 0, MissionPhase.MISSION_PHASE_PICKING, 'Slot reserved', trace)
                     deadline=time.monotonic()+1.
                     while not (self.inputs_permit_execution() and lease_matches(self.supply,lease)):
-                        if time.monotonic()>deadline or self.supply.supply_epoch != epoch or handle.is_cancel_requested:
+                        if handle.is_cancel_requested:
+                            reason = MissionExitReason.MISSION_EXIT_CANCELED
+                            raise RuntimeError('Canceled while confirming reservation')
+                        if not self.safety_allows_motion():
+                            safety_preempted = True
+                            raise RuntimeError('Safety preempted reservation handoff')
+                        if not self.awaiting_supply() and (
+                                time.monotonic() > deadline or self.supply.supply_epoch != epoch):
                             raise RuntimeError('Cell reservation state not confirmed')
                         time.sleep(.01)
+                    if self.plc_admission:
+                        with self.lock:
+                            self.active_lease = lease
+                            self.revoked = (not getattr(self.supply, 'observation_pending', False)
+                                            and not self.same_active_lease(self.supply))
                     self.capture_event(handle,'reservation_confirmed',supply_epoch=lease.supply_epoch,
                         reservation_id=lease.reservation_id,slot_id=lease.slot_id,
                         material_type_id=lease.material_type_id,material_instance_id=lease.material_instance_id)
@@ -341,7 +421,11 @@ def main(args=None):
                             safety_preempted = True
                             interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                         elif handle.is_cancel_requested:interrupted=MissionExitReason.MISSION_EXIT_CANCELED
-                        elif not self.supply_is_current() or self.supply.supply_epoch != epoch:interrupted=MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                        elif self.plc_admission:
+                            if self.revoked:
+                                interrupted = MissionExitReason.MISSION_EXIT_MOTION_ERROR
+                        elif not self.supply_is_current() or self.supply.supply_epoch != epoch:
+                            interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
                         if interrupted is not None and not cancel_sent:
                             name=mission_reason_name(interrupted,MissionExitReason)
                             self.log_event('warning','Configured Mission interrupted / '+name)
@@ -371,13 +455,16 @@ def main(args=None):
                     if outcome.result_code == TaskCode.TASK_RESULT_SAFETY_PREEMPTED or not self.safety_allows_motion():
                         safety_preempted = True
                         interrupted = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED
+                    if self.plc_admission and self.revoked and interrupted is None:
+                        interrupted = MissionExitReason.MISSION_EXIT_MOTION_ERROR
                     task_succeeded = task_result.status == 4 and outcome.result_code == 0
                     if not task_succeeded:
                         detail = (f'Task failed (result_code={outcome.result_code}): '
                                   f'{outcome.failure_stage} {outcome.diagnostic_detail}')
                     if interrupted is None and task_succeeded and outcome.material_placed:
-                        complete=self.command(ConfiguredSupply.Request.COMPLETE,
-                            lease.supply_epoch,lease,True)
+                        complete = self.command(
+                            ConfiguredSupply.Request.COMPLETE, lease.supply_epoch, lease,
+                            placed=True, handle=handle)
                         if not complete.success:
                             raise RuntimeError('Cell cycle retirement failed: '+complete.diagnostic_detail)
                         sequence_completed=True;lease=None
@@ -408,7 +495,10 @@ def main(args=None):
                         if not cleanup.success:
                             detail += '; reservation cleanup rejected: '+cleanup.diagnostic_detail
                     except (RuntimeError,TimeoutError) as error:detail+='; reservation cleanup failed: '+str(error)
-                with self.lock:self.busy=False
+                with self.lock:
+                    self.busy = False
+                    self.active_lease = None
+                    self.revoked = False
             # Preserve the child outcome and placement while arbitrating the public Mission terminal.
             if safety_preempted or not self.safety_allows_motion():
                 reason = MissionExitReason.MISSION_EXIT_SAFETY_PREEMPTED

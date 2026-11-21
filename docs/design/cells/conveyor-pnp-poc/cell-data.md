@@ -47,7 +47,7 @@ erDiagram
 
 별도의 SQLite `production.sqlite`는 실제 생성 개체, 공급 Snapshot 및 예약 이력, PLC에서 관측한 Cycle 상태·Commit, 검사 근거와 상태 변화 이력을 보존한다. 요약 수량은 **원장에 실제 식별된 자재와 PLC가 Commit을 보고한 Cycle의 결합**으로만 계산한다. PLC Adapter의 별도 SQLite `receipt`가 가진 `command_id ↔ Mission Goal UUID`는 정식 실행 영수증이며 Ledger가 임의로 재발급하지 않는다.
 
-동일 `stream_id`로 Equipment Sidecar만 재시작하면 이전 Snapshot·epoch·예약을 읽되, 새로 관측한 물리 자재 및 PLC 위치 확정이 일치하기 전에는 작업 예약을 공개하지 않는다. 실제 Stage/PLC 재시작으로 스트림 자체가 바뀌면 이전 이력은 조회 가능하지만 새 자재가 이전 예약을 자동 재사용하지 않는다. 복원된 예약에는 같은 epoch·예약·슬롯·개체·품종의 종료 요청을 적용할 수 있다. Task가 목적지 Release를 확인한 자재는 Pick 재관측 없이 퇴역시키며, 배치 없이 반환한 자재는 실물과 PLC 위치 확정을 대조한 뒤 다시 예약할 수 있다. 기록 복원은 기구 재가동이나 기존 Task 자동 재실행 승인이 아니다.
+동일 `stream_id`로 Equipment Sidecar만 재시작하면 이전 Snapshot·epoch·예약을 읽되, 같은 장면이 자동 운전 중이면 기존 장치 스트림에 재접속한다. 예약 복원은 현재 PLC 자재 번호와 Stage rigid body의 개체 ID·품종을 대조한다. Robot 실행 단계에서는 PLC가 Pick 위치 확정 신호를 해제하므로, 같은 PLC 사이클과 실물 개체로 이미 실행 중인 예약을 확인한다. Tool은 단절 중에도 마지막 확인 예약에 해당하는 실물만 식별하며, 새 예약 수락에는 현재 Pick 위치 확정이 필요하다. 실제 Stage/PLC 재시작으로 스트림 자체가 바뀌면 이전 이력은 조회 가능하지만 새 자재가 이전 예약을 자동 재사용하지 않는다. 복원된 예약에는 같은 epoch·예약·슬롯·개체·품종의 종료 요청을 적용할 수 있다. Task가 목적지 Release를 확인한 자재는 Pick 재관측 없이 퇴역시키며, 배치 없이 반환한 자재는 실물과 PLC 위치 확정을 대조한 뒤 다시 예약할 수 있다. 기록 복원은 기구 재가동이나 기존 Task 자동 재실행 승인이 아니다.
 
 미해결 예약과 불확실 Task 결과는 명시적으로 보존한다. 기존 Cell Control/Process의 Reconciliation 경계를 사용하며, DB 기록만으로 물리 자재의 현존·트레이 인수·PLC Commit을 정식 확정하지 않는다. 영구 보존·백업, 원격 DB 공유, 자동 무인 Recovery는 추가 검증이 필요한 운영 결정이다.
 

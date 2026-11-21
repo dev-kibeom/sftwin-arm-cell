@@ -190,6 +190,17 @@ class ProductionLedger:
                                   (self.stream_id,)).fetchone()
             return dict(row) if row else None
 
+    def release_recorded(self, request):
+        """Recognize a lost COMPLETE reply for precisely the already released lease."""
+        with self.lock:
+            row = self.db.execute(
+                """SELECT 1 FROM reservations r JOIN materials m USING (instance_id)
+                   WHERE r.reservation_id=? AND r.instance_id=? AND r.supply_epoch=? AND r.slot_id=?
+                     AND r.status='RELEASED' AND m.stream_id=? AND m.type_id=?""",
+                (request.reservation_id, request.material_instance_id, request.supply_epoch,
+                 request.slot_id, self.stream_id, request.material_type_id)).fetchone()
+            return row is not None
+
     def save_supply(self, snapshot, *, released=False):
         """Atomically save material, reservation lifecycle and current projection."""
         if snapshot['stream_id'] != self.stream_id or not snapshot['epoch'] or not snapshot['slot_id']:

@@ -63,6 +63,7 @@ ExecuteConfiguredGraspActionServer::ExecuteConfiguredGraspActionServer(
         teaching->identity.material_id != identity.material_id)
       {return rclcpp_action::GoalResponse::REJECT;}
       State::Active active;
+      active.conveyor = catalog.fixed.has_value();
       active.cycle = *teaching;
       active.cycle.identity = identity;
       active.uuid.uuid = uuid;
@@ -96,7 +97,7 @@ void ExecuteConfiguredGraspActionServer::fence_leases(
     std::lock_guard<std::mutex> lock(state->mutex);
     const auto now = ConfiguredSupplyLease::Clock::now();
     for (const auto & active : state->active) {
-      if (!state->lease.matches(active.second.cycle.identity, now) &&
+      if (!state->lease.retains(active.second.cycle.identity, now, active.second.conveyor) &&
         state->invalidated.insert(active.first).second) {stops.push_back(active.second.uuid);}
     }
   }
@@ -140,7 +141,7 @@ void ExecuteConfiguredGraspActionServer::execute(
       {
         std::lock_guard<std::mutex> lock(state->mutex);
         if (state->invalidated.count(id) ||
-          !state->lease.matches(cycle.identity, ConfiguredSupplyLease::Clock::now()))
+          !state->lease.retains(cycle.identity, ConfiguredSupplyLease::Clock::now(), fixed_teaching))
         {
           state->invalidated.insert(id);
           return Code::TASK_RESULT_PERMISSION_DENIED;

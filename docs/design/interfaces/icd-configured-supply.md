@@ -15,6 +15,9 @@ Conveyor Mission에서 확인된 Task 종료의 ABANDON 응답이 유실되면 �
 
 `/cell/configured_supply/state`는 ID·epoch·슬롯 점유·예약·호환용 completed_count(항상 0)·valid·소진 상태를 발행한다.
 수신 신선도와 valid를 함께 평가하며, Topic 수신이나 슬롯 생성 자체를 파지 성공으로 취급하지 않는다.
+Conveyor에서 새 Mission·Task의 수락과 BT 진입에는 500ms 미만의 유효한 표본과 해당 단계의 예약 조건이 필요하다. 수락되어 실행 중인 Task는 공급 표본이 지연되거나 공급자가 PLC·실물 대조 중임을 표시하면 기존 Goal과 예약을 유지한다. 대조 중인 표본은 `observation_pending=true, valid=false`이다. 대조가 끝난 표본에서 예약 철회, epoch·슬롯·품종·개체 변경 또는 유효성 상실이 확인되면 기존 실행을 중단한다. Safety 선점과 사용자 취소는 통신 복구를 기다리지 않는다.
+Conveyor Mission은 관측 지연 500ms에 WARN, 5초에 ERROR, 정상화에 INFO를 기록한다. 같은 단절의 반복 관측은 합산한다. 목적지 Release가 확인된 뒤 COMPLETE 응답만 유실되면 Mission은 같은 요청으로 확인을 계속한다. 공급자는 원장에 이미 반영된 동일한 Release를 확인할 수 있다.
+
 Stop은 새 epoch와 Cell 초기 공급 상태·집계 없음을 복원하며 이전 예약·결과를 이월하지 않는다.
 Tape Cell의 초기 상태는 빈 컨베이어와 공급 대기다.
 
