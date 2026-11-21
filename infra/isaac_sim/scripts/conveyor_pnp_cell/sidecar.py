@@ -145,9 +145,15 @@ class Exchange:
                 if after != before:
                     self.ledger.save_supply(after)
                 if valid:
-                    self.ledger.record_created(packet.get('created_cycle', 0),
-                                               packet.get('created_type_id', ''))
-                    self.ledger.record_plc(command)
+                    birth = (packet.get('created_cycle', 0), packet.get('created_type_id', ''))
+                    if birth != getattr(self, '_last_birth', None):
+                        self.ledger.record_created(*birth)
+                        self._last_birth = birth
+                    plc = (command.cycle, command.phase, command.committed,
+                           command.result_state, command.reason, command.placement)
+                    if plc != getattr(self, '_last_plc', None):
+                        self.ledger.record_plc(command)
+                        self._last_plc = plc
             except (ValueError, sqlite3.Error):
                 self.supply.restore_snapshot(before)
                 self.at_pick = False
