@@ -34,12 +34,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "diagnostics",
-                default_value="__log_level_default__",
-                description=(
-                    "Optional component diagnostics: none, all, or a comma-separated "
-                    "list of motion,vision,safety,orchestration; when omitted, debug "
-                    "selects all ROS Bringup producers and other log levels select none"
-                ),
+                default_value="none",
+                description="Optional diagnostics: none (default), all, or a comma-separated component list",
             ),
             DeclareLaunchArgument(
                 "ros_domain_id",

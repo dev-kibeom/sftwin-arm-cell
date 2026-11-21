@@ -10,29 +10,11 @@ from launch.actions import DeclareLaunchArgument
 from launch.actions import OpaqueFunction, SetEnvironmentVariable
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode
 import yaml
 
 
-def _load_console_output_format():
-    helper_path = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "launch/console_output_format.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "arm_cell_console_output_format", helper_path
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load console formatter from {helper_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.ConsoleOutputFormat("{line}")
-
-
-CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
-
-
-# Keep the spdlog process sink at DEBUG without enabling framework chatter.
+# Limit framework work before launch selects project-owned events.
 DEBUG_FRAMEWORK_LOGGERS = (
     "rcl",
     "rclcpp",
@@ -61,6 +43,10 @@ MOVEIT_PROGRESS_LOGGERS = (
     "moveit.ompl_planning.model_based_planning_context",
 )
 MOVEIT_RAW_LOG_LEVELS = (
+    "moveit_kinematics_base.kinematics_base:=warn",
+    "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
+    "moveit_rdf_loader.rdf_loader:=warn",
+    "moveit_robot_model.robot_model:=warn",
     "ompl:=fatal",
     "moveit_kinematic_constraints.kinematic_constraints:=warn",
     "moveit_collision_detection_fcl.collision_common:=warn",
@@ -152,20 +138,16 @@ def compose(context):
         config("planning_only.yaml"),
     ]
     return [
-        Node(
+        OperatorLogNode(
             package="moveit_ros_move_group",
             executable="move_group",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=ros_arguments,
             parameters=parameters,
             remappings=[("joint_states", LaunchConfiguration("joint_states"))],
         ),
-        Node(
+        OperatorLogNode(
             package="rviz2",
             executable="rviz2",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             condition=IfCondition(LaunchConfiguration("use_rviz")),
             arguments=["-d", str(share / "config/moveit/moveit.rviz")],
             ros_arguments=ros_arguments,
@@ -177,10 +159,6 @@ def compose(context):
 def generate_launch_description():
     return LaunchDescription(
         [
-            SetEnvironmentVariable(
-                "RCUTILS_CONSOLE_OUTPUT_FORMAT",
-                "[{severity}] [{name}] {message}",
-            ),
             SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument(
                 "robot_profile", default_value=str(Path(get_package_share_directory("arm_cell_motion")) / "config/robots/m0609.yaml")),

@@ -153,18 +153,14 @@ def test_pick_ik_profile_reaches_motion_without_changing_cartesian_solver():
     assert not kinematics["arm"].get("position_only_ik", False)
 
 
-def test_launch_uses_utc_and_preserves_ros_console_fields():
+def test_launch_uses_utc_and_routes_all_nodes_through_operator_log():
     actions = _composed_nodes()
     environment = [
         action for action in actions if isinstance(action, SetEnvironmentVariable)
     ]
     context = LaunchContext()
-    output_format = next(
-        action
-        for action in environment
-        if action.name[0].perform(context) == "RCUTILS_CONSOLE_OUTPUT_FORMAT"
-    )
-    assert output_format.value[0].perform(context) == "[{severity}] [{name}] {message}"
+    from arm_cell_motion.launch_output import OperatorLogNode
+    assert all(isinstance(node, OperatorLogNode) for node in actions if isinstance(node, Node))
     timezone = next(
         action for action in environment if action.name[0].perform(context) == "TZ"
     )
@@ -325,6 +321,8 @@ def test_moveit_raw_logs_are_filtered_at_their_source_logger(monkeypatch):
         "moveit_kinematic_constraints.kinematic_constraints:=" "warn",
         "moveit_collision_detection_fcl.collision_common:=" "warn",
         "ompl:=fatal",
+        "moveit_kinematics_base.kinematics_base:=warn",
+        "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
     }
     for log_level in ("info", "debug"):
         arguments = module.node_ros_arguments("arm_cell_motion", log_level)
@@ -516,39 +514,15 @@ def test_info_vision_diagnostics_enables_capture_without_debug_logging():
     ]
 
 
-def test_omitted_diagnostics_defaults_to_all_only_for_debug_logging():
-    info_actions = _composed_nodes(log_level="info")
-    debug_actions = _composed_nodes(log_level="debug")
-    info_nodes = _project_nodes(info_actions)
-    debug_nodes = _project_nodes(debug_actions)
+@pytest.mark.parametrize("level", ["info", "debug"])
+def test_omitted_diagnostics_keeps_optional_capture_off(level):
+    actions = _composed_nodes(log_level=level)
+    nodes = _project_nodes(actions)
+    for executable in ("motion_node", "detect_target_node", "safety_node", "orchestration_node"):
+        assert _node_parameters(nodes[executable])["diagnostics.capture_enabled"] is False
 
-    for executable in (
-        "motion_node",
-        "detect_target_node",
-        "safety_node",
-        "orchestration_node",
-    ):
-        assert (
-            _node_parameters(info_nodes[executable])["diagnostics.capture_enabled"]
-            is False
-        )
-        assert (
-            _node_parameters(debug_nodes[executable])["diagnostics.capture_enabled"]
-            is True
-        )
-
-    info_summary = next(
-        action for action in info_actions if isinstance(action, LogInfo)
-    )
-    debug_summary = next(
-        action for action in debug_actions if isinstance(action, LogInfo)
-    )
-    assert "diagnostics=none" in "".join(
-        part.text for part in info_summary._LogInfo__msg
-    )
-    assert "diagnostics=motion,orchestration,safety,vision" in "".join(
-        part.text for part in debug_summary._LogInfo__msg
-    )
+    summary = next(action for action in actions if isinstance(action, LogInfo))
+    assert "diagnostics=none" in "".join(part.text for part in summary._LogInfo__msg)
 
 
 def test_component_diagnostics_selects_only_requested_component_producers():
@@ -599,6 +573,8 @@ def test_component_diagnostics_selects_only_requested_component_producers():
         "info",
         "--log-level",
         "orchestration_node.rclcpp_action:=warn",
+        "--disable-external-lib-logs",
+        "--disable-rosout-logs",
     ]
     assert (
         _node_parameters(orchestration_nodes["orchestration_node"])[

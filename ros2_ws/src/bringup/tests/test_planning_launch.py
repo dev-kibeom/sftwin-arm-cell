@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchContext
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import IncludeLaunchDescription
 from launch.utilities import perform_substitutions
 from launch_ros.actions import Node
 
@@ -145,14 +145,7 @@ def test_planning_launches_filter_moveit_raw_detail_loggers(monkeypatch):
             arguments = module.node_ros_arguments(log_level)
             assert expected.issubset(set(arguments))
             assert "ompl:=warn" not in arguments
-        context = LaunchContext()
-        output_format = next(
-            action.value[0].perform(context)
-            for action in module.generate_launch_description().entities
-            if isinstance(action, SetEnvironmentVariable)
-            and action.name[0].perform(context) == "RCUTILS_CONSOLE_OUTPUT_FORMAT"
-        )
-        assert output_format == "[{severity}] [{name}] {message}"
+
 
 
 def test_selected_profiles_reach_home_tf_and_nested_moveit(tmp_path):

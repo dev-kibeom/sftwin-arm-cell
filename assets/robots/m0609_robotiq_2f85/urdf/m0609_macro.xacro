@@ -1,14 +1,21 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+    <xacro:arg name="ros_kdl_model" default="false"/>
+    <xacro:macro name="m0609_base_inertial">
+        <inertial>
+            <mass value="3.18"/>
+            <origin xyz="-2.8e-05 -0.006045 0.038403"/>
+            <inertia ixx="0.017789" ixy="-7.4356e-06" ixz="3.0378e-06" iyy="0.011135" iyz="-0.00029038" izz="0.020054"/>
+        </inertial>
+    </xacro:macro>
+
     <xacro:macro name="m0609_robot" params="mesh_dir">
 	    <!-- Base Link -->
 	    <link name="base_link">
-		<inertial>
-		    <mass value="3.18"/>
-		    <origin xyz="-2.8e-05 -0.006045 0.038403"/>
-		    <inertia ixx="0.017789" ixy="-7.4356e-06" ixz="3.0378e-06" iyy="0.011135" iyz="-0.00029038" izz="0.020054"/>
-		</inertial>
+		<xacro:unless value="$(arg ros_kdl_model)">
+		    <xacro:m0609_base_inertial/>
+		</xacro:unless>
 		<collision>
 		    <origin rpy="0 0 0" xyz="0 0 0" />
 		    <geometry>
@@ -22,6 +29,17 @@
 		    </geometry>
 		</visual>
 	    </link>
+
+	    <!-- KDL represents inertia on child segments. Keep the TF root and mount geometry. -->
+	    <xacro:if value="$(arg ros_kdl_model)">
+		<link name="base_inertia">
+		    <xacro:m0609_base_inertial/>
+		</link>
+		<joint name="base_link_to_base_inertia" type="fixed">
+		    <parent link="base_link"/>
+		    <child link="base_inertia"/>
+		</joint>
+	    </xacro:if>
 
 	    <link name="base"/>
 	    <joint name="base_link-base" type="fixed">

@@ -25,27 +25,11 @@ from launch.actions import SetEnvironmentVariable
 from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode, session_output
 import yaml
 from arm_cell_bringup.runtime import load_profile
 
 
-def _load_console_output_format():
-    helper_path = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "launch/console_output_format.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "arm_cell_console_output_format", helper_path
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load console formatter from {helper_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.ConsoleOutputFormat("{line}")
-
-
-CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
 PLANNING_SCENE_LOGGER = "moveit_planning_scene.planning_scene"
 
 
@@ -91,13 +75,16 @@ PROJECT_DEBUG_LOGGERS = {
 SUPPORTED_DIAGNOSTIC_COMPONENTS = frozenset(
     {"motion", "vision", "safety", "orchestration"}
 )
-DIAGNOSTICS_DEFAULT = "__log_level_default__"
 MOVEIT_RAW_LOG_LEVELS = (
+    "moveit_kinematics_base.kinematics_base:=warn",
+    "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
+    "moveit_rdf_loader.rdf_loader:=warn",
+    "moveit_robot_model.robot_model:=warn",
     "ompl:=fatal",
     "moveit_kinematic_constraints.kinematic_constraints:=warn",
     "moveit_collision_detection_fcl.collision_common:=warn",
 )
-# Keep the spdlog process sink at DEBUG without enabling framework chatter.
+# Limit framework work before launch selects project-owned events.
 DEBUG_FRAMEWORK_LOGGERS = (
     "rcl",
     "rclcpp",
@@ -125,7 +112,7 @@ DEBUG_FRAMEWORK_LOGGERS = (
 def parse_diagnostics(value):
     """Resolve the operator's component diagnostic selection."""
     selection = value.strip()
-    if selection == "none":
+    if selection in ("none", "__log_level_default__"):  # Older launch wrappers used this sentinel.
         return frozenset()
     if selection == "all":
         return SUPPORTED_DIAGNOSTIC_COMPONENTS
@@ -145,13 +132,6 @@ def parse_diagnostics(value):
             "diagnostics contains unsupported component(s): " + ",".join(unknown)
         )
     return frozenset(components)
-
-
-def resolve_diagnostics(value, log_level):
-    """Use log level only when the operator omitted diagnostics."""
-    if value == DIAGNOSTICS_DEFAULT:
-        value = "all" if log_level == "debug" else "none"
-    return parse_diagnostics(value)
 
 
 def project_checkout_root():
@@ -585,7 +565,7 @@ def node_ros_arguments(
             arguments.extend(["--log-level", logger_setting])
         arguments.extend(["--log-level", "move_group_interface:=warn"])
         # These independent MoveIt namespaces otherwise inherit global DEBUG.
-        # Reuse the existing detail override; retain their WARN/ERROR output.
+        # Retain the launch-level override for upstream logger configuration.
         for logger_name in (PLANNING_SCENE_LOGGER, "moveit_robot_state.conversions",
                             "moveit_robot_state.robot_state"):
             arguments.extend(["--log-level", f"{logger_name}:={planning_scene_log_level}"])
@@ -609,11 +589,8 @@ def compose(context):
     selected_planning_scene_log_level = LaunchConfiguration(
         "planning_scene_log_level"
     ).perform(context)
-    selected_diagnostics = resolve_diagnostics(
-        LaunchConfiguration("diagnostics", default=DIAGNOSTICS_DEFAULT).perform(
-            context
-        ),
-        selected_log_level,
+    selected_diagnostics = parse_diagnostics(
+        LaunchConfiguration("diagnostics", default="none").perform(context)
     )
     artifact_directory = Path(project_artifacts_directory())
     live_session_root = join_live_test_session(artifact_directory)
@@ -698,7 +675,7 @@ def compose(context):
         else diagnostic_root(artifact_directory) / "orchestration"
     )
     run_log_directory = (live_session_root if live_session_root else diagnostic_root(artifact_directory)) / 'ros_logs'
-    CONSOLE_OUTPUT_FORMAT.record_directory = run_log_directory
+    session_output().select_directory(run_log_directory)
     selected_action_logger_level = LaunchConfiguration("action_logger_level").perform(
         context
     )
@@ -712,11 +689,6 @@ def compose(context):
                                      selected_diagnostics, include_simulation)
     common_actions = [
         SetEnvironmentVariable("SFTWIN_PROJECT_ROOT", str(project_checkout_root())),
-        SetEnvironmentVariable("ROS_LOG_DIR", str(run_log_directory / 'nodes')),
-        SetEnvironmentVariable(
-            "RCUTILS_CONSOLE_OUTPUT_FORMAT",
-            "[{severity}] [{name}] {message}",
-        ),
         SetEnvironmentVariable("TZ", "UTC"),
         LogInfo(
             msg=(
@@ -759,8 +731,7 @@ def compose(context):
         directories = {'motion': motion_artifact_directory, 'safety': safety_artifact_directory,
                        'orchestration': orchestration_artifact_directory}
         def configured_node_options(package):
-            return dict(output_format=CONSOLE_OUTPUT_FORMAT,
-                ros_arguments=node_ros_arguments(package, selected_log_level,
+            return dict(ros_arguments=node_ros_arguments(package, selected_log_level,
                     selected_action_logger_level, selected_planning_scene_log_level))
         diagnostic_parameters = {
             component: {'diagnostics.capture_enabled': component in selected_diagnostics,
@@ -819,30 +790,24 @@ def compose(context):
         )
 
     actions = common_actions + [
-        Node(
+        OperatorLogNode(
             package="arm_cell_vda",
             executable="external_state_mock_node",
             name="external_state_mock",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=node_ros_arguments("arm_cell_vda", selected_log_level),
             parameters=[profile_parameters(config, "vda")],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_gateway",
             executable="material_handoff_node",
             name="material_handoff_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=node_ros_arguments("arm_cell_gateway", selected_log_level),
             parameters=[profile_parameters(config, "material_handoff")],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_safety",
             executable="safety_node",
             name="safety_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=node_ros_arguments(
                 "arm_cell_safety",
                 selected_log_level,
@@ -858,12 +823,10 @@ def compose(context):
                 },
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_vision",
             executable="detect_target_node",
             name="detect_target_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=node_ros_arguments("arm_cell_vision", selected_log_level),
             parameters=[
                 {
@@ -877,12 +840,10 @@ def compose(context):
                 }
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_task_execution",
             executable="task_execution_node",
             name="motion_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=node_ros_arguments(
                 "arm_cell_motion",
                 selected_log_level,
@@ -905,12 +866,10 @@ def compose(context):
                 }
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_orchestration",
             executable="orchestration_node",
             name="orchestration_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=node_ros_arguments(
                 "arm_cell_orchestration",
                 selected_log_level,
@@ -993,11 +952,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "diagnostics",
-                default_value=DIAGNOSTICS_DEFAULT,
-                description=(
-                    "Optional component diagnostics; when omitted, debug selects all "
-                    "ROS Bringup producers and other log levels select none"
-                ),
+                default_value="none",
+                description="Optional component diagnostics: none (default), all, or a component list",
             ),
             DeclareLaunchArgument("action_logger_level", default_value="warn"),
             OpaqueFunction(function=compose),

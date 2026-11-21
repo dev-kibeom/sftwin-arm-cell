@@ -1,105 +1,97 @@
-"""Launch output timestamps share one observation-time basis per session."""
+"""Verify which ROS output reaches the operator on screen and on disk."""
 
-import importlib.util
-from pathlib import Path
+import os
+import subprocess
+import sys
+from textwrap import dedent
 from types import SimpleNamespace
 
 from launch.logging import launch_config
 
-
-def _load_formatter(source, name):
-    spec = importlib.util.spec_from_file_location(name, source)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.ConsoleOutputFormat
+from arm_cell_motion.launch_output import _OperatorFormat, session_output
 
 
-def test_formatters_share_session_elapsed_time_and_preserve_console_format(
-    tmp_path, monkeypatch
-):
-    source = Path(__file__).resolve().parents[1] / "launch/console_output_format.py"
-    formatter_a = _load_formatter(source, "console_output_format_a")
-    formatter_b = _load_formatter(source, "console_output_format_b")
-    observed_ns = iter((1_000_000_000, 3_000_000_000, 4_000_000_000, 5_000_000_000))
-    monkeypatch.setattr("time.monotonic_ns", lambda: next(observed_ns))
-    monkeypatch.setattr(launch_config, "_log_dir", str(tmp_path))
+def _format(process, source, message):
+    node = SimpleNamespace(process_description=SimpleNamespace(final_name=process))
+    return _OperatorFormat("{line}").format(line=f"arm_cell_ros\t{source}\t{message}", this=node)
+
+
+def test_nested_nodes_share_clock_and_selected_run_file(tmp_path, monkeypatch):
     monkeypatch.setattr(launch_config, "file_handlers", {})
-
-    process_a = SimpleNamespace(process_description=SimpleNamespace(final_name="a"))
-    process_b = SimpleNamespace(process_description=SimpleNamespace(final_name="b"))
-    output_a = formatter_a("{line}")
-    output_b = formatter_b("{line}")
-
-    assert output_a.format(line="first", this=process_a) == "[3.000s] first"
-    assert output_b.format(line="second", this=process_b) == "[4.000s] second"
-
+    ticks = iter((1_000_000_000, 4_000_000_000, 5_000_000_000))
+    monkeypatch.setattr("time.monotonic_ns", lambda: next(ticks))
+    output = session_output()
+    output.select_directory(tmp_path)
+    for process, source, message, elapsed in (
+        ("motion", "/workspace/ros2_ws/src/motion/src/motion_core.cpp", "first", 3),
+        ("mission", "/opt/arm/lib/arm_cell_orchestration/mission.py", "second", 4),
+    ):
+        assert _format(process, source, message) == f"[{elapsed}.000s] {message}"
     saved = (tmp_path / "ros_output_nanoseconds.log").read_text()
-    assert "launch output observation time" in saved.splitlines()[0]
-    assert "ROS event time" in saved.splitlines()[0]
-    assert "[3.000000000s] [a] first" in saved
-    assert "[4.000000000s] [b] second" in saved
+    assert saved.count("# clock=") == 1
+    assert "[3.000000000s] [motion] first" in saved
+    assert "[4.000000000s] [mission] second" in saved
 
 
-def test_formatter_preserves_flattened_ompl_and_motion_lines(tmp_path, monkeypatch):
-    source = Path(__file__).resolve().parents[1] / "launch/console_output_format.py"
-    formatter_type = _load_formatter(source, "console_output_format_ompl")
-    observed_ns = iter((1_000, 1_010, 1_020, 1_030, 1_040))
-    monkeypatch.setattr("time.monotonic_ns", lambda: next(observed_ns))
+def test_project_error_survives_file_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(launch_config, "_log_dir", str(tmp_path))
     monkeypatch.setattr(launch_config, "file_handlers", {})
+    blocked = tmp_path / "not-a-directory"
+    blocked.touch()
+    session_output().select_directory(blocked)
+    for _ in range(2):
+        message = "[ERROR] [motion] Planning failed"
+        line = _format("motion", "/workspace/ros2_ws/src/motion/src/executor.cpp", message)
+        assert line.endswith(message)
+    assert (tmp_path / "launch.log").read_text().count("ROS output file incomplete") == 1
 
-    move_group = SimpleNamespace(
-        process_description=SimpleNamespace(final_name="move_group")
+
+def test_real_launch_rejects_library_and_unframed_output(tmp_path):
+    # Run a child through the actual ROS launch I/O handlers, including their
+    # file destinations. Logging alone needs no ROS graph or simulator.
+    (tmp_path / "dependency.py").write_text(dedent("""\
+        def emit(logger):
+            logger.debug("LIBRARY_DEBUG")
+            logger.info("LIBRARY_INFO")
+            logger.warning("LIBRARY_GOAL_UUID")
+            logger.error("LIBRARY_ERROR")
+            logger.fatal("LIBRARY_FATAL")
+        """))
+    project = tmp_path / "ros2_ws/src/orchestration/scripts/probe.py"
+    project.parent.mkdir(parents=True)
+    project.write_text(dedent("""\
+        #!/usr/bin/python3
+        import sys
+        from rclpy.logging import get_logger, LoggingSeverity
+        from dependency import emit
+        logger = get_logger("orchestration_node")
+        logger.set_level(LoggingSeverity.DEBUG)
+        assert "--disable-external-lib-logs" in sys.argv
+        assert "--disable-rosout-logs" in sys.argv
+        emit(logger)
+        print("LIBRARY_STDOUT", flush=True)
+        print("LIBRARY_STDERR", file=sys.stderr, flush=True)
+        logger.error("Mission failed / planning unavailable")
+        sys.exit(17)
+        """))
+    project.chmod(0o755)
+    result = subprocess.run(
+        [sys.executable, "-m", "arm_cell_motion.launch_output", str(project)],
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join((str(tmp_path), os.getenv("PYTHONPATH", ""))),
+            "ROS_LOG_DIR": str(tmp_path / "logs"),
+            "OVERRIDE_LAUNCH_PROCESS_OUTPUT": "full",
+        },
+        capture_output=True, text=True, timeout=20,
     )
-    formatter = formatter_type("{line}")
-    error_line = "[ERROR] [ompl] ./src/ompl/RRTConnect.cpp:265 - planner failed"
-    warning_line = "[WARN] [ompl] ./src/ompl/ParallelPlan.cpp:138 - no solution"
-    motion_result = "[ERROR] [moveit] Motion planning failed; context: [ompl]"
-
-    assert formatter.format(line=error_line, this=move_group).endswith(error_line)
-    assert formatter.format(line=warning_line, this=move_group).endswith(warning_line)
-    assert formatter.format(line=motion_result, this=move_group).endswith(motion_result)
-
-    saved = (tmp_path / "ros_output_nanoseconds.log").read_text()
-    assert error_line in saved
-    assert warning_line in saved
-    assert motion_result in saved
-
-
-def test_ompl_raw_ros_logs_remain_on_console_if_file_logging_fails(
-    tmp_path, monkeypatch
-):
-    source = Path(__file__).resolve().parents[1] / "launch/console_output_format.py"
-    formatter_type = _load_formatter(source, "console_output_format_ompl_file_error")
-    observed_ns = iter((1_000, 1_010))
-    monkeypatch.setattr("time.monotonic_ns", lambda: next(observed_ns))
-    monkeypatch.setattr(launch_config, "_log_dir", str(tmp_path))
-    monkeypatch.setattr(launch_config, "file_handlers", {})
-
-    def fail_open(*args, **kwargs):
-        raise OSError("file log unavailable")
-
-    monkeypatch.setattr(Path, "open", fail_open)
-    move_group = SimpleNamespace(
-        process_description=SimpleNamespace(final_name="move_group")
-    )
-    formatter = formatter_type("{line}")
-    error_line = "[ERROR] [ompl] ./src/ompl/RRTConnect.cpp:265 - planner failed"
-
-    assert formatter.format(line=error_line, this=move_group).endswith(error_line)
-
-
-def test_formatter_records_in_the_selected_run_instead_of_global_launch_directory(
-    tmp_path, monkeypatch
-):
-    source = Path(__file__).resolve().parents[1] / 'launch/console_output_format.py'
-    formatter_type = _load_formatter(source, 'console_output_format_run')
-    monkeypatch.setattr(launch_config, '_log_dir', str(tmp_path / 'global-logs'))
-    monkeypatch.setattr(launch_config, 'file_handlers', {})
-    formatter = formatter_type('{line}')
-    formatter.record_directory = tmp_path / '20261120/001122/diagnostic/ros_logs'
-    process = SimpleNamespace(process_description=SimpleNamespace(final_name='motion'))
-    assert formatter.format(line='completed', this=process).endswith('completed')
-    saved = formatter.record_directory / 'ros_output_nanoseconds.log'
-    assert '[motion] completed' in saved.read_text()
-    assert not (tmp_path / 'global-logs/ros_output_nanoseconds.log').exists()
+    console = result.stdout + result.stderr
+    assert result.returncode == 17, console
+    expected = "[ERROR] [orchestration_node] Mission failed / planning unavailable"
+    assert expected in console
+    logs = list((tmp_path / "logs").rglob("*.log"))
+    saved = next(path for path in logs if path.name == "ros_output_nanoseconds.log")
+    assert expected in saved.read_text()
+    for output in [console, *(log.read_text() for log in logs)]:
+        assert "LIBRARY_" not in output
+        assert "arm_cell_ros\t" not in output

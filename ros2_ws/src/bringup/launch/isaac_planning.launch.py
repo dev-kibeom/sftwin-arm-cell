@@ -1,6 +1,5 @@
 """Compose ROS processes for the externally started Isaac simulation."""
 
-import importlib.util
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
@@ -18,31 +17,13 @@ from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode
 import xacro
 import yaml
 from arm_cell_bringup.runtime import load_profile, selected_profiles, DEFAULT_PROFILES, read, resolve
 
 
-def _load_console_output_format():
-    helper_path = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "launch/console_output_format.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "arm_cell_console_output_format", helper_path
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load console formatter from {helper_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.ConsoleOutputFormat("{line}")
-
-
-CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
-
-
-# Keep the spdlog process sink at DEBUG without enabling framework chatter.
+# Limit framework work before launch selects project-owned events.
 DEBUG_FRAMEWORK_LOGGERS = (
     "rcl",
     "rclcpp",
@@ -67,6 +48,10 @@ DEBUG_FRAMEWORK_LOGGERS = (
     "moveit_constraint_samplers",
 )
 MOVEIT_RAW_LOG_LEVELS = (
+    "moveit_kinematics_base.kinematics_base:=warn",
+    "trac_ik_kinematics_plugin.trac_ik_kinematics_plugin:=warn",
+    "moveit_rdf_loader.rdf_loader:=warn",
+    "moveit_robot_model.robot_model:=warn",
     "ompl:=fatal",
     "moveit_kinematic_constraints.kinematic_constraints:=warn",
     "moveit_collision_detection_fcl.collision_common:=warn",
@@ -114,7 +99,7 @@ def compose(context):
                 raise ValueError(f'Selected model is incompatible with {name} profile')
     model = {
         "robot_description": xacro.process_file(
-            description['urdf'], mappings={'mesh_root': description['mesh_root']},
+            description['urdf'], mappings={'ros_kdl_model': 'true', 'mesh_root': description['mesh_root']},
         ).toxml(),
         "use_sim_time": True,
     }
@@ -124,11 +109,9 @@ def compose(context):
         arguments.extend(["--" + key, str(pose[key])])
     moveit = Path(get_package_share_directory("arm_cell_motion"))
     default_scene_file = cell["static_scene"]
-    static_loader = Node(
+    static_loader = OperatorLogNode(
         package="arm_cell_motion",
         executable="load_static_scene.py",
-        output="screen",
-        output_format=CONSOLE_OUTPUT_FORMAT,
         ros_arguments=ros_arguments,
         parameters=[
             {
@@ -146,11 +129,9 @@ def compose(context):
         ],
     )
     actions = [
-        Node(
+        OperatorLogNode(
             package="arm_cell_sim_adapter",
             executable="joint_state_adapter",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=ros_arguments,
             parameters=[model],
             remappings=[
@@ -158,21 +139,17 @@ def compose(context):
                 ("joint_states", config["joint_states"]),
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="robot_state_publisher",
             executable="robot_state_publisher",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[model],
             ros_arguments=ros_arguments,
             remappings=[("joint_states", config["joint_states"])],
         ),
-        Node(
+        OperatorLogNode(
             package="tf2_ros",
             executable="static_transform_publisher",
             name="world_to_base",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             arguments=arguments,
             parameters=[{"use_sim_time": True}],
             ros_arguments=ros_arguments,
@@ -222,10 +199,6 @@ def generate_launch_description():
     share = Path(get_package_share_directory("arm_cell_bringup"))
     return LaunchDescription(
         [
-            SetEnvironmentVariable(
-                "RCUTILS_CONSOLE_OUTPUT_FORMAT",
-                "[{severity}] [{name}] {message}",
-            ),
             SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument("use_rviz", default_value="false"),
             DeclareLaunchArgument("static_scene", default_value="false"),

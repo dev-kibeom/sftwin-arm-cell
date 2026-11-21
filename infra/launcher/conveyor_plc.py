@@ -1,4 +1,4 @@
-"""Probe the selected Conveyor application or replace this process with its ROS adapter."""
+"""Probe the selected Conveyor application or launch its ROS adapter."""
 import json
 import os
 from pathlib import Path
@@ -40,14 +40,15 @@ def start_adapter(config):
     executable = Path(get_package_prefix(package)) / 'lib' / package / 'plc_task_adapter'
     profile = resolve(layout['plc_profile'], ROOT)
     process = resolve('package://arm_cell_plc_adapter/config/conveyor_process.yaml', ROOT)
-    args = [str(executable), '--ros-args', '--params-file', str(profile), '--params-file', str(process)]
+    args = [sys.executable, '-m', 'arm_cell_motion.launch_output', str(executable),
+            '--params-file', str(profile), '--params-file', str(process)]
     # Use the endpoint and receipt stream that Isaac received at session export.
     for key, value in dict(layout['connection'], receipt_file=layout['receipt_file']).items():
         args.extend(['-p', f'{key}:={value}'])
     factory = config['cell'].get('isaac', {}).get('material_supply_factory')
     if factory == 'conveyor_pnp_cell.runtime:create_adapter':
         args.extend(['-p', f"simulation_equipment_permit_topic:={layout['equipment_permit_topic']}"])
-    os.execv(sys.executable, [sys.executable, *args])
+    os.execv(sys.executable, args)
 
 
 if __name__ == '__main__':

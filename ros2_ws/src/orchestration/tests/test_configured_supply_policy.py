@@ -88,7 +88,8 @@ def configured_mission(monkeypatch, request):
         def create_subscription(self,*args,**kwargs):pass
         def create_timer(self,*args):return State(cancel=lambda:None)
         def create_client(self,*args,**kwargs):return State(service_is_ready=lambda:True,call_async=call_cell)
-        def get_logger(self):return State(info=lambda message:None,warning=lambda message:None,debug=lambda message:None)
+        def get_logger(self):
+            return rclpy.logging.get_logger('configured_supply_test')
         def destroy_node(self):pass
     class Executor:
         def __init__(self,**kwargs):pass
@@ -372,9 +373,26 @@ def test_supply_delay_emits_all_severities_to_ros_logger(configured_mission, cap
     from rclpy.logging import get_logger
     mission, _, _ = configured_mission
     logger = get_logger('supply_delay_regression')
-    mission.get_logger = lambda: logger
+    mission.mission_logger = logger
     for age in (0.5, 5.0, 0.):
         mission.supply_delay.report(age, mission.log_event)
     log = capfd.readouterr().err
     assert log.count('observation delayed') == 2
     assert '[WARN]' in log and '[ERROR]' in log and '[INFO]' in log
+
+
+def test_configured_mission_debug_preserves_events_and_suppresses_action_ids(request, capfd):
+    from rclpy.logging import get_logger, LoggingSeverity
+
+    framework = get_logger('configured_supply_test')
+    framework.set_level(LoggingSeverity.DEBUG)
+    try:
+        mission, _, _ = request.getfixturevalue('configured_mission')
+        framework.debug('test action goal identifier')
+        mission.log_event('debug', 'Waiting for the configured supply')
+        output = capfd.readouterr().err
+        assert 'test action goal identifier' not in output
+        assert 'Waiting for the configured supply' in output
+    finally:
+        framework.set_level(LoggingSeverity.UNSET)
+        framework.get_child('mission').set_level(LoggingSeverity.UNSET)

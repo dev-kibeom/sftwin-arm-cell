@@ -5,7 +5,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode
 
 
 def flatten(values,prefix=''):
@@ -23,7 +23,7 @@ def compose(config,profile_path,log_level='info', *, node_options=None, diagnost
     def node(package, executable, component=None, logger_package=None, **kwargs):
         values = kwargs.pop('parameters', {})
         values.update(diagnostics.get(component, {}))
-        return Node(package=package, executable=executable, output='screen',
+        return OperatorLogNode(package=package, executable=executable,
                     parameters=[values], **node_options(logger_package or package), **kwargs)
     bringup=Path(get_package_share_directory('arm_cell_bringup'))
     model=config['model_configuration']

@@ -7,7 +7,6 @@ Humble terminal after this composition is live.  This launch file does not
 claim to spawn simulator material or register it by itself.
 """
 
-import importlib.util
 from pathlib import Path
 import math
 
@@ -22,28 +21,10 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from arm_cell_motion.launch_output import OperatorLogNode
 import xacro
 import yaml
 from arm_cell_bringup.runtime import resolve, mission_directory, load_profile
-
-
-def _load_console_output_format():
-    helper_path = (
-        Path(get_package_share_directory("arm_cell_motion"))
-        / "launch/console_output_format.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "arm_cell_console_output_format", helper_path
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load console formatter from {helper_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.ConsoleOutputFormat("{line}")
-
-
-CONSOLE_OUTPUT_FORMAT = _load_console_output_format()
 
 
 def profile_parameters(config, section):
@@ -86,7 +67,7 @@ def compose(context):
     use_sim_time = config.get("use_sim_time", True)
     model = config['model_configuration']
     robot_description = xacro.process_file(
-        model['urdf'], mappings={'mesh_root': model['mesh_root']},
+        model['urdf'], mappings={'ros_kdl_model': 'true', 'mesh_root': model['mesh_root']},
     ).toxml()
     robot_description_semantic = Path(model['semantic']).read_text()
     kinematics = yaml.safe_load(Path(config['motion_configuration']['kinematics']).read_text())
@@ -105,28 +86,22 @@ def compose(context):
         )
 
     nodes = [
-        Node(
+        OperatorLogNode(
             package="arm_cell_vda",
             executable="external_state_mock_node",
             name="external_state_mock",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[profile_parameters(config, "vda")],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_safety",
             executable="safety_node",
             name="safety_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[profile_parameters(config, "safety")],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_vision",
             executable=validation["fixed_vision"]["executable"],
             name="fixed_detect_target_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[
                 {
                     "use_sim_time": config.get("use_sim_time", True),
@@ -134,12 +109,10 @@ def compose(context):
                 }
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_task_execution",
             executable="task_execution_node",
             name="motion_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             ros_arguments=[
                 "--log-level",
                 "info",
@@ -156,12 +129,10 @@ def compose(context):
                 }
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_orchestration",
             executable="orchestration_node",
             name="orchestration_node",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[
                 {
                     **profile_parameters(config, "orchestration"),
@@ -172,12 +143,10 @@ def compose(context):
                 }
             ],
         ),
-        Node(
+        OperatorLogNode(
             package="arm_cell_bringup",
             executable="pnp_planning_scene_runtime.py",
             name="pnp_planning_scene_runtime",
-            output="screen",
-            output_format=CONSOLE_OUTPUT_FORMAT,
             parameters=[
                 {
                     "use_sim_time": config.get("use_sim_time", True),
@@ -222,10 +191,6 @@ def generate_launch_description():
     share = Path(get_package_share_directory("arm_cell_bringup"))
     return LaunchDescription(
         [
-            SetEnvironmentVariable(
-                "RCUTILS_CONSOLE_OUTPUT_FORMAT",
-                "[{severity}] [{name}] {message}",
-            ),
             SetEnvironmentVariable("TZ", "UTC"),
             DeclareLaunchArgument(
                 "profile",
