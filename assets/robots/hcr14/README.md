@@ -153,7 +153,7 @@ C10 하우징 뒷면을 `tool_mount`에 직접 장착하며, 실제 Coupling이�
 
 공식 C10 모델의 세 Prismatic Joint·Mimic과 하우징 뒷면 기준 +Z 154.77 mm TCP를
 유지합니다. 손가락 수축은 외경 파지 방향, 확장은 내경 파지 방향입니다.
-공식 자산의 출처·라이선스와 공통 구동 원리는 [C10 모델 안내](../m0609_hand_e_c10/README.md)를
+공식 자산의 출처·라이선스와 관절 구동 방향은 [C10 원본 자산 안내](../../tools/hand_e_c10/third_party/robotiq/UPSTREAM.md)를
 참조하세요. TCP·관절 데이터는 두 로봇이 같은 C10 Tool Assembly를 사용합니다.
 
 HCR-14 + C10 및 C10 Long은 정적 조립 모델로 유지합니다. Xacro의 장착 변환,
@@ -164,4 +164,4 @@ HCR-14 + C10 조합에는 operational Cell·ROS Mission·Physical Real 실행 �
 기존 셀에서의 충돌 없는 경로나 물리 파지 성공도 확인하지 않았습니다.
 
 사진을 참고한 100 mm 연장 핑거의 정적 조립 모델은 `hcr14_hand_e_c10_long`입니다.
-[연장부 치수·물성 가정](../../tools/hand_e_c10/README.md)을 참조하세요.
+[연장부 치수·물성 설정](../../tools/hand_e_c10/urdf/assembly.xacro)을 참조하세요.

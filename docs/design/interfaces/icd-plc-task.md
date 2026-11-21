@@ -39,4 +39,4 @@ PLC는 응답 블록이 오래되었거나 ID가 다르면 공정 판단을 보�
 | VR-PLC-02 | 단절 중 완료된 작업은 재접속 후 원래 terminal 사유와 배치 사실을 반환한다. |
 | VR-PLC-03 | 재시작 시 보존된 terminal 또는 같은 Goal의 조회 결과만 복원한다. 미저장 결과가 서버에서도 만료됐으면 배치 사실 미확정(0)과 상태 8을 유지하고 동일·후속 ID 모두 제출하지 않는다. |
 
-Modbus TCP 블록과 장치별 구성 예시는 [Adapter 실행 안내](../../../ros2_ws/src/plc_adapter/README.md)에 있다.
+Modbus TCP 블록과 장치별 구성 예시는 [Modbus 프로필](../../../ros2_ws/src/plc_adapter/config/conveyor_pnp_codesys.yaml)과 [공정 파라미터](../../../ros2_ws/src/plc_adapter/config/conveyor_process.yaml)에 있다.
