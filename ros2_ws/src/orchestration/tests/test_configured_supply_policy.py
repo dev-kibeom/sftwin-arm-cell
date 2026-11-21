@@ -151,6 +151,11 @@ def test_unit_request_runs_one_sequence_without_material_count(configured_missio
     result=mission.execute(handle)
     assert result.exit_reason.value==MissionExitReason.MISSION_EXIT_QUANTITY_REACHED
     assert result.has_material_placed and result.material_placed
+    trace = result.configured_task
+    assert trace.material_instance_id == '42' and trace.reservation_id == 'lease'
+    assert bytes(trace.task_goal_id.uuid) == bytes([1]*16)
+    assert (trace.task_status, trace.result_code) == (4, 0)
+    assert any(f.configured_task.reservation_id == 'lease' for f in feedback)
     assert terminal==['succeeded']
     assert [request.command for request in requests]==[ConfiguredSupply.Request.RESERVE,ConfiguredSupply.Request.COMPLETE]
     assert requests[-1].material_placed
@@ -310,3 +315,21 @@ def test_mission_safety_precedence_preserves_placed_task_failure(configured_miss
     assert 'RETREAT' in result.diagnostic_detail and 'blocked' in result.diagnostic_detail
     task_outcome, = [facts for event, facts in events if event == 'task_outcome']
     assert task_outcome['task_result_code'] == failure.result_code and task_outcome['material_placed']
+
+
+def test_reconnected_supply_receives_only_the_original_terminal_cleanup(configured_mission):
+    from arm_cell_interfaces.srv import ConfiguredSupply
+    mission, requests, tasks = configured_mission
+    mission.plc_admission = True
+    lease = State(slot_id='slot', reservation_id='lease', material_type_id='A', material_instance_id='stream/1')
+    wait = mission.wait
+    def lost_first_response(future, timeout):
+        if len(requests) == 1:
+            raise TimeoutError('Disconnected during terminal cleanup')
+        return wait(future, timeout)
+    mission.wait = lost_first_response
+    mission.cell.wait_for_service = lambda timeout_sec: True
+    response = mission.command(ConfiguredSupply.Request.ABANDON, 'epoch', lease, placed=False)
+    assert response.success and not tasks
+    assert len(requests) == 2 and requests[0] == requests[1]
+    assert requests[-1].reservation_id == 'lease' and not requests[-1].material_placed

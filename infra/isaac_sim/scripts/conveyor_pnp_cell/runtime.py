@@ -29,6 +29,7 @@ class ConveyorRuntime:
             supply=dict(cell['configured_supply'], slot_id=layout['pick_slot_id'],
                         stream_id=equipment.stream_id, material_type_ids=layout['material_type_ids']),
             pick_configured=bool(layout['teaching']['cycle']),
+            receipt_file=layout.get('receipt_file'),
             history_db_path=layout.get('history_db_path', '~/.local/state/arm_cell/conveyor-pnp-poc/production.sqlite'))
         self.sidecar.send(self.sidecar_config)
         self.feeder.bind_ui(set_automatic=self.set_automatic)

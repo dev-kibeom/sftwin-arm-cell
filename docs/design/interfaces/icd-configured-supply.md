@@ -11,7 +11,7 @@ COMPLETE·ABANDON은 supply_id, supply_epoch, slot_id, reservation_id가 정확�
 개체를 추적하는 공급자는 RESERVE 응답에 `material_type_id`와 `material_instance_id`를 함께 반환한다. 상태의 두 필드는 한 자리 공급의 현재 점유를 나타내며, COMPLETE·ABANDON은 응답의 두 값을 그대로 돌려줘야 한다. Tape의 명목 슬롯에서는 두 필드가 빈 문자열이다.
 COMPLETE는 성공한 Task 시퀀스와 같은 예약의 장치 Release 확인으로 해당 점유의 처리를 끝낸다.
 material_placed는 기존 필드명이며 실제 수령·안착의 GT 증거가 아니다. 실제 자재 완료 수량은 집계하지 않는다.
-중복·만료·이전 epoch 요청은 슬롯 진행을 바꾸지 않는다. ABANDON은 예약을 해제하며 확인된 목적지 Release를 기존 `material_placed` 필드로 함께 전달한다. Tape의 명목 슬롯은 기존 실패 정책을 따른다. Conveyor 공급자는 같은 예약의 Release가 확인됐으면 해당 도착 자재를 선택 대상에서 제외한다. 실패한 Mission을 성공으로 집계하지 않는다. Task 결과가 불명확하면 예약을 유지한다.
+Conveyor Mission에서 확인된 Task 종료의 ABANDON 응답이 유실되면 공급 서비스 재발견 후 동일 요청을 한 번 재전송할 수 있다. 중복·만료·이전 epoch 요청은 슬롯 진행을 바꾸지 않는다. ABANDON은 예약을 해제하며 확인된 목적지 Release를 기존 `material_placed` 필드로 함께 전달한다. Tape의 명목 슬롯은 기존 실패 정책을 따른다. Conveyor 공급자는 같은 예약의 Release가 확인됐으면 해당 도착 자재를 선택 대상에서 제외한다. 실패한 Mission을 성공으로 집계하지 않는다. Task 결과가 불명확하면 예약을 유지한다.
 
 `/cell/configured_supply/state`는 ID·epoch·슬롯 점유·예약·호환용 completed_count(항상 0)·valid·소진 상태를 발행한다.
 수신 신선도와 valid를 함께 평가하며, Topic 수신이나 슬롯 생성 자체를 파지 성공으로 취급하지 않는다.

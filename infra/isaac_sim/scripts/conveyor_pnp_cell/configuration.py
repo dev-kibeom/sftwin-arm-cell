@@ -9,6 +9,7 @@ def compile_cell(*, configuration):
     layout = cell['conveyor']
     profile = read(resolve(layout['plc_profile'], project_root()))['plc_task_adapter']['ros__parameters']
     layout['connection'] = {key: profile[key] for key in ('host', 'port', 'unit_id', 'poll_seconds', 'timeout_seconds')}
+    layout['receipt_file'] = profile['receipt_file']
     layout['boxes'] = json.loads(Path(cell['static_scene']).read_text())['objects']
     teaching = layout['teaching']
     if 'motions' in teaching:

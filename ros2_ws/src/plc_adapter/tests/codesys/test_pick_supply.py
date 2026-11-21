@@ -258,3 +258,50 @@ def test_recovered_abandon_without_placement_waits_for_the_same_pick(open_exchan
     new_lease = restored.reserve(req, ConfiguredSupply.Response())
     assert new_lease.success and new_lease.material_instance_id == lease.material_instance_id
     assert new_lease.reservation_id != lease.reservation_id
+
+
+def test_history_service_joins_archived_stream_to_its_own_live_receipt_owner(open_exchange, tmp_path):
+    import json
+    from arm_cell_interfaces.msg import ConfiguredTaskTrace
+    from arm_cell_interfaces.srv import QueryConveyorHistory
+    from arm_cell_plc_adapter.receipts import Receipts, State
+
+    path = tmp_path / 'first-plc.sqlite'
+    owner = Receipts(path)
+    try:
+        owner.observe_idle()
+        receipt = owner.claim(1)
+        first = open_exchange(receipt_file=str(path))
+        send_sample(first, cycle=7)
+        lease = first.reserve(reserve_request(first), ConfiguredSupply.Response())
+        trace = ConfiguredTaskTrace(material_instance_id=lease.material_instance_id,
+                                    reservation_id=lease.reservation_id, task_status=6, result_code=5)
+        trace.task_goal_id.uuid = list(range(16))
+        owner.update(1, State.ABORTED, 3, 2, trace=trace)
+        next_stream = open_exchange(supply=dict(supply_id='pick', material_id='Part', slot_id='cell/belt/pick',
+                                                material_type_ids=['A'], stream_id='other'),
+                                    receipt_file=str(tmp_path / 'other.sqlite'))
+        request = QueryConveyorHistory.Request(material_instance_id='stream/7')
+        response = next_stream.query_history(request, QueryConveyorHistory.Response())
+        assert response.success
+        history = json.loads(response.json_result)
+        attempt, = history['robot_execution']['attempts']
+        assert history['robot_execution']['status'] == 'linked'
+        assert attempt['command_id'] == 1 and attempt['mission_goal_uuid'] == receipt.goal_uuid.hex()
+        assert attempt['task_goal_uuid'] == bytes(range(16)).hex()
+        assert attempt['task_outcome']['material_placed']
+        assert attempt['reservation_id'] == history['reservations'][0]['reservation_id']
+    finally:
+        owner.close()
+
+
+def test_receipt_source_index_failure_does_not_block_supply(open_exchange, monkeypatch):
+    import sqlite3
+    from conveyor_pnp_cell.production_ledger import ProductionLedger
+
+    def unavailable(*args):
+        raise sqlite3.OperationalError('receipt index busy')
+    monkeypatch.setattr(ProductionLedger, 'bind_receipt_source', unavailable)
+    exchange = open_exchange(receipt_file='plc.sqlite')
+    send_sample(exchange)
+    assert exchange.reserve(reserve_request(exchange), ConfiguredSupply.Response()).success

@@ -10,6 +10,7 @@ MissionExitReason exit_reason
 # Other Missions and missing child results leave has_material_placed false.
 bool has_material_placed
 bool material_placed
+ConfiguredTaskTrace configured_task
 string diagnostic_detail
 ---
 # Feedback is a public mission phase, not a BehaviorTree implementation state.
@@ -27,3 +28,4 @@ uint32 interruption_count
 MissionExitReason first_interruption_reason
 SafetyCauseSet first_interruption_causes
 StopMode first_interruption_stop_mode
+ConfiguredTaskTrace configured_task

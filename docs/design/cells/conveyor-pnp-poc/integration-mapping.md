@@ -25,9 +25,11 @@
 
 ## 식별과 관측
 
-`stream_id/plc_material_number`는 실제 개체, `slot_id`는 위치, `supply_epoch + reservation_id`는 예약, `command_id`는 PLC 실행 요청, `Goal UUID`는 ROS 실행, `inspection_id`는 검사 근거를 구별한다. History는 이들의 기존 관계를 조회 가능하게 만들되 새로운 제어 ID를 발급하지 않는다.
+`stream_id/plc_material_number`는 실제 개체, `slot_id`는 위치, `supply_epoch + reservation_id`는 예약, `command_id`는 PLC 실행 요청, `Goal UUID`는 ROS 실행, `station_id + inspection_id`는 해당 개체의 검사 근거를 구별한다. History는 이들의 기존 관계를 조회 가능하게 만들되 새로운 제어 ID를 발급하지 않는다.
 
 새 자재의 첫 로봇 요청 전에는 PLC 결과 레지스터가 직전 요청 값을 유지할 수 있다. History는 새 자재의 결과·사유·배치를 미확정으로 두며 기존 자재의 결과와 Commit을 보존한다. History 쓰기 장애 중에도 Equipment는 PLC에 관측한 센서와 생성 번호를 전달하고, Supply는 영속화한 배정만 PLC에 확인한다.
+
+자재별 실행 이력은 스트림에 연결된 Adapter 영수증에서 실제 개체 ID로 조회한다. Mission이 관측한 예약·Task UUID·terminal을 같은 Mission UUID의 영수증에 연결한다. 예약 전 거절 등 개체와의 연결 근거가 없는 요청은 자재에 귀속하지 않는다.
 
 일반 INFO/WARN/ERROR는 원인이 의미 있게 변하는 경계에서 한 번 기록하고, 상세한 ID·원본 필드·시간/품질 근거는 구조화 이력으로 둔다. 고빈도 장치 샘플을 그대로 로그/DB에 복제하지 않고 PLC 단계 변화 등 의미 있는 사건만 기록한다.
 

@@ -35,6 +35,7 @@ class Exchange:
         self.pick_configured = config['pick_configured']
         self.supply = ConveyorPickSupply(uuid4().hex, **config['supply'])
         self.history_path = config['history_db_path']
+        self.receipt_file = config.get('receipt_file')
         self.resume_stream = config.get('resume_stream', False)
         self.ledger = None
         self.restored_unverified = True
@@ -75,6 +76,11 @@ class Exchange:
             return
         self.ledger = ledger
         self.restored_unverified = bool(previous and previous['available'])
+        if self.receipt_file:
+            try:
+                ledger.bind_receipt_source(self.receipt_file)
+            except (OSError, sqlite3.Error) as error:
+                self.node.get_logger().warning(f'Cannot index PLC receipt source: {error}')
 
     def run(self):
         try:
@@ -152,11 +158,26 @@ class Exchange:
             if report is None:
                 response.diagnostic_detail = 'Unknown material instance'
             else:
+                if request.material_instance_id:
+                    report['robot_execution'] = self.execution_history(report['material'])
                 response.success = True
                 response.json_result = json.dumps(report, sort_keys=True)
         except sqlite3.Error as error:
             response.diagnostic_detail = str(error)
         return response
+
+    def execution_history(self, material):
+        source = self.receipt_file if material['stream_id'] == self.supply.stream_id else None
+        if not source:
+            source = self.ledger.receipt_source(material['stream_id'])
+        if not source:
+            return dict(status='source_not_configured', attempts=[])
+        try:
+            from arm_cell_plc_adapter.receipts import read_material_attempts
+            attempts = read_material_attempts(source, material['instance_id'])
+        except (ImportError, OSError, ValueError, sqlite3.Error) as error:
+            return dict(status='source_unavailable', diagnostic_detail=str(error), attempts=[])
+        return dict(status='linked' if attempts else 'no_link_observed', attempts=attempts)
 
     def sample(self, packet, command):
         sensors = Sensors(**packet['sensors'])

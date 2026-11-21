@@ -48,9 +48,9 @@ export SFTWIN_PROJECT_ROOT="$PWD" ARM_CELL_RUNTIME_CONFIG=/tmp/conveyor-runtime.
 
 ## 지속 생산 이력과 품질 검사
 
-Cell 측 Sidecar는 `conveyor.history_db_path`의 SQLite에 실제 생성 개체·배정·예약·PLC Cycle/Commit 관측과 품질 판정을 남긴다. 제어의 Source of Truth는 기존 Isaac Equipment·Task·PLC이며 DB는 독립 이력이다. 다른 검사 설비는 `/cell/conveyor/record_inspection` (`RecordConveyorInspection.srv`)에 **알고 있는 material_instance_id**와 검사 ID, 설비 ID, 실제 판정(`PASS`/`FAIL`/`INCONCLUSIVE`), 증거 참조를 제출할 수 있다. 이 호출은 PLC Commit 또는 로봇 동작을 승인하지 않는다. 재전송한 동일 검사는 멱등이고 다른 결과로 덮어쓸 수 없다.
+Cell 측 Sidecar는 `conveyor.history_db_path`의 SQLite에 실제 생성 개체·배정·예약·PLC Cycle/Commit 관측과 품질 판정을 남긴다. 제어의 Source of Truth는 기존 Isaac Equipment·Task·PLC이며 DB는 독립 이력이다. 다른 검사 설비는 `/cell/conveyor/record_inspection` (`RecordConveyorInspection.srv`)에 **알고 있는 material_instance_id**와 검사 ID, 설비 ID, 실제 판정(`PASS`/`FAIL`/`INCONCLUSIVE`), 증거 참조를 제출할 수 있다. 이 호출은 PLC Commit 또는 로봇 동작을 승인하지 않는다. 검사 ID는 설비별·개체별 번호다. 카메라와 치수기가 같은 개체에 각각 1번을 제출할 수 있다. 같은 개체·설비·번호의 재전송은 동일 판정·근거일 때 멱등이다.
 
-`/cell/conveyor/query_history` (`QueryConveyorHistory.srv`)에 특정 `material_instance_id`를 보내면 해당 개체의 자재·예약·PLC 관측·검사·변경 기록 JSON을 반환한다. 빈 ID는 보존된 전체 스트림의 생산 집계를 반환한다. 여러 소비자는 읽기 서비스를 이용하거나 동일 호스트의 SQLite WAL 읽기 연결로 보고서를 생성할 수 있다. SQLite 원본 파일은 Git·진단 스냅샷과 독립적으로 유지하고 운영 백업 정책을 별도로 설정한다.
+`/cell/conveyor/query_history` (`QueryConveyorHistory.srv`)에 특정 `material_instance_id`를 보내면 해당 개체의 자재·예약·PLC 관측·검사·변경 기록 JSON을 반환한다. 응답의 `robot_execution.attempts`에는 같은 개체에 연결된 각 PLC 요청 ID와 Mission UUID, 예약 ID, Task UUID·결과가 들어간다. Task terminal이 없으면 `task_outcome`은 null이다. `status`는 조회된 연결(`linked`), 기록된 연결 없음(`no_link_observed`), 영수증 경로 미설정 또는 읽기 실패(`source_not_configured`, `source_unavailable`)를 구분한다. 구버전 영수증에는 개체·Task 연결이 없을 수 있다. 배포 시 Sidecar 스냅샷의 PLC 프로필과 실행 중인 Adapter의 `receipt_file`이 같은 영속 파일을 가리키도록 설정한다. 빈 ID는 보존된 전체 스트림의 생산 집계를 반환한다. 여러 소비자는 읽기 서비스를 이용하거나 동일 호스트의 SQLite WAL 읽기 연결로 보고서를 생성할 수 있다. SQLite 원본 파일은 Git·진단 스냅샷과 독립적으로 유지하고 운영 백업 정책을 별도로 설정한다.
 
 장면이 살아 있고 Sidecar 프로세스가 종료된 경우, Timeline을 Stop하지 않고 Supply UI의 **Start automatic**을 누르면 기존 Equipment에 새 Sidecar를 연결한다. 기존 투입 수량·생성 번호·스트림을 유지하며, 새 허가와 PLC 명령을 받은 뒤 설비를 진행한다. 이 조작은 자동공급도 켜므로 작업자가 운전을 재개할 때 사용한다.
 
@@ -58,7 +58,9 @@ Cell 측 Sidecar는 `conveyor.history_db_path`의 SQLite에 실제 생성 개체
 
 원장 쓰기가 실패하면 설비 Sidecar는 센서 피드백을 계속 전송한다. 배정·예약 변경은 저장에 성공한 뒤 확인하며, 관측 쓰기는 다음 유효 표본에서 다시 시도한다. 장애 동안 지나간 중간 PLC 단계는 이력에서 누락될 수 있다. 새 자재가 첫 로봇 요청 전인 단계 10·20·21·22에서는 결과·사유·배치를 0(미확정)으로 조회한다. 기존 v1 원장은 처음 열 때 이 귀속을 보정하고 해당 이벤트의 원래 값은 `retained_registers`에 남긴다.
 
-실행 전에 `arm_cell_interfaces`를 포함한 ROS Overlay를 다시 빌드해야 한다. SQLite 원장은 Python 표준 라이브러리를 사용한다. Pure DB 회귀는 `python3 -m pytest -q infra/isaac_sim/scripts/tests/test_conveyor_production_ledger.py`로 확인할 수 있다. 외부 CODESYS + Isaac 통합 및 재시작 시운전은 별도 live 증거로 확인해야 한다.
+실행 중 Sidecar가 종료되어 유효한 공급 표본이 0.5초 동안 도착하지 않으면 Mission은 진행 중인 Task를 취소한다. Pick 접근 중에 취소되고 배치가 확인되지 않은 경우 PLC는 단계 39(현장 대조)에서 마지막 Commit을 유지한다. 이때 같은 예약의 ABANDON 처리는 Task의 중복 실행이나 다음 자재 공급을 승인하지 않는다.
+
+실행 전에 새 ExecuteCycle 정의로 arm_cell_interfaces 및 이 Action을 사용하는 Mission·Adapter와 클라이언트를 함께 재빌드하고 재시작한다. SQLite 원장은 Python 표준 라이브러리를 사용한다. Pure DB 회귀는 `python3 -m pytest -q infra/isaac_sim/scripts/tests/test_conveyor_production_ledger.py`로 확인할 수 있다. 외부 CODESYS + Isaac 통합 및 재시작 시운전은 별도 live 증거로 확인해야 한다.
 
 ## 실제 설비 반복 시험
 

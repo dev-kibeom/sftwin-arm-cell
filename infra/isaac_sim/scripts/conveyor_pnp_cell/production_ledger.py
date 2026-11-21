@@ -11,6 +11,17 @@ import sqlite3
 PRE_REQUEST_PHASES = (10, 20, 21, 22)
 
 
+INSPECTIONS_SCHEMA = """CREATE TABLE IF NOT EXISTS inspections (
+    instance_id TEXT NOT NULL REFERENCES materials(instance_id),
+    inspection_id TEXT NOT NULL,
+    station_id TEXT NOT NULL,
+    verdict TEXT NOT NULL CHECK(verdict IN ('PASS','FAIL','INCONCLUSIVE')),
+    evidence_ref TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    PRIMARY KEY(instance_id, station_id, inspection_id)
+)"""
+
+
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
@@ -38,7 +49,7 @@ class ProductionLedger:
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=FULL')
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (0, 1, 2):
+        if version not in (0, 1, 2, 3):
             raise ValueError(f'Unsupported production history version: {version}')
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS materials (
@@ -81,14 +92,8 @@ class ProductionLedger:
                 observed_at TEXT NOT NULL,
                 PRIMARY KEY(stream_id, plc_number)
             );
-            CREATE TABLE IF NOT EXISTS inspections (
-                instance_id TEXT NOT NULL REFERENCES materials(instance_id),
-                inspection_id TEXT NOT NULL,
-                station_id TEXT NOT NULL,
-                verdict TEXT NOT NULL CHECK(verdict IN ('PASS','FAIL','INCONCLUSIVE')),
-                evidence_ref TEXT NOT NULL,
-                recorded_at TEXT NOT NULL,
-                PRIMARY KEY(instance_id, inspection_id)
+            CREATE TABLE IF NOT EXISTS receipt_sources (
+                stream_id TEXT PRIMARY KEY, receipt_file TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS history_events (
                 ordinal INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,8 +105,11 @@ class ProductionLedger:
                 recorded_at TEXT NOT NULL
             );
         """)
-        if version < 2:
+        if version < 3:
             with self.transaction():
+                version = self.db.execute('PRAGMA user_version').fetchone()[0]
+                if version == 3:
+                    return
                 if version == 1:
                     # Keep the original wire values as evidence while correcting attribution.
                     self.db.execute('''UPDATE history_events SET details=json_set(details,
@@ -114,7 +122,15 @@ class ProductionLedger:
                                OR json_extract(details,'$.placement') != 0)''', PRE_REQUEST_PHASES)
                     self.db.execute('''UPDATE plc_cycles SET result_state=0, reason=0, placement=0
                         WHERE phase IN (?,?,?,?)''', PRE_REQUEST_PHASES)
-                self.db.execute('PRAGMA user_version=2')
+                # Older releases created tables before stamping the database version.
+                existing = self.db.execute('PRAGMA table_info(inspections)').fetchall()
+                if existing:
+                    self.db.execute('ALTER TABLE inspections RENAME TO inspections_old')
+                self.db.execute(INSPECTIONS_SCHEMA)
+                if existing:
+                    self.db.execute('INSERT INTO inspections SELECT * FROM inspections_old')
+                    self.db.execute('DROP TABLE inspections_old')
+                self.db.execute('PRAGMA user_version=3')
 
     @contextmanager
     def transaction(self):
@@ -264,10 +280,10 @@ class ProductionLedger:
             if material is None:
                 raise ValueError('Unknown physical material')
             row = self.db.execute(
-                'SELECT station_id,verdict,evidence_ref FROM inspections WHERE instance_id=? AND inspection_id=?',
-                (instance_id, inspection_id)).fetchone()
+                'SELECT verdict,evidence_ref FROM inspections WHERE instance_id=? AND station_id=? AND inspection_id=?',
+                (instance_id, station_id, inspection_id)).fetchone()
             if row:
-                if tuple(row) != (station_id, verdict, evidence_ref):
+                if tuple(row) != (verdict, evidence_ref):
                     raise ValueError('Conflicting inspection ID')
                 return False
             self.db.execute('INSERT INTO inspections VALUES (?,?,?,?,?,?)',
@@ -276,6 +292,17 @@ class ProductionLedger:
                         dict(inspection_id=inspection_id, verdict=verdict, evidence_ref=evidence_ref),
                         stream_id=material['stream_id'])
             return True
+
+    def bind_receipt_source(self, filename):
+        with self.transaction():
+            self.db.execute('INSERT OR REPLACE INTO receipt_sources VALUES (?,?)',
+                            (self.stream_id, str(Path(filename).expanduser().resolve())))
+
+    def receipt_source(self, stream_id):
+        with self.lock:
+            row = self.db.execute('SELECT receipt_file FROM receipt_sources WHERE stream_id=?',
+                                  (stream_id,)).fetchone()
+            return row[0] if row else None
 
     def history(self, instance_id):
         with self.lock:

@@ -37,6 +37,8 @@ Action Feedback은 Mission 진행과 수량·Retry·중단 사실을 관측하�
 
 `target_valid`와 `target_observation_stamp`는 최근 Vision 관측의 Mission 진행 정보다. 이미 제출한 Motion Goal의 Pose를 변경하거나 Live Freshness/Scene Stability Gate로 재사용하지 않는다. `retry_count`는 현재 Target Episode의 Vision 관측 Retry 관측값이며 새 Mission 요청의 수가 아니다. 각 Feedback은 현재 ExecuteCycle Goal UUID에, `delivery_id`는 해당 공급 Event에 연결된다. 첫 중단의 reason·causes·stop mode는 해당 Cycle에서 관측된 최초 중단을 가리키며 뒤의 중단이 이를 덮어쓰지 않는다. 실제 Retry·Recovery·중단된 Task의 수명은 Mission Cycle FDS가 소유한다.
 
+Configured 단일 슬롯 Mission의 Feedback·Result는 `configured_task`로 예약한 개체와 예약 ID, 수락된 하위 Task의 Goal UUID를 전달한다. Result의 Task 상태가 SUCCEEDED·CANCELED·ABORTED일 때만 하위 결과 코드·실패 단계·진단이 유효하다. Task terminal 미관측은 상태 0, 수락 미관측은 zero UUID로 표현한다. 일반 Batch Mission은 이 필드를 기본값으로 둔다.
+
 ## 3. 결과 및 취소
 
 ExecuteCycle Goal 제출은 Delivery Admission 이후 Orchestration이 소유한다. Goal 수락은 Mission 성공을 뜻하지 않고, Caller 취소는 Action 수명에 대한 요청이다. Timeline Session 전환·프로세스 종료와 Safety Stop/Reset의 관계는 [Simulation Session FDS](../components/simulation/fds-sim-session.md) 및 해당 Safety 계약을 따른다.

@@ -146,3 +146,31 @@ def test_existing_history_does_not_attribute_retained_registers_to_the_next_part
             assert (row['result_state'], row['reason'], row['placement']) == (0, 0, 0)
     finally:
         reopened.close()
+
+
+@pytest.mark.parametrize('version', [0, 1, 2])
+def test_inspection_numbers_are_scoped_to_station_including_existing_rows(tmp_path, version):
+    path = tmp_path/'stations.sqlite'
+    initial = ProductionLedger(path, 'stream-a')
+    initial.record_created(1, 'A')
+    initial.close()
+    with sqlite3.connect(path) as db:
+        db.execute('DROP TABLE inspections')
+        db.execute('''CREATE TABLE inspections(instance_id TEXT REFERENCES materials(instance_id),
+            inspection_id TEXT, station_id TEXT, verdict TEXT, evidence_ref TEXT, recorded_at TEXT,
+            PRIMARY KEY(instance_id, inspection_id))''')
+        db.execute("INSERT INTO inspections VALUES ('stream-a/1','1','camera','PASS','frame','original')")
+        db.execute(f'PRAGMA user_version={version}')
+    ledger = ProductionLedger(path, 'stream-a')
+    reading = dict(instance_id='stream-a/1', inspection_id='1', station_id='gauge',
+                   verdict='FAIL', evidence_ref='reading')
+    try:
+        assert ledger.inspect(**reading)
+        assert not ledger.inspect(**reading)
+        with pytest.raises(ValueError):
+            ledger.inspect(**dict(reading, verdict='PASS'))
+        rows = ledger.history('stream-a/1')['inspections']
+        assert {r['station_id']: r['verdict'] for r in rows} == {'camera':'PASS', 'gauge':'FAIL'}
+        assert next(r for r in rows if r['station_id'] == 'camera')['recorded_at'] == 'original'
+    finally:
+        ledger.close()

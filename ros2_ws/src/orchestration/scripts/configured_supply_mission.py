@@ -260,12 +260,23 @@ def main(args=None):
                 request.reservation_id=lease.reservation_id
                 request.material_type_id=lease.material_type_id
                 request.material_instance_id=lease.material_instance_id
-            return self.wait(self.cell.call_async(request),3.5)
+            for attempt in range(2):
+                pending = self.cell.call_async(request)
+                try:
+                    return self.wait(pending, 3.5)
+                except TimeoutError:
+                    pending.cancel()
+                    # Only resend cleanup for the exact lease after provider replacement.
+                    if (attempt or command != request.ABANDON or not self.plc_admission or
+                            not self.cell.wait_for_service(timeout_sec=1.)):
+                        raise
 
-        def feedback(self,handle,count,phase,detail):
+        def feedback(self,handle,count,phase,detail,trace=None):
             message=ExecuteCycle.Feedback();message.phase.value=phase
             message.delivery_id=handle.request.delivery_id;message.quantity=handle.request.quantity
             message.batch_processed_count=count;message.diagnostic_detail=detail
+            if trace is not None:
+                message.configured_task = trace
             handle.publish_feedback(message)
 
         def execute(self,handle):
@@ -289,6 +300,10 @@ def main(args=None):
                     if not reserved.success:
                         raise RuntimeError('Cell reservation rejected: '+reserved.diagnostic_detail)
                     lease=reserved
+                    trace = result.configured_task
+                    trace.material_instance_id = lease.material_instance_id
+                    trace.reservation_id = lease.reservation_id
+                    self.feedback(handle, 0, MissionPhase.MISSION_PHASE_PICKING, 'Slot reserved', trace)
                     deadline=time.monotonic()+1.
                     while not (self.inputs_permit_execution() and lease_matches(self.supply,lease)):
                         if time.monotonic()>deadline or self.supply.supply_epoch != epoch or handle.is_cancel_requested:
@@ -315,11 +330,12 @@ def main(args=None):
                     if not child.accepted:
                         terminal_known=True
                         raise RuntimeError('Task goal rejected')
+                    trace.task_goal_id.uuid = child.goal_id.uuid
                     self.capture_event(handle,'task_accepted',task_goal_uuid=bytes(child.goal_id.uuid).hex(),
                         supply_epoch=lease.supply_epoch,reservation_id=lease.reservation_id,slot_id=lease.slot_id,
                         material_type_id=lease.material_type_id,material_instance_id=lease.material_instance_id)
                     pending=child.get_result_async();cancel_sent=False;interrupted=None;cancel_deadline=None
-                    self.feedback(handle,0,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id)
+                    self.feedback(handle,0,MissionPhase.MISSION_PHASE_PICKING,'Configured slot '+lease.slot_id,trace)
                     while not pending.done():
                         if not self.safety_allows_motion():
                             safety_preempted = True
@@ -341,6 +357,10 @@ def main(args=None):
                     terminal_known = True
                     child = None
                     outcome = task_result.result
+                    trace.task_status = task_result.status
+                    trace.result_code = outcome.result_code
+                    trace.failure_stage = outcome.failure_stage
+                    trace.diagnostic_detail = outcome.diagnostic_detail
                     result.has_material_placed = True
                     result.material_placed = outcome.material_placed
                     self.capture_event(handle,'task_outcome',task_status=task_result.status,

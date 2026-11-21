@@ -16,6 +16,7 @@ find_package(unique_identifier_msgs REQUIRED)
 
 set(msg_files
   "msg/ConfiguredSupplyState.msg"
+  "msg/ConfiguredTaskTrace.msg"
   "msg/AMRDockingState.msg"
   "msg/DetectTargetResultCode.msg"
   "msg/DisturbanceCandidate.msg"
