@@ -60,9 +60,12 @@ def test_guard_exec_preserves_pid_and_blocks_concurrent_start(tmp_path):
     script = Path(__file__).resolve().parents[1] / 'ros_guard.py'
     command = [sys.executable, str(script), sys.executable, '-u', '-c',
                'import os,time; print(os.getpid(), flush=True); time.sleep(60)']
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    marker = tmp_path / 'preflight-complete'
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                               env=dict(os.environ, ARM_CELL_ROS_PREFLIGHT_FILE=str(marker)))
     try:
         assert process.stdout.readline().strip() == str(process.pid)
+        assert marker.exists()
         second = subprocess.run(command, capture_output=True, text=True, timeout=5)
         assert second.returncode == 1
         assert '먼저 종료' in second.stderr

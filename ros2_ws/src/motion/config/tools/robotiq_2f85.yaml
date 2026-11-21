@@ -65,7 +65,7 @@ runtime:
       combination: [logical, fixed_attach]
       description: 논리적으로 손가락을 구동하고 Fixed Joint로 물체를 고정합니다.
     - id: physical_snap
-      label: Physical Attach
+      label: Physics + Fixed Attach
       combination: [physics, fixed_attach]
       description: 물리 접촉 반력·폭 Qualification 후 Fixed Joint로 물체를 고정합니다.
     - id: physical_real

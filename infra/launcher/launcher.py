@@ -13,7 +13,7 @@ import time
 from PySide6.QtCore import QLockFile, QSignalBlocker, QTimer, Qt
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFormLayout, QHBoxLayout,
                               QLabel, QMainWindow, QPushButton, QDoubleSpinBox, QGroupBox,
-                              QVBoxLayout, QWidget)
+                              QStackedWidget, QVBoxLayout, QWidget)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,8 +21,10 @@ sys.path.insert(0, str(ROOT / 'ros2_ws/src/bringup'))
 from arm_cell_bringup.tool_parameters import available_fields, parameter_value, apply_tool_parameters
 from arm_cell_bringup.runtime import export_runtime_configuration, read, resolve
 if __package__:
+    from . import plc_control
     from .component_settings import ComponentSettings
 else:
+    import plc_control
     from component_settings import ComponentSettings
 
 
@@ -145,6 +147,9 @@ class Launcher(QMainWindow):
         super().__init__()
         self.setWindowTitle('ARM Cell Launcher')
         self.resize(760, 240)
+        self.plc = plc_control.ConveyorPLC(self)
+        self.conveyor = False
+        self.ros_preflight = None
         self.processes = {}
         self.terminals = {}
         self.terminal_stop = False
@@ -176,7 +181,13 @@ class Launcher(QMainWindow):
                 combo.currentIndexChanged.connect(
                     lambda _index, changed=key: self.refresh_deployment_choices(changed))
         self.tool_mode = QComboBox()
-        form.insertRow(form.rowCount() - 1, 'Grasp Mode', self.tool_mode)
+        self.strategy = QLabel()
+        form.insertRow(form.rowCount() - 1, '파지 전략', self.strategy)
+        self.fixed_mode = QLabel()
+        self.mode_display = QStackedWidget()
+        self.mode_display.addWidget(self.tool_mode)
+        self.mode_display.addWidget(self.fixed_mode)
+        form.insertRow(form.rowCount() - 1, 'Grasp Mode', self.mode_display)
         self.tool_mode.currentIndexChanged.connect(self.refresh_parameters)
         self.mode_pairs = []
         self.parameter_edits = {}
@@ -195,11 +206,13 @@ class Launcher(QMainWindow):
         layout.addLayout(buttons)
         self.isaac = QPushButton('Isaac 시작')
         self.ros = QPushButton('ROS 2 시작 (Isaac 초기화 확인 후)')
+        self.plc_button = QPushButton('PLC 시작')
         self.stop = QPushButton('모두 종료')
-        for button in (self.isaac, self.ros, self.stop):
+        for button in (self.isaac, self.ros, self.plc_button, self.stop):
             buttons.addWidget(button)
         self.isaac.clicked.connect(self.start_isaac)
         self.ros.clicked.connect(self.start_ros)
+        self.plc_button.clicked.connect(self.start_plc)
         self.stop.clicked.connect(self.begin_stop)
         self.status = QLabel()
         self.status.setWordWrap(True)
@@ -232,6 +245,8 @@ class Launcher(QMainWindow):
                 candidates = [entry for entry in candidates if entry[key] == combo.currentData()]
             refresh_choices = refresh_choices or key == changed
 
+        cell = self.selectors['cell'].currentData()
+        self.conveyor = bool(cell and read(cell).get('conveyor', {}).get('plc_profile'))
         if changed == 'tool' or previous_tool != self.selectors['tool'].currentData():
             self.refresh_tool_modes()
         else:
@@ -242,6 +257,9 @@ class Launcher(QMainWindow):
         profile = read(tool) if tool is not None else None
         runtime = profile['runtime'] if profile is not None else {}
         choices = tool_mode_choices(profile) if profile is not None else []
+        labels = {'surface_suction': '표면 흡착', 'internal_radial': '내경 파지', 'box_exterior': '외측 파지'}
+        strategies = runtime.get('grasp_strategies', [])
+        self.strategy.setText(', '.join(labels.get(key, key) for key in strategies) or '—')
         self.mode_pairs = [choice['combination'] for choice in choices]
         self.tool_mode.blockSignals(True)
         self.tool_mode.clear()
@@ -251,6 +269,9 @@ class Launcher(QMainWindow):
         default = [runtime.get('actuator', 'logical'), runtime.get('grasp', 'fixed_attach')]
         self.tool_mode.setCurrentIndex(self.tool_mode.findData(default))
         self.tool_mode.blockSignals(False)
+        self.fixed_mode.setText(self.tool_mode.currentText())
+        self.fixed_mode.setToolTip(self.tool_mode.currentData(Qt.ToolTipRole) or '')
+        self.mode_display.setCurrentWidget(self.tool_mode if len(choices) > 1 else self.fixed_mode)
         self.refresh_parameters()
 
     def refresh_parameters(self):
@@ -342,6 +363,8 @@ class Launcher(QMainWindow):
         self.isaac.setText('설정 준비 중…' if self.preparing else 'Isaac 시작')
         self.isaac.setEnabled(valid and not active)
         self.ros.setEnabled('isaac' in self.processes and 'ros' not in self.processes and not self.stopping)
+        self.plc_button.setVisible(self.conveyor)
+        self.plc_button.setEnabled(self.can_start_plc())
         self.stop.setEnabled(active and not self.stopping)
         self.debug.setEnabled('ros' not in self.processes and not self.stopping)
         states = ', '.join(f'{name}: 프로세스 실행 중' for name in self.processes)
@@ -350,6 +373,8 @@ class Launcher(QMainWindow):
             message = f'설정·슬롯 티칭 경로 준비 중… ({elapsed}초) 중지 버튼으로 취소할 수 있습니다.'
         elif states:
             message = states + ' | ' + message
+        if self.plc.message and self.conveyor:
+            message = f'{self.plc.message} | {message}'
         self.status.setText(self.error or ('종료 중…' if self.stopping else message))
 
     def spawn(self, name, command, environment):
@@ -383,6 +408,8 @@ class Launcher(QMainWindow):
             self.validate()
             return
         try:
+            self.plc.closing = False
+            self.plc.message = ''
             self.run = tempfile.TemporaryDirectory(prefix='arm-cell-launcher-')
             entry = self.selection()
             self.runtime = Path(self.run.name)/'runtime_configuration.json'
@@ -438,12 +465,24 @@ class Launcher(QMainWindow):
                 or 'ros' in self.processes or self.stopping):
             return
         try:
-            self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), str(self.runtime),
-                               'debug' if self.debug.isChecked() else 'info'], self.environment)
+            args = [str(self.runtime), 'debug' if self.debug.isChecked() else 'info']
+            if self.conveyor:
+                self.ros_preflight = self.runtime.with_name('ros-preflight-complete')
+                args.append(str(self.ros_preflight))
+            self.spawn('ros', ['bash', str(ROOT / 'infra/launcher/start_ros.bash'), *args], self.environment)
         except Exception as exc:
             self.error = str(exc)
             self.begin_stop()
         self.validate()
+
+    def can_start_plc(self):
+        return (self.conveyor and 'ros' in self.processes and not self.stopping
+                and self.plc.phase is None and self.ros_preflight is not None and self.ros_preflight.exists())
+
+    def start_plc(self):
+        if self.can_start_plc():
+            self.plc.start(self.runtime, self.environment)
+            self.validate()
 
     def signal_groups(self, sig):
         signal_processes(self.processes.values(), sig)
@@ -452,6 +491,7 @@ class Launcher(QMainWindow):
         self.preparing = False
         if not self.stopping:
             self.stopping = True
+            self.plc.close_session()
             self.phase = 0
             self.terminal_stop = False
             self.signal_groups(signal.SIGINT)
@@ -491,7 +531,7 @@ class Launcher(QMainWindow):
                 if groups_alive(self.terminals.values()):
                     if time.monotonic() >= self.deadline:
                         signal_processes(self.terminals.values(), signal.SIGKILL)
-                else:
+                elif self.plc.phase is None:
                     for process in self.processes.values():
                         if process.stdout is not None:process.stdout.close()
                     self.processes.clear()

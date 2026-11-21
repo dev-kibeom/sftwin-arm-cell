@@ -334,7 +334,7 @@ def test_terminal_ctrl_c_reaches_actual_runtime(app, window, monkeypatch):
 
 @pytest.mark.parametrize('label,pair', [
     ('Logical Attach', ['logical', 'fixed_attach']),
-    ('Physical Attach', ['physics', 'fixed_attach']),
+    ('Physics + Fixed Attach', ['physics', 'fixed_attach']),
     ('Physics', ['physics', 'physical']),
 ])
 def test_tool_mode_presets_export_one_shared_selection(window, monkeypatch, label, pair):
@@ -438,7 +438,7 @@ def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
     robot = window.selectors['robot']
     tool = window.selectors['tool']
     form = window.centralWidget().layout().itemAt(0).layout()
-    for row, widget in enumerate((cells, robot, tool, window.tool_mode, window.selectors['backend'])):
+    for row, widget in enumerate((cells, robot, tool, window.strategy, window.mode_display, window.selectors['backend'])):
         assert form.itemAt(row, QFormLayout.FieldRole).widget() is widget
 
     arm_index = cells.currentIndex()
@@ -447,17 +447,17 @@ def test_launcher_filters_choices_after_cell_change(window, monkeypatch):
     assert window.tool_mode.count() == 3
     assert window.selection()['profile'].stem == 'operational_profile'
 
-    window.tool_mode.setCurrentText('Physical Attach')
+    window.tool_mode.setCurrentText('Physics + Fixed Attach')
     robot.setCurrentIndex(options(robot).index('rb5_850'))
     assert window.selection()['profile'].stem == 'rb5_850_profile'
-    assert window.tool_mode.currentText() == 'Physical Attach'
+    assert window.tool_mode.currentText() == 'Physics + Fixed Attach'
 
     cells.setCurrentIndex(options(cells).index('tape_roll_cell'))
     assert set(options(robot)) == {'m0609', 'rb5_850', 'hcr14'}
     assert Path(robot.currentData()).stem == 'rb5_850'
     assert set(options(tool)) == {'hand_e_c10', 'hand_e_c10_long'}
     assert window.tool_mode.count() == 1
-    assert window.tool_mode.currentText() == 'Physical Real'
+    assert window.tool_mode.currentText() == 'Physics'
     assert not window.isaac.isEnabled()
 
     robot.setCurrentIndex(options(robot).index('m0609'))
@@ -543,3 +543,76 @@ def test_experiment_tabs_keep_edits_after_stop_and_restore_yaml_defaults(app, wi
         assert reopened.selection()['component_parameters'] == {}
     finally:
         reopened.close()
+
+
+def test_conveyor_displays_strategy_and_fixed_mode_and_enables_plc_after_ros(app, window, monkeypatch):
+    assert window.plc_button.isHidden()
+    entry = next(item for item in window.entries if item['profile'].stem == 'conveyor_pnp_profile')
+    for key, combo in window.selectors.items():
+        combo.setCurrentIndex(combo.findData(entry[key]))
+    assert window.strategy.text() == '표면 흡착'
+    assert window.fixed_mode.text() == 'Physics'
+    assert window.tool_mode.isHidden()
+    assert not window.plc_button.isHidden()
+    assert not window.plc_button.isEnabled()
+    fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    until(app, window, lambda: 'isaac' in window.processes)
+    assert not window.plc_button.isEnabled()
+    window.start_ros()
+    assert not window.plc_button.isEnabled()
+    window.ros_preflight.touch()
+    window.poll()
+    assert window.plc_button.isEnabled()
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)
+
+
+@pytest.mark.parametrize('service_active', [True, False])
+def test_plc_retry_preserves_ros_and_releases_only_owned_service(app, window, tmp_path, monkeypatch, service_active):
+    entry = next(item for item in window.entries if item['profile'].stem == 'conveyor_pnp_profile')
+    for key, combo in window.selectors.items():
+        combo.setCurrentIndex(combo.findData(entry[key]))
+    state = tmp_path / 'active'
+    if service_active:
+        state.touch()
+    systemctl = tmp_path / 'systemctl'
+    systemctl.write_text("""#!/bin/sh
+case "$1" in
+show) echo LoadState=loaded; if test -f "$PLC_TEST_DIR/active"; then echo ActiveState=active; echo InvocationID=1234; else echo ActiveState=inactive; fi ;;
+start) touch "$PLC_TEST_DIR/active" ;;
+stop) rm "$PLC_TEST_DIR/active" ;;
+*) exit 2 ;;
+esac
+""")
+    systemctl.chmod(0o755)
+    monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ['PATH'])
+    monkeypatch.setenv('PLC_TEST_DIR', str(tmp_path))
+    fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
+    window.start_isaac()
+    until(app, window, lambda: 'isaac' in window.processes)
+    window.start_ros()
+    window.ros_preflight.touch()
+    window.poll()
+    ros = window.processes['ros']
+    commands = []
+    def command(stage, runtime):
+        assert runtime == window.runtime
+        commands.append(stage)
+        if stage == 'probe':
+            return [sys.executable, '-c', 'pass']
+        if commands.count('adapter') == 1:
+            return [sys.executable, '-c', 'raise SystemExit("writer locked")']
+        return WAIT
+    monkeypatch.setattr(launcher.plc_control, 'runtime_command', command)
+    window.plc_button.click()
+    window.plc_button.click()
+    until(app, window, lambda: window.plc_button.isEnabled())
+    assert 'writer locked' in window.status.text()
+    assert commands == ['probe', 'adapter']
+    assert ros.poll() is None and state.exists()
+    window.plc_button.click()
+    until(app, window, lambda: commands.count('adapter') == 2)
+    window.begin_stop()
+    until(app, window, lambda: not window.stopping)
+    assert state.exists() is service_active

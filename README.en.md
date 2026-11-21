@@ -166,11 +166,16 @@ ISAAC_SIM_ROOT=/path/to/isaac_sim ROS_DOMAIN_ID=0 python3 launcher.py
 
 **4. Start the cell.** Button labels currently appear in Korean.
 
-1. Select Robot, Tool, Cell, and Backend. The supported combination is M0609 +
-   Robotiq 2F-85 + the `isaac_pnp_cnc` Cell.
+1. Select the Cell, Robot, Tool, and Backend. The launcher shows the Tool’s grasp strategy
+   and supported grasp modes. The Conveyor suction cup displays surface suction and a fixed `Physics` mode.
 2. Click `Isaac 시작` (Start Isaac). Wait for the scene, Timeline, and After Playing initialization.
 3. Click `ROS 2 시작` (Start ROS 2). For detailed logs, select `ROS 2 디버그 모드` before starting.
-4. Check the camera/Vision views in Isaac Sim's UI Hub and errors in both run terminals.
+4. For Conveyor, click `PLC 시작` (Start PLC). The launcher starts or reuses the local CODESYS service,
+   checks the Conveyor Modbus response and starts the PLC adapter. Check the launcher terminal for
+   the startup log and use the same button to retry. Stop all releases the adapter and a local
+   service started by this session. See the [Conveyor instructions](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)
+   for the equipment permit and automatic feed.
+5. Check the camera/Vision views in Isaac Sim's UI Hub and errors in both run terminals.
    The launcher reports process execution; this does not establish system readiness or PnP success.
 
 Isaac and ROS each open an `xterm` window for output and errors. Use `모두 종료`
