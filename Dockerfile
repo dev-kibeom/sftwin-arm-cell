@@ -11,6 +11,7 @@ RUN sed -i \
 
 WORKDIR /workspace
 COPY ros2_ws/src/ ros2_ws/src/
+COPY infra/plc/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st infra/plc/Conveyor.fbsdev/Application.iecapp^/
 COPY assets/ assets/
 
 # ROS 2 Humble has no binary TRAC-IK plugin package in the configured apt repositories.
