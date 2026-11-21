@@ -5,7 +5,7 @@ find_package(ament_cmake_python REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
 install(PROGRAMS scripts/plc_task_adapter DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../infra/plc/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../infra/plc/projects/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st"
   DESTINATION share/${PROJECT_NAME}/codesys)
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)

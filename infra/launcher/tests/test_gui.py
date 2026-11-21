@@ -664,7 +664,7 @@ def test_optional_codesys_gui_opens_selected_project_once(window, tmp_path, monk
     cell.setCurrentIndex(next(i for i in range(cell.count()) if Path(cell.itemData(i)).stem == 'conveyor_pnp_cell'))
     assert not window.plc_gui.isHidden()
     assert not window.plc_gui.isChecked()
-    project = Path(__file__).resolve().parents[2] / 'plc' / 'Conveyor.fbsdev'
+    project = Path(__file__).resolve().parents[2] / 'plc' / 'projects' / 'Conveyor.fbsdev'
     window.environment = dict(os.environ)
     window.environment.pop('ARM_CELL_CODESYS_PROJECT', None)
     if use_override:

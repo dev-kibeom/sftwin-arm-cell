@@ -5,9 +5,10 @@
 !ros2_ws/src/**
 !infra/
 !infra/plc/
-!infra/plc/Conveyor.fbsdev/
-!infra/plc/Conveyor.fbsdev/Application.iecapp^/
-!infra/plc/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st
+!infra/plc/projects/
+!infra/plc/projects/Conveyor.fbsdev/
+!infra/plc/projects/Conveyor.fbsdev/Application.iecapp^/
+!infra/plc/projects/Conveyor.fbsdev/Application.iecapp^/PLC_PRG.prg.st
 
 # Exclude local build and interpreter artifacts if present in a checkout.
 ros2_ws/src/**/build/
