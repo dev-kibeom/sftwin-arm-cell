@@ -5,6 +5,8 @@ from threading import RLock
 from datetime import datetime, timezone
 import json
 import sqlite3
+import time
+from uuid import uuid4
 
 
 # The PLC allocates a part before clearing the previous request's result registers.
@@ -33,6 +35,7 @@ class ProductionLedger:
         if not stream_id or '/' in stream_id:
             raise ValueError('Invalid production stream')
         self.stream_id = stream_id
+        self.writer_id = uuid4().hex
         self.path = Path(filename).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = RLock()
@@ -104,6 +107,8 @@ class ProductionLedger:
                 details TEXT NOT NULL,
                 recorded_at TEXT NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS conveyor_removals ON history_events(instance_id)
+                WHERE source='equipment' AND event_type='DISCHARGED';
         """)
         if version < 3:
             with self.transaction():
@@ -149,6 +154,8 @@ class ProductionLedger:
             self.db.close()
 
     def _event(self, instance_id, source, kind, details, *, stream_id=None):
+        if source in ('plc', 'supply', 'sidecar') and kind != 'INSPECTION_RECORDED':
+            details = dict(details, writer_id=self.writer_id, observed_monotonic_ns=time.monotonic_ns())
         self.db.execute('INSERT INTO history_events(stream_id,instance_id,source,event_type,details,recorded_at) VALUES (?,?,?,?,?,?)',
                         (stream_id or self.stream_id, instance_id, source, kind, json.dumps(details, sort_keys=True), timestamp()))
 
@@ -243,7 +250,24 @@ class ProductionLedger:
                     self._event(instance, 'supply', 'ASSIGNMENT_CHANGED',
                                 dict(slot_id=snapshot['slot_id'], available=bool(snapshot['available'])))
 
-    def record_plc(self, command):
+    def record_discharge(self, number, spawned_ns, removed_ns):
+        """The equipment retains its last physical removal across lost IPC samples."""
+        instance = f'{self.stream_id}/{number}'
+        with self.transaction():
+            seen = self.db.execute("""SELECT 1 FROM history_events WHERE instance_id=?
+                AND source='equipment' AND event_type='DISCHARGED'
+                AND json_extract(details,'$.removed_ns')=?""", (instance, removed_ns)).fetchone()
+            if not seen:
+                self._event(instance, 'equipment', 'DISCHARGED',
+                            dict(spawned_ns=spawned_ns, removed_ns=removed_ns))
+
+    def record_reconnect(self, event, snapshot, **evidence):
+        with self.transaction():
+            self._event(self._identifier(snapshot), 'sidecar', event,
+                        dict(epoch=snapshot['epoch'], reservation_id=snapshot['reservation_id'],
+                             slot_id=snapshot['slot_id'], **evidence))
+
+    def record_plc(self, command, previous_register=None):
         """Record PLC-reported facts, not a second Cell Commit decision."""
         plc_number = int(command.cycle)
         if plc_number <= 0:
@@ -258,7 +282,8 @@ class ProductionLedger:
                                   (self.stream_id, plc_number)).fetchone()
             committed = int(command.committed == plc_number)
             committed = max(committed, int(row['committed'])) if row else committed
-            if row and fields == tuple(row[k] for k in ('phase','result_state','reason','placement')) and committed == row['committed']:
+            if (row and fields == tuple(row[k] for k in ('phase', 'result_state', 'reason', 'placement'))
+                    and committed == row['committed'] and previous_register in (None, command.committed)):
                 return
             self.db.execute("""INSERT INTO plc_cycles VALUES (?,?,?,?,?,?,?,?)
                 ON CONFLICT(stream_id,plc_number) DO UPDATE SET
@@ -267,7 +292,7 @@ class ProductionLedger:
                 (self.stream_id, plc_number, *fields, committed, timestamp()))
             self._event(f'{self.stream_id}/{plc_number}', 'plc', 'PROCESS_OBSERVED',
                         dict(phase=fields[0], result_state=fields[1], reason=fields[2],
-                             placement=fields[3], committed=bool(committed)))
+                             placement=fields[3], committed=bool(committed), commit_register=int(command.committed)))
             # The PLC may commit the previous part while it prepares the next one.
             previous_commit = int(command.committed)
             if 0 < previous_commit < plc_number:

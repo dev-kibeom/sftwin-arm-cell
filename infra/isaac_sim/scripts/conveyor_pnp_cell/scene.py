@@ -1,5 +1,6 @@
 """One native PhysX belt, a travelling side stop and one discharge slot."""
 from uuid import uuid4
+import time
 
 from pxr import Gf, PhysxSchema, Sdf, UsdGeom, UsdPhysics
 from isaac_runtime.cuboid import author_cuboid_body
@@ -67,6 +68,8 @@ class Equipment:
         self.material_type_id = ''
         self.stream_id = uuid4().hex
         self.cycle = 0
+        self.spawned_ns = None
+        self.last_discharge = None
         self.path = None
         self.speed = None
         self.fixtures = {item['id'] for item in layout['boxes']} | {ROOT+'/Stopper'}
@@ -86,6 +89,7 @@ class Equipment:
         prim.CreateAttribute('arm_cell:material_instance_id', Sdf.ValueTypeNames.String).Set(
             material_instance_id(self.stream_id, cycle))
         self.path, self.cycle, self.material_type_id = path, cycle, material
+        self.spawned_ns = time.monotonic_ns()
         return True
 
     def material_path(self, material_type_id, instance_id):
@@ -179,4 +183,5 @@ class Equipment:
                 and sensors.occupied and sensors.discharge_zone_clear):
             if not self.stage.RemovePrim(self.path):
                 raise RuntimeError('Discharge could not remove the observed part')
+            self.last_discharge = (self.cycle, self.spawned_ns, time.monotonic_ns())
             self.path = None

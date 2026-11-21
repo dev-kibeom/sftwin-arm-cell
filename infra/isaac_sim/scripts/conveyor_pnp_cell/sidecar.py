@@ -40,7 +40,8 @@ class Exchange:
         self.ledger = None
         self.restored_unverified = True
         self.identity_conflict = False
-        self._last_birth = self._last_plc = None
+        self._last_birth = self._last_plc = self._last_discharge = None
+        self._restored_lease = None
         self._open_history()
         self.permit_at = self.valid_at = 0.
         self.published_observation = None
@@ -78,11 +79,20 @@ class Exchange:
             return
         self.ledger = ledger
         self.restored_unverified = bool(previous and previous['available'])
+        if self.resume_stream and previous:
+            self._restored_lease = previous if previous['reservation_id'] else None
+            self._record_reconnect('SIDECAR_RECONNECTED', previous)
         if self.receipt_file:
             try:
                 ledger.bind_receipt_source(self.receipt_file)
             except (OSError, sqlite3.Error) as error:
                 self.node.get_logger().warning(f'Cannot index PLC receipt source: {error}')
+
+    def _record_reconnect(self, event, snapshot, **evidence):
+        try:
+            self.ledger.record_reconnect(event, snapshot, **evidence)
+        except sqlite3.Error as error:
+            self.node.get_logger().warning(f'Reconnection observation not persisted: {error}')
 
     def run(self):
         try:
@@ -240,6 +250,20 @@ class Exchange:
                     self.restored_unverified = False
             elif not self.supply.reservation:
                 self.identity_conflict = False
+            if self._restored_lease and packet.get('identity_observed', valid):
+                saved = self._restored_lease
+                if self.supply.reservation != saved['reservation_id']:
+                    resolution = 'closed_before_verification'
+                elif self.identity_conflict:
+                    resolution = 'identity_conflict'
+                elif valid and not self.restored_unverified:
+                    resolution = 'retained'
+                else:
+                    resolution = None
+                if resolution:
+                    self._record_reconnect('RESERVATION_RECONCILED', saved, result=resolution,
+                                           plc_number=command.cycle, body=packet['body_instance_id'])
+                    self._restored_lease = None
             self.valid_at = packet['acquired'] if valid else 0.
         try:
             self.io.publish(valid=valid, feeder=SimpleNamespace(**packet['feeder']),
@@ -261,10 +285,19 @@ class Exchange:
                command.result_state, command.reason, command.placement)
         if plc != self._last_plc:
             try:
-                self.ledger.record_plc(command)
+                self.ledger.record_plc(command, self._last_plc[2] if self._last_plc else None)
                 self._last_plc = plc
             except (ValueError, sqlite3.Error) as error:
                 self.node.get_logger().warning(f'PLC observation not persisted: {error}',
+                                               throttle_duration_sec=5.)
+
+        discharge = packet.get('last_discharge')
+        if discharge and discharge != self._last_discharge:
+            try:
+                self.ledger.record_discharge(*discharge)
+                self._last_discharge = discharge
+            except sqlite3.Error as error:
+                self.node.get_logger().warning(f'Discharge observation not persisted: {error}',
                                                throttle_duration_sec=5.)
 
     def poll(self):

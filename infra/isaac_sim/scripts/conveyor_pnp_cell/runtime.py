@@ -132,6 +132,7 @@ class ConveyorRuntime:
                                    identity_observed=identity_observed, body_instance_id=body_id,
                                    observed=self.equipment.cycle if sensors.pick else 0,
                                    material_type_id=self.equipment.material_type_id if sensors.pick else '',
+                                   last_discharge=getattr(self.equipment, 'last_discharge', None),
                                    created_cycle=self.feeder.last_generated,
                                    created_type_id=self.equipment.material_type_id,
                                    feeder=stock))
