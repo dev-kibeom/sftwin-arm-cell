@@ -105,7 +105,7 @@ def test_conveyor_exports_one_teaching_bound_to_the_reserved_arrival():
     cell = config['cell']
     catalog = json.loads(config['motion']['configured_grasp_cycles_json'])
     assert set(catalog) == {'fixed_pick'}
-    assert catalog['fixed_pick']['use_reserved_slot'] is True
+    assert catalog['fixed_pick']['pick_slot_id'] == 'conveyor_pnp_cell/CV-01/pick'
     assert catalog['fixed_pick']['grasp'] == {'strategy': 'surface_suction'}
     assert config['motion']['tool_grasp_strategies'] == ['surface_suction']
     fixed = dict(cell['configured_supply'], approach_motion='approach', insertion_motion='pick',
@@ -116,4 +116,6 @@ def test_conveyor_exports_one_teaching_bound_to_the_reserved_arrival():
     config['motion']['taught_motions_json'] = json.dumps({name: {} for name in ('approach', 'pick', 'place', 'retreat')})
     compile_cell(configuration=config)
     catalog = json.loads(config['motion']['configured_grasp_cycles_json'])
-    assert catalog == {'fixed_pick': dict(fixed, use_reserved_slot=True)}
+    assert catalog == {'fixed_pick': dict(fixed, pick_slot_id=cell['conveyor']['pick_slot_id'],
+                                        place_slot_id=cell['conveyor']['place_slot_id'],
+                                        material_type_ids=cell['conveyor']['material_type_ids'])}

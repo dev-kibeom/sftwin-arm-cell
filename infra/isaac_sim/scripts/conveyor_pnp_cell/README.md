@@ -24,7 +24,7 @@ Isaac 환경에서 `infra/isaac_sim/scripts/isaac_arm_cell.sh --runtime-config /
 
 ## 고정 Pick과 Robot BT
 
-공급자는 PLC의 위치 확정과 실제 도착 ID를 대조해 현재 자재의 `slot_<ID>`를 공개한다. Task는 유효한 예약을 확인하고 고정 Pick/Place 티칭 한 개를 M0609와 지름 30 mm 흡착컵으로 실행한다. 슬롯은 Tool의 흡착 대상 식별에도 사용한다. 로봇 베이스는 월드 X=0.30 m에 설치한다. TCP는 컵의 접촉면 중앙이며 +Z가 자재 상면을 향한다. Pick은 월드 (0.754, 0.38, 0.332) m, Release는 (0.46, −0.38, 0.38) m다.
+공급자는 PLC의 위치 확정과 실제 도착 ID를 대조해 고정 Pick 슬롯에서 현재 자재의 품종과 개체 ID를 공개한다. Task는 유효한 예약을 확인하고 고정 Pick/Place 티칭 한 개를 M0609와 지름 30 mm 흡착컵으로 실행한다. Tool은 예약의 개체 ID와 투입 시 기록한 품종으로 흡착할 바디를 확인한다. 로봇 베이스는 월드 X=0.30 m에 설치한다. TCP는 컵의 접촉면 중앙이며 +Z가 자재 상면을 향한다. Pick은 월드 (0.754, 0.38, 0.332) m, Release는 (0.46, −0.38, 0.38) m다.
 
 Tool은 Isaac 5.1 Surface Gripper의 상태와 Gripped Objects를 매 물리 스텝 읽는다. HELD에는 현재 공급·epoch·예약·슬롯으로 확인된 단일 자재 prim과의 결합이 필요하다. 목적지에서 기존 GraspCycle이 확인한 Release는 `material_placed`로 전달된다. 설비는 별도로 트레이 점유를 관측하고 기존 PLC가 Commit과 배출을 결정한다.
 

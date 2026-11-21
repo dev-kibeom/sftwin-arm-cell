@@ -16,7 +16,9 @@ class ConveyorRuntime:
     def __init__(self, configuration, equipment, sidecar):
         self.equipment, self.sidecar = equipment, sidecar
         cell = configuration['cell']
-        self.feeder = ConveyorFeeder(cell['configured_supply']['material_id'], last_generated=0)
+        layout = cell['conveyor']
+        self.feeder = ConveyorFeeder(cell['configured_supply']['material_id'], last_generated=0,
+                                     material_type_ids=layout['material_type_ids'])
         self.packet = None
         self.synchronized = False
         self.stopped = False
@@ -24,7 +26,9 @@ class ConveyorRuntime:
         self.last_sample = 0.
         self.sidecar.send(dict(op='configure', connection=cell['conveyor']['connection'],
                                permit_topic=cell['conveyor']['equipment_permit_topic'],
-                               supply=cell['configured_supply'],
+                               supply=dict(cell['configured_supply'], slot_id=layout['pick_slot_id'],
+                                           stream_id=equipment.stream_id,
+                                           material_type_ids=layout['material_type_ids']),
                                pick_configured=bool(cell['conveyor']['teaching']['cycle'])))
         self.feeder.bind_ui()
 
@@ -38,9 +42,10 @@ class ConveyorRuntime:
             return None
         reservation = packet.get('reservation')
         if not reservation or any(reference.get(key) != reservation.get(key) for key in (
-                'material_id', 'supply_id', 'slot_id', 'supply_epoch', 'reservation_id')):
+                'material_id', 'supply_id', 'slot_id', 'supply_epoch', 'reservation_id',
+                'material_type_id', 'material_instance_id')):
             return None
-        return self.equipment.material_path(reference['material_id'], reference['slot_id'])
+        return self.equipment.material_path(reference['material_type_id'], reference['material_instance_id'])
 
     def tick(self, dt):
         for packet in self.sidecar.poll_messages():
@@ -79,6 +84,7 @@ class ConveyorRuntime:
             self.sidecar.send(dict(op='sample', at=packet['at'], acquired=now,
                                    valid=valid and self.feeder.pending is None, sensors=asdict(sensors),
                                    observed=self.equipment.cycle if sensors.pick else 0,
+                                   material_type_id=self.equipment.material_type_id if sensors.pick else '',
                                    feeder=stock))
 
     def spin_once(self):

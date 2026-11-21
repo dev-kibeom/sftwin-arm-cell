@@ -101,7 +101,7 @@ Modbus 레지스터 번호, PLC 타이머, 실제 티칭 좌표와 속도는 이
 ## Robot Task 연결과 후속 Cell 통합
 
 1. PLC 요청은 [PLC 단일 작업 ICD](../../interfaces/icd-plc-task.md)를 통해 [Configured-source Mission](../../interfaces/icd-configured-supply.md)에 연결한다. Task는 Mission이 예약한 도착 자재에 고정 Pick/Place 티칭을 적용한다. 기존 Vision PnP에는 실제 Acquisition 후보가 필요하다.
-2. 같은 Pick 위치에 도착하는 자재는 도착 건마다 현재 epoch의 서로 다른 미완료 논리 슬롯에 대응하고 같은 Pick 티칭을 사용한다. 설비 공급자는 이번 자재의 도착 관측과 PLC 위치 확정을 대조해 현재 epoch의 슬롯을 공개하고 같은 자재 ID를 응답한다. PLC는 슬롯 연결까지 확인한 뒤 P3 요청을 발행한다. Adapter는 요청 ID로 슬롯을 생성하거나 Stop/epoch 변경을 유도하지 않는다.
+2. 공급자는 실제 Pick 도착과 PLC 위치 확정을 대조하고 해당 자재 ID를 PLC에 응답한다. PLC는 연결을 확인한 뒤 P3 요청을 발행한다. 공급 예약과 Robot Task는 같은 설비 슬롯과 그때 도착한 개체를 함께 참조한다.
 3. Task 실패는 기존 Mission을 종료한다. 배치 사실은 같은 Mission의 terminal 결과로 전달하며 PLC가 P4에서 별도 인수를 판단한다. PoC의 Modbus TCP 장치 주소와 I/O 매핑은 Adapter 구성에서 관리한다.
 4. 고장 주입은 실제 I/O 관측 경계에서 수행한다. `Fault Injector`가 PLC 내부 상태나 Cell Commit을 직접 수정하는 것은 금지한다.
 
@@ -112,4 +112,36 @@ Conveyor의 UI Supply Port는 자동운전을 멈춘 상태에서 종류와 공�
 
 후속 Isaac Cell의 `material_supply_factory`는 [ConveyorFeeder](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/supply.py)를 기존 UI 포트에 등록하고 종료 시 해제한다. 설비 측 [ConveyorIO](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/equipment_io.py)는 같은 Modbus 서버의 설비 블록을 교환한다. 설비가 유효한 공급 명령을 읽으면 `feed(cycle, spawn_one)`에 기존 자재 생성 함수를 연결한다. 복원 시 마지막 생성 ID와 미확정 생성 건을 실제 자재에 대조한다.
 
-Pick 센서의 실제 자재 ID와 `pick_position_confirmed`가 일치할 때 `bind_confirmed_pick`은 공급자에게 `slot_<자재 ID>` 공개를 요청한다. 공급자는 현재 epoch에서 그 자재만 예약 가능한지 확인한 뒤 ID를 응답한다. 슬롯 ID는 도착 자재를 식별하며 배포할 티칭 수와 독립적이다. [Conveyor 공급자](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/configured_supply.py)는 목적지 Release가 확인된 자재를 미완료 예약에서도 다시 선택하지 않는다. 관측을 잃거나 epoch가 달라지면 새 근거가 확보될 때까지 연결 확인을 내린다. 재관측은 같은 슬롯을 가리키고 퇴역 슬롯을 재사용하지 않는다. 위치·센서·허가·트레이 상태는 물리 설비 모델의 연결 지점이다.
+Pick 센서가 관측한 자재와 PLC가 위치를 확정한 자재가 일치하면 공급자가 그 개체를 고정 Pick 슬롯에서 공개한다. 같은 개체를 다시 관측해도 품종과 개체 ID를 유지한다. 목적지 Release를 확인한 뒤에는 해당 개체를 퇴역시키며 다음 도착 자재가 같은 슬롯을 사용한다. [Configured Supply ICD](../../interfaces/icd-configured-supply.md)
+
+### 슬롯과 자재의 관계
+
+아래 ER 도식은 공급 설정, 설비 관측, 예약 사이의 논리 관계를 나타낸다. 점유는 특정 개체가 Pick 위치에서 예약 가능한 기간이며, 로봇이 이송 중일 때는 예약이 계속 그 개체를 가리킨다.
+
+```mermaid
+erDiagram
+    CELL ||--o{ EQUIPMENT : contains
+    EQUIPMENT ||--o{ SLOT : owns
+    SLOT ||--o{ OCCUPANCY : receives
+    SUPPLY ||--o{ MATERIAL_INSTANCE : feeds
+    MATERIAL_TYPE ||--o{ MATERIAL_INSTANCE : classifies
+    MATERIAL_INSTANCE ||--o| OCCUPANCY : arrives
+    SUPPLY ||--o{ SUPPLY_EPOCH : opens
+    SUPPLY_EPOCH ||--o{ RESERVATION : issues
+    OCCUPANCY ||--o{ RESERVATION : reserves
+    SLOT ||--o{ TEACHING_BINDING : pick
+    SLOT ||--o{ TEACHING_BINDING : place
+    MATERIAL_TYPE ||--o{ TEACHING_BINDING : supports
+    TEACHING ||--o{ TEACHING_BINDING : executes
+```
+
+| 식별자 | 범위와 수명 | 배포 예 |
+|---|---|---|
+| `slot_id` | Cell·설비·로컬 위치의 복합 주소. 자재 교체 후에도 유지 | `conveyor_pnp_cell/CV-01/pick`, `conveyor_pnp_cell/TR-01/receive` |
+| `material_type_id` | 한 번에 한 품종과 수량을 투입 설정으로 받는다. 실제 생성 시 선택한 품종을 개체에 기록한다 | `ConveyorPart` |
+| `material_instance_id` | 설비 스트림 UUID와 실제 생성 때의 PLC 자재 번호를 결합한다. 예약 epoch와 독립적이며 새 PLC 스트림의 첫 자재도 구분한다 | `<stream>/1`, `<stream>/2`, `<stream>/3` |
+| `reservation_id` | 공급 epoch에서 특정 슬롯·품종·개체에 부여한 예약 | RESERVE 응답에서 발급 |
+
+한 슬롯에는 한 번에 한 개체와 최대 한 개의 활성 예약이 있다. 작업 시작 전 BUSY로 반환하면 새 예약이 같은 점유를 이어받을 수 있다. Task가 BT에 진입한 개체는 같은 실행 프로세스에서 다시 Pick하지 않는다. 프로세스를 재시작할 때는 기존 PLC 스트림과 설비의 초기화·대조 계약을 따른다.
+
+배포 설정의 품종 목록은 한 쌍의 Pick/Place 위치, 동일한 물리 규격 및 기존 흡착 티칭을 공유할 수 있는 품종을 명시한다. 운영자는 정지 상태에서 다음 공급 품종을 선택한다. 이미 투입된 개체는 기존 품종을 유지한다. 기본 PoC 프로필은 `ConveyorPart` 한 품종을 설치한다.

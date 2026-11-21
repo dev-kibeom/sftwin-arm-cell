@@ -42,8 +42,8 @@ def test_acceptance_before_or_after_timeout_is_canceled():
 
 
 def test_task_handoff_waits_for_observed_occupied_lease():
-    lease=State(supply_epoch='epoch',slot_id='slot_0',reservation_id='lease')
-    state=State(supply_epoch='epoch',selected_slot_id='',reservation_id='',slot_ids=['slot_0'],occupied=[True])
+    lease=State(supply_epoch='epoch',slot_id='slot_0',reservation_id='lease',material_type_id='A',material_instance_id='1')
+    state=State(supply_epoch='epoch',selected_slot_id='',reservation_id='',material_type_id='A',material_instance_id='1',slot_ids=['slot_0'],occupied=[True])
     assert not module.lease_matches(state,lease)
     state.selected_slot_id='slot_0';state.reservation_id='lease'
     assert module.lease_matches(state,lease)
@@ -95,7 +95,8 @@ def configured_mission(monkeypatch, request):
         def add_node(self,node):pass
         def spin(self):pass
         def shutdown(self):pass
-    lease=State(success=True,exhausted=False,supply_epoch='epoch',slot_id='slot_0',reservation_id='lease')
+    lease=State(success=True,exhausted=False,supply_epoch='epoch',slot_id='slot_0',reservation_id='lease',
+                material_type_id='A',material_instance_id='42')
     def call_cell(request):
         from arm_cell_interfaces.srv import ConfiguredSupply
         requests.append(request)
@@ -119,7 +120,7 @@ def configured_mission(monkeypatch, request):
         motion_capability=State(value=2),max_velocity_scale=.5,max_acceleration_scale=.5))
     mission.on_supply(State(valid=True,supply_id=mission.supply_id,material_id=mission.target,
         supply_epoch='epoch',slot_ids=['slot_0','slot_1'],occupied=[True,True],
-        selected_slot_id='',reservation_id=''))
+        selected_slot_id='',reservation_id='',material_type_id='A',material_instance_id='42'))
     return mission,requests,tasks
 
 
@@ -154,6 +155,8 @@ def test_unit_request_runs_one_sequence_without_material_count(configured_missio
     assert [request.command for request in requests]==[ConfiguredSupply.Request.RESERVE,ConfiguredSupply.Request.COMPLETE]
     assert requests[-1].material_placed
     assert len(tasks)==1 and tasks[0].slot_id=='slot_0'
+    for message in (tasks[0], requests[-1]):
+        assert (message.material_type_id, message.material_instance_id) == ('A', '42')
     assert feedback[-1].batch_processed_count==0
     assert not mission.busy
 

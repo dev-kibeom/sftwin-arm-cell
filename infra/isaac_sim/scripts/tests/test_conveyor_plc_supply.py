@@ -49,12 +49,24 @@ def test_only_the_observed_and_exposed_pick_slot_can_be_acknowledged():
     command = SimpleNamespace(confirmed=True, cycle=12)
     calls = []
 
-    def expose(slot):
-        calls.append(slot)
+    def expose(cycle, material_type):
+        calls.append((cycle, material_type))
         return True
 
-    assert bind_confirmed_pick(command, 11, expose) == 0 and calls == []
-    assert bind_confirmed_pick(command, 12, lambda _: False) == 0
-    assert bind_confirmed_pick(command, 12, expose) == 12 and calls == ['slot_12']
+    assert bind_confirmed_pick(command, 11, "A", expose) == 0 and calls == []
+    assert bind_confirmed_pick(command, 12, "A", lambda *_: False) == 0
+    assert bind_confirmed_pick(command, 12, "A", expose) == 12 and calls == [(12, 'A')]
     command.confirmed = False
-    assert bind_confirmed_pick(command, 12, expose) == 0 and calls == ['slot_12']
+    assert bind_confirmed_pick(command, 12, "A", expose) == 0 and calls == [(12, 'A')]
+
+
+def test_successive_lots_keep_the_type_recorded_at_feed():
+    feeder = ConveyorFeeder('ConveyorPart', last_generated=0, material_type_ids=['A', 'B'])
+    receipts = []
+    for cycle, part in enumerate(('A', 'B'), start=1):
+        feeder.set_automatic(False)
+        assert not feeder.configure('unknown', 1)['accepted']
+        assert feeder.configure(part, 1)['accepted']
+        feeder.set_automatic(True)
+        feeder.feed(cycle, lambda material, number: receipts.append((number, material)) or True)
+    assert receipts == [(1, 'A'), (2, 'B')]

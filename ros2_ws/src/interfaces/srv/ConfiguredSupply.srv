@@ -6,12 +6,18 @@ string supply_id
 string supply_epoch
 string reservation_id
 string slot_id
+# Occupant of the selected location for individually tracked supplies.
+string material_type_id
+string material_instance_id
 bool material_placed
 ---
 bool success
 string diagnostic_detail
 string supply_epoch
 string slot_id
+# Occupant of the selected location for individually tracked supplies.
+string material_type_id
+string material_instance_id
 string reservation_id
 bool exhausted
 # Reserved compatibility field; always zero. Not a physical material count.
