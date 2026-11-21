@@ -116,6 +116,7 @@ class SupplyDelay:
                 log('info', f'Conveyor supply observation recovered / delayed polls={self.polls}')
                 self.polls = 0
             self.level = level
+            return level or 'recovered'
 
 
 def supply_permits(state, received_at, now, supply_id, material_id):
@@ -261,7 +262,21 @@ def main(args=None):
             with self.lock:
                 if self.last_observation is not None:
                     age = time.monotonic() - self.last_observation
-                    self.supply_delay.report(age, self.log_event)
+                    transition = self.supply_delay.report(age, self.log_event)
+                    if transition:
+                        lease = self.active_lease
+                        try:
+                            state = self.supply
+                            reconciled = None
+                            if (lease and transition == 'recovered' and state and state.valid
+                                    and not state.observation_pending):
+                                reconciled = self.same_active_lease(state)
+                            self.capture.emit('supply_observation_delay', transition=transition, age_s=age,
+                                material_instance_id=getattr(lease, 'material_instance_id', None),
+                                reservation_id=getattr(lease, 'reservation_id', None), lease_matches=reconciled,
+                                observed_reservation_id=getattr(state, 'reservation_id', None))
+                        except Exception:
+                            self.log_event('warning', 'Supply delay diagnostic submission unavailable')
 
         def on_motion(self, status):
             self.motion_sample = (status, time.monotonic())

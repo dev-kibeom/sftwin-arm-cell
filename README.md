@@ -99,7 +99,7 @@ v0.2.0에도 Behavior Tree 기반 미션 흐름과 MoveIt 계획은 있었습니
 
 ## Conveyor PnP Cell
 
-CODESYS가 공급·이송·스토퍼·트레이 배출을 제어하는 Isaac Sim 설비의 프로필, UI 설정과 반복 시운전 절차는 [Conveyor PnP Cell 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)에 있습니다.
+CODESYS가 공급·이송·스토퍼·트레이 배출을 제어하는 Isaac Sim 설비의 프로필, UI 설정과 반복 시운전 절차는 [Conveyor PnP Cell 안내](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md)에 있습니다. 30 Cycle 종료 후에는 저장된 원장과 진단으로 자재별 결과를 확인할 수 있습니다. [오프라인 분석 및 테스트 명령](infra/isaac_sim/scripts/conveyor_pnp_cell/README.md#30-cycle-종료-후-오프라인-분석)
 
 ## Tape Handling Cell
 
