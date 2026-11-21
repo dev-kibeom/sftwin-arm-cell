@@ -7,6 +7,10 @@ import json
 import sqlite3
 
 
+# The PLC allocates a part before clearing the previous request's result registers.
+PRE_REQUEST_PHASES = (10, 20, 21, 22)
+
+
 def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
@@ -21,13 +25,20 @@ class ProductionLedger:
         self.path = Path(filename).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = RLock()
-        self.db = sqlite3.connect(self.path, timeout=5, isolation_level=None, check_same_thread=False)
+        self.db = sqlite3.connect(self.path, timeout=0, isolation_level=None, check_same_thread=False)
+        try:
+            self._initialize()
+        except Exception:
+            self.db.close()
+            raise
+
+    def _initialize(self):
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('PRAGMA synchronous=FULL')
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             raise ValueError(f'Unsupported production history version: {version}')
         self.db.executescript("""
             CREATE TABLE IF NOT EXISTS materials (
@@ -89,8 +100,21 @@ class ProductionLedger:
                 recorded_at TEXT NOT NULL
             );
         """)
-        if version == 0:
-            self.db.execute('PRAGMA user_version=1')
+        if version < 2:
+            with self.transaction():
+                if version == 1:
+                    # Keep the original wire values as evidence while correcting attribution.
+                    self.db.execute('''UPDATE history_events SET details=json_set(details,
+                        '$.retained_registers', json_object('result_state', json_extract(details,'$.result_state'),
+                            'reason', json_extract(details,'$.reason'), 'placement', json_extract(details,'$.placement')),
+                        '$.result_state',0,'$.reason',0,'$.placement',0)
+                        WHERE source='plc' AND event_type='PROCESS_OBSERVED'
+                          AND json_extract(details,'$.phase') IN (?,?,?,?)
+                          AND (json_extract(details,'$.result_state') != 0 OR json_extract(details,'$.reason') != 0
+                               OR json_extract(details,'$.placement') != 0)''', PRE_REQUEST_PHASES)
+                    self.db.execute('''UPDATE plc_cycles SET result_state=0, reason=0, placement=0
+                        WHERE phase IN (?,?,?,?)''', PRE_REQUEST_PHASES)
+                self.db.execute('PRAGMA user_version=2')
 
     @contextmanager
     def transaction(self):
@@ -98,11 +122,11 @@ class ProductionLedger:
             self.db.execute('BEGIN IMMEDIATE')
             try:
                 yield
-            except BaseException:
-                self.db.execute('ROLLBACK')
-                raise
-            else:
                 self.db.execute('COMMIT')
+            except BaseException:
+                if self.db.in_transaction:
+                    self.db.rollback()
+                raise
 
     def close(self):
         with self.lock:
@@ -197,8 +221,11 @@ class ProductionLedger:
         plc_number = int(command.cycle)
         if plc_number <= 0:
             return
-        fields = (int(command.phase), int(command.result_state),
-                  int(command.reason), int(command.placement))
+        phase = int(command.phase)
+        if phase in PRE_REQUEST_PHASES:
+            fields = (phase, 0, 0, 0)
+        else:
+            fields = (phase, int(command.result_state), int(command.reason), int(command.placement))
         with self.transaction():
             row = self.db.execute('SELECT * FROM plc_cycles WHERE stream_id=? AND plc_number=?',
                                   (self.stream_id, plc_number)).fetchone()

@@ -98,3 +98,51 @@ def test_physical_birth_precedes_pick_and_plc_result_is_not_fabricated(tmp_path)
     ledger.record_plc(Plc(cycle=8, phase=10, result_state=0, placement=0, committed=7))
     assert ledger.summary()['plc_commits'] == 1
     ledger.close()
+
+
+def test_results_belong_to_the_part_that_requested_the_robot(tmp_path):
+    import json
+
+    ledger = ProductionLedger(tmp_path/'cycles.sqlite', 'stream-a')
+    try:
+        for cycle in (1, 2):
+            ledger.record_created(cycle, 'A')
+        ledger.record_plc(Plc(cycle=1, phase=50, result_state=6, reason=3, placement=2, committed=1))
+        for phase in (10, 20, 21, 22):
+            ledger.record_plc(Plc(cycle=2, phase=phase, result_state=6, reason=3, placement=2, committed=1))
+        part = ledger.history('stream-a/2')
+        observations = [json.loads(event['details']) for event in part['events']
+                        if event['source'] == 'plc']
+        assert len(observations) == 4
+        for row in [part['plc'], *observations]:
+            assert (row['result_state'], row['reason'], row['placement']) == (0, 0, 0)
+        ledger.record_plc(Plc(cycle=2, phase=23, result_state=6, reason=9, placement=1, committed=1))
+        assert ledger.history('stream-a/2')['plc']['reason'] == 9
+        assert ledger.history('stream-a/1')['plc']['placement'] == 2
+    finally:
+        ledger.close()
+
+
+def test_existing_history_does_not_attribute_retained_registers_to_the_next_part(tmp_path):
+    import json
+
+    path = tmp_path / 'existing.sqlite'
+    ledger = ProductionLedger(path, 'stream-a')
+    ledger.record_created(2, 'A')
+    ledger.close()
+    # Rows produced by the original ledger between feed and the first robot request.
+    with sqlite3.connect(path) as db:
+        db.execute("PRAGMA user_version=1")
+        db.execute("INSERT INTO plc_cycles VALUES ('stream-a',2,10,6,3,2,0,'t')")
+        details = dict(phase=10, result_state=6, reason=3, placement=2, committed=False)
+        db.execute("""INSERT INTO history_events(stream_id,instance_id,source,event_type,details,recorded_at)
+                      VALUES ('stream-a','stream-a/2','plc','PROCESS_OBSERVED',?,'t')""", (json.dumps(details),))
+    reopened = ProductionLedger(path, 'stream-a')
+    try:
+        history = reopened.history('stream-a/2')
+        event = json.loads(history['events'][-1]['details'])
+        assert event['retained_registers'] == dict(result_state=6, reason=3, placement=2)
+        for row in (history['plc'], event):
+            assert (row['result_state'], row['reason'], row['placement']) == (0, 0, 0)
+    finally:
+        reopened.close()

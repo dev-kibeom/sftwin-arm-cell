@@ -17,11 +17,11 @@ class ConveyorFeeder:
         self.remaining = 0
         self.automatic = False
 
-    def bind_ui(self):
+    def bind_ui(self, *, set_automatic=None):
         from isaac_runtime.cell_supply import register_supply_port
         register_supply_port(self, dict(materials=[dict(id=t) for t in self.material_type_ids],
                              count_label='Available parts', default_count=1),
-                             self.configure, self.status, set_automatic=self.set_automatic)
+                             self.configure, self.status, set_automatic=set_automatic or self.set_automatic)
 
     def configure(self, material, count):
         if (self.automatic or self.pending is not None or material not in self.material_type_ids

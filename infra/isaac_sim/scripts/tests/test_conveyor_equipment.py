@@ -21,10 +21,17 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
         batch = list(packets)
         packets.clear()
         return batch
-    ipc = SimpleNamespace(available=True, send=lambda _: None, poll_messages=poll)
-    eq = SimpleNamespace(stream_id='test', cycle=0, drive=speeds.append, step=lambda *args: None,
+    outgoing = []
+    ipc = SimpleNamespace(available=True, send=outgoing.append, poll_messages=poll)
+
+    def spawn(name, cycle):
+        eq.cycle, eq.material_type_id = cycle, name
+        spawned.append(cycle)
+        return True
+
+    eq = SimpleNamespace(stream_id='test', cycle=0, material_type_id='', drive=speeds.append, step=lambda *args: None,
                          observe=lambda permit: Sensors(permitted=permit, path_clear=True, pick_zone_clear=True),
-                         spawn=lambda name, cycle: spawned.append(cycle) or True)
+                         spawn=spawn)
     adapter = runtime.ConveyorRuntime(dict(cell=dict(configured_supply=dict(material_id='ConveyorPart'),
         conveyor=dict(material_type_ids=['ConveyorPart'], pick_slot_id='cell/belt/pick', connection={}, equipment_permit_topic='permit', teaching=dict(cycle=None)))),
         eq, ipc)
@@ -34,6 +41,7 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
         send_command(command)
         adapter.tick(.01)
         assert not adapter.synchronized and not spawned
+        assert (outgoing[-1]['created_cycle'], outgoing[-1]['created_type_id']) == (0, '')
         send_command(Commands(0, 0, False, False, False, False, False, 0, 0, 0, 0))
         adapter.tick(.01)
         send_command(command)
@@ -44,6 +52,7 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
         send_command(command)
         adapter.tick(.01)
         assert spawned == [1] and adapter.feeder.remaining == 1
+        assert (outgoing[-1]['created_cycle'], outgoing[-1]['created_type_id']) == (1, 'ConveyorPart')
     finally:
         clear_supply_port(adapter.feeder)
 
@@ -67,3 +76,41 @@ def test_suction_resolves_only_the_current_reserved_piece(monkeypatch):
                           ('slot_id', 'cell/other/pick'), ('reservation_id', 'first'),
                           ('supply_epoch', 'old')):
         assert adapter.reserved_body(dict(lease, **{key: previous})) is None
+
+
+def test_start_automatic_reconnects_the_existing_equipment_stream(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from conveyor_pnp_cell import runtime
+    from isaac_runtime import cell_supply
+
+    initial, replacement = Mock(available=True), Mock(available=True)
+    launch = Mock(return_value=replacement)
+    monkeypatch.setattr(runtime.ConfiguredSupplyClient, 'launch', launch)
+    config = dict(cell=dict(configured_supply=dict(material_id='ConveyorPart'),
+                            conveyor=dict(material_type_ids=['A'], pick_slot_id='cell/belt/pick',
+                                          connection={}, equipment_permit_topic='permit',
+                                          teaching=dict(cycle=None), history_db_path='/tmp/test-history')))
+    equipment = SimpleNamespace(stream_id='stage', drive=Mock())
+    adapter = runtime.ConveyorRuntime(config, equipment, initial)
+    try:
+        cell_supply.request_supply('A', 2)
+        cell_supply.set_automatic(True)
+        adapter.feeder.feed(1, lambda *_: True)
+        adapter.synchronized = True
+        initial.available = False
+        adapter.packet = dict(op='command', reservation={'reservation_id': 'stale'})
+        assert cell_supply.set_automatic(True)['accepted']
+        assert adapter.sidecar is replacement
+        initial.close.assert_called_once()
+        packet = replacement.send.call_args.args[0]
+        assert packet == dict(initial.send.call_args.args[0], resume_stream=True)
+        assert packet['supply']['stream_id'] == equipment.stream_id
+        assert adapter.packet is None and adapter.synchronized
+        assert (adapter.feeder.last_generated, adapter.feeder.remaining) == (1, 1)
+        replacement.available = False
+        adapter.reset_generated_materials(None)
+        assert not cell_supply.set_automatic(True)['accepted']
+        launch.assert_called_once()
+    finally:
+        adapter.close()

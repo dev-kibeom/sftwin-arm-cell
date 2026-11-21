@@ -24,14 +24,31 @@ class ConveyorRuntime:
         self.stopped = False
         self.failure = ''
         self.last_sample = 0.
-        self.sidecar.send(dict(op='configure', connection=cell['conveyor']['connection'],
-                               permit_topic=cell['conveyor']['equipment_permit_topic'],
-                               supply=dict(cell['configured_supply'], slot_id=layout['pick_slot_id'],
-                                           stream_id=equipment.stream_id,
-                                           material_type_ids=layout['material_type_ids']),
-                               pick_configured=bool(cell['conveyor']['teaching']['cycle']),
-                               history_db_path=layout.get('history_db_path', '~/.local/state/arm_cell/conveyor-pnp-poc/production.sqlite')))
-        self.feeder.bind_ui()
+        self.sidecar_config = dict(
+            op='configure', connection=layout['connection'], permit_topic=layout['equipment_permit_topic'],
+            supply=dict(cell['configured_supply'], slot_id=layout['pick_slot_id'],
+                        stream_id=equipment.stream_id, material_type_ids=layout['material_type_ids']),
+            pick_configured=bool(layout['teaching']['cycle']),
+            history_db_path=layout.get('history_db_path', '~/.local/state/arm_cell/conveyor-pnp-poc/production.sqlite'))
+        self.sidecar.send(self.sidecar_config)
+        self.feeder.bind_ui(set_automatic=self.set_automatic)
+
+    def set_automatic(self, enabled):
+        if enabled and self.stopped:
+            return dict(accepted=False, detail='Timeline stopped; reconcile the equipment stream.')
+        if enabled and not self.sidecar.available:
+            self.packet = None
+            self.equipment.drive(0.)
+            self.feeder.set_automatic(False)
+            self.sidecar.close()
+            try:
+                self.sidecar = ConfiguredSupplyClient.launch(Path(__file__).with_name('sidecar.py'))
+                self.sidecar.send(dict(self.sidecar_config, resume_stream=True))
+                if not self.sidecar.available:
+                    raise RuntimeError('Equipment sidecar disconnected during configuration')
+            except (OSError, RuntimeError) as error:
+                return dict(accepted=False, detail=f'Equipment sidecar unavailable: {error}')
+        return self.feeder.set_automatic(enabled)
 
     def set_tool_session(self, session):
         session.tool.capture.resolve_reserved_body = self.reserved_body

@@ -52,7 +52,11 @@ Cell 측 Sidecar는 `conveyor.history_db_path`의 SQLite에 실제 생성 개체
 
 `/cell/conveyor/query_history` (`QueryConveyorHistory.srv`)에 특정 `material_instance_id`를 보내면 해당 개체의 자재·예약·PLC 관측·검사·변경 기록 JSON을 반환한다. 빈 ID는 보존된 전체 스트림의 생산 집계를 반환한다. 여러 소비자는 읽기 서비스를 이용하거나 동일 호스트의 SQLite WAL 읽기 연결로 보고서를 생성할 수 있다. SQLite 원본 파일은 Git·진단 스냅샷과 독립적으로 유지하고 운영 백업 정책을 별도로 설정한다.
 
-재시작 후 동일 Equipment 스트림이면 이전 예약 Snapshot과 ID를 읽되, 현재 실물과 PLC의 위치 확정이 재관측되기 전에는 해당 예약을 실행 가능한 것으로 공개하지 않는다. Stage를 새로 생성했거나 PLC RETAIN과 실제 자재가 불일치하면 과거 이력만 복원하며 물리 작업 자동 복귀는 하지 않는다. Sidecar 복원만으로 Robot Goal, PLC 단계 또는 물리 바디를 재생성하지 않는다.
+장면이 살아 있고 Sidecar 프로세스가 종료된 경우, Timeline을 Stop하지 않고 Supply UI의 **Start automatic**을 누르면 기존 Equipment에 새 Sidecar를 연결한다. 기존 투입 수량·생성 번호·스트림을 유지하며, 새 허가와 PLC 명령을 받은 뒤 설비를 진행한다. 이 조작은 자동공급도 켜므로 작업자가 운전을 재개할 때 사용한다.
+
+재시작 후 동일 Equipment 스트림이면 이전 예약 Snapshot과 ID를 읽되, 현재 실물과 PLC의 위치 확정이 재관측되기 전에는 해당 예약을 실행 가능한 것으로 공개하지 않는다. 이미 배치한 자재는 기존 예약과 일치하는 COMPLETE 또는 ABANDON 및 Release 확인으로 퇴역시킬 수 있다. 재연결할 스트림의 Snapshot이 누락되면 설비 관측을 계속하며 공급 예약은 보류한다. Stage를 새로 생성했거나 PLC RETAIN과 실제 자재가 불일치하면 과거 이력만 복원하며 물리 작업 자동 복귀는 하지 않는다. Sidecar 복원만으로 Robot Goal, PLC 단계 또는 물리 바디를 재생성하지 않는다.
+
+원장 쓰기가 실패하면 설비 Sidecar는 센서 피드백을 계속 전송한다. 배정·예약 변경은 저장에 성공한 뒤 확인하며, 관측 쓰기는 다음 유효 표본에서 다시 시도한다. 장애 동안 지나간 중간 PLC 단계는 이력에서 누락될 수 있다. 새 자재가 첫 로봇 요청 전인 단계 10·20·21·22에서는 결과·사유·배치를 0(미확정)으로 조회한다. 기존 v1 원장은 처음 열 때 이 귀속을 보정하고 해당 이벤트의 원래 값은 `retained_registers`에 남긴다.
 
 실행 전에 `arm_cell_interfaces`를 포함한 ROS Overlay를 다시 빌드해야 한다. SQLite 원장은 Python 표준 라이브러리를 사용한다. Pure DB 회귀는 `python3 -m pytest -q infra/isaac_sim/scripts/tests/test_conveyor_production_ledger.py`로 확인할 수 있다. 외부 CODESYS + Isaac 통합 및 재시작 시운전은 별도 live 증거로 확인해야 한다.
 
