@@ -49,7 +49,6 @@ class ConveyorFeeder:
 def bind_confirmed_pick(command, observed_cycle, expose_slot):
     """Return the acknowledged ID only while the actual arrival has a reservable slot.
 
-    expose_slot checks the current epoch, part identity and installed teaching catalog.
     Repeated calls for that arrival must resolve to the same slot.
     """
     if not command.confirmed or not observed_cycle or command.cycle != observed_cycle:

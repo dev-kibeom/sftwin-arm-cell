@@ -1,14 +1,6 @@
-"""Compile one fixed Pick teaching into the Task server's exact-key catalog."""
+"""Install the Conveyor's fixed Pick/Place teaching in the configured grasp catalog."""
 import json
 from pathlib import Path
-
-
-def fixed_pick_slots(teaching, *, first, count):
-    if type(first) is not int or type(count) is not int:
-        raise ValueError('Conveyor slot IDs and count must be integers')
-    if not (1 <= first <= 0xffffffff and 0 <= count <= 65535 and first + count <= 2**32):
-        raise ValueError('Invalid Conveyor deployment slot range')
-    return {f'slot_{cycle}': teaching for cycle in range(first, first + count)} if teaching else {}
 
 
 def compile_cell(*, configuration):
@@ -34,6 +26,6 @@ def compile_cell(*, configuration):
                 raise ValueError(f'Conveyor {key} requires an installed taught motion')
         configuration['motion']['taught_cycle_motion_names'] = [
             cycle[key] for key in ('approach_motion', 'insertion_motion', 'transfer_motion', 'retreat_motion')]
-    catalog = fixed_pick_slots(cycle, first=teaching['first'], count=teaching['count'])
+    catalog = {'fixed_pick': dict(cycle, use_reserved_slot=True)} if cycle else {}
     configuration['motion']['configured_grasp_cycles_json'] = json.dumps(catalog)
     configuration['orchestration']['plc_admission_enabled'] = True

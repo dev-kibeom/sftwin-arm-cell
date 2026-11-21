@@ -17,7 +17,7 @@ class ConveyorPickSupply:
         self.reservation = ''
 
     def expose_slot(self, slot):
-        """Called after the equipment owner confirms this arrival and its catalog entry."""
+        """Called after the equipment owner confirms this arrival at the fixed pick position."""
         number = slot.removeprefix('slot_')
         if not number.isascii() or not number.isdecimal() or slot != f'slot_{int(number)}':
             return False

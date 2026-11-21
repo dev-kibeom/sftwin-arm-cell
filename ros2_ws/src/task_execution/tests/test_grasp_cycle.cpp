@@ -249,7 +249,7 @@ TEST(ConfiguredGraspCatalog, RejectsUntrustedCallerSlotAndMalformedTrustedGeomet
 {
   using namespace arm_cell_task_execution;
   EXPECT_THROW(parse_configured_grasp_cycles(R"({"slot":{}})"), std::invalid_argument);
-  EXPECT_TRUE(parse_configured_grasp_cycles("{}").empty());
+  EXPECT_EQ(parse_configured_grasp_cycles("{}").find("unknown"), nullptr);
 }
 
 namespace arm_cell_task_execution
@@ -264,7 +264,10 @@ TEST(ConfiguredGraspExecution, SuppliesTrustedMetadataAndPreservesReleaseOnRetre
       "inner_radius_m":0.025,"release_position_m":0.02,"grasp_position_m":0.01},
     "approach_motion":"fixture_approach","insertion_motion":"fixture_insert",
     "transfer_motion":"fixture_transfer","retreat_motion":"fixture_retreat"}})");
-  auto request = catalog.at("slot_0");
+  ASSERT_EQ(catalog.find("other_slot"), nullptr);
+  const auto * teaching = catalog.find("slot_0");
+  ASSERT_NE(teaching, nullptr);
+  auto request = *teaching;
   request.identity.execution_id = execution_id;
   request.identity.supply_epoch = "epoch";
   request.identity.reservation_id = "reservation";
@@ -313,10 +316,26 @@ TEST(ConfiguredGraspExecution, PhysicalReleaseRemainsPlacedWhenSceneSynchronizat
 }
 }
 
-TEST(ConfiguredGraspCatalog, SuctionRequiresNoBoreGeometry)
+TEST(ConfiguredGraspCatalog, SelectsFixedOrSlotSpecificSuctionTeachingWithoutBoreGeometry)
 {
-  auto catalog = arm_cell_task_execution::parse_configured_grasp_cycles(R"({"slot_1":{
+  using arm_cell_task_execution::parse_configured_grasp_cycles;
+  auto entries = nlohmann::json::parse(R"({"slot_1":{
     "grasp":{"strategy":"surface_suction"},"approach_motion":"above","insertion_motion":"pick",
     "transfer_motion":"place","retreat_motion":"exit","material_id":"part","supply_id":"belt"}})");
-  EXPECT_TRUE(catalog.at("slot_1").valid());
+  entries["slot_2"] = entries.at("slot_1");
+  entries["slot_2"]["approach_motion"] = "above_second_slot";
+  const auto slots = parse_configured_grasp_cycles(entries.dump());
+  ASSERT_NE(slots.find("slot_1"), nullptr);
+  ASSERT_NE(slots.find("slot_2"), nullptr);
+  EXPECT_EQ(slots.find("slot_1")->approach_motion, "above");
+  EXPECT_EQ(slots.find("slot_2")->approach_motion, "above_second_slot");
+  EXPECT_EQ(slots.find("slot_3"), nullptr);
+
+  entries["slot_1"]["use_reserved_slot"] = true;
+  EXPECT_THROW(parse_configured_grasp_cycles(entries.dump()), std::invalid_argument);
+  entries.erase("slot_2");
+  const auto fixed = parse_configured_grasp_cycles(entries.dump());
+  ASSERT_NE(fixed.find("slot_3"), nullptr);
+  EXPECT_EQ(fixed.find("slot_3")->approach_motion, "above");
+  EXPECT_TRUE(fixed.find("slot_3")->valid());
 }

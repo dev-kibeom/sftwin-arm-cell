@@ -1,7 +1,6 @@
 """Isaac owns the physical receipt and advances the equipment only on simulation steps."""
 from dataclasses import asdict
 from pathlib import Path
-import json
 import logging
 import time
 
@@ -26,7 +25,7 @@ class ConveyorRuntime:
         self.sidecar.send(dict(op='configure', connection=cell['conveyor']['connection'],
                                permit_topic=cell['conveyor']['equipment_permit_topic'],
                                supply=cell['configured_supply'],
-                               slots=list(json.loads(configuration['motion']['configured_grasp_cycles_json']))))
+                               pick_configured=bool(cell['conveyor']['teaching']['cycle'])))
         self.feeder.bind_ui()
 
     def set_tool_session(self, session):

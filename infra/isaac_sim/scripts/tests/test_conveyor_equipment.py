@@ -1,16 +1,8 @@
-"""Only the observed, catalogued arrival can enter the configured supply."""
+"""Only the observed arrival can enter the configured supply."""
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from conveyor_pnp_cell.configuration import fixed_pick_slots
-
-
-def test_one_fixed_teaching_distinct_arrivals_and_bounded_deployment():
-    teaching = {'approach_motion': 'fixed_pick'}
-    catalog = fixed_pick_slots(teaching, first=7, count=2)
-    assert catalog == {'slot_7': teaching, 'slot_8': teaching}
-    assert fixed_pick_slots(None, first=1, count=2) == {}
 
 
 def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
@@ -34,7 +26,7 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
                          observe=lambda permit: Sensors(permitted=permit, path_clear=True, pick_zone_clear=True),
                          spawn=lambda name, cycle: spawned.append(cycle) or True)
     adapter = runtime.ConveyorRuntime(dict(cell=dict(configured_supply=dict(material_id='ConveyorPart'),
-        conveyor=dict(connection={}, equipment_permit_topic='permit')), motion=dict(configured_grasp_cycles_json='{}')),
+        conveyor=dict(connection={}, equipment_permit_topic='permit', teaching=dict(cycle=None)))),
         eq, ipc)
     try:
         adapter.feeder.configure('ConveyorPart', 2)

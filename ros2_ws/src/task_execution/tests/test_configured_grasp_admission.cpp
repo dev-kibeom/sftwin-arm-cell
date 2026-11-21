@@ -55,7 +55,8 @@ public:
   void stop() override {}
 };
 }
-TEST(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActiveMotion)
+class ConfiguredGraspAdmission : public ::testing::TestWithParam<bool> {};
+TEST_P(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActiveMotion)
 {
   if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
   auto node = std::make_shared<rclcpp::Node>("configured_lease_test");
@@ -70,7 +71,14 @@ TEST(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActiveMo
   cycle.identity.slot_id = "slot_0";
   cycle.approach_motion = "approach"; cycle.insertion_motion = "insert";
   cycle.transfer_motion = "transfer"; cycle.retreat_motion = "retreat";
-  ExecuteConfiguredGraspActionServer server(node.get(), motion, task, {{"slot_0", cycle}});
+  ConfiguredGraspCatalog catalog;
+  if (GetParam()) {
+    cycle.identity.slot_id.clear();
+    catalog.fixed = cycle;
+  } else {
+    catalog.by_slot.emplace("slot_0", cycle);
+  }
+  ExecuteConfiguredGraspActionServer server(node.get(), motion, task, catalog);
   using Action = ExecuteConfiguredGraspActionServer::Action;
   auto client = rclcpp_action::create_client<Action>(
     node,
@@ -147,7 +155,18 @@ TEST(ConfiguredGraspAdmission, ForgedLeaseNeverMovesAndChangedLeaseStopsActiveMo
   ASSERT_EQ(executor.spin_until_future_complete(replay, std::chrono::seconds(1)), rclcpp::FutureReturnCode::SUCCESS);
   EXPECT_FALSE(replay.get());
   EXPECT_EQ(motion->moves.load(), 1);
+  if (GetParam()) {
+    // A new reservation cannot retry a Conveyor arrival that entered the BT.
+    supply.reservation_id = goal.reservation_id = "next-token";
+    publisher->publish(supply); pump(5);
+    auto duplicate = client->async_send_goal(goal);
+    ASSERT_EQ(executor.spin_until_future_complete(duplicate, std::chrono::seconds(1)),
+      rclcpp::FutureReturnCode::SUCCESS);
+    EXPECT_FALSE(duplicate.get());
+    EXPECT_EQ(motion->moves.load(), 1);
+  }
   executor.remove_node(node);
   rclcpp::shutdown();
 }
+INSTANTIATE_TEST_SUITE_P(ExactAndFixed, ConfiguredGraspAdmission, ::testing::Bool());
 }

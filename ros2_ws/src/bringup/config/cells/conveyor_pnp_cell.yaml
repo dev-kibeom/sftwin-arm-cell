@@ -31,8 +31,6 @@ conveyor:
     robot_pick: {center: [0.754, 0.38, 0.39], size: [0.18, 0.18, 0.24]}
     robot_discharge: {center: [0.46, -0.38, 0.39], size: [0.2, 0.2, 0.24]}
   teaching:
-    first: 1
-    count: 2
     # Fixed TCP coordinates in base_link (mount is at world X=0.30).
     # TCP +Z faces down. Pick is 2 mm above the nominal 0.330 m part top.
     motions:

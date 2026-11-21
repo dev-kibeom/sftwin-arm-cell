@@ -130,4 +130,4 @@ Bringup은 Task Execution Action server와 Motion runtime을 동일 ROS process�
 
 ## Configured-source 작업 조립
 
-정렬 공급의 ExecuteConfiguredGrasp server는 배포된 슬롯 registry와 예약 identity를 검증하고 동일 TaskExecutor·MotionCore·GripperPort로 공통 GraspCycle을 수행한다. 공유 의미는 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)가 소유한다. 시험용 MotionPort를 운영 조립에 사용하지 않는다.
+정렬 공급의 ExecuteConfiguredGrasp server는 현재 예약 identity를 검증하고 배포된 티칭을 선택하여 동일 TaskExecutor·MotionCore·GripperPort로 공통 GraspCycle을 수행한다. 공유 의미는 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)가 소유한다. 시험용 MotionPort를 운영 조립에 사용하지 않는다.
