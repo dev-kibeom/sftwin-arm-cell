@@ -90,6 +90,8 @@ RELEASE 및 RELEASED 확인·Scene 관계 해제, 후퇴 순서를 유지한다.
 확정 해제 후 후퇴 실패가 해제 사실을 되돌리지 않는다. 이 경계는 정식 Material·Vision·Cell
 또는 새로운 운영 PnP 지원 조합을 추가하지 않는다.
 
+Conveyor 고정 티칭 픽에서 GRASP 명령이 전달됐지만 `HELD` 확인에 실패하면, BT는 복구 RELEASE 이후 새 `RELEASED` 관측을 확인한다. 같은 예약·자재가 여전히 픽 위치에 있으면 기존 티칭 접근점으로 후퇴한 뒤 같은 픽 위치에 재삽입해 한 번만 재파지한다. 후퇴·재삽입·재파지 각각의 시작 전에 [공급 상태](../../interfaces/icd-configured-supply.md)로 자재 위치를 확인한다. 취소·Safety 선점·예약 철회 또는 관측 상실 시 다음 동작을 시작하지 않는다. 두 번째 파지도 미확정이면 삽입 위치에서 RELEASE 복구 후 종료한다. 모든 시도는 같은 PLC 로봇 요청과 실행 ID를 유지하며 상위에는 최종 결과 한 건을 반환한다.
+
 ## PICK / PLACE 독립 전략
 
 운영 profile은 PICK과 PLACE의 전략을 독립적으로 선택한다. 각 작업은 시작 시 전략을 고정하며
@@ -205,7 +207,7 @@ RELEASE를 한 번 요청하고 명령 이후 새로운 `RELEASED`를 확인한�
 `UNKNOWN`이거나 Timeout이면 disposition은 `UNKNOWN`으로 보존하고 원래 파지 실패·해제 미확정
 진단과 함께 `RETRYABLE`을 반환한다. 이때 해제·반환 또는 Scene 분리를 확인한 것으로 처리하지 않는다.
 이 재시도는 해당 RELEASE 명령 성공 근거가 있는 PICK 복구에만 허용하며 일반 `UNKNOWN`으로 확대하지 않는다.
-이후 HOME·새 Acquisition은 기존 Mission 재시도 절차가 수행한다. RELEASE 명령 실패, Backend 장애,
+Vision 기반 작업의 이후 HOME·새 Acquisition은 기존 Mission 재시도 절차가 수행한다. RELEASE 명령 실패, Backend 장애,
 Cancel·Safety 선점은 이 불확실 관측 재시도 대상이 아니다. CLOSE 뒤 관측 미확정 상태를 `UNCHANGED`로 보고하지 않는다.
 이 복구는 Cancel·Safety 선점·Backend 불가를 일반 파지 실패로 바꾸지 않으며 Retreat 이후 보유 상실이나
 PLACE 실패의 기존 복구를 대체하지 않는다. 구동·보유·해제의 장치별 판정은 Backend/Tool이,
@@ -396,6 +398,7 @@ Action Cancel은 활성 MotionPort 실행에 전파되어야 한다. Safety dire
 
 | 판정 항목 | 요구사항 |
 |---|---|
+| Conveyor 흡착 복구 | 첫 파지 미확정 후 같은 예약 자재의 위치와 해제가 확인되면 한 번 재파지한다. 재파지 성공 시 같은 요청으로 PLACE까지 진행한다. 두 번 모두 미확정이면 PLACE 없이 최종 결과 한 건을 반환한다. 자재 이동·예약 철회 시 재파지 명령은 0회다. |
 | Gripper·복구 | 기존 PnP 동작은 Gripper command, Holding observation 및 복구 의미를 보존해야 한다(SHALL). |
 | 관측·Gate 경계 | 통신 지연 대기, 실제 UNKNOWN 복구, 실제 파지 실패의 기존 OPEN 복구, 중복 OPEN/Holding 검증 제거와 새 Timeout/completion gate 금지는 이 FDS 및 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)의 정식 계약을 따른다. |
 

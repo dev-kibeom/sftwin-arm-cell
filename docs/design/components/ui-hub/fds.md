@@ -52,15 +52,15 @@ sequenceDiagram
 
 ## 3. Simulation 조작과 테스트 자극
 
-Play·Pause·Stop은 Isaac Sim의 표준 Timeline UI가 소유한다. Hub는 별도 Simulation 조작 버튼이나 Timeline 상태 표시를 두지 않으며, 요청 가능 여부와 Cleanup에만 Timeline Lifecycle Event를 내부적으로 사용한다. Development Mode에서는 Publish Trigger·Retry Detection을 표시할 수 있고, 승인된 Fault Scenario를 실행하거나 [Safety Operator ICD](../../interfaces/icd-safety-operator.md)를 통해 Operator Acknowledgement/Reset을 요청할 수 있다.
+Play·Pause·Stop은 Isaac Sim의 표준 Timeline UI가 소유한다. Hub는 별도 Timeline 조작 버튼이나 Timeline 상태 표시를 두지 않으며, 요청 가능 여부와 Cleanup에만 Timeline Lifecycle Event를 내부적으로 사용한다. Development Mode에서는 Publish Trigger·Retry Detection을 표시할 수 있고, 승인된 Fault Scenario를 실행하거나 [Safety Operator ICD](../../interfaces/icd-safety-operator.md)를 통해 Operator Acknowledgement/Reset을 요청할 수 있다.
 
 CNC의 External Handoff Trigger에는 입력원에서 지정한 `delivery_id`, 양수 `quantity`, 설정된 `material_type`(현재 `TestCube`), 선택적 Random Seed를 담는다. Demo 자극에서 Hub가 생성하는 Fresh ID는 해당 Event의 상관관계 식별자일 뿐, 작업 배정·자재 예약/요청·VDA 호출·Delivery 관리를 뜻하지 않는다. Raw Trigger는 Gateway만 수락해 VDA 및 Isaac Material Supply Adapter로 전달한다. Hub는 Trigger 발행 여부만 보고한다. Adapter의 공급 결과, Vision Scene Stability, VDA Phase, `MATERIAL_READY`, Orchestration Admission은 Hub에서 표시하지 않는다.
 
 ### 3.1 Isaac Timeline Stop과 Simulation Reset
 
-Play·Pause·Stop은 Isaac Sim 표준 Timeline UI가 소유한다. Pause는 동일 실험을 보존한 채 Simulation Time 진행을 멈추고, 이후 Play는 이를 재개한다. Timeline Stop은 해당 실험을 종료하고 기존 Isaac Lifecycle Callback을 실행한다. Stop은 Simulation Reset이지 Safety Stop이 아니다. Safety StopMotion 호출, E-Stop/Latch 생성, 실제 장비 Recovery 요청을 수행하지 않는다. Hub에는 Play/Pause/Stop 버튼이 없으며 Timeline Play를 차단할 수도 없다.
+Play·Pause·Stop은 Isaac Sim 표준 Timeline UI가 소유한다. Pause는 동일 실험을 보존한 채 Simulation Time 진행을 멈추고, 이후 Play는 이를 재개한다. Timeline Stop은 해당 실험을 종료하고 기존 Isaac Lifecycle Callback을 실행한다. Stop은 Simulation Reset이지 Safety Stop이 아니다. Safety StopMotion 호출, E-Stop/Latch 생성, 실제 장비 Recovery 요청을 수행하지 않는다. Timeline 조작은 Isaac 표준 UI에서만 제공한다. Hub의 Start·Pause는 Simulation Time과 실험 Session을 유지한다.
 
-Stop Callback은 Isaac Kit을 종료하지 않고 Simulation 소유 상태를 초기화한다. 새 실험을 시작할 때 운영자는 Timeline Stop 전에 ROS Bringup을 수동 중지하고, Reset 이후 `1_before_play.py` 설정 → Timeline Play → `2_after_play.py` Session 초기화 → 새 Bringup 시작·Session 연결 → Endpoint와 Fresh Readiness 확인 순서로 진행한다. 이 프로세스 경계에서 Gateway·Orchestration의 프로세스 로컬 Accounting이 비워진다.
+Stop Callback은 Isaac Kit을 종료하지 않고 Simulation 소유 상태를 초기화한다. Script Editor에서 새 실험을 수동 구성할 때 운영자는 Timeline Stop 전에 ROS Bringup을 수동 중지하고, Reset 이후 `1_before_play.py` 설정 → Timeline Play → `2_after_play.py` Session 초기화 → 새 Bringup 시작·Session 연결 → Endpoint와 Fresh Readiness 확인 순서로 진행한다. 이 프로세스 경계에서 Gateway·Orchestration의 프로세스 로컬 Accounting이 비워진다.
 
 - Isaac은 Robot Articulation의 초기 Joint Position·Velocity와 설정된 초기 Physics State를 복원한다.
 - Simulation Gripper는 Attach Joint/Held 관계를 제거하고 초기 Actuator 상태로 돌아간다. 물리적인 Release Sequence를 실행하거나 Reset 승인 조건으로 `RELEASED`/`HELD`를 요구하지 않는다.
@@ -69,13 +69,19 @@ Stop Callback은 Isaac Kit을 종료하지 않고 Simulation 소유 상태를 �
 - Orchestration은 기존 Action Cancel 경로로 이전 ExecuteCycle을 취소하고, 이전 Session에서 Ready였으나 미소비된 Delivery를 종료 처리한다. Motion은 하위 Action Cancel을 받으며 Safety StopMotion은 실행하지 않는다. 진행 중 Vision 요청은 기존 유한 Lifecycle에 따라 완료되거나 취소된 Mission에 의해 결과가 무효화된다. 이후 Mission이 그 결과를 사용하지 않으며 새 요청에는 새 Acquisition ID를 부여한다.
 - Gateway는 미완료 Simulation Handoff를 종료하고 해당 Delivery 점유를 해제한다. Isaac Stop Callback은 실제 공급 Adapter나 하드웨어를 지휘하지 않는다.
 
-Configuration·Recipe·유효 Calibration·이전 Snapshot·Log·진단 이력은 보존한다. 이전 실행 전용 상태, Gripper Attachment, Simulation Physics·Material·Fixture, 대기 공급 및 주입 Stimulus는 초기화한다. 새 실험에는 항상 새 Publish Trigger와 Delivery ID가 필요하다.
+Configuration·Recipe·유효 Calibration·이전 Snapshot·Log·진단 이력은 보존한다. 이전 실행 전용 상태, Gripper Attachment, Simulation Physics·Material·Fixture, 대기 공급 및 주입 Stimulus는 초기화한다. CNC의 다음 External Handoff에는 새 Publish Trigger와 Delivery ID가 필요하다. Conveyor의 보존 상태는 [Configured Supply ICD](../../interfaces/icd-configured-supply.md)를 따른다.
 
-Reset은 각 Owner의 로컬 동작이며 멱등적이다. Hub가 Cleanup 진단을 집계해 보여주지 않으므로 실패한 항목은 Owner 진단에서 확인한 뒤 새 Bringup·실험을 시작한다. Hub는 영구적인 `Cleaning` 상태나 운영자 승인을 도입하지 않는다. 불완전한 Reset은 다음 Stop/Play 경계의 동일 Timeline Callback에서 다시 시도한다. Timeline Stop은 E-Stop이 아니며 Safety StopMotion·Safety Reset을 호출하지 않는다. Bringup 교체 시 Safety Latch/Cause Memory 전송 계약은 없다. 새 Safety 프로세스는 Fresh Input에 기존 정책을 적용하며 정상 Readiness Gate가 Motion Admission을 통제한다.
+Timeline Stop의 Reset은 각 Owner의 로컬 동작이며 멱등적이다. 수동 Bringup 경로에서는 Hub가 Cleanup 진단을 집계해 보여주지 않으므로 실패한 항목은 Owner 진단에서 확인한 뒤 새 Bringup·실험을 시작한다. Hub는 영구적인 `Cleaning` 상태나 운영자 승인을 도입하지 않는다. 불완전한 Reset은 다음 Stop/Play 경계의 동일 Timeline Callback에서 다시 시도한다. Timeline Stop은 E-Stop이 아니며 Safety StopMotion·Safety Reset을 호출하지 않는다. Bringup 교체 시 Safety Latch/Cause Memory 전송 계약은 없다. 새 Safety 프로세스는 Fresh Input에 기존 정책을 적용하며 정상 Readiness Gate가 Motion Admission을 통제한다.
 
 ROS Owner를 사용할 수 있는 동안 Hub Extension이 종료되면 활성 E-Stop Stimulus Clear, Safety Signal Loss 기간 취소, 아직 대기 중인 Vision Mislocalization Disarm을 요청한다. 이는 Stimulus Cleanup 요청일 뿐 응답이 Safety·Motion·Vision 결과를 확정하지 않는다. Owner가 이미 없으면 Hub는 Cleanup 요청 실패를 보고하고 기존 Owner/Process Lifecycle이 로컬 Stimulus 폐기를 책임진다. Hub는 Cleanup 명목으로 Safety Acknowledgement/Reset을 요청하지 않는다.
 
-### 3.2 Supply
+### 3.2 공통 운전·공급 조작
+
+Cell을 바꿔도 기본 조작의 이름, 배치, 의미를 유지한다. 맨 위에는 **Initialize**, **Start**, **Pause**를 나란히 두고, 그 아래에 품종·수량 입력과 **Supply**, 기존 **E-stop** 조작을 둔다. E-stop은 공급 패널의 입력 상태나 운전 모드와 관계없이 접근할 수 있다. 시뮬레이션의 E-stop 입력 및 해제·Reset은 기존 Safety 계약을 따른다.
+
+**Initialize**는 [Simulation Session](../simulation/fds-sim-session.md)의 새 실험을 요청한다. 진행 중인 작업이나 잔여 자재가 있어도 누를 수 있다. Hub는 접수와 원점 복원 완료를 구분해 표시하고, 복원 중에는 Start·Supply를 보류한다.
+
+**Start**는 자동운전을 시작하거나 재개한다. 수락된 공급이 없으면 Cell은 자동운전 상태에서 대기한다. **Supply** 한 번은 입력한 품종과 양수 수량의 추가 공급 요청 한 건이다. 운전 중에도 반복해서 요청할 수 있고, 작업 중에 수락된 물량은 기존 자재·잔량을 보존한 채 처리한다. **Pause**는 자동운전을 일시정지한다. Cell은 새 사이클 시작을 보류하고 수락한 공급과 진행 중인 자재 식별자를 보존한다. 진행 중인 설비 동작은 해당 Cell의 공정 정지·재개 조건을 따른다. 일시정지 중에 수락된 물량도 Start 후 공정 조건이 충족되면 처리한다. Start와 Pause는 Safety Reset을 요청하지 않는다.
 
 Hub는 Cell·Robot·Tool 종류와 무관하게 로드한다. 선택된 Cell은 선택적 Supply capability로 자재 목록, 수량 단위, 요청·상태 callback을 제공한다. Hub는 입력을 해당 Owner에 전달하고 수락·거부와 Owner가 제공한 진행 상태를 표시한다. 요청 수락을 공급 준비·PnP 성공으로 해석하지 않는다. Cell readiness, Mission Admission, Safety, 완료 수량은 기존 Owner가 결정한다.
 
@@ -83,7 +89,7 @@ Tape Cell에서 수량은 15개 롤이 가득 찬 카트리지 개수다. Cell�
 
 CNC의 Supply 조작과 공개 Trigger 계약은 Bringup이 선택한 두 Provider 환경에서 동일하며 Gateway도 모든 Provider에 같은 입력 계약을 적용한다. 각 명시적 클릭은 Source가 새로 부여한 `delivery_id`를 포함한 기존 External Handoff Trigger를 발행한다. Material Type과 양수 Quantity는 운영자 입력이다. Hub는 선택적 Seed를 생략하고 Random Drop Sampling을 기존 공급 경로에 맡긴다. Gateway만 Trigger 수락·거부를 결정한다. Hub는 로컬 발행 결과만 보고하고 Gateway Receipt, 공급 결과, `MATERIAL_READY`, Mission 결과를 표시하지 않는다. 로컬 발행 성공을 이들 Owner의 결과로 암시해서는 안 된다.
 
-Timeline이 Running이고 Stop 소유 Simulation Reset이 끝났을 때 Supply를 사용할 수 있다. 각 클릭은 새 Delivery ID로 해당 Quantity의 추가 공급을 요청한다. 이전 Receipt를 기다리는 중이어도 서로 다른 주문을 막지 않으며 중복 Delivery ID는 Gateway가 거부한다. 새로 수락된 Delivery는 활성 공급이나 PnP를 취소·대체하지 않는다. 활성 Mission이 있으면 Orchestration은 새 주문을 보존해 다음 순차 ExecuteCycle에서 처리한다. Terminal Mission 실패가 기존 자재나 성공 PLACE Accounting을 지우지 않으며, 이후 고유 Trigger는 미처리량 전체를 대상으로 새 Cycle을 허용하는 정상 공급 Event다.
+Timeline이 Running이고 Stop 소유 Simulation Reset이 끝났을 때 Supply를 사용할 수 있다. CNC에서는 각 클릭이 새 Delivery ID로 해당 Quantity의 추가 공급을 요청한다. 이전 Receipt를 기다리는 중이어도 서로 다른 주문을 막지 않으며 중복 Delivery ID는 Gateway가 거부한다. 새로 수락된 Delivery는 활성 공급이나 PnP를 취소·대체하지 않는다. 활성 Mission이 있으면 Orchestration은 새 주문을 보존해 다음 순차 ExecuteCycle에서 처리한다. Terminal Mission 실패가 기존 자재나 성공 PLACE Accounting을 지우지 않으며, 이후 고유 Trigger는 미처리량 전체를 대상으로 새 Cycle을 허용하는 정상 공급 Event다.
 
 Cuboid Demonstration과 Owner별 fault adapter는 선택된 Cell이 제공하는 선택적 capability다. 지원하지 않는 기능이나 ROS·Vision 관측이 없으면 unavailable로 표시하며 Hub 로드를 실패시키거나 가짜 성공을 만들지 않는다.
 
@@ -154,7 +160,7 @@ Delivery ID는 주문별 공급 식별자다. ExecuteCycle은 Admission Delivery
 
 Acceptance 검증에서 Invalid·Stale·Unavailable Target 시나리오는 [RGB-D ICD](../../interfaces/icd-sim-rgbd.md)의 Source-side Stimulus 경계로, Holding Uncertainty는 [Motion Backend ICD](../../interfaces/icd-motion-backend.md)의 Backend Observation 경계로 라우팅한다. Hub는 시나리오 활성화를 요청하고 Owner가 발행한 결과를 관측할 뿐 Sensor Message·`MotionStatus`·Safety·Mission 상태를 직접 바꾸지 않는다. Production Vision과 정상 Motion Backend를 검증하며 검증 전용 Fixed Vision Adapter를 Production 인지 근거로 삼지 않는다.
 
-운영자 화면은 Timeline 상태를 별도로 표시하지 않고 Isaac 표준 Timeline을 사용한다. 주요 Hub 영역의 첫 번째는 **External Handoff Trigger**다. 운영자 Fault Scenario는 정확히 세 가지다.
+운영자 화면은 Timeline 상태를 별도로 표시하지 않고 Isaac 표준 Timeline을 사용한다. 기본 운전·공급 조작의 배치는 §3.2를 따른다. 운영자 Fault Scenario는 정확히 세 가지다.
 
 | 시나리오 | 운영자 조작 | 정식 Owner 경계 |
 |---|---|---|
@@ -191,12 +197,14 @@ Hub 조작이나 로컬 표시 상태를 변경해도 Safety·Motion·Orchestrat
 | 종합 상태 요약 | Hub는 집계 System Observations 패널이나 일반적인 정규 운영 상태의 실시간 종합 요약을 제공하지 않는다. |
 | 조작 결과 표시 | Trigger·Fault·Reset 조작은 로컬 발행/요청 결과만 표시하고 정규 Owner 결과를 암시하지 않는다. |
 | Camera·Vision Freshness | Camera/Vision의 Freshness는 `VR-INT-UI-04` 및 Snapshot 검증 요구사항을 별도로 따른다. |
-| 화면 구성 | Hub에는 Vision Detector Snapshot·선택적 Live Camera·Fault Injection·Safety 경유 Acknowledgement/Reset·활성화된 경우 개발 전용 Retry Detection을 유지하고 External Handoff Trigger를 첫 주요 영역으로 배치한다. |
+| 화면 구성 | Hub에는 Vision Detector Snapshot·선택적 Live Camera·Fault Injection·Safety 경유 Acknowledgement/Reset·활성화된 경우 개발 전용 Retry Detection을 유지한다. CNC·Tape·Conveyor를 각각 선택했을 때 상단의 Initialize·Start·Pause와 그 아래의 Supply·E-stop이 같은 이름과 순서로 표시된다. |
 
 ### VR-INT-UI-03 — Trigger·요청 의미
 
 | 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
 |---|---|
+| 연속 공급 | 자동운전을 시작하고 재고 0에서 Supply로 한 개를 요청한다. 해당 물량이 소진된 뒤 같은 조작을 반복하면 추가 요청 한 건이 전달되고, Cell의 공정 조건 충족 후 다음 사이클이 시작된다. 두 요청 사이에 Pause·Start를 요구하지 않는다. |
+| 일시정지 후 재개 | Pause 중 수락한 공급은 대기하며, Start로 재개한 뒤에도 수락한 수량과 현재 자재의 식별자를 보존한다. |
 | Trigger 결과 표시 | Trigger 조작은 로컬 발행 결과만 표시하고 Gateway 수락·VDA Phase·Readiness·Supply Completion·Orchestration Admission을 표시하거나 주장하지 않는다. |
 | 상태 전이 완료 주장 | UI 조작과 로컬 결과만으로 실행 상태 전이가 완료된 것처럼 표시해서는 안 된다. |
 | Random Drop Seed | Random Drop은 선택적 Seed를 생략한다(`has_random_seed = false`). |
@@ -209,7 +217,7 @@ Hub 조작이나 로컬 표시 상태를 변경해도 Safety·Motion·Orchestrat
 
 | 검증 관점·조건 | 기대 결과·금지 결과 및 관찰 근거 |
 |---|---|
-| 새 실험 순서 | 새 실험에서 운영자는 ROS Bringup을 수동 중지하고 Timeline Stop 후 `1_before_play.py` → Timeline Play → `2_after_play.py`의 Session 초기화를 마친 다음 Bringup을 수동 시작해 동일 Session에 연결하고 Endpoint 및 Fresh Readiness를 확인해야 한다. |
+| 수동 Bringup 교체 | Script Editor에서 새 실험을 구성할 때 운영자는 ROS Bringup을 수동 중지하고 Timeline Stop 후 `1_before_play.py` → Timeline Play → `2_after_play.py`의 Session 초기화를 마친 다음 Bringup을 수동 시작해 동일 Session에 연결하고 Endpoint 및 Fresh Readiness를 확인해야 한다. |
 | 초기화 대상·비전제 | Timeline Stop은 Fresh Gripper `RELEASED`, Safety Recovery 또는 Isaac Kit 재시작을 요구하지 않고 Isaac 소유 Robot Articulation·Simulation Gripper Attachment/Actuator·생성 Material·검증 Fixture·대기 Supply·Simulation Fault Stimulus를 초기화해야 한다. |
 | Fault Cleanup 경계 | Hub의 Stop 처리는 Isaac 프로세스 내부 Owner Port를 통해 Isaac 소유 Fault Stimulus를 제거하며 Bringup 종료 후 ROS Mock Endpoint에 Cleanup을 요청해서는 안 된다. |
 | Safety·실장비 명령 금지 | Safety StopMotion·Safety Reset·실장비 명령도 수행해서는 안 된다. |

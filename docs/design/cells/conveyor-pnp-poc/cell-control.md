@@ -17,6 +17,8 @@
 | **Robot Backend** | 명목 티칭/계획 경로 실현과 Logical Attach | 로봇 관절·그리퍼 관측 | Cell 공정 완료 확정 아님 |
 | **안전 제어계** | 실제 안전 정지·허가의 독립 권한 | 정지·해제/허가 상태 | 일반 PLC/BT가 우회할 수 없음 |
 
+런처에서 선택한 PLC 프로젝트가 로컬 시험 대상을 정한다. CODESYS는 그 프로젝트의 장치와 CODESYS Gateway 연결 설정으로 대상 Runtime에 로그인한다. Cell의 Delivery Gateway는 외부 자재 인계를 처리한다. Conveyor의 운전 중 요청과 응답은 PLC Adapter를 통해 교환한다.
+
 **기존 시스템과의 연결 시 주의:** 현재 공개 ARM Cell의 Gateway는 Delivery/Handoff와 VDA 문맥을, Orchestration은 Mission·PnP 결과와 수량을 별도로 소유한다. 이번 PoC는 이 의미를 임의 변경하거나 가상의 VDA/AMR 상태를 꾸며내지 않는다. PLC의 위치 확정·작업 요청을 기존 계약과 접속할 방법을 구현 전에 검토한다. 기존 범용 기능이 충분하지 않다면 공통 인터페이스 확장을 별도 시스템 설계로 다룬다. Cell Commit과 기존 로봇 PnP 완료 회계는 서로 다른 개념이며 중복 카운팅하지 않는다.
 
 상위 설비나 HMI에서 PackML을 사용할 경우 PLC가 Cell 전체의 운전 상태를 표현한다. 예를 들어 연속 생산은 `Execute` 안에서 P1~P5를 반복하며, 개별 Cell Commit은 운전 상태 전이를 일으키지 않는다. [기존 `/packml/state`](../../interfaces/icd-external-safety.md)는 외부 CNC/공정 상태를 나타낸다. 로봇 실행·인수 판정과 Safety 허가는 각각의 기존 계약을 따른다.
@@ -85,6 +87,8 @@ PLC 상태 대기와 오류는 공정상 영향받는 단계에 국한한다. Sa
 | PLC/Adapter 재시작 | 마지막 ID와 결과, Commit 기록, 실제 자재·로봇·슬롯 상태 | 미확정 작업 재실행 금지. 이미 Commit했으면 P5에서 실제 배출 여부와 현재 동작 조건 확인. 상관을 복원할 수 없으면 보류 |
 | 실제 설비 상태 불일치 | 관측의 유효성 및 해당 Cycle과의 연관성 | Cell Process의 재확인 경로 사용, 독립적 재검출이 불가능하면 작업자 확인 |
 
+PLC가 재배포로 원점이고 로봇 쪽에는 이전 요청이 남은 경우, Adapter는 해당 영수증의 자재와 예약을 생산 이력에 대조한다. 같은 스트림에서 마지막 자재의 예약 해제, PLC 인수, 실제 배출이 확인되면 이전 요청을 종료된 것으로 식별할 수 있다. 동일 스트림에서 자동운전을 재개하면 PLC는 다음 자재의 작업을 요청할 때 직전 요청에 이은 번호를 부여한다. 기존 실행을 이어갈 근거가 없거나 더 진행된 자재가 있으면 새 작업을 보류한다. 새 실험의 원점 복원은 [Simulation Session](../../components/simulation/fds-sim-session.md), 첫 요청 번호와 이전 영수증 처리는 [PLC 단일 작업 ICD](../../interfaces/icd-plc-task.md)를 따른다.
+
 실행 코드의 영속화 수단·레지스터 표현은 구현 계약에서 결정하되, 재시작·통신 단절 시험이 주장하는 범위에 맞게 해당 단계에 필요한 결과와 관측 증거를 보존하거나 재조회할 수 있어야 한다.
 
 ## PLC·Equipment Adapter 구성 참조
@@ -108,11 +112,11 @@ Modbus 레지스터 번호, PLC 타이머, 실제 티칭 좌표와 속도는 이
 
 ## 공급 설정과 Isaac 설비 연결
 
-Conveyor의 UI Supply Port는 자동운전을 멈춘 상태에서 종류와 공급 가능 수량을 설정하고 자동운전을 시작·일시 정지한다. 설비는 PLC 공급 명령과 자재 ID로 생성 동작을 한 번 수행하고 실제 생성 확인 후 수량을 차감한다. 투입 도착은 별도 센서가 확인한다. 생성 결과가 불명확하면 해당 ID를 보류하고 자재와 생성 이력을 대조한다. Tape·CNC의 공급 요청은 각 Cell의 기존 공급자가 처리한다.
+운영자는 [UI Hub의 공통 운전·공급 조작](../../components/ui-hub/fds.md#32-공통-운전공급-조작)을 사용한다. 설비는 수락한 품종과 수량을 기존 미투입 재고에 추가하고, 현재 생성 중인 자재의 품종·ID를 보존한다. 자동운전 중 재고가 소진되면 PLC는 대기하고, 재고가 보충되면 기존 P1 조건을 다시 평가한다. 설비는 PLC 공급 명령과 자재 ID로 생성 동작을 한 번 수행하고 실제 생성 확인 후 수량을 차감한다. 투입 도착은 별도 센서가 확인한다. 생성 결과가 불명확하면 해당 ID를 보류하고 자재와 생성 이력을 대조한다. Tape·CNC의 공급 요청은 각 Cell의 기존 공급자가 처리한다.
 
 후속 Isaac Cell의 `material_supply_factory`는 [ConveyorFeeder](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/supply.py)를 기존 UI 포트에 등록하고 종료 시 해제한다. 설비 측 [ConveyorIO](../../../../infra/isaac_sim/scripts/conveyor_pnp_cell/equipment_io.py)는 같은 Modbus 서버의 설비 블록을 교환한다. 설비가 유효한 공급 명령을 읽으면 `feed(cycle, spawn_one)`에 기존 자재 생성 함수를 연결한다. 복원 시 마지막 생성 ID와 미확정 생성 건을 실제 자재에 대조한다.
 
-Pick 센서가 관측한 자재와 PLC가 위치를 확정한 자재가 일치하면 공급자가 그 개체를 고정 Pick 슬롯에서 공개한다. 같은 개체를 다시 관측해도 품종과 개체 ID를 유지한다. 목적지 Release를 확인한 뒤에는 해당 개체를 퇴역시키며 다음 도착 자재가 같은 슬롯을 사용한다. [Configured Supply ICD](../../interfaces/icd-configured-supply.md)
+Pick 센서가 관측한 자재와 PLC가 위치를 확정한 자재가 일치하면 공급자가 그 개체를 고정 Pick 슬롯에서 공개한다. 로봇 요청 단계에서는 PLC가 위치 확정 신호를 내린다. 공급자는 이미 배정된 동일 개체가 정지된 벨트의 Pick 위치에 있고 스토퍼 전진·트레이 비움이 관측되는 동안 해당 요청의 예약을 수락한다. 같은 개체를 다시 관측해도 품종과 개체 ID를 유지한다. 목적지 Release를 확인한 뒤에는 해당 개체를 퇴역시키며 다음 도착 자재가 같은 슬롯을 사용한다. [Configured Supply ICD](../../interfaces/icd-configured-supply.md)
 
 ### 데이터 모델 및 변환 계약
 

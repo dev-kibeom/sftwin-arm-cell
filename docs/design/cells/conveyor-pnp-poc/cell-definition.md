@@ -60,7 +60,7 @@ flowchart LR
 | Sensor | 위치/점유 관측 및 Fault Injection | 입력 변화는 가상 설비에서 생성 |
 | Robot | 기존 ROS 2 / BT / Motion 및 Robot Backend | 기존 ARM Cell 계약 재사용 가능 범위 검토 필요 |
 | Target Source | 정적 Pick 위치에 대한 Configured Supply 티칭 또는 기존 Vision 기반 PnP | 적용 경계는 [Cell Control](cell-control.md)의 구현 선행 확인 사항 참조 |
-| Grip | 상면 수직 흡착·해제 | Tool은 실제 결합 대상과 예약 자재를 대조한다. 트레이 슬롯 점유는 설비가 별도로 관측 |
+| Grip | 상면 수직 흡착·해제 | Tool은 진공을 구동하고 보유·해제 피드백을 제공한다. 트레이 슬롯 점유는 설비가 별도로 관측 |
 
 Cell별 설정은 Plugin 선택, 설비 배치, 센서/명령 매핑과 명목 Pose를 참조한다. 새로 필요한 범용 기능이 있는 경우에만 System 설계를 별도로 보완한다.
 

@@ -39,7 +39,9 @@ Motion이 제공하는 선택된 TCP Grasp Pose와 Geometry에서 도출한 예�
 
 Tool 작업 의도 GRASP는 자재 확보 요청, RELEASE는 자재 해제 요청이다. 병렬 그리퍼는 CLOSE/OPEN으로, 흡착기 유형은 VACUUM_ON/OFF로 실현할 수 있다. 의도 수락·Tool 구동 완료·Qualification 통과·Attach/Detach 완료는 별개의 사실이다. 기존 close/open API와 폭 기반 ROS 명령은 병렬 그리퍼 호환 경로로 유지한다.
 
-Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction과 합계 파지력(N)인 grip_force_n을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. GRASP의 execution identity는 적용된 Capture Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
+Conveyor 흡착기는 GRASP에 진공을 인가하고 RELEASE에 해제한다. 접촉할 자재가 없어도 명령은 같은 방식으로 구동되며, 보유 여부는 명령 이후의 장치 피드백으로 보고한다. 시뮬레이션도 이 장치 경계를 따른다. 공급 예약 조회나 장면 객체 ID 일치를 구동 조건으로 사용하지 않는다. 물리 모델은 접촉에 따른 결합을 모사하고, 실제 접촉 상대의 ID는 독립 검증에만 사용할 수 있다.
+
+Isaac의 추가 `/tool/intent`는 `std_msgs/String`의 JSON `intent=GRASP|RELEASE|STOP`, 선택적 `execution_id`를 받는다. 제어 Capability가 있는 Tool은 선택적 `parameters` 객체를 해석할 수 있으며 지원하지 않는 항목·값은 거부한다. 현재 Physics 2F-85는 normalized target_position, speed_fraction과 합계 파지력(N)인 grip_force_n을 제공한다. 이 정보는 다른 Tool의 공통 필수 필드가 아니며 접촉력 센서값을 뜻하지 않는다. Capture Reference를 사용하는 Tool에서 GRASP의 execution identity는 적용된 Reference와 일치해야 하며, retained graph 값은 Session 시작 시 generation 기준선으로만 소비한다. STOP은 Tool별 구동 취소·Hold를 요청하고 새 Capture를 취소하며 자체로 Detach하지 않는다. 같은 Physics 경계에서 의도를 수락하면 이미 대기하던 호환 명령은 다시 실행하지 않는다. 기존 `/gripper/command`, `/gripper/close`, `/gripper/capture_reference`, `/gripper/status`의 병렬 그리퍼 의미는 보존한다. 폭 Capability가 없는 Tool의 status는 `width_mm`를 생략하며 Holding의 시각·Sequence·신선도 규칙은 동일하다. 폭 Capability는 선택된 Tool Profile에서 제공한다.
 
 모드별 Qualification·보유·Attachment 의미는 아래 표를 따른다. ROS status의 grasp는 보유 관측이고
 attached는 실제 Fixed Joint 소유 여부다. 현재 지원 Profile은 Robotiq 2F-85와 M0609 Tape Cell의 C10/Long이며 Fake Vacuum은 테스트에서만
@@ -128,6 +130,8 @@ Backend 교체 후에도 논리적 Gripper 의미, Stop 전달과 명령 생산 
 
 ### VR-ICD-MOT-BACKEND-02 — 파지 확인 경계
 `holding()`은 Boolean이 아닌 관측 시간·Sequence를 가진 `HoldingObservation`을 반환해야 한다. `HELD`·`RELEASED`·`UNKNOWN`은 명령 결과와 구분된다. PICK은 새로운 `HELD` 없이 후퇴하거나 성공해서는 안 된다. Isaac Production/Validation에서 Capture는 Motion이 선택한 TCP 파지 Pose·Closing Axis를 사용하며 World Z 수직 접근을 강제하지 않는다. Profile별 Capture 허용 조건은 유지한다.
+
+Conveyor 흡착기는 공급 서비스가 없는 장치 단독 시험에서도 GRASP와 RELEASE에 따라 진공을 켜고 끌 수 있어야 한다. 빈 픽 위치에서는 진공 명령이 전달되어도 물체를 보유했다고 보고하지 않는다.
 
 ### VR-ICD-MOT-BACKEND-03 — 선택 기능 미지원
 요청된 Gripper·Holding 기능이 지원되지 않으면 정규 실패를 반환하고 PICK/PLACE 성공을 보고해서는 안 된다.

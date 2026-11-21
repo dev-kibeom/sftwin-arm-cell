@@ -11,7 +11,7 @@
 | Isaac 런처의 PLC 통신 상태와 신선한 Safety 정상 운전 권한 | Conveyor 시뮬레이션 설비 허가 | 현재 레지스터 교환 성공과 유효한 정상 운전 권한을 함께 관측하면 허가, 입력 만료·통신 실패 시 보류 | 런처가 시뮬레이션 발행자를 관리한다. 실제 설비의 허가는 해당 설비 제어계가 소유한다 |
 | PLC `requested` | PLC Adapter 영수증 | `command_id`로 ROS Mission Goal UUID와 결과를 지속 연결 | Adapter가 중복 요청을 재실행하지 않음. 요청 ID는 자재 ID와 1:1이 아닐 수 있음 |
 | Supply RESERVE | Configured Mission/Task | epoch, slot, type, instance, reservation ID를 변경 없이 전달 | Supply가 예약·점유의 Source. Task는 자기 실행만 판단 |
-| Tool Surface Gripper | Task/Mission terminal | 실제 예약 개체의 HELD, 목적지 RELEASED와 결과 코드 분리 | GRASP 명령 성공 ≠ 파지 성공 |
+| Tool Surface Gripper | Task/Mission terminal | 같은 실행에서 관측한 HELD, 목적지 RELEASED와 작업 결과를 구분 | GRASP 명령 성공 ≠ 파지 성공 |
 | Task terminal + 실제 트레이 점유 | PLC P4 Commit | 서로 독립인 `material_placed`와 점유 관측을 PLC가 결합 | Adapter/DB에서 성공으로 재분류하지 않음 |
 | 검사 설비의 독립 판정 | History Inspection | 개체 ID·검사 ID·설비 ID·판정·근거 참조를 보존 | History 기록은 검사 결과를 생성하거나 PLC Commit하지 않음 |
 

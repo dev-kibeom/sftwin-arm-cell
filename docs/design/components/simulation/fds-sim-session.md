@@ -7,7 +7,7 @@
 
 ## 1. 목적과 시퀀스
 
-이 문서는 Pause/Resume·Timeline Stop·ROS Bringup 교체에 따른 **실험 Session Lifecycle**을 정의한다. Production Safety 메커니즘은 아니다.
+이 문서는 개발용 시뮬레이션의 실험 시작·종료와 운전 재개 조건을 정의한다. 아래 시퀀스는 Script Editor에서 Bringup을 수동 교체하는 경우다.
 
 ```mermaid
 sequenceDiagram
@@ -31,11 +31,11 @@ sequenceDiagram
 
 ## 2. Pause·Stop 및 실험 경계
 
-Pause/Resume은 동일 Live Test Session이다. Pause 후 Timeline Play는 동일 Session을 재개하며 Session ID를 새로 할당하거나 Diagnostic Writer를 재생성하지 않는다. Timeline Stop은 현재 Session을 종료하고 기존 Isaac Reset Callback을 실행한다. Kit과 Stage는 Stage 자체가 변경되지 않은 한 열린 상태로 유지하면서 생성 Material·Gripper/Attachment·설정된 Robot HOME Target을 초기 Runtime 상태로 복원한다.
+Pause/Resume은 동일 Live Test Session이다. Pause 후 Timeline Play는 동일 Session을 재개하며 Session ID를 새로 할당하거나 Diagnostic Writer를 재생성하지 않는다. Timeline Stop은 현재 Isaac Session을 종료하고 Isaac 소유 상태의 Reset Callback을 실행한다. Conveyor의 PLC 요청·공급 기록은 단순 Timeline 조작 뒤에도 대조할 수 있도록 보존한다. Kit과 Stage는 Stage 자체가 변경되지 않은 한 열린 상태로 유지하면서 생성 Material·Gripper/Attachment·설정된 Robot HOME Target을 초기 Runtime 상태로 복원한다.
 
 UI Hub의 Cuboid Demonstration도 Play-to-Stop 경계를 따른다. Playing Session당 성공 Load 한 번만 가능하며 Pause/Resume은 그 허용 상태를 보존한다. Stop은 Material Supply Reset으로 해당 RawPart를 제거하고 다음 Play에서 다시 Load를 허용한다. 이 로컬 자극은 Live Test Delivery/Admission 순서에 참여하지 않는다.
 
-새 Live Test는 이전 ROS Bringup 중지 → Timeline Stop → `1_before_play.py` 설정 → Timeline Play로 Isaac 소유 새 Session 생성 → `2_after_play.py`로 Session 진단 선택·Gripper/UI Runtime 초기화 → 새 ROS Bringup이 Session 설명과 연결 → Endpoint 및 Simulation 의존 Fresh Readiness 확인 → 새 Delivery 순서로 실행한다. 새 Bringup이 준비되기 전에 작업을 승인하지 않는다. After Playing 시점이 Gripper Writer/PhysX Observer 생성보다 먼저 설정을 적용하고 ROS가 확인된 Session에 결합할 수 있도록 하는 순서다. Script Editor·ROS Bridge·Launch 세부 순서는 구현 관심사다.
+Script Editor에서 수동으로 새 Live Test를 구성할 때는 이전 ROS Bringup 중지 → Timeline Stop → `1_before_play.py` 설정 → Timeline Play로 Isaac 소유 새 Session 생성 → `2_after_play.py`로 Session 진단 선택·Gripper/UI Runtime 초기화 → 새 ROS Bringup이 Session 설명과 연결 → Endpoint 및 Simulation 의존 Fresh Readiness 확인 → 새 Delivery 순서로 실행한다. 새 Bringup이 준비되기 전에 작업을 승인하지 않는다. After Playing 시점이 Gripper Writer/PhysX Observer 생성보다 먼저 설정을 적용하고 ROS가 확인된 Session에 결합할 수 있도록 하는 순서다. Script Editor·ROS Bridge·Launch 세부 순서는 구현 관심사다.
 
 Stop/Reset 후 Isaac은 기존 유한 Best-effort 경로로 Session Descriptor와 Diagnostic Producer를 Finalize한다. Descriptor는 확보 가능한 참여 프로세스별 Git Source Revision 및 Dirty State를 기록하고 누락 시 명시적 Unavailable로 남긴다. 출처를 얻지 못해도 Live Test나 Finalization을 막지 않는다. Stop은 Analysis/Report 프로세스를 실행하지 않고 보고서 작성을 Simulation Lifecycle에 포함하지 않는다. 종료 Session 분석은 별도 [Live Test Analysis FDS](../fds-live-test-analysis.md)와 분석 절차를 따른다. 분석은 기존 Producer Artifact를 제자리에서 읽으며 Runtime State나 원본 기록을 수정하지 않는다.
 
@@ -43,7 +43,13 @@ Stop/Reset 후 Isaac은 기존 유한 Best-effort 경로로 Session Descriptor�
 
 ## 3. Reset·Epoch 경계와 실패
 
-운영자는 새 테스트 Session 전에 ROS Bringup을 중지하고 Timeline Stop을 수행한다. Stop은 현재 Session 및 Isaac 소유 상태를 종료·초기화한다. 다음 Timeline Play에서 새 Session을 열고 새 Bringup이 이를 연결한 후에만 작업을 승인할 수 있다. Reset 실패는 해당 Owner가 보고하며 새 Bringup 시작과 작업 승인 이전에 해결해야 한다. Session ID는 증거를 묶을 뿐 Runtime 작업의 Fence·승인 Authority가 아니다.
+### 런처에서 새 실험 시작
+
+**Initialize**는 Setup에 선택된 구성으로 로컬 시뮬레이션을 원점에서 다시 시작하는 요청이다. 실패한 작업, 응답 대기 중인 PLC 요청, 남은 자재 또는 그리퍼가 자재를 든 상태에서도 접수한다. 런처는 현재 Kit 프로세스와 창을 유지한다. 초기화 중에는 신규 운전·공급 요청을 보류하고, 이전 작업과 설비 연결이 새 장면에 명령이나 결과를 적용할 수 없게 한 뒤 각 참여자가 소유한 상태를 복원한다.
+
+완료 시 로봇은 설정된 HOME, Tool과 가상 설비는 초기 상태이며, 활성 자재·예약·대기 공급·실행 중인 작업은 없다. Conveyor에서는 로컬 PLC와 ROS Adapter가 [같은 새 요청 스트림의 원점](../../interfaces/icd-plc-task.md)을 확인해야 한다. 이전 실험의 영수증·생산·진단 이력과 배포 설정은 보존한다. 일부 참여자의 원점이 미확인인 동안은 초기화 미완료로 표시한다. 같은 초기화를 다시 요청해도 새 작업이 생기지 않으며 초기화가 끝난 Cell은 일시정지 상태에서 명시적인 Start를 기다린다.
+
+Isaac, ROS Bringup, PLC Runtime은 독립적으로 기동할 수 있다. 초기화 완료는 선택된 Cell의 참여자가 새 실험에 연결되어 원점을 확인한 시점이다. 개별 동작은 해당 시점의 설비·로봇 관측과 공정 허가에 따라 수락한다. Live Test Session ID는 진단 기록의 상관관계를 나타낸다. 실제 장비의 복구·Safety Reset은 각 장비와 Safety Owner의 계약을 따른다.
 
 Isaac Reset은 멱등적이며 Fresh Gripper `RELEASED`나 실제 Safety Recovery를 요구하지 않는다. Simulation Attach 관계는 부착 Material을 삭제하기 전에 제거한다. Timeline Stop은 Safety StopMotion·Safety Reset을 실행하지 않는다. Bringup 교체에 Safety Latch/Cause Memory를 이관하는 계약은 없다. 새 Safety Process는 Fresh Input에 기존 정책을 적용하고 정상 Readiness Gate를 거쳐 Motion을 승인한다.
 
@@ -66,7 +72,7 @@ Isaac Reset은 멱등적이며 Fresh Gripper `RELEASED`나 실제 Safety Recover
 시간 역행이 없는 Pause/Resume은 정상적인 Session 참여 관계를 유지해야 한다.
 
 ### VR-SIM-TIME-02 — 새 Live Test Session
-새 Session은 ROS Bringup 중지 → Timeline Stop/Reset → Before Playing Setup → Timeline Play → After Playing Session 초기화 → 새 ROS Bringup Session 연결 → Endpoint/Fresh Readiness 확인 → Work Admission 순서를 따라야 한다. 이전 프로세스 로컬 Workload/Readiness를 새 Session에 승인해서는 안 된다. Pause→Play는 기존 Session을 보존한다.
+수동 경로는 §1의 순서로 동작한다. 런처 경로에서는 직전 작업이 실패해 그리퍼와 슬롯에 잔류 상태가 있거나 PLC와 Adapter가 서로 다른 마지막 요청 번호를 기억할 때 Initialize를 요청한다. Kit과 창이 유지되고, 양측의 새 원점이 확인된 뒤에만 Start가 가능해야 한다. 이전 작업의 늦은 응답은 새 원점을 바꾸지 않으며, 일부 참여자의 복원이 지연되어 같은 초기화를 다시 요청해도 공급이나 PnP가 발생하지 않는다. Pause→Start는 기존 실험과 잔량을 보존한다.
 
 ### VR-SIM-TIME-03 — 묵시적 시간 재기준화 금지
 Epoch 변경을 Timestamp 재작성이나 Stale Cached State Replay로 숨겨서는 안 된다.
@@ -80,7 +86,7 @@ Epoch 변경을 Timestamp 재작성이나 Stale Cached State Replay로 숨겨서
 | 새 Bringup 연결 | 새 Bringup은 같은 Session에 연결하고 Fresh Endpoint를 확립해야 한다. |
 | 새 Delivery 준비 | 새 Delivery 전에 Fresh Simulation Observation/Readiness를 검증하며 이전 Delivery Accounting·Mission·Retry Budget·Pending Readiness·Action·Vision Result를 승계하지 않는다. |
 | 관찰 근거 | Oracle은 Kit Process 연속성, Reset된 Stage Material, 새 Session ID, 가능한 경우 Isaac/ROS Session Record의 동일 ID, 구분되는 ROS Process/Goal/Acquisition ID, Fresh Endpoint 관측 및 신규 Admission 성공이다. |
-| 범위 밖·연결 실패 | 기존 Bringup을 유지한 Stop→Play는 이 절차 범위 밖이며 Session 연결 실패는 관측 가능하게 남되 Runtime 판단을 바꾸지 않는다. |
+| 수동 Bringup 교체 | 기존 Bringup을 유지한 Stop→Play는 수동 교체 검증 범위 밖이며 Session 연결 실패는 관측 가능하게 남되 Runtime 판단을 바꾸지 않는다. |
 
 ### VR-OBS-SESSION-REVISION-01 — 참여 프로세스 소스 출처
 Session Source Revision을 확보할 수 있으면 Session Descriptor에 참여 프로세스별 Revision·Dirty State를 기록해야 한다. 확보할 수 없다면 그 사실과 사유를 표현하되 Session Finalization을 차단해서는 안 된다. Oracle은 `session.json`의 프로세스별 출처 상관관계와 Unavailable 표시다.
