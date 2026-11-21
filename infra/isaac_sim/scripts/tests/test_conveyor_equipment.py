@@ -5,7 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
+def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch, tmp_path):
+    import json
     from dataclasses import asdict
     from types import SimpleNamespace
     from conveyor_pnp_cell import runtime
@@ -35,6 +36,12 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
     adapter = runtime.ConveyorRuntime(dict(cell=dict(configured_supply=dict(material_id='ConveyorPart'),
         conveyor=dict(material_type_ids=['ConveyorPart'], pick_slot_id='cell/belt/pick', connection={}, equipment_permit_topic='permit', teaching=dict(cycle=None)))),
         eq, ipc)
+    # A pre-existing evidence file causes a writer failure on the first decision.
+    directory = tmp_path / 'simulation' / 'conveyor_supply'
+    directory.mkdir(parents=True)
+    first = directory / 'decision-00000001.json'
+    first.write_text('{}')
+    adapter.set_live_test_session_id('storage-failure', tmp_path)
     try:
         adapter.feeder.configure('ConveyorPart', 2)
         adapter.feeder.set_automatic(True)
@@ -54,7 +61,11 @@ def test_cold_start_and_expired_commands_hold_the_same_inventory(monkeypatch):
         assert spawned == [1] and adapter.feeder.remaining == 1
         assert (outgoing[-1]['created_cycle'], outgoing[-1]['created_type_id']) == (1, 'ConveyorPart')
     finally:
+        adapter.set_live_test_session_id(None)
         clear_supply_port(adapter.feeder)
+    assert first.read_text() == '{}'
+    summary = json.loads((directory / 'capture_summary.json').read_text())
+    assert summary['write_failure_count'] == 1 and not summary['capture_complete']
 
 
 def test_suction_resolves_only_the_current_reserved_piece(monkeypatch):
@@ -114,3 +125,79 @@ def test_start_automatic_reconnects_the_existing_equipment_stream(monkeypatch):
         launch.assert_called_once()
     finally:
         adapter.close()
+
+
+def test_session_records_feed_decisions_at_transitions(tmp_path, monkeypatch):
+    import json
+    from dataclasses import asdict, replace
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    from conveyor_pnp_cell import runtime
+    from conveyor_pnp_cell.equipment_io import Commands, Sensors
+
+    now = 100.
+    monkeypatch.setattr(runtime.time, 'monotonic', lambda: now)
+    packets = []
+    def poll():
+        result = packets.copy()
+        packets.clear()
+        return result
+    ipc = SimpleNamespace(available=True, send=lambda _: None, poll_messages=poll, close=lambda: None)
+    sensors = Sensors(path_clear=True, pick_zone_clear=True)
+    equipment = SimpleNamespace(stream_id='stream', cycle=0, material_type_id='', drive=Mock(), step=Mock(),
+                                observe=lambda permitted: replace(sensors, permitted=permitted),
+                                spawn=Mock(return_value=True))
+    adapter = runtime.ConveyorRuntime(dict(cell=dict(configured_supply=dict(material_id='A'),
+        conveyor=dict(material_type_ids=['A'], pick_slot_id='pick', connection={}, equipment_permit_topic='permit',
+                      teaching=dict(cycle=None)))), equipment, ipc)
+    idle = Commands(0, 0, False, False, False, False, False, 0, 0, 0, 0)
+    feed = replace(idle, phase=10, cycle=1, feed=True)
+    def tick(command, permit_at, permitted=True):
+        packets.append(dict(op='command', at=now, command=asdict(command), permitted=permitted, permit_at=permit_at))
+        adapter.tick(.01)
+    def records(root):
+        files = (root/'simulation/conveyor_supply').glob('decision-*.json')
+        return [json.loads(path.read_text()) for path in sorted(files)]
+    try:
+        adapter.set_live_test_session_id('session-a', tmp_path)
+        adapter.tick(.01)
+        tick(feed, 0., False)
+        tick(idle, 0., False)
+        tick(idle, now)
+        now += .1
+        tick(idle, now)
+        adapter.feeder.configure('A', 2)
+        adapter.feeder.set_automatic(True)
+        tick(feed, now - 2)
+        tick(feed, now, False)
+        sensors.occupied = True
+        tick(feed, now)
+        sensors.occupied = False
+        tick(feed, now)
+        adapter.set_live_test_session_id('session-b', tmp_path/'next')
+        tick(feed, now)
+        now += 2.
+        adapter.tick(.01)
+        packets.append(dict(op='offline'))
+        adapter.tick(.01)
+        adapter.tick(.01)
+    finally:
+        adapter.close()
+    rows = records(tmp_path)
+    assert len(rows) == 8
+    assert all(row['live_test_session_id'] == 'session-a' and row['stream_id'] == 'stream' for row in rows)
+    assert rows[0]['command_status'] == 'not_received' and rows[0]['plc'] is None
+    assert rows[1]['plc'] == dict(phase=10, cycle=1, committed=0, feed=True)
+    assert not rows[1]['synchronized'] and rows[2]['synchronized']
+    assert rows[2]['permit_status'] == 'not_received' and rows[2]['permit_value'] is None
+    assert rows[3]['permit_status'] == 'fresh' and rows[3]['automatic'] is False
+    assert rows[4]['permit_status'] == 'expired' and rows[4]['permit_age_s'] == 2
+    assert rows[5]['permit_status'] == 'fresh' and rows[5]['permit_value'] is False
+    assert rows[6]['occupied'] and 'tray_occupied' in rows[6]['blockers']
+    assert rows[7]['blockers'] == [] and rows[7]['remaining'] == 2
+    equipment.spawn.assert_called_once_with('A', 1)
+    current, expired, offline = records(tmp_path/'next')
+    assert current['live_test_session_id'] == 'session-b' and current['last_generated'] == 1
+    assert expired['command_status'] == 'expired' and expired['command_age_s'] == 2
+    assert offline['command_status'] == 'offline' and offline['permit_status'] == 'unknown'
+    assert offline['plc'] is None and offline['path_clear'] is None

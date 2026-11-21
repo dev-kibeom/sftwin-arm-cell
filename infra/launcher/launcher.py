@@ -481,8 +481,8 @@ class Launcher(QMainWindow):
         self.validate()
 
     def can_start_plc(self):
-        return (self.conveyor and 'ros' in self.processes and not self.stopping
-                and self.plc.phase is None and self.ros_preflight is not None and self.ros_preflight.exists())
+        return (self.conveyor and 'isaac' in self.processes and not self.stopping
+                and self.plc.phase is None)
 
     def start_plc(self):
         if self.can_start_plc():
@@ -521,6 +521,9 @@ class Launcher(QMainWindow):
                     self.error = f'{name} 터미널 종료 (코드 {code}). 실행 환경을 정리합니다.'
                     self.begin_stop()
                     break
+        if (not self.stopping and self.plc.phase == 'awaiting_ros' and 'ros' in self.processes
+                and self.ros_preflight is not None and self.ros_preflight.exists()):
+            self.plc.start_adapter()
         if self.stopping:
             # Keep runtime group IDs after leader exit, including when a user
             # closes its terminal. The snapshot outlives every consumer group.

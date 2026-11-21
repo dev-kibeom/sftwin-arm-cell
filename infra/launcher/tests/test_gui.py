@@ -567,7 +567,8 @@ def test_experiment_tabs_keep_edits_after_stop_and_restore_yaml_defaults(app, wi
         reopened.close()
 
 
-def test_conveyor_displays_strategy_and_fixed_mode_and_enables_plc_after_ros(app, window, monkeypatch):
+@pytest.mark.parametrize("start_ros", [True, False])
+def test_conveyor_can_prepare_plc_before_ros(app, window, monkeypatch, start_ros):
     assert window.plc_button.isHidden()
     entry = next(item for item in window.entries if item['profile'].stem == 'conveyor_pnp_profile')
     for key, combo in window.selectors.items():
@@ -580,12 +581,26 @@ def test_conveyor_displays_strategy_and_fixed_mode_and_enables_plc_after_ros(app
     fake_spawn(window, monkeypatch, {'isaac': WAIT, 'ros': WAIT})
     window.start_isaac()
     until(app, window, lambda: 'isaac' in window.processes)
-    assert not window.plc_button.isEnabled()
-    window.start_ros()
-    assert not window.plc_button.isEnabled()
-    window.ros_preflight.touch()
-    window.poll()
     assert window.plc_button.isEnabled()
+    commands = []
+    def fake_command(stage, runtime):
+        assert runtime == window.runtime
+        commands.append(stage)
+        return [sys.executable, '-c', 'pass'] if stage == 'probe' else WAIT
+    monkeypatch.setattr(launcher.plc_control, 'runtime_command', fake_command)
+    monkeypatch.setattr(window.plc, 'inspect', lambda phase: window.plc.service_observed(
+        phase, 'ActiveState=active\nInvocationID=existing'))
+    window.plc_button.click()
+    until(app, window, lambda: window.plc.phase == 'awaiting_ros')
+    assert commands == ['probe']
+    assert not window.plc_button.isEnabled()
+    if start_ros:
+        window.start_ros()
+        window.poll()
+        assert commands == ['probe']
+        window.ros_preflight.touch()
+        until(app, window, lambda: window.plc.phase == 'adapter')
+        assert commands == ['probe', 'adapter']
     window.begin_stop()
     until(app, window, lambda: not window.stopping)
 
