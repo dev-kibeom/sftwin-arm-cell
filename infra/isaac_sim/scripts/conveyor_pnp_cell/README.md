@@ -80,6 +80,7 @@ python3 -m pytest -q tools/tests/test_conveyor_cycles.py
 원장에 연결된 영수증 파일은 자동으로 읽는다. 보관 위치가 바뀌었으면 `--receipts /path/to/plc.sqlite`를 추가한다. ROS·Isaac 진단 루트가 같으면 `--diagnostic` 하나로 충분하다. 두 DB는 읽기 전용으로 연다. JSON에는 자재별 단계, 원장 이벤트 번호, 예약, 명령·Goal ID, 근거 파일, 수집 손실, 실패 사유와 시간 표본 수가 들어간다.
 
 - **결과**는 공급·예약, 같은 Task의 HELD·목적지 배치, PLC Commit, 배출·다음 공급 준비를 연결해 판정한다. 확인된 실패·모순은 FAIL, 필수 근거가 빠진 자재 번호나 종료 시 미완료 상태는 UNKNOWN이다. 성공률의 분모는 PASS + FAIL이며 30개 중 UNKNOWN 개수를 함께 표시한다.
+- **배출 근거**는 자재별 JSON의 `discharge_evidence`와 콘솔 요약에 표시한다. 실제 Prim 제거 영수증(`ISAAC_DISCHARGED`), Commit 후 PLC 재사용 단계 관측(`PLC_REUSABLE`), 다음 자재 할당에 따른 추론(`NEXT_ALLOCATION`) 순으로 가장 강한 근거를 사용한다. 모두 없으면 `UNKNOWN`이다. 간접 근거로 배출 단계가 충족되어도 실제 생성→제거 시간은 미측정으로 남긴다.
 - **시간**은 초 단위로 표본 수·평균·중앙값·최댓값을 표시한다. `cycle`은 Isaac의 실제 생성부터 트레이 자재 제거까지, `p1_to_plc_reusable`은 Sidecar가 같은 자재의 PLC 단계 10과 배출 후 단계 0을 관측한 구간이다. 각 생산자의 monotonic 경과시간에는 대기가 포함된다. 재시작을 가로질러 시계 근거가 끊기거나 끝점이 없으면 JSON 값은 `null`이다.
 - **복구**는 WARN·ERROR·복구 전이, 재접속 당시 예약, 실물 재대조 결과와 Task terminal을 함께 읽는다. 예약 없는 지연은 자재에 귀속하지 않는다. 실행권 획득 전 BUSY는 별도 시도로 보존한다. 배치 후 실패도 Commit과 별개로 FAIL에 남는다.
 - **측정 한계**가 있다. PLC의 유지된 Commit 번호가 다른 값을 거친 뒤 다시 나타나면 식별할 수 있다. 두 관측 사이 같은 값을 두 번 쓴 횟수, 단방향 통신 지연, 순수 로봇 이동 시간은 측정할 수 없다. 이 보고서는 저장된 증거의 분석이며 생산·Safety 승인과 독립적이다.

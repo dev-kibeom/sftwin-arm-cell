@@ -244,8 +244,16 @@ class Cycle:
         commit = first(e['facts'] for e in events if e['source'] == 'plc' and (
             e['event_type'] == 'COMMIT_OBSERVED' or e['facts'].get('committed') is True))
         reusable = first(p for p in plc if p.get('phase') == 0 and p.get('committed') is True)
+        if discharge:
+            discharge_evidence = 'ISAAC_DISCHARGED'
+        elif reusable:
+            discharge_evidence = 'PLC_REUSABLE'
+        elif next_cycle:
+            discharge_evidence = 'NEXT_ALLOCATION'
+        else:
+            discharge_evidence = 'UNKNOWN'
         self.stages.update(commit=bool(commit or projection.get('committed') == 1),
-                           discharge=bool(discharge or reusable or next_cycle),
+                           discharge=discharge_evidence != 'UNKNOWN',
                            plc_reusable=bool(reusable or next_cycle))
         if any(p.get('committed') is True and p.get('phase') in (10, 20, 21, 22, 23, 30) for p in plc):
             self.fail('PLC sequence', 'PLC returned to pre-discharge work for the same material')
@@ -288,7 +296,7 @@ class Cycle:
                                  ('assignment_to_reservation', assignment, opened),
                                  ('p1_to_plc_reusable', p1, reusable), ('p1_to_commit', p1, commit), ('commit_to_plc_reusable', commit, reusable)]:
             self.durations[name] = interval(start, end, 'writer_id')
-        return phases
+        return phases, discharge_evidence
 
 
 def earliest(records):
@@ -319,8 +327,8 @@ def evaluate(evidence, stream, number):
     selected = result.robot(attempts, missions, tools, leases, material.get('type_id'))
     projection = evidence.plc.get(number, {})
     result.require(projection, 'missing final PLC projection')
-    phases = result.production(events, projection, selected, instance in evidence.duplicate_commits,
-                               evidence.next_cycles.get(instance))
+    phases, discharge_evidence = result.production(
+        events, projection, selected, instance in evidence.duplicate_commits, evidence.next_cycles.get(instance))
     if evidence.incomplete:
         result.require(False, 'selected evidence truncated, unreadable or dropped (see input_issues and coverage)')
     result.require(not any(r['status'] == 'ACTIVE' for r in leases), 'reservation still active')
@@ -328,7 +336,7 @@ def evaluate(evidence, stream, number):
         result.require(observed, f'{stage}: evidence missing or incomplete')
     verdict = 'FAIL' if result.failures else 'UNKNOWN' if result.gaps else 'PASS'
     return dict(material_instance_id=instance, verdict=verdict, stages=result.stages, plc_phases=phases,
-                failures=result.failures, gaps=result.gaps, durations_s=result.durations,
+                discharge_evidence=discharge_evidence, failures=result.failures, gaps=result.gaps, durations_s=result.durations,
                 reservations=leases, attempts=attempts, plc=projection, next_allocation=evidence.next_cycles.get(instance),
                 history=events, mission_records=missions,
                 suction_files=[r['file'] for r in tools])
@@ -360,6 +368,13 @@ def summary(report):
     yield (f"{report['verdict']}  {report['stream']}  PASS {counts['PASS']}  FAIL {counts['FAIL']}  "
            f"UNKNOWN {counts['UNKNOWN']} / {report['expected']}")
     yield 'Success among measured cycles: ' + ('unmeasured' if rate is None else f"{rate:.1%} (n={report['measured_cycles']})")
+    yield 'Discharge evidence by material number:'
+    for evidence, label in [('ISAAC_DISCHARGED', 'Direct (Isaac removal)'), ('PLC_REUSABLE', 'Indirect (PLC reusable)'),
+                            ('NEXT_ALLOCATION', 'Inferred (next allocation)'), ('UNKNOWN', 'UNKNOWN')]:
+        numbers = [c['material_instance_id'].rsplit('/', 1)[1] for c in report['cycles']
+                   if c['discharge_evidence'] == evidence]
+        if numbers:
+            yield f"  {label}: {', '.join(numbers)}"
     for name, stats in report['durations_s'].items():
         values = 'unmeasured' if not stats['n'] else (
             f"mean {stats['mean']:.3f}, median {stats['median']:.3f}, max {stats['maximum']:.3f} s")

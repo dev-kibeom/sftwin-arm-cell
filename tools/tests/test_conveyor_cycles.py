@@ -241,3 +241,25 @@ def test_old_receipt_with_only_mission_uuid_uses_explicit_diagnostic_links(tmp_p
     assert cycle['verdict'] == 'PASS'
     assert cycle['attempts'][0]['link_source'] == 'mission diagnostics'
     assert cycle['attempts'][0]['command_id'] == 1
+
+
+def test_discharge_report_distinguishes_direct_indirect_inferred_and_missing_evidence(tmp_path):
+    save_run(tmp_path, 4)
+    with sqlite3.connect(tmp_path / 'production.sqlite') as db:
+        db.execute("DELETE FROM history_events WHERE event_type='DISCHARGED' AND instance_id!='cell/1'")
+        db.execute("DELETE FROM history_events WHERE source='plc' AND json_extract(details,'$.phase')=0 "
+                   "AND instance_id IN ('cell/3','cell/4')")
+        db.execute("UPDATE plc_cycles SET phase=51 WHERE plc_number IN (3,4)")
+
+    cycles = analyze(tmp_path, 4)['cycles']
+    assert [c['discharge_evidence'] for c in cycles] == [
+        'ISAAC_DISCHARGED', 'PLC_REUSABLE', 'NEXT_ALLOCATION', 'UNKNOWN']
+    assert [c['verdict'] for c in cycles] == ['PASS', 'PASS', 'PASS', 'UNKNOWN']
+    assert [c['stages']['discharge'] for c in cycles] == [True, True, True, False]
+    assert [c['durations_s']['cycle'] for c in cycles] == [1, None, None, None]
+
+    output = subprocess.check_output([sys.executable, str(CLI), str(tmp_path / 'production.sqlite'),
+                                      '--stream', 'cell', '--count', '4', '--diagnostic', str(tmp_path)], text=True)
+    for label, number in [('Direct (Isaac removal)', 1), ('Indirect (PLC reusable)', 2),
+                          ('Inferred (next allocation)', 3), ('UNKNOWN', 4)]:
+        assert f'{label}: {number}' in output
